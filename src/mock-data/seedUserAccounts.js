@@ -1,0 +1,42 @@
+export const seedUserAccounts = [
+  {
+    id: 'user-1',
+    employeeId: 'emp-005',
+    username: 'priyanka.nair',
+    email: 'priyanka.nair@rizurf.example',
+    role: 'Employee',
+    status: 'Active',
+  },
+  {
+    id: 'user-2',
+    employeeId: 'emp-004',
+    username: 'marcus.tan',
+    email: 'marcus.tan@rizurf.example',
+    role: 'Manager',
+    status: 'Active',
+  },
+  {
+    id: 'user-3',
+    employeeId: 'emp-003',
+    username: 'sarah.abdullah',
+    email: 'sarah.abdullah@rizurf.example',
+    role: 'HR',
+    status: 'Active',
+  },
+  {
+    id: 'user-4',
+    employeeId: 'emp-001',
+    username: 'tariq.ibrahim',
+    email: 'tariq.ibrahim@rizurf.example',
+    role: 'HR Admin',
+    status: 'Active',
+  },
+  {
+    id: 'user-5',
+    employeeId: 'emp-012',
+    username: 'rajiv.sharma',
+    email: 'rajiv.sharma@rizurf.example',
+    role: 'Payroll',
+    status: 'Active',
+  },
+];

@@ -1,0 +1,38 @@
+export const seedSchedules = [
+  {
+    id: 'sched-1',
+    name: 'Standard Office Schedule',
+    workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    startTime: '09:00',
+    endTime: '18:00',
+    weeklyHours: 40,
+    active: true,
+  },
+  {
+    id: 'sched-2',
+    name: 'Flexible Hybrid Schedule',
+    workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    startTime: '08:30',
+    endTime: '17:30',
+    weeklyHours: 40,
+    active: true,
+  },
+  {
+    id: 'sched-3',
+    name: 'Operations Rotational Schedule',
+    workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    startTime: '08:00',
+    endTime: '16:00',
+    weeklyHours: 40,
+    active: true,
+  },
+  {
+    id: 'sched-4',
+    name: 'Part-Time Schedule',
+    workingDays: ['Monday', 'Tuesday', 'Wednesday'],
+    startTime: '09:00',
+    endTime: '17:00',
+    weeklyHours: 24,
+    active: true,
+  },
+];
