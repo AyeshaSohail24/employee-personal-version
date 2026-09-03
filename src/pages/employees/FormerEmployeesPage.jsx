@@ -1,14 +1,12 @@
 import React from 'react';
-import { UserX } from 'lucide-react';
-import PlaceholderCard from '../../components/common/PlaceholderCard';
+import DirectoryPageContainer from '../../components/employees/DirectoryPageContainer';
 
 export default function FormerEmployeesPage() {
   return (
-    <PlaceholderCard
+    <DirectoryPageContainer
       title="Former Employees"
-      subtitle="Archived employee history and historical departure records"
-      category="Employee Archives"
-      icon={UserX}
+      description="Archived alumni records and closed employment histories"
+      baseLifecycleScope="Former"
     />
   );
 }

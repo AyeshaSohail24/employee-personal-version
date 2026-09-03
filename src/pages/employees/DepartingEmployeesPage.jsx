@@ -1,14 +1,12 @@
 import React from 'react';
-import { UserMinus } from 'lucide-react';
-import PlaceholderCard from '../../components/common/PlaceholderCard';
+import DirectoryPageContainer from '../../components/employees/DirectoryPageContainer';
 
 export default function DepartingEmployeesPage() {
   return (
-    <PlaceholderCard
+    <DirectoryPageContainer
       title="Departing Employees"
-      subtitle="Team members currently undergoing offboarding clearance"
-      category="Employee Directory"
-      icon={UserMinus}
+      description="Team members currently undergoing offboarding transition"
+      baseLifecycleScope="Departing"
     />
   );
 }

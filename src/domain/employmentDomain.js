@@ -31,13 +31,12 @@ export function resolveCurrentRecord(employeeId, records = [], referenceDate = n
 
   if (matchingRecords.length === 0) return null;
 
-  // If multiple matching (e.g. overlapping), sort by effectiveFrom descending
   matchingRecords.sort((a, b) => (b.effectiveFrom || '').localeCompare(a.effectiveFrom || ''));
   return matchingRecords[0];
 }
 
 /**
- * Resolves the next scheduled future EmploymentRecord for an employee starting after the reference date.
+ * Resolves the next scheduled future EmploymentRecord for an employee starting after reference date.
  * Used explicitly for Upcoming hires whose contract has not yet started.
  *
  * @param {string} employeeId
@@ -65,9 +64,42 @@ export function resolveNextRecord(employeeId, records = [], referenceDate = new 
 }
 
 /**
+ * Resolves the most recent closed historical EmploymentRecord for a Former employee.
+ * Used explicitly to display historical position, department, location, manager for Former employees
+ * without treating them as currently employed.
+ *
+ * @param {string} employeeId
+ * @param {Array<Object>} records
+ * @param {string|Date} [referenceDate]
+ * @returns {Object|null} The latest historical closed EmploymentRecord or null
+ */
+export function resolveHistoricalRecord(employeeId, records = [], referenceDate = new Date()) {
+  if (!employeeId || !Array.isArray(records)) return null;
+
+  const refIso = typeof referenceDate === 'string'
+    ? referenceDate.slice(0, 10)
+    : referenceDate.toISOString().slice(0, 10);
+
+  const closedRecords = records.filter((rec) => {
+    if (rec.employeeId !== employeeId) return false;
+    const toDate = rec.effectiveTo ? rec.effectiveTo.slice(0, 10) : null;
+    return toDate !== null && toDate <= refIso;
+  });
+
+  if (closedRecords.length === 0) return null;
+
+  closedRecords.sort((a, b) => (b.effectiveTo || '').localeCompare(a.effectiveTo || ''));
+  return closedRecords[0];
+}
+
+/**
  * Enriches an Employee object with resolved organizational data
  * (Department, Position, Manager, Location, Schedule) without duplicating identity fields.
- * If the employee is 'Upcoming' and has no current record on referenceDate, resolves their next scheduled record.
+ * Explicitly separates:
+ * - currentEmploymentRecord (active today)
+ * - futureEmploymentRecord (scheduled for Upcoming)
+ * - historicalEmploymentRecord (latest closed record for Former)
+ * - effectiveEmploymentRecord (points to record used for display representation)
  *
  * @param {Object} employee - Pure Employee record
  * @param {Array<Object>} records - Employment records
@@ -95,25 +127,29 @@ export function resolveHydratedEmployee(
   const futureRecord = !currentRecord && employee.status === 'Upcoming'
     ? resolveNextRecord(employee.id, records, referenceDate)
     : null;
-
-  const activeOrFutureRecord = currentRecord || futureRecord;
-
-  const dept = activeOrFutureRecord ? departments.find((d) => d.id === activeOrFutureRecord.departmentId) : null;
-  const pos = activeOrFutureRecord ? positions.find((p) => p.id === activeOrFutureRecord.positionId) : null;
-  const loc = activeOrFutureRecord ? locations.find((l) => l.id === activeOrFutureRecord.locationId) : null;
-  const sched = activeOrFutureRecord ? schedules.find((s) => s.id === activeOrFutureRecord.scheduleId) : null;
-  const manager = activeOrFutureRecord && activeOrFutureRecord.managerId
-    ? allEmployees.find((e) => e.id === activeOrFutureRecord.managerId)
+  const historicalRecord = !currentRecord && employee.status === 'Former'
+    ? resolveHistoricalRecord(employee.id, records, referenceDate)
     : null;
-  const supervisor = activeOrFutureRecord && activeOrFutureRecord.supervisorId
-    ? allEmployees.find((e) => e.id === activeOrFutureRecord.supervisorId)
+
+  const effectiveRecord = currentRecord || futureRecord || historicalRecord;
+
+  const dept = effectiveRecord ? departments.find((d) => d.id === effectiveRecord.departmentId) : null;
+  const pos = effectiveRecord ? positions.find((p) => p.id === effectiveRecord.positionId) : null;
+  const loc = effectiveRecord ? locations.find((l) => l.id === effectiveRecord.locationId) : null;
+  const sched = effectiveRecord ? schedules.find((s) => s.id === effectiveRecord.scheduleId) : null;
+  const manager = effectiveRecord && effectiveRecord.managerId
+    ? allEmployees.find((e) => e.id === effectiveRecord.managerId)
+    : null;
+  const supervisor = effectiveRecord && effectiveRecord.supervisorId
+    ? allEmployees.find((e) => e.id === effectiveRecord.supervisorId)
     : null;
 
   return {
     ...employee,
-    currentEmploymentRecord: currentRecord, // Is null for Upcoming employee before start date!
-    futureEmploymentRecord: futureRecord,   // Populated explicitly for Upcoming employee!
-    effectiveEmploymentRecord: activeOrFutureRecord,
+    currentEmploymentRecord: currentRecord,       // Null for Former & Upcoming before start!
+    futureEmploymentRecord: futureRecord,         // Populated explicitly for Upcoming!
+    historicalEmploymentRecord: historicalRecord, // Populated explicitly for Former!
+    effectiveEmploymentRecord: effectiveRecord,   // Record used for directory display representation
     department: dept || null,
     position: pos || null,
     location: loc || null,
@@ -124,12 +160,12 @@ export function resolveHydratedEmployee(
 }
 
 /**
- * Traverses manager relationships up to the top level (CEO).
+ * Traverses manager relationships up to top level (CEO).
  *
  * @param {string} employeeId
  * @param {Array<Object>} records
  * @param {Array<Object>} employees
- * @returns {Array<Object>} Ordered array of manager employee objects from direct manager to CEO
+ * @returns {Array<Object>} Ordered array of manager employee objects
  */
 export function resolveManagerChain(employeeId, records = [], employees = []) {
   const chain = [];

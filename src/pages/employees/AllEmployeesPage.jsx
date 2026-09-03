@@ -1,14 +1,12 @@
 import React from 'react';
-import { Users } from 'lucide-react';
-import PlaceholderCard from '../../components/common/PlaceholderCard';
+import DirectoryPageContainer from '../../components/employees/DirectoryPageContainer';
 
 export default function AllEmployeesPage() {
   return (
-    <PlaceholderCard
+    <DirectoryPageContainer
       title="All Employees"
-      subtitle="Complete company directory across all departments and employment statuses"
-      category="Employee Management"
-      icon={Users}
+      description="Complete Rizurf workforce directory across all lifecycle statuses"
+      baseLifecycleScope="All"
     />
   );
 }

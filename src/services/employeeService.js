@@ -3,13 +3,13 @@ import { resolveHydratedEmployee } from '../domain/employmentDomain.js';
 import { filterEmployeesByStatus } from '../domain/lifecycleDomain.js';
 
 /**
- * Service providing asynchronous data access for Employee entities.
+ * Service providing asynchronous data access and directory querying for Employee entities.
  */
 export const employeeService = {
   /**
-   * Retrieves all employees, optionally hydrated with current employment data.
+   * Retrieves all employees, hydrated with organizational data.
    * @param {Object} [options]
-   * @param {boolean} [options.hydrate=true] - Whether to include resolved department, position, manager details.
+   * @param {boolean} [options.hydrate=true]
    * @returns {Promise<Array<Object>>}
    */
   async getAll({ hydrate = true } = {}) {
@@ -60,13 +60,109 @@ export const employeeService = {
 
   /**
    * Retrieves employees filtered by lifecycle status.
-   * @param {string} status - e.g. 'Active', 'Onboarding', 'Departing', 'Former', 'Upcoming'
+   * @param {string} status
    * @param {Object} [options]
    * @returns {Promise<Array<Object>>}
    */
   async getByStatus(status, options = {}) {
     const all = await this.getAll(options);
     return filterEmployeesByStatus(all, status);
+  },
+
+  /**
+   * Queries employees with route scope, user filters, search, and sorting.
+   *
+   * @param {Object} options
+   * @param {string} [options.baseLifecycleScope='All'] - 'All', 'Active', 'NewJoiners', 'Departing', 'Former'
+   * @param {string} [options.statusFilter=''] - User-selected status filter (only active when baseLifecycleScope is 'All')
+   * @param {string} [options.departmentId='']
+   * @param {string} [options.employeeTypeId='']
+   * @param {string} [options.locationId='']
+   * @param {string} [options.search='']
+   * @param {string} [options.sortBy='name-asc'] - 'name-asc', 'name-desc', 'date-desc', 'date-asc'
+   * @returns {Promise<Object>} { employees, baseCount, totalFilteredCount }
+   */
+  async queryEmployees({
+    baseLifecycleScope = 'All',
+    statusFilter = '',
+    departmentId = '',
+    employeeTypeId = '',
+    locationId = '',
+    search = '',
+    sortBy = 'name-asc',
+  } = {}) {
+    const allEmployees = await this.getAll({ hydrate: true });
+
+    // 1. Enforce route base lifecycle scope
+    let scoped = [];
+    if (baseLifecycleScope === 'Active') {
+      scoped = allEmployees.filter((e) => e.status === 'Active');
+    } else if (baseLifecycleScope === 'NewJoiners') {
+      scoped = allEmployees.filter((e) => e.status === 'Onboarding' || e.status === 'Upcoming');
+    } else if (baseLifecycleScope === 'Departing') {
+      scoped = allEmployees.filter((e) => e.status === 'Departing');
+    } else if (baseLifecycleScope === 'Former') {
+      scoped = allEmployees.filter((e) => e.status === 'Former');
+    } else {
+      scoped = [...allEmployees]; // 'All' route allows all 18 employees
+    }
+
+    const baseCount = scoped.length;
+    let filtered = [...scoped];
+
+    // 2. Interactive Status filter (only applied if route base scope is 'All')
+    if (baseLifecycleScope === 'All' && statusFilter && statusFilter !== 'All') {
+      filtered = filterEmployeesByStatus(filtered, statusFilter);
+    }
+
+    // 3. Interactive Department filter
+    if (departmentId) {
+      filtered = filtered.filter((e) => e.department && e.department.id === departmentId);
+    }
+
+    // 4. Interactive Employee Type filter
+    if (employeeTypeId) {
+      filtered = filtered.filter((e) => e.employeeTypeId === employeeTypeId);
+    }
+
+    // 5. Interactive Location filter
+    if (locationId) {
+      filtered = filtered.filter((e) => e.location && e.location.id === locationId);
+    }
+
+    // 6. Text Search (case-insensitive across name, ID, position, department, email)
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      filtered = filtered.filter((e) => {
+        const nameMatch = e.fullName?.toLowerCase().includes(q);
+        const codeMatch = e.employeeId?.toLowerCase().includes(q);
+        const posMatch = e.position?.name?.toLowerCase().includes(q);
+        const deptMatch = e.department?.name?.toLowerCase().includes(q);
+        const emailMatch = e.workEmail?.toLowerCase().includes(q);
+        return nameMatch || codeMatch || posMatch || deptMatch || emailMatch;
+      });
+    }
+
+    // 7. Sorting
+    filtered.sort((a, b) => {
+      if (sortBy === 'name-desc') {
+        return (b.fullName || '').localeCompare(a.fullName || '');
+      }
+      if (sortBy === 'date-desc') {
+        return (b.startDate || '').localeCompare(a.startDate || '');
+      }
+      if (sortBy === 'date-asc') {
+        return (a.startDate || '').localeCompare(b.startDate || '');
+      }
+      // Default: 'name-asc'
+      return (a.fullName || '').localeCompare(b.fullName || '');
+    });
+
+    return {
+      employees: filtered,
+      baseCount,
+      totalFilteredCount: filtered.length,
+    };
   },
 
   /**

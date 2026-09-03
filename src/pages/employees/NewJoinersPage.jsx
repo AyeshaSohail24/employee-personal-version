@@ -1,14 +1,12 @@
 import React from 'react';
-import { UserPlus } from 'lucide-react';
-import PlaceholderCard from '../../components/common/PlaceholderCard';
+import DirectoryPageContainer from '../../components/employees/DirectoryPageContainer';
 
 export default function NewJoinersPage() {
   return (
-    <PlaceholderCard
-      title="New Joiners"
-      subtitle="Recently onboarded team members and upcoming start dates"
-      category="Employee Directory"
-      icon={UserPlus}
+    <DirectoryPageContainer
+      title="New Joiners & Upcoming Hires"
+      description="Team members currently onboarding or scheduled to join"
+      baseLifecycleScope="NewJoiners"
     />
   );
 }
