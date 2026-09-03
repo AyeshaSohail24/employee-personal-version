@@ -1,14 +1,62 @@
-import React from 'react';
-import { Building2 } from 'lucide-react';
-import PlaceholderCard from '../../components/common/PlaceholderCard';
+import React, { useState, useEffect } from 'react';
+import { departmentService } from '../../services/departmentService';
+import DepartmentCard from '../../components/organization/DepartmentCard';
+import OrganizationSkeleton from '../../components/organization/OrganizationSkeleton';
 
 export default function DepartmentsPage() {
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+        const depts = await departmentService.getAll({ withCount: true });
+        setDepartments(depts);
+      } catch (err) {
+        console.error('Failed to load departments:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  const rootDepts = departments.filter((d) => !d.parentDepartmentId);
+
   return (
-    <PlaceholderCard
-      title="Departments"
-      subtitle="Organizational units, managers, and employee counts"
-      category="Organization Structure"
-      icon={Building2}
-    />
+    <div className="organization-page-wrapper">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Departments</h1>
+          <p className="page-description">
+            Rizurf organizational unit hierarchy, department managers, and current headcount
+          </p>
+        </div>
+        <div className="directory-count-badge">{departments.length} Departments</div>
+      </div>
+
+      {loading ? (
+        <OrganizationSkeleton />
+      ) : (
+        <div className="dept-card-grid">
+          {rootDepts.map((dept) => {
+            const subDepts = departments.filter((sub) => sub.parentDepartmentId === dept.id);
+            const parent = dept.parentDepartmentId
+              ? departments.find((p) => p.id === dept.parentDepartmentId)?.name
+              : null;
+
+            return (
+              <DepartmentCard
+                key={dept.id}
+                department={dept}
+                parentDepartmentName={parent}
+                subDepartments={subDepts}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

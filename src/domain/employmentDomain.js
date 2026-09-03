@@ -93,13 +93,97 @@ export function resolveHistoricalRecord(employeeId, records = [], referenceDate 
 }
 
 /**
- * Enriches an Employee object with resolved organizational data
- * (Department, Position, Manager, Location, Schedule) without duplicating identity fields.
- * Explicitly separates:
- * - currentEmploymentRecord (active today)
- * - futureEmploymentRecord (scheduled for Upcoming)
- * - historicalEmploymentRecord (latest closed record for Former)
- * - effectiveEmploymentRecord (points to record used for display representation)
+ * Returns array of currently assigned employees participating in current organizational structure
+ * (Active, Onboarding, and Departing employees with valid current EmploymentRecord on referenceDate).
+ * Strictly excludes Former employees and not-yet-started Upcoming employees.
+ *
+ * @param {Array<Object>} employees
+ * @param {Array<Object>} records
+ * @param {string|Date} [referenceDate]
+ * @returns {Array<Object>} Filtered list of currently assigned employee objects with active record
+ */
+export function getCurrentWorkforce(employees = [], records = [], referenceDate = new Date()) {
+  if (!Array.isArray(employees) || !Array.isArray(records)) return [];
+
+  return employees.filter((emp) => {
+    if (emp.status !== 'Active' && emp.status !== 'Onboarding' && emp.status !== 'Departing') {
+      return false;
+    }
+    const currentRec = resolveCurrentRecord(emp.id, records, referenceDate);
+    return currentRec !== null;
+  });
+}
+
+/**
+ * Calculates current headcount for a department based on active workforce assignments.
+ *
+ * @param {string} departmentId
+ * @param {Array<Object>} employees
+ * @param {Array<Object>} records
+ * @param {string|Date} [referenceDate]
+ * @returns {number} Current headcount
+ */
+export function calculateDepartmentHeadcount(departmentId, employees = [], records = [], referenceDate = new Date()) {
+  const currentWorkforce = getCurrentWorkforce(employees, records, referenceDate);
+  return currentWorkforce.filter((emp) => {
+    const activeRec = resolveCurrentRecord(emp.id, records, referenceDate);
+    return activeRec && activeRec.departmentId === departmentId;
+  }).length;
+}
+
+/**
+ * Calculates current active occupants count for a job position.
+ *
+ * @param {string} positionId
+ * @param {Array<Object>} employees
+ * @param {Array<Object>} records
+ * @param {string|Date} [referenceDate]
+ * @returns {number} Current occupants count
+ */
+export function calculatePositionOccupants(positionId, employees = [], records = [], referenceDate = new Date()) {
+  const currentWorkforce = getCurrentWorkforce(employees, records, referenceDate);
+  return currentWorkforce.filter((emp) => {
+    const activeRec = resolveCurrentRecord(emp.id, records, referenceDate);
+    return activeRec && activeRec.positionId === positionId;
+  }).length;
+}
+
+/**
+ * Calculates current assigned employee count for a work location.
+ *
+ * @param {string} locationId
+ * @param {Array<Object>} employees
+ * @param {Array<Object>} records
+ * @param {string|Date} [referenceDate]
+ * @returns {number} Current location workforce count
+ */
+export function calculateLocationWorkforce(locationId, employees = [], records = [], referenceDate = new Date()) {
+  const currentWorkforce = getCurrentWorkforce(employees, records, referenceDate);
+  return currentWorkforce.filter((emp) => {
+    const activeRec = resolveCurrentRecord(emp.id, records, referenceDate);
+    return activeRec && activeRec.locationId === locationId;
+  }).length;
+}
+
+/**
+ * Calculates upcoming scheduled hires for a position starting in the future.
+ *
+ * @param {string} positionId
+ * @param {Array<Object>} employees
+ * @param {Array<Object>} records
+ * @param {string|Date} [referenceDate]
+ * @returns {number} Upcoming scheduled hires count
+ */
+export function calculateUpcomingPositionHires(positionId, employees = [], records = [], referenceDate = new Date()) {
+  const upcomingEmployees = employees.filter((e) => e.status === 'Upcoming');
+  return upcomingEmployees.filter((emp) => {
+    const nextRec = resolveNextRecord(emp.id, records, referenceDate);
+    return nextRec && nextRec.positionId === positionId;
+  }).length;
+}
+
+/**
+ * Enriches an Employee object with resolved organizational data.
  *
  * @param {Object} employee - Pure Employee record
  * @param {Array<Object>} records - Employment records
@@ -157,6 +241,64 @@ export function resolveHydratedEmployee(
     manager: manager ? { id: manager.id, fullName: manager.fullName, workEmail: manager.workEmail } : null,
     supervisor: supervisor ? { id: supervisor.id, fullName: supervisor.fullName, workEmail: supervisor.workEmail } : null,
   };
+}
+
+/**
+ * Builds employee reporting tree structure rooted at top-level managers (managerId === null).
+ * Forest-capable (handles single CEO root or multiple independent roots dynamically).
+ * Includes cycle detection and self-manager protection to prevent infinite recursion.
+ *
+ * @param {Array<Object>} employees
+ * @param {Array<Object>} records
+ * @param {Array<Object>} departments
+ * @param {Array<Object>} positions
+ * @param {Array<Object>} locations
+ * @param {Array<Object>} schedules
+ * @param {string|Date} [referenceDate]
+ * @returns {Array<Object>} Roots collection array containing tree nodes
+ */
+export function buildOrgChartTree(
+  employees = [],
+  records = [],
+  departments = [],
+  positions = [],
+  locations = [],
+  schedules = [],
+  referenceDate = new Date()
+) {
+  const currentWorkforce = getCurrentWorkforce(employees, records, referenceDate);
+  const hydratedWorkforce = currentWorkforce.map((emp) =>
+    resolveHydratedEmployee(emp, records, departments, positions, locations, schedules, employees, referenceDate)
+  );
+
+  const activeIds = new Set(hydratedWorkforce.map((e) => e.id));
+
+  // Identify root employees (managerId is null OR managerId is not in active workforce OR points to self)
+  const roots = hydratedWorkforce.filter((emp) => {
+    const mgrId = emp.currentEmploymentRecord?.managerId;
+    return !mgrId || mgrId === emp.id || !activeIds.has(mgrId);
+  });
+
+  const buildNode = (emp, visited = new Set()) => {
+    if (visited.has(emp.id)) {
+      console.warn(`OrgChart cycle detected for employee ${emp.id}`);
+      return null;
+    }
+    const newVisited = new Set(visited).add(emp.id);
+
+    const directReports = hydratedWorkforce
+      .filter((child) => child.id !== emp.id && child.currentEmploymentRecord?.managerId === emp.id)
+      .map((child) => buildNode(child, newVisited))
+      .filter(Boolean);
+
+    return {
+      employee: emp,
+      directReports,
+      totalReportCount: directReports.reduce((sum, r) => sum + 1 + r.totalReportCount, 0),
+    };
+  };
+
+  return roots.map((root) => buildNode(root)).filter(Boolean);
 }
 
 /**

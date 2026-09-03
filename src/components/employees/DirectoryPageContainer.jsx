@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { employeeService } from '../../services/employeeService';
 import { departmentService } from '../../services/departmentService';
 import { employeeTypeService } from '../../services/employeeTypeService';
@@ -15,26 +16,37 @@ export default function DirectoryPageContainer({
   description = 'Browse, filter, and manage Rizurf workforce records',
   baseLifecycleScope = 'All',
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [employees, setEmployees] = useState([]);
   const [baseCount, setBaseCount] = useState(0);
   const [totalFilteredCount, setTotalFilteredCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Read URL query parameters for initial state / deep linking
+  const urlDeptId = searchParams.get('departmentId') || '';
+  const urlLocId = searchParams.get('locationId') || '';
+
   // Filter & Search states
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [departmentId, setDepartmentId] = useState('');
+  const [departmentId, setDepartmentId] = useState(urlDeptId);
   const [employeeTypeId, setEmployeeTypeId] = useState('');
-  const [locationId, setLocationId] = useState('');
+  const [locationId, setLocationId] = useState(urlLocId);
   const [sortBy, setSortBy] = useState('name-asc');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'card'
+
+  // Sync state if URL search parameters change externally
+  useEffect(() => {
+    setDepartmentId(urlDeptId);
+    setLocationId(urlLocId);
+  }, [urlDeptId, urlLocId]);
 
   // Dropdown Options
   const [departments, setDepartments] = useState([]);
   const [employeeTypes, setEmployeeTypes] = useState([]);
   const [locations, setLocations] = useState([]);
 
-  // Load dropdown options once on mount
   useEffect(() => {
     async function loadOptions() {
       try {
@@ -81,7 +93,7 @@ export default function DirectoryPageContainer({
     fetchEmployees();
   }, [fetchEmployees]);
 
-  // Reset interactive filters without changing the route's base lifecycle scope!
+  // Reset interactive filters & clear URL query parameters without overriding route baseLifecycleScope!
   const handleResetFilters = () => {
     setSearch('');
     setStatusFilter('All');
@@ -89,6 +101,7 @@ export default function DirectoryPageContainer({
     setEmployeeTypeId('');
     setLocationId('');
     setSortBy('name-asc');
+    setSearchParams({}); // Clears URL query parameters cleanly
   };
 
   const hasActiveFilters =
@@ -123,11 +136,25 @@ export default function DirectoryPageContainer({
         selectedStatus={statusFilter}
         onStatusChange={setStatusFilter}
         selectedDept={departmentId}
-        onDeptChange={setDepartmentId}
+        onDeptChange={(val) => {
+          setDepartmentId(val);
+          if (!val) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('departmentId');
+            setSearchParams(nextParams);
+          }
+        }}
         selectedType={employeeTypeId}
         onTypeChange={setEmployeeTypeId}
         selectedLoc={locationId}
-        onLocChange={setLocationId}
+        onLocChange={(val) => {
+          setLocationId(val);
+          if (!val) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('locationId');
+            setSearchParams(nextParams);
+          }
+        }}
         selectedSort={sortBy}
         onSortChange={setSortBy}
         viewMode={viewMode}

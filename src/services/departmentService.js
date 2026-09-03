@@ -1,12 +1,12 @@
 import { loadDatabase } from '../mock-data/storageEngine.js';
-import { resolveCurrentRecord } from '../domain/employmentDomain.js';
+import { calculateDepartmentHeadcount } from '../domain/employmentDomain.js';
 
 /**
  * Service providing asynchronous data access for Department entities.
  */
 export const departmentService = {
   /**
-   * Retrieves all departments, optionally enriched with active employee counts.
+   * Retrieves all departments, enriched with current headcount metrics.
    * @param {Object} [options]
    * @param {boolean} [options.withCount=true]
    * @returns {Promise<Array<Object>>}
@@ -19,17 +19,8 @@ export const departmentService = {
 
     if (!withCount) return depts;
 
-    // Calculate current headcount per department (Active, Onboarding, and Departing employees with active employment record on reference date)
-    const currentWorkforce = employees.filter(
-      (e) => e.status === 'Active' || e.status === 'Onboarding' || e.status === 'Departing'
-    );
-
     return depts.map((dept) => {
-      const headcount = currentWorkforce.filter((emp) => {
-        const activeRec = resolveCurrentRecord(emp.id, records);
-        return activeRec && activeRec.departmentId === dept.id;
-      }).length;
-
+      const headcount = calculateDepartmentHeadcount(dept.id, employees, records);
       const manager = dept.managerEmployeeId
         ? employees.find((e) => e.id === dept.managerEmployeeId)
         : null;
