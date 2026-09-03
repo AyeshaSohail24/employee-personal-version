@@ -29,10 +29,16 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
     organization: true,
     onboarding: false,
     offboarding: false,
-    activities: false,
+    activities: location.pathname.startsWith('/activities'),
     reporting: false,
     configuration: false,
   });
+
+  React.useEffect(() => {
+    if (location.pathname.startsWith('/activities')) {
+      setOpenSections((prev) => ({ ...prev, activities: true }));
+    }
+  }, [location.pathname]);
 
   const toggleSection = (section) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));

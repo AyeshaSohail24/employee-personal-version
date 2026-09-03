@@ -9,8 +9,11 @@ import { seedUserAccounts } from './seedUserAccounts.js';
 import { seedLeaves } from './seedLeaves.js';
 import { seedAttendance } from './seedAttendance.js';
 import { seedPresenceOverrides } from './seedPresenceOverrides.js';
+import { seedActivityTypes } from './seedActivityTypes.js';
+import { seedActivities } from './seedActivities.js';
 
 const STORAGE_KEY = 'rizurf_hr_poc_v1';
+let inMemoryDb = null;
 
 function getInitialState() {
   return {
@@ -25,13 +28,18 @@ function getInitialState() {
     leaves: seedLeaves,
     attendance: seedAttendance,
     presenceOverrides: seedPresenceOverrides,
+    activityTypes: seedActivityTypes,
+    activities: seedActivities,
   };
 }
 
 export function loadDatabase() {
   try {
     if (typeof localStorage === 'undefined') {
-      return getInitialState();
+      if (!inMemoryDb) {
+        inMemoryDb = getInitialState();
+      }
+      return inMemoryDb;
     }
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
@@ -39,24 +47,35 @@ export function loadDatabase() {
       saveDatabase(initial);
       return initial;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!parsed.activityTypes) parsed.activityTypes = seedActivityTypes;
+    if (!parsed.activities) parsed.activities = seedActivities;
+    return parsed;
   } catch (err) {
-    return getInitialState();
+    if (!inMemoryDb) {
+      inMemoryDb = getInitialState();
+    }
+    return inMemoryDb;
   }
 }
 
 export function saveDatabase(db) {
   try {
+    inMemoryDb = db;
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
     }
   } catch (err) {
+    inMemoryDb = db;
     console.error('StorageEngine: failed to save to localStorage.', err);
   }
 }
 
 export function resetDatabase() {
   const initial = getInitialState();
-  saveDatabase(initial);
+  inMemoryDb = initial;
+  if (typeof localStorage !== 'undefined') {
+    saveDatabase(initial);
+  }
   return initial;
 }

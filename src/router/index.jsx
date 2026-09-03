@@ -112,6 +112,7 @@ export const router = createBrowserRouter([
       {
         path: 'activities',
         children: [
+          { index: true, element: <Navigate to="/activities/my" replace /> },
           { path: 'my', element: <MyActivitiesPage /> },
           { path: 'all', element: <AllActivitiesPage /> },
           { path: 'overdue', element: <OverdueActivitiesPage /> },
