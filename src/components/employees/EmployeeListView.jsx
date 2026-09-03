@@ -1,4 +1,6 @@
 import React from 'react';
+import { formatCompactLocation } from '../../domain/locationDomain';
+import { formatCompactPosition } from '../../domain/positionDomain';
 
 const STATUS_PILL_STYLES = {
   Active: { bg: '#ECFDF5', color: '#059669' },
@@ -47,7 +49,9 @@ export default function EmployeeListView({ employees = [] }) {
                   </td>
 
                   <td>
-                    <div className="table-text-main">{emp.position ? emp.position.name : 'Unassigned'}</div>
+                    <div className="table-text-main pos-title-text">
+                      {emp.position ? formatCompactPosition(emp.position.name) : 'Unassigned'}
+                    </div>
                     {isUpcoming && <div className="table-sub-badge">Scheduled Position</div>}
                     {isFormer && <div className="table-sub-badge">Last Held Position</div>}
                   </td>
@@ -57,7 +61,7 @@ export default function EmployeeListView({ employees = [] }) {
                   </td>
 
                   <td>
-                    <div className="table-text-secondary">{emp.location ? emp.location.name : 'Unassigned'}</div>
+                    <div className="table-text-secondary">{formatCompactLocation(emp.location)}</div>
                   </td>
 
                   <td>

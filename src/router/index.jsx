@@ -11,6 +11,9 @@ import NewJoinersPage from '../pages/employees/NewJoinersPage';
 import DepartingEmployeesPage from '../pages/employees/DepartingEmployeesPage';
 import FormerEmployeesPage from '../pages/employees/FormerEmployeesPage';
 
+// Presence Page
+import PresencePage from '../pages/presence/PresencePage';
+
 // Organization Pages
 import DepartmentsPage from '../pages/organization/DepartmentsPage';
 import OrgChartPage from '../pages/organization/OrgChartPage';
@@ -58,6 +61,9 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: 'dashboard', element: <DashboardPage /> },
 
+      // Presence route
+      { path: 'presence', element: <PresencePage /> },
+
       // Employees routes
       {
         path: 'employees',
@@ -67,6 +73,7 @@ export const router = createBrowserRouter([
           { path: 'new-joiners', element: <NewJoinersPage /> },
           { path: 'departing', element: <DepartingEmployeesPage /> },
           { path: 'former', element: <FormerEmployeesPage /> },
+          { path: 'presence', element: <PresencePage /> },
         ],
       },
 

@@ -1,5 +1,7 @@
 import React from 'react';
 import { MapPin, Building2, User } from 'lucide-react';
+import { formatCompactLocation } from '../../domain/locationDomain';
+import { formatCompactPosition } from '../../domain/positionDomain';
 
 const STATUS_PILL_STYLES = {
   Active: { bg: '#ECFDF5', color: '#059669' },
@@ -37,7 +39,9 @@ export default function EmployeeCardView({ employees = [] }) {
             <div className="emp-card-identity">
               <h3 className="emp-card-name">{emp.fullName}</h3>
               <span className="emp-card-code">{emp.employeeId}</span>
-              <p className="emp-card-position">{emp.position ? emp.position.name : 'Unassigned'}</p>
+              <p className="emp-card-position pos-title-text">
+                {emp.position ? formatCompactPosition(emp.position.name) : 'Unassigned'}
+              </p>
               {isUpcoming && <span className="emp-card-tag-sub">Scheduled Position</span>}
               {isFormer && <span className="emp-card-tag-sub">Last Held Position</span>}
             </div>
@@ -51,7 +55,7 @@ export default function EmployeeCardView({ employees = [] }) {
 
               <div className="detail-row">
                 <MapPin size={15} className="detail-icon" />
-                <span className="detail-text">{emp.location ? emp.location.name : 'Unassigned'}</span>
+                <span className="detail-text">{formatCompactLocation(emp.location)}</span>
               </div>
 
               <div className="detail-row">

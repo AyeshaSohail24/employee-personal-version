@@ -6,6 +6,9 @@ import { seedSchedules } from './seedSchedules.js';
 import { seedEmployees } from './seedEmployees.js';
 import { seedEmploymentRecords } from './seedEmploymentRecords.js';
 import { seedUserAccounts } from './seedUserAccounts.js';
+import { seedLeaves } from './seedLeaves.js';
+import { seedAttendance } from './seedAttendance.js';
+import { seedPresenceOverrides } from './seedPresenceOverrides.js';
 
 const STORAGE_KEY = 'rizurf_hr_poc_v1';
 
@@ -19,6 +22,9 @@ function getInitialState() {
     employees: seedEmployees,
     employmentRecords: seedEmploymentRecords,
     userAccounts: seedUserAccounts,
+    leaves: seedLeaves,
+    attendance: seedAttendance,
+    presenceOverrides: seedPresenceOverrides,
   };
 }
 

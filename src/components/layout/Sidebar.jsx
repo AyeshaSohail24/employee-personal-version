@@ -119,6 +119,13 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
               >
                 Former Employees
               </NavLink>
+              <NavLink
+                to="/presence"
+                className={({ isActive }) => `subnav-item ${isActive ? 'active' : ''}`}
+                onClick={closeMobile}
+              >
+                Work Status / Presence
+              </NavLink>
             </div>
           )}
         </div>

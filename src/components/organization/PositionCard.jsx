@@ -1,5 +1,7 @@
 import React from 'react';
 import { Building2, Clock, MapPin, Users, Calendar } from 'lucide-react';
+import { formatCompactLocation } from '../../domain/locationDomain';
+import { formatCompactPosition } from '../../domain/positionDomain';
 
 export default function PositionCard({ position }) {
   const currentOccupants = position.currentOccupantsCount || 0;
@@ -10,7 +12,7 @@ export default function PositionCard({ position }) {
     <div className="position-card">
       <div className="pos-card-header">
         <div>
-          <h3 className="pos-title">{position.name}</h3>
+          <h3 className="pos-title pos-title-text">{formatCompactPosition(position.name)}</h3>
           <span className="pos-dept-tag" style={{ backgroundColor: position.departmentColor + '20', color: position.departmentColor }}>
             <Building2 size={13} />
             <span>{position.departmentName}</span>
@@ -31,7 +33,7 @@ export default function PositionCard({ position }) {
 
         <div className="pos-meta-row">
           <MapPin size={15} className="pos-icon" />
-          <span>Location: {position.locationName}</span>
+          <span>Location: {formatCompactLocation(position.locationName)}</span>
         </div>
 
         {/* Scheduled Upcoming Hire Badge */}

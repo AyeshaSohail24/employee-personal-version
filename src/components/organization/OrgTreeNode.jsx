@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Users, MapPin, Building2 } from 'lucide-react';
+import { formatCompactLocation } from '../../domain/locationDomain';
+import { formatCompactPosition } from '../../domain/positionDomain';
 
 export default function OrgTreeNode({ node, level = 0 }) {
   const [expanded, setExpanded] = useState(true);
@@ -37,8 +39,8 @@ export default function OrgTreeNode({ node, level = 0 }) {
         </div>
 
         <div className="org-node-body">
-          <div className="org-node-position">
-            {employee.position ? employee.position.name : 'Unassigned'}
+          <div className="org-node-position pos-title-text">
+            {employee.position ? formatCompactPosition(employee.position.name) : 'Unassigned'}
           </div>
 
           <div className="org-node-meta">
@@ -52,7 +54,7 @@ export default function OrgTreeNode({ node, level = 0 }) {
             {employee.location && (
               <div className="org-meta-item">
                 <MapPin size={13} />
-                <span>{employee.location.name}</span>
+                <span>{formatCompactLocation(employee.location)}</span>
               </div>
             )}
           </div>
