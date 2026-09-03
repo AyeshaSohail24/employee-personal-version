@@ -19,13 +19,13 @@ export const departmentService = {
 
     if (!withCount) return depts;
 
-    // Calculate active employee count per department
-    const activeEmployees = employees.filter(
-      (e) => e.status === 'Active' || e.status === 'Onboarding'
+    // Calculate current headcount per department (Active, Onboarding, and Departing employees with active employment record on reference date)
+    const currentWorkforce = employees.filter(
+      (e) => e.status === 'Active' || e.status === 'Onboarding' || e.status === 'Departing'
     );
 
     return depts.map((dept) => {
-      const count = activeEmployees.filter((emp) => {
+      const headcount = currentWorkforce.filter((emp) => {
         const activeRec = resolveCurrentRecord(emp.id, records);
         return activeRec && activeRec.departmentId === dept.id;
       }).length;
@@ -36,7 +36,8 @@ export const departmentService = {
 
       return {
         ...dept,
-        employeeCount: count,
+        currentHeadcount: headcount,
+        employeeCount: headcount,
         managerName: manager ? manager.fullName : null,
       };
     });
