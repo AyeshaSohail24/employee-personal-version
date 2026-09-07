@@ -2826,6 +2826,54 @@ body {
   }
 }
 
+/* ==========================================================================
+   STAGE 10: REPORTING & HR ANALYTICS SCOPED STYLES
+   ========================================================================== */
+
+.reporting-header {
+  margin-bottom: 1.5rem;
+}
+
+.reporting-filter-bar {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
+}
+
+.reporting-kpi-grid {
+  margin-bottom: 1.5rem;
+}
+
+.reporting-chart-card {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
+}
+
+.reporting-data-table th {
+  border-bottom: 1px solid var(--border-light);
+  background-color: var(--bg-subtle);
+  color: var(--text-muted);
+}
+
+.reporting-data-table td {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.reporting-data-table tr:hover {
+  background-color: var(--bg-hover);
+}
+
+@media (max-width: 768px) {
+  .reporting-filter-bar {
+    padding: 0.85rem !important;
+  }
+  .reporting-data-table {
+    font-size: 0.8rem !important;
+  }
+}
+
+
 
 
 
