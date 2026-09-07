@@ -2763,6 +2763,70 @@ body {
   box-sizing: border-box;
 }
 
+/* ==========================================================================
+   Stage 8 — Onboarding Dashboard Responsive UI Styles
+   ========================================================================== */
+
+.onboarding-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.onboarding-dashboard-header .header-text-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.onboarding-dashboard-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
+.onboarding-dashboard-header .btn-header-action {
+  white-space: nowrap;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.815rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 36px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.onboarding-main-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 1024px) {
+  .onboarding-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .onboarding-dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .onboarding-dashboard-header .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+
 
 
 

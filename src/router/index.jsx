@@ -23,7 +23,9 @@ import WorkLocationsPage from '../pages/organization/WorkLocationsPage';
 // Onboarding Pages
 import OnboardingDashboardPage from '../pages/onboarding/OnboardingDashboardPage';
 import OnboardingEmployeesPage from '../pages/onboarding/OnboardingEmployeesPage';
+import OnboardingEmployeeDetailPage from '../pages/onboarding/OnboardingEmployeeDetailPage';
 import OnboardingPlansPage from '../pages/onboarding/OnboardingPlansPage';
+import PlanEditorPage from '../pages/onboarding/PlanEditorPage';
 
 // Offboarding Pages
 import OffboardingDashboardPage from '../pages/offboarding/OffboardingDashboardPage';
@@ -92,9 +94,13 @@ export const router = createBrowserRouter([
       {
         path: 'onboarding',
         children: [
+          { index: true, element: <Navigate to="/onboarding/dashboard" replace /> },
           { path: 'dashboard', element: <OnboardingDashboardPage /> },
           { path: 'employees', element: <OnboardingEmployeesPage /> },
+          { path: 'employees/:employeeId', element: <OnboardingEmployeeDetailPage /> },
           { path: 'plans', element: <OnboardingPlansPage /> },
+          { path: 'plans/new', element: <PlanEditorPage /> },
+          { path: 'plans/:planId/edit', element: <PlanEditorPage /> },
         ],
       },
 

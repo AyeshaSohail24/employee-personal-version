@@ -55,3 +55,24 @@ export function getDaysDifference(targetDate, referenceDate) {
   const diffTime = t1 - t2;
   return Math.round(diffTime / (1000 * 60 * 60 * 24));
 }
+
+/**
+ * Adds or subtracts a number of days from a YYYY-MM-DD date string safely in local time.
+ * 
+ * @param {string} dateStr 'YYYY-MM-DD'
+ * @param {number} days Days to add or subtract
+ * @returns {string} Resulting date string in 'YYYY-MM-DD' format
+ */
+export function addDaysToLocalDate(dateStr, days = 0) {
+  if (!dateStr) return null;
+  const parts = dateStr.slice(0, 10).split('-');
+  if (parts.length !== 3) return dateStr;
+  const [year, month, day] = parts.map(Number);
+  const d = new Date(year, month - 1, day + Number(days));
+  if (isNaN(d.getTime())) return dateStr;
+  const rYear = d.getFullYear();
+  const rMonth = String(d.getMonth() + 1).padStart(2, '0');
+  const rDay = String(d.getDate()).padStart(2, '0');
+  return `${rYear}-${rMonth}-${rDay}`;
+}
+

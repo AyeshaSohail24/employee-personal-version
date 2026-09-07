@@ -11,6 +11,8 @@ import { seedAttendance } from './seedAttendance.js';
 import { seedPresenceOverrides } from './seedPresenceOverrides.js';
 import { seedActivityTypes } from './seedActivityTypes.js';
 import { seedActivities } from './seedActivities.js';
+import { seedOnboardingPlanTemplates, seedOnboardingPlanTasks } from './seedOnboardingTemplates.js';
+import { seedOnboardingPlanInstances, seedOnboardingTaskInstances } from './seedOnboardingInstances.js';
 
 const STORAGE_KEY = 'rizurf_hr_poc_v1';
 let inMemoryDb = null;
@@ -30,6 +32,10 @@ function getInitialState() {
     presenceOverrides: seedPresenceOverrides,
     activityTypes: seedActivityTypes,
     activities: seedActivities,
+    onboardingPlanTemplates: seedOnboardingPlanTemplates,
+    onboardingPlanTasks: seedOnboardingPlanTasks,
+    onboardingPlanInstances: seedOnboardingPlanInstances,
+    onboardingTaskInstances: seedOnboardingTaskInstances,
   };
 }
 
@@ -50,6 +56,10 @@ export function loadDatabase() {
     const parsed = JSON.parse(raw);
     if (!parsed.activityTypes) parsed.activityTypes = seedActivityTypes;
     if (!parsed.activities) parsed.activities = seedActivities;
+    if (!parsed.onboardingPlanTemplates) parsed.onboardingPlanTemplates = seedOnboardingPlanTemplates;
+    if (!parsed.onboardingPlanTasks) parsed.onboardingPlanTasks = seedOnboardingPlanTasks;
+    if (!parsed.onboardingPlanInstances) parsed.onboardingPlanInstances = seedOnboardingPlanInstances;
+    if (!parsed.onboardingTaskInstances) parsed.onboardingTaskInstances = seedOnboardingTaskInstances;
     return parsed;
   } catch (err) {
     if (!inMemoryDb) {

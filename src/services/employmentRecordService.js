@@ -6,6 +6,15 @@ import { resolveCurrentRecord } from '../domain/employmentDomain.js';
  */
 export const employmentRecordService = {
   /**
+   * Retrieves all employment records.
+   * @returns {Promise<Array<Object>>}
+   */
+  async getAll() {
+    const db = loadDatabase();
+    return db.employmentRecords || [];
+  },
+
+  /**
    * Retrieves all employment records for a given employee ID.
    * @param {string} employeeId
    * @returns {Promise<Array<Object>>} Sorted by effectiveFrom descending

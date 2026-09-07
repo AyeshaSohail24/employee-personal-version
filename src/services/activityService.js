@@ -187,6 +187,8 @@ export const activityService = {
       completedAt: null,
       completedBy: null,
       source: activityData.source || ACTIVITY_SOURCES.MANUAL,
+      sourceEntityType: activityData.sourceEntityType || null,
+      sourceEntityId: activityData.sourceEntityId || null,
       createdAt: nowIso,
       createdBy: currentUserId,
       updatedAt: nowIso,
@@ -231,6 +233,8 @@ export const activityService = {
       description: updateData.description !== undefined
         ? updateData.description.trim()
         : (updateData.notes !== undefined ? updateData.notes.trim() : existing.description),
+      sourceEntityType: updateData.sourceEntityType !== undefined ? updateData.sourceEntityType : existing.sourceEntityType,
+      sourceEntityId: updateData.sourceEntityId !== undefined ? updateData.sourceEntityId : existing.sourceEntityId,
       updatedAt: new Date().toISOString(),
     };
 
@@ -252,7 +256,7 @@ export const activityService = {
   },
 
   /**
-   * Marks an activity as completed.
+   * Marks an activity as completed and reconciles parent onboarding plan if linked.
    */
   async markComplete(id, currentUserId = 'emp-001') {
     const db = loadDatabase();
@@ -285,11 +289,19 @@ export const activityService = {
       );
     } catch (auditErr) {}
 
+    // Dynamic import to maintain acyclic module graph
+    if (activities[index].sourceEntityType === 'OnboardingTaskInstance') {
+      try {
+        const { onboardingService } = await import('./onboardingService.js');
+        await onboardingService.reconcileOnboardingPlanProgress(id, db);
+      } catch (reconcileErr) {}
+    }
+
     return this.getById(id);
   },
 
   /**
-   * Reopens a completed activity.
+   * Reopens a completed activity and reconciles parent onboarding plan if linked.
    */
   async reopen(id, currentUserId = 'emp-001') {
     const db = loadDatabase();
@@ -321,6 +333,14 @@ export const activityService = {
         `Reopened activity "${activities[index].title}"`
       );
     } catch (auditErr) {}
+
+    // Dynamic import to maintain acyclic module graph
+    if (activities[index].sourceEntityType === 'OnboardingTaskInstance') {
+      try {
+        const { onboardingService } = await import('./onboardingService.js');
+        await onboardingService.reconcileOnboardingPlanProgress(id, db);
+      } catch (reconcileErr) {}
+    }
 
     return this.getById(id);
   },
