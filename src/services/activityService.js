@@ -295,13 +295,18 @@ export const activityService = {
         const { onboardingService } = await import('./onboardingService.js');
         await onboardingService.reconcileOnboardingPlanProgress(id, db);
       } catch (reconcileErr) {}
+    } else if (activities[index].sourceEntityType === 'OffboardingTaskInstance') {
+      try {
+        const { offboardingService } = await import('./offboardingService.js');
+        await offboardingService.reconcileOffboardingPlanProgress(id, db);
+      } catch (reconcileErr) {}
     }
 
     return this.getById(id);
   },
 
   /**
-   * Reopens a completed activity and reconciles parent onboarding plan if linked.
+   * Reopens a completed activity and reconciles parent onboarding or offboarding plan if linked.
    */
   async reopen(id, currentUserId = 'emp-001') {
     const db = loadDatabase();
@@ -339,6 +344,11 @@ export const activityService = {
       try {
         const { onboardingService } = await import('./onboardingService.js');
         await onboardingService.reconcileOnboardingPlanProgress(id, db);
+      } catch (reconcileErr) {}
+    } else if (activities[index].sourceEntityType === 'OffboardingTaskInstance') {
+      try {
+        const { offboardingService } = await import('./offboardingService.js');
+        await offboardingService.reconcileOffboardingPlanProgress(id, db);
       } catch (reconcileErr) {}
     }
 

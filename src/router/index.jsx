@@ -30,7 +30,9 @@ import PlanEditorPage from '../pages/onboarding/PlanEditorPage';
 // Offboarding Pages
 import OffboardingDashboardPage from '../pages/offboarding/OffboardingDashboardPage';
 import OffboardingDepartingPage from '../pages/offboarding/OffboardingDepartingPage';
+import OffboardingEmployeeDetailPage from '../pages/offboarding/OffboardingEmployeeDetailPage';
 import OffboardingPlansPage from '../pages/offboarding/OffboardingPlansPage';
+import OffboardingPlanEditorPage from '../pages/offboarding/PlanEditorPage';
 
 // Activities Pages
 import MyActivitiesPage from '../pages/activities/MyActivitiesPage';
@@ -108,9 +110,13 @@ export const router = createBrowserRouter([
       {
         path: 'offboarding',
         children: [
+          { index: true, element: <Navigate to="/offboarding/dashboard" replace /> },
           { path: 'dashboard', element: <OffboardingDashboardPage /> },
           { path: 'departing', element: <OffboardingDepartingPage /> },
+          { path: 'employees/:employeeId', element: <OffboardingEmployeeDetailPage /> },
           { path: 'plans', element: <OffboardingPlansPage /> },
+          { path: 'plans/new', element: <OffboardingPlanEditorPage /> },
+          { path: 'plans/:planId/edit', element: <OffboardingPlanEditorPage /> },
         ],
       },
 

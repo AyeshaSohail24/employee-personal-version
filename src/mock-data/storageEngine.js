@@ -13,6 +13,8 @@ import { seedActivityTypes } from './seedActivityTypes.js';
 import { seedActivities } from './seedActivities.js';
 import { seedOnboardingPlanTemplates, seedOnboardingPlanTasks } from './seedOnboardingTemplates.js';
 import { seedOnboardingPlanInstances, seedOnboardingTaskInstances } from './seedOnboardingInstances.js';
+import { seedOffboardingPlanTemplates, seedOffboardingPlanTasks } from './seedOffboardingTemplates.js';
+import { seedOffboardingPlanInstances, seedOffboardingTaskInstances } from './seedOffboardingInstances.js';
 
 const STORAGE_KEY = 'rizurf_hr_poc_v1';
 let inMemoryDb = null;
@@ -36,6 +38,10 @@ function getInitialState() {
     onboardingPlanTasks: seedOnboardingPlanTasks,
     onboardingPlanInstances: seedOnboardingPlanInstances,
     onboardingTaskInstances: seedOnboardingTaskInstances,
+    offboardingPlanTemplates: seedOffboardingPlanTemplates,
+    offboardingPlanTasks: seedOffboardingPlanTasks,
+    offboardingPlanInstances: seedOffboardingPlanInstances,
+    offboardingTaskInstances: seedOffboardingTaskInstances,
   };
 }
 
@@ -60,6 +66,10 @@ export function loadDatabase() {
     if (!parsed.onboardingPlanTasks) parsed.onboardingPlanTasks = seedOnboardingPlanTasks;
     if (!parsed.onboardingPlanInstances) parsed.onboardingPlanInstances = seedOnboardingPlanInstances;
     if (!parsed.onboardingTaskInstances) parsed.onboardingTaskInstances = seedOnboardingTaskInstances;
+    if (!parsed.offboardingPlanTemplates) parsed.offboardingPlanTemplates = seedOffboardingPlanTemplates;
+    if (!parsed.offboardingPlanTasks) parsed.offboardingPlanTasks = seedOffboardingPlanTasks;
+    if (!parsed.offboardingPlanInstances) parsed.offboardingPlanInstances = seedOffboardingPlanInstances;
+    if (!parsed.offboardingTaskInstances) parsed.offboardingTaskInstances = seedOffboardingTaskInstances;
     return parsed;
   } catch (err) {
     if (!inMemoryDb) {
