@@ -2873,6 +2873,190 @@ body {
   }
 }
 
+/* ==========================================================================
+   Stage 11 — Configuration & HR Master Data Management Design System CSS
+   ========================================================================== */
+
+.config-page-wrapper {
+  padding: 1.5rem;
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+/* Header & Primary Buttons */
+.config-header-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary-teal {
+  background-color: #129FA9;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.15s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary-teal:hover {
+  background-color: #0E848D;
+  box-shadow: 0 2px 6px rgba(18, 159, 169, 0.3);
+}
+
+/* Modern Tab Segmented Bar */
+.config-tab-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #f1f5f9;
+  padding: 0.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid #e2e8f0;
+}
+
+.config-tab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  color: #64748b;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.config-tab-item:hover {
+  color: #0f172a;
+}
+
+.config-tab-item.active {
+  background-color: #ffffff;
+  color: #129FA9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Polished SaaS Table System */
+.config-table-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.config-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: left;
+  font-size: 0.8125rem;
+}
+
+.config-table th {
+  background-color: #f8fafc;
+  color: #475569;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.config-table td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+  color: #1e293b;
+}
+
+.config-table tr:last-child td {
+  border-bottom: none;
+}
+
+.config-table tr:hover td {
+  background-color: #f8fafc;
+}
+
+/* Action Icon Buttons */
+.config-action-btn {
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  color: #64748b;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.config-action-btn:hover:not(:disabled) {
+  background-color: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.config-action-btn.deactivate:hover:not(:disabled) {
+  background-color: #fffbe6;
+  color: #d97706;
+  border-color: #fde68a;
+}
+
+.config-action-btn.activate:hover:not(:disabled) {
+  background-color: #ecfdf5;
+  color: #059669;
+  border-color: #a7f3d0;
+}
+
+.config-action-btn.delete:hover:not(:disabled) {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.config-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Responsive Mobile Cards */
+@media (max-width: 768px) {
+  .config-desktop-table {
+    display: none;
+  }
+  .config-mobile-cards {
+    display: block;
+  }
+}
+
+@media (min-width: 769px) {
+  .config-desktop-table {
+    display: block;
+  }
+  .config-mobile-cards {
+    display: none;
+  }
+}
+
+
+
 
 
 

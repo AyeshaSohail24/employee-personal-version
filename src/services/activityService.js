@@ -1,5 +1,6 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
 import { employeeService } from './employeeService.js';
+import { activityTypeService } from './activityTypeService.js';
 import { auditService, AUDIT_ACTIONS } from './auditService.js';
 import {
   filterActivities,
@@ -55,16 +56,14 @@ export const activityService = {
    * Fetches all registered ActivityTypes.
    */
   async getAllTypes() {
-    const db = loadDatabase();
-    return db.activityTypes || [];
+    return activityTypeService.getAll();
   },
 
   /**
    * Fetches all active ActivityTypes (for creation dropdowns).
    */
   async getActiveTypes() {
-    const types = await this.getAllTypes();
-    return types.filter((t) => t.active !== false);
+    return activityTypeService.getActive();
   },
 
   /**

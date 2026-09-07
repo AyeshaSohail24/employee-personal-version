@@ -1,4 +1,4 @@
-import { loadDatabase } from '../mock-data/storageEngine.js';
+import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
 import {
   calculatePositionOccupants,
   calculateUpcomingPositionHires,
@@ -48,6 +48,7 @@ export const positionService = {
 
       return {
         ...pos,
+        active: pos.active !== false,
         currentOccupantsCount,
         upcomingCount,
         departmentName: dept ? dept.name : 'Unassigned',
@@ -60,6 +61,15 @@ export const positionService = {
   },
 
   /**
+   * Retrieves active job positions only (for creation dropdowns).
+   * @returns {Promise<Array<Object>>}
+   */
+  async getActive() {
+    const all = await this.getAll();
+    return all.filter((p) => p.active !== false);
+  },
+
+  /**
    * Retrieves a position by ID.
    * @param {string} id
    * @returns {Promise<Object|null>}
@@ -68,4 +78,94 @@ export const positionService = {
     const all = await this.getAll();
     return all.find((p) => p.id === id) || null;
   },
+
+  /**
+   * Creates a new Job Position entity.
+   * @param {Object} posData
+   * @returns {Promise<Object>}
+   */
+  async create(posData) {
+    const db = loadDatabase();
+    const positions = db.positions || [];
+
+    const newPos = {
+      id: posData.id,
+      name: posData.name.trim(),
+      departmentId: posData.departmentId,
+      defaultManagerId: posData.defaultManagerId || null,
+      defaultScheduleId: posData.defaultScheduleId || 'sched-1',
+      defaultLocationId: posData.defaultLocationId || 'loc-1',
+      active: posData.active !== undefined ? posData.active : true,
+    };
+
+    db.positions = [...positions, newPos];
+    saveDatabase(db);
+    return this.getById(newPos.id);
+  },
+
+  /**
+   * Updates an existing Job Position entity.
+   * @param {string} id
+   * @param {Object} updateData
+   * @returns {Promise<Object>}
+   */
+  async update(id, updateData) {
+    const db = loadDatabase();
+    const positions = db.positions || [];
+    const index = positions.findIndex((p) => p.id === id);
+
+    if (index === -1) {
+      throw new Error(`Job Position with ID "${id}" not found.`);
+    }
+
+    const existing = positions[index];
+    const updated = {
+      ...existing,
+      ...updateData,
+      name: updateData.name ? updateData.name.trim() : existing.name,
+      departmentId: updateData.departmentId || existing.departmentId,
+      defaultManagerId: updateData.defaultManagerId !== undefined ? updateData.defaultManagerId : existing.defaultManagerId,
+      defaultScheduleId: updateData.defaultScheduleId || existing.defaultScheduleId,
+      defaultLocationId: updateData.defaultLocationId || existing.defaultLocationId,
+      active: updateData.active !== undefined ? updateData.active : existing.active,
+    };
+
+    positions[index] = updated;
+    db.positions = positions;
+    saveDatabase(db);
+    return this.getById(id);
+  },
+
+  /**
+   * Toggles active status of a Job Position entity.
+   * @param {string} id
+   * @returns {Promise<Object>}
+   */
+  async toggleActive(id) {
+    const existing = await this.getById(id);
+    if (!existing) {
+      throw new Error(`Job Position with ID "${id}" not found.`);
+    }
+    return this.update(id, { active: !existing.active });
+  },
+
+  /**
+   * Deletes an unreferenced Job Position entity.
+   * @param {string} id
+   * @returns {Promise<boolean>}
+   */
+  async delete(id) {
+    const db = loadDatabase();
+    const positions = db.positions || [];
+    const filtered = positions.filter((p) => p.id !== id);
+
+    if (filtered.length === positions.length) {
+      throw new Error(`Job Position with ID "${id}" not found.`);
+    }
+
+    db.positions = filtered;
+    saveDatabase(db);
+    return true;
+  },
 };
+
