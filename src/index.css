@@ -74,7 +74,7 @@ body {
 .app-container {
   display: flex;
   min-height: 100vh;
-  width: 100vw;
+  width: 100%;
   overflow-x: hidden;
 }
 
@@ -2879,8 +2879,13 @@ body {
 
 .config-page-wrapper {
   padding: 1.5rem;
-  max-width: 80rem;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  box-sizing: border-box;
 }
 
 /* Header & Primary Buttons */
@@ -2890,14 +2895,50 @@ body {
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   box-shadow: var(--shadow-sm);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.config-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.config-header-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-md);
+  background-color: rgba(18, 159, 169, 0.1);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.config-header-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.config-header-desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
 }
 
 .btn-primary-teal {
-  background-color: #129FA9;
+  background-color: var(--color-primary);
   color: #ffffff;
   font-weight: 600;
   font-size: 0.875rem;
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1.125rem;
   border-radius: var(--radius-md);
   display: inline-flex;
   align-items: center;
@@ -2905,22 +2946,51 @@ body {
   transition: all 0.15s ease;
   border: none;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.btn-primary-teal:hover {
-  background-color: #0E848D;
+.btn-primary-teal:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
   box-shadow: 0 2px 6px rgba(18, 159, 169, 0.3);
 }
 
-/* Modern Tab Segmented Bar */
-.config-tab-container {
-  display: flex;
+.btn-primary-teal:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary-cancel {
+  background-color: #ffffff;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.6rem 1.125rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.btn-secondary-cancel:hover {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  border-color: #cbd5e1;
+}
+
+/* Modern Segmented Tab Bar */
+.config-tab-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   background-color: #f1f5f9;
-  padding: 0.25rem;
-  border-radius: var(--radius-md);
+  padding: 0.35rem;
+  border-radius: var(--radius-lg);
   border: 1px solid #e2e8f0;
+  width: fit-content;
 }
 
 .config-tab-item {
@@ -2930,7 +3000,7 @@ body {
   padding: 0.5rem 1rem;
   font-size: 0.8125rem;
   font-weight: 600;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: #64748b;
   border: none;
   background: transparent;
@@ -2939,13 +3009,33 @@ body {
 }
 
 .config-tab-item:hover {
-  color: #0f172a;
+  color: var(--text-main);
+  background-color: rgba(255, 255, 255, 0.5);
 }
 
 .config-tab-item.active {
   background-color: #ffffff;
-  color: #129FA9;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.config-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+  background-color: #e2e8f0;
+  color: #475569;
+  transition: all 0.15s ease;
+}
+
+.config-tab-item.active .config-tab-count {
+  background-color: var(--color-primary);
+  color: #ffffff;
 }
 
 /* Polished SaaS Table System */
@@ -2955,6 +3045,7 @@ body {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  width: 100%;
 }
 
 .config-table {
@@ -2963,6 +3054,7 @@ body {
   border-spacing: 0;
   text-align: left;
   font-size: 0.8125rem;
+  table-layout: fixed;
 }
 
 .config-table th {
@@ -2972,13 +3064,13 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 0.65rem;
   border-bottom: 1px solid #e2e8f0;
   white-space: nowrap;
 }
 
 .config-table td {
-  padding: 0.65rem 1rem;
+  padding: 0.75rem 0.65rem;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
   color: #1e293b;
@@ -2992,7 +3084,77 @@ body {
   background-color: #f8fafc;
 }
 
-/* Action Icon Buttons */
+/* Color Dot Component */
+.config-color-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  margin-right: 0.5rem;
+}
+
+/* Status & Ref Pills */
+.config-pill-active {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: var(--status-active-bg);
+  color: var(--status-active-text);
+  border: 1px solid #a7f3d0;
+  white-space: nowrap;
+}
+
+.config-pill-inactive {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.config-pill-ref {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  white-space: nowrap;
+}
+
+.config-pill-ref-zero {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+/* Action Icon Buttons Group */
+.config-actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
 .config-action-btn {
   width: 2rem;
   height: 2rem;
@@ -3005,6 +3167,7 @@ body {
   color: #64748b;
   transition: all 0.15s ease;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .config-action-btn:hover:not(:disabled) {
@@ -3036,24 +3199,224 @@ body {
   cursor: not-allowed;
 }
 
-/* Responsive Mobile Cards */
+/* Modals System */
+.config-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.config-modal-card {
+  background-color: #ffffff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid #e2e8f0;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: configModalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes configModalFadeIn {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.config-modal-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.config-modal-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.config-modal-close {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  padding: 0.35rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.config-modal-close:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.config-modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.config-modal-footer {
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* Form System inside Modals */
+.config-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.config-form-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+
+.config-form-control {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.875rem;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-md);
+  background-color: #ffffff;
+  color: #0f172a;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.config-form-control:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.15);
+}
+
+.config-form-control.error {
+  border-color: #dc2626;
+}
+
+.config-form-error {
+  font-size: 0.75rem;
+  color: #dc2626;
+  margin-top: 0.2rem;
+}
+
+.config-form-checkbox-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  margin-top: 0.25rem;
+}
+
+.config-form-checkbox {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid #cbd5e1;
+  accent-color: var(--color-primary);
+  margin-top: 0.1rem;
+}
+
+/* Mobile Responsive Layout & Cards */
+.config-mobile-cards {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.config-mobile-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.config-mobile-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.config-mobile-card-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.config-mobile-card-body {
+  font-size: 0.8125rem;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.config-mobile-card-footer {
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 @media (max-width: 768px) {
+  .config-header-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .config-desktop-table {
-    display: none;
+    display: none !important;
   }
   .config-mobile-cards {
-    display: block;
+    display: flex !important;
   }
 }
 
 @media (min-width: 769px) {
   .config-desktop-table {
-    display: block;
+    display: block !important;
   }
   .config-mobile-cards {
-    display: none;
+    display: none !important;
   }
 }
+
 
 
 

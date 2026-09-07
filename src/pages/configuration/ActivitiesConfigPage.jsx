@@ -101,15 +101,17 @@ export default function ActivitiesConfigPage() {
 
   if (isEmployee) {
     return (
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 text-center max-w-2xl mx-auto my-12">
-          <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Master Data Access Restricted</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-            Master data configuration (Activity Types) requires HR or HR Admin permissions.
-          </p>
-          <div className="inline-block px-4 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300">
-            Current Role: {currentRole}
+      <div className="config-page-wrapper">
+        <div className="config-header-card" style={{ textAlign: 'center', justifyContent: 'center' }}>
+          <div>
+            <ShieldAlert style={{ width: '48px', height: '48px', color: '#d97706', margin: '0 auto 1rem' }} />
+            <h2 className="config-header-title">Master Data Access Restricted</h2>
+            <p className="config-header-desc">
+              Master data configuration (Activity Types) requires HR or HR Admin permissions.
+            </p>
+            <div style={{ marginTop: '1rem' }}>
+              <span className="config-pill-inactive">Current Role: {currentRole}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -117,24 +119,24 @@ export default function ActivitiesConfigPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="config-page-wrapper">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-[#129FA9]/10 text-[#129FA9] flex items-center justify-center shrink-0">
-            <CheckSquare className="w-6 h-6" />
+      <div className="config-header-card">
+        <div className="config-header-left">
+          <div className="config-header-icon">
+            <CheckSquare style={{ width: '24px', height: '24px' }} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Activity Types Master Data</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            <h1 className="config-header-title">Activity Types Master Data</h1>
+            <p className="config-header-desc">
               Configure canonical activity types and workflow task categories used across tasks, onboarding, and offboarding.
             </p>
           </div>
         </div>
 
         {userCanMutate && (
-          <button onClick={handleOpenCreate} className="btn-primary-teal shrink-0">
-            <Plus className="w-4 h-4" />
+          <button type="button" onClick={handleOpenCreate} className="btn-primary-teal">
+            <Plus style={{ width: '16px', height: '16px' }} />
             <span>Create Activity Type</span>
           </button>
         )}
@@ -142,8 +144,8 @@ export default function ActivitiesConfigPage() {
 
       {/* Read-Only Manager Notice */}
       {isManager && (
-        <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-center gap-3 text-xs text-amber-800 dark:text-amber-300">
-          <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div style={{ padding: '0.85rem 1rem', borderRadius: '10px', backgroundColor: '#fffbe6', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem', color: '#854d0e' }}>
+          <AlertCircle style={{ width: '18px', height: '18px', flexShrink: 0, color: '#d97706' }} />
           <span>
             <strong>Read-Only Mode:</strong> You are viewing Activity Types configuration as a Manager. Administrative mutations require HR or HR Admin privileges.
           </span>
@@ -152,22 +154,22 @@ export default function ActivitiesConfigPage() {
 
       {/* Main Table Area */}
       {loading ? (
-        <div className="bg-white dark:bg-slate-800 p-12 text-center rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500">
+        <div className="config-table-card" style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
           Loading activity types configuration...
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="config-table-card">
           {/* Desktop Table View */}
-          <div className="config-desktop-table overflow-x-auto">
+          <div className="config-desktop-table">
             <table className="config-table">
               <thead>
                 <tr>
-                  <th style={{ width: '30%' }}>Activity Type</th>
-                  <th style={{ width: '15%' }}>Icon</th>
-                  <th style={{ width: '20%' }}>Category</th>
-                  <th style={{ width: '15%' }}>References</th>
-                  <th style={{ width: '10%' }}>Status</th>
-                  <th style={{ width: '10%' }} className="text-right">Actions</th>
+                  <th style={{ width: '26%' }}>Activity Type</th>
+                  <th style={{ width: '8%' }}>Icon</th>
+                  <th style={{ width: '16%' }}>Category</th>
+                  <th style={{ width: '14%' }}>References</th>
+                  <th style={{ width: '14%' }}>Status</th>
+                  <th style={{ width: '18%' }} className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -175,51 +177,38 @@ export default function ActivitiesConfigPage() {
                   const IconComponent = ICON_MAP[typeItem.icon] || CheckSquare;
                   return (
                     <tr key={typeItem.id}>
-                      <td className="font-semibold text-slate-900 dark:text-white">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-[#129FA9] border border-teal-200/80 dark:border-teal-800 shrink-0">
-                            <IconComponent className="w-4 h-4" />
+                      <td style={{ fontWeight: 600 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <div style={{ padding: '0.4rem', borderRadius: '6px', backgroundColor: '#e6f7f8', color: '#129FA9', border: '1px solid #bce7ea', display: 'inline-flex' }}>
+                            <IconComponent style={{ width: '16px', height: '16px' }} />
                           </div>
                           <span>{typeItem.name}</span>
                         </div>
                       </td>
                       <td>
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 w-fit">
-                          <IconComponent className="w-3.5 h-3.5 text-[#129FA9]" />
-                          <span className="text-[11px] font-mono font-medium">{typeItem.icon}</span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', padding: '0.3rem 0.6rem', borderRadius: '6px', backgroundColor: '#f1f5f9', border: '1px solid #e2e8f0', color: '#129FA9' }}>
+                          <IconComponent style={{ width: '16px', height: '16px' }} />
                         </div>
                       </td>
                       <td>
-                        <span className="px-2.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+                        <span className="config-pill-inactive" style={{ fontWeight: 600, color: '#334155' }}>
                           {typeItem.category}
                         </span>
                       </td>
                       <td>
-                        <span
-                          title={typeItem.referenceSummary}
-                          className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-                            typeItem.totalReferences > 0
-                              ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
+                        <span title={typeItem.referenceSummary} className={typeItem.totalReferences > 0 ? 'config-pill-ref' : 'config-pill-ref-zero'}>
                           {typeItem.totalReferences} ref(s)
                         </span>
                       </td>
                       <td>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-                            typeItem.active !== false
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
+                        <span className={typeItem.active !== false ? 'config-pill-active' : 'config-pill-inactive'}>
                           {typeItem.active !== false ? 'Active' : 'Inactive'}
                         </span>
                       </td>
                       <td className="text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="config-actions-cell">
                           <button
+                            type="button"
                             disabled={!userCanMutate}
                             onClick={() => {
                               setSelectedType(typeItem);
@@ -228,23 +217,25 @@ export default function ActivitiesConfigPage() {
                             className="config-action-btn"
                             title="Edit Activity Type"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <Edit2 style={{ width: '14px', height: '14px' }} />
                           </button>
                           <button
+                            type="button"
                             disabled={!userCanMutate}
                             onClick={() => handleToggleActive(typeItem.id)}
                             className={`config-action-btn ${typeItem.active !== false ? 'deactivate' : 'activate'}`}
                             title={typeItem.active !== false ? 'Deactivate Activity Type' : 'Activate Activity Type'}
                           >
-                            <Power className="w-3.5 h-3.5" />
+                            <Power style={{ width: '14px', height: '14px' }} />
                           </button>
                           <button
+                            type="button"
                             disabled={!userCanMutate}
                             onClick={() => handleOpenDelete(typeItem)}
                             className="config-action-btn delete"
                             title="Delete Activity Type"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 style={{ width: '14px', height: '14px' }} />
                           </button>
                         </div>
                       </td>
@@ -256,36 +247,40 @@ export default function ActivitiesConfigPage() {
           </div>
 
           {/* Mobile Responsive Cards */}
-          <div className="config-mobile-cards p-4 space-y-3">
+          <div className="config-mobile-cards">
             {types.map((typeItem) => {
               const IconComponent = ICON_MAP[typeItem.icon] || CheckSquare;
               return (
-                <div key={typeItem.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-teal-50 text-[#129FA9] border border-teal-200">
-                      <IconComponent className="w-5 h-5" />
+                <div key={typeItem.id} className="config-mobile-card">
+                  <div className="config-mobile-card-header">
+                    <div className="config-mobile-card-title">
+                      <div style={{ padding: '0.4rem', borderRadius: '6px', backgroundColor: '#e6f7f8', color: '#129FA9', border: '1px solid #bce7ea', display: 'inline-flex' }}>
+                        <IconComponent style={{ width: '18px', height: '18px' }} />
+                      </div>
+                      <span>{typeItem.name}</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-sm text-slate-900 dark:text-white">{typeItem.name}</div>
-                      <div className="text-xs text-slate-500">{typeItem.category} • {typeItem.icon}</div>
+                    <span className="config-pill-inactive" style={{ fontWeight: 600, color: '#334155' }}>
+                      {typeItem.category}
+                    </span>
+                  </div>
+                  <div className="config-mobile-card-body">
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', alignItems: 'center' }}>
+                      <span className={typeItem.totalReferences > 0 ? 'config-pill-ref' : 'config-pill-ref-zero'}>{typeItem.totalReferences} ref(s)</span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${typeItem.active !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                        {typeItem.active !== false ? 'Active' : 'Inactive'}
-                      </span>
-                      <span className="text-xs text-blue-600 font-medium">{typeItem.totalReferences} ref(s)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button disabled={!userCanMutate} onClick={() => { setSelectedType(typeItem); setModalOpen(true); }} className="config-action-btn">
-                        <Edit2 className="w-3.5 h-3.5" />
+                  <div className="config-mobile-card-footer">
+                    <span className={typeItem.active !== false ? 'config-pill-active' : 'config-pill-inactive'}>
+                      {typeItem.active !== false ? 'Active' : 'Inactive'}
+                    </span>
+                    <div className="config-actions-cell">
+                      <button type="button" disabled={!userCanMutate} onClick={() => { setSelectedType(typeItem); setModalOpen(true); }} className="config-action-btn">
+                        <Edit2 style={{ width: '14px', height: '14px' }} />
                       </button>
-                      <button disabled={!userCanMutate} onClick={() => handleToggleActive(typeItem.id)} className="config-action-btn">
-                        <Power className="w-3.5 h-3.5" />
+                      <button type="button" disabled={!userCanMutate} onClick={() => handleToggleActive(typeItem.id)} className={`config-action-btn ${typeItem.active !== false ? 'deactivate' : 'activate'}`}>
+                        <Power style={{ width: '14px', height: '14px' }} />
                       </button>
-                      <button disabled={!userCanMutate} onClick={() => handleOpenDelete(typeItem)} className="config-action-btn delete">
-                        <Trash2 className="w-3.5 h-3.5" />
+                      <button type="button" disabled={!userCanMutate} onClick={() => handleOpenDelete(typeItem)} className="config-action-btn delete">
+                        <Trash2 style={{ width: '14px', height: '14px' }} />
                       </button>
                     </div>
                   </div>

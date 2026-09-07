@@ -38,41 +38,37 @@ export function DeleteConfirmModal({ isOpen, onClose, onConfirmDelete, onConfirm
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 my-auto max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 shrink-0">
-          <div className="flex items-center gap-2">
+    <div className="config-modal-backdrop">
+      <div className="config-modal-card" style={{ maxWidth: '460px' }}>
+        <div className="config-modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {canDelete ? (
-              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              <AlertTriangle style={{ width: '20px', height: '20px', color: '#dc2626' }} />
             ) : (
-              <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              <ShieldAlert style={{ width: '20px', height: '20px', color: '#d97706' }} />
             )}
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            <h3 className="config-modal-title">
               {canDelete ? `Delete ${itemType}` : `Deletion Blocked — Deactivate Instead`}
             </h3>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-          >
-            <X className="w-5 h-5" />
+          <button type="button" onClick={onClose} className="config-modal-close">
+            <X style={{ width: '20px', height: '20px' }} />
           </button>
         </div>
 
-        <div className="p-6 space-y-4 overflow-y-auto">
-          <div className="text-sm text-slate-600 dark:text-slate-300">
-            Target Record: <span className="font-semibold text-slate-900 dark:text-white">"{itemName}"</span>
+        <div className="config-modal-body">
+          <div style={{ fontSize: '0.875rem', color: '#334155' }}>
+            Target Record: <strong>"{itemName}"</strong>
           </div>
 
           {canDelete ? (
-            <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-300 space-y-1">
-              <p className="font-semibold">This record is permanently deletable because it is not referenced by any historical or active HR data.</p>
-              <p className="text-red-600 dark:text-red-400">This action cannot be undone.</p>
+            <div style={{ padding: '0.85rem', borderRadius: '8px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', fontSize: '0.75rem', color: '#991b1b', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <p style={{ fontWeight: 600 }}>This record is permanently deletable because it is not referenced by any historical or active HR data.</p>
+              <p style={{ color: '#dc2626' }}>This action cannot be undone.</p>
             </div>
           ) : (
-            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 space-y-2">
-              <p className="font-semibold">
+            <div style={{ padding: '0.85rem', borderRadius: '8px', backgroundColor: '#fffbe6', border: '1px solid #fde68a', fontSize: '0.75rem', color: '#854d0e', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <p style={{ fontWeight: 600 }}>
                 This record is referenced by existing HR data ({item.referenceSummary || `${item.totalReferences} references`}) and cannot be deleted.
               </p>
               <p>
@@ -81,12 +77,8 @@ export function DeleteConfirmModal({ isOpen, onClose, onConfirmDelete, onConfirm
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
+          <div className="config-modal-footer" style={{ borderTop: 'none', padding: '1rem 0 0 0', backgroundColor: 'transparent' }}>
+            <button type="button" onClick={onClose} className="btn-secondary-cancel">
               Cancel
             </button>
 
@@ -95,7 +87,8 @@ export function DeleteConfirmModal({ isOpen, onClose, onConfirmDelete, onConfirm
                 type="button"
                 onClick={handleAction}
                 disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                className="btn-primary-teal"
+                style={{ backgroundColor: '#dc2626' }}
               >
                 {isSubmitting ? 'Deleting...' : 'Delete Permanently'}
               </button>
@@ -104,7 +97,8 @@ export function DeleteConfirmModal({ isOpen, onClose, onConfirmDelete, onConfirm
                 type="button"
                 onClick={handleAction}
                 disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                className="btn-primary-teal"
+                style={{ backgroundColor: '#d97706' }}
               >
                 {isSubmitting ? 'Deactivating...' : 'Deactivate Record'}
               </button>

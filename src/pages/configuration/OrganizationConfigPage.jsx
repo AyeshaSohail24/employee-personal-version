@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Edit2, Trash2, Power, AlertCircle, ShieldAlert, Layers, MapPin, Briefcase } from 'lucide-react';
+import { Building2, Plus, Edit2, Trash2, Power, AlertCircle, ShieldAlert } from 'lucide-react';
 import { useRole } from '../../state/RoleContext';
 import { configurationService } from '../../services/configurationService';
 import { employeeService } from '../../services/employeeService';
@@ -52,7 +52,7 @@ export default function OrganizationConfigPage() {
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    // Explicitly unmount and reset all modal states on tab switch to prevent stale leaks
+    // Explicitly reset all modal states on tab switch to prevent leaks
     setDeptModalOpen(false);
     setSelectedDept(null);
     setPosModalOpen(false);
@@ -151,15 +151,17 @@ export default function OrganizationConfigPage() {
 
   if (isEmployee) {
     return (
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 text-center max-w-2xl mx-auto my-12">
-          <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Master Data Access Restricted</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-            Master data configuration (Departments, Job Positions, Work Locations) requires HR or HR Admin permissions.
-          </p>
-          <div className="inline-block px-4 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300">
-            Current Role: {currentRole}
+      <div className="config-page-wrapper">
+        <div className="config-header-card" style={{ textAlign: 'center', justifyContent: 'center' }}>
+          <div>
+            <ShieldAlert style={{ width: '48px', height: '48px', color: '#d97706', margin: '0 auto 1rem' }} />
+            <h2 className="config-header-title">Master Data Access Restricted</h2>
+            <p className="config-header-desc">
+              Master data configuration (Departments, Job Positions, Work Locations) requires HR or HR Admin permissions.
+            </p>
+            <div style={{ marginTop: '1rem' }}>
+              <span className="config-pill-inactive">Current Role: {currentRole}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -167,28 +169,24 @@ export default function OrganizationConfigPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-[#129FA9]/10 text-[#129FA9] flex items-center justify-center shrink-0">
-            <Building2 className="w-6 h-6" />
+    <div className="config-page-wrapper">
+      {/* Page Header Banner */}
+      <div className="config-header-card">
+        <div className="config-header-left">
+          <div className="config-header-icon">
+            <Building2 style={{ width: '24px', height: '24px' }} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Organization Master Data</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            <h1 className="config-header-title">Organization Master Data</h1>
+            <p className="config-header-desc">
               Manage departments, job position titles, work locations, and structural assignments.
             </p>
           </div>
         </div>
 
         {userCanMutate && (
-          <button
-            type="button"
-            onClick={handleOpenCreate}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#129FA9] hover:bg-[#0e7c85] text-white text-sm font-semibold rounded-lg shadow-sm transition-all cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4" />
+          <button type="button" onClick={handleOpenCreate} className="btn-primary-teal">
+            <Plus style={{ width: '16px', height: '16px' }} />
             <span>
               Create {activeTab === 'departments' ? 'Department' : activeTab === 'positions' ? 'Job Position' : 'Work Location'}
             </span>
@@ -196,180 +194,130 @@ export default function OrganizationConfigPage() {
         )}
       </div>
 
-      {/* Read-Only Manager Banners */}
+      {/* Read-Only Manager Notice */}
       {isManager && (
-        <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-center gap-3 text-xs text-amber-800 dark:text-amber-300">
-          <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div style={{ padding: '0.85rem 1rem', borderRadius: '10px', backgroundColor: '#fffbe6', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8125rem', color: '#854d0e' }}>
+          <AlertCircle style={{ width: '18px', height: '18px', flexShrink: 0, color: '#d97706' }} />
           <span>
             <strong>Read-Only Mode:</strong> You are viewing master data configurations as a Manager. Administrative mutations require HR or HR Admin privileges.
           </span>
         </div>
       )}
 
-      {/* Segmented Tab Controls — Modern pill style with count badges, NO oversized icons */}
-      <div className="inline-flex bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200/80 dark:border-slate-700 gap-1.5">
+      {/* Segmented Tab Controls — Modern pill style with count badges */}
+      <div className="config-tab-container">
         <button
           type="button"
           onClick={() => handleTabChange('departments')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-            activeTab === 'departments'
-              ? 'bg-teal-50 dark:bg-teal-950/40 text-[#129FA9] dark:text-teal-300 shadow-sm border border-teal-200/60 dark:border-teal-800/50 font-bold'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-          }`}
+          className={`config-tab-item ${activeTab === 'departments' ? 'active' : ''}`}
         >
           <span>Departments</span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-            activeTab === 'departments'
-              ? 'bg-[#129FA9]/15 text-[#129FA9] dark:bg-teal-900/50 dark:text-teal-300'
-              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-          }`}>
-            {config.departments.length}
-          </span>
+          <span className="config-tab-count">{config.departments.length}</span>
         </button>
 
         <button
           type="button"
           onClick={() => handleTabChange('positions')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-            activeTab === 'positions'
-              ? 'bg-teal-50 dark:bg-teal-950/40 text-[#129FA9] dark:text-teal-300 shadow-sm border border-teal-200/60 dark:border-teal-800/50 font-bold'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-          }`}
+          className={`config-tab-item ${activeTab === 'positions' ? 'active' : ''}`}
         >
           <span>Job Positions</span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-            activeTab === 'positions'
-              ? 'bg-[#129FA9]/15 text-[#129FA9] dark:bg-teal-900/50 dark:text-teal-300'
-              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-          }`}>
-            {config.positions.length}
-          </span>
+          <span className="config-tab-count">{config.positions.length}</span>
         </button>
 
         <button
           type="button"
           onClick={() => handleTabChange('locations')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-            activeTab === 'locations'
-              ? 'bg-teal-50 dark:bg-teal-950/40 text-[#129FA9] dark:text-teal-300 shadow-sm border border-teal-200/60 dark:border-teal-800/50 font-bold'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-          }`}
+          className={`config-tab-item ${activeTab === 'locations' ? 'active' : ''}`}
         >
           <span>Work Locations</span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-            activeTab === 'locations'
-              ? 'bg-[#129FA9]/15 text-[#129FA9] dark:bg-teal-900/50 dark:text-teal-300'
-              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-          }`}>
-            {config.locations.length}
-          </span>
+          <span className="config-tab-count">{config.locations.length}</span>
         </button>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content Card */}
       {loading ? (
-        <div className="bg-white dark:bg-slate-800 p-12 text-center rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500">
+        <div className="config-table-card" style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
           Loading master data configuration...
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="config-table-card">
           {/* TAB 1: DEPARTMENTS */}
           {activeTab === 'departments' && (
             <>
-              {/* Desktop Table View */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+              {/* Desktop Table */}
+              <div className="config-desktop-table">
+                <table className="config-table">
                   <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 uppercase text-[11px] font-bold border-b border-slate-200 dark:border-slate-700">
-                      <th className="px-4 py-3">Department Name</th>
-                      <th className="px-4 py-3">Code</th>
-                      <th className="px-4 py-3">Parent Dept</th>
-                      <th className="px-4 py-3">Head of Dept</th>
-                      <th className="px-4 py-3">Headcount</th>
-                      <th className="px-4 py-3">References</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3 text-right">Actions</th>
+                    <tr>
+                      <th style={{ width: '20%' }}>Department Name</th>
+                      <th style={{ width: '8%' }}>Code</th>
+                      <th style={{ width: '15%' }}>Parent Dept</th>
+                      <th style={{ width: '15%' }}>Head of Dept</th>
+                      <th style={{ width: '10%' }}>Headcount</th>
+                      <th style={{ width: '8%' }}>References</th>
+                      <th style={{ width: '12%' }}>Status</th>
+                      <th style={{ width: '12%' }} className="text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                  <tbody>
                     {config.departments.map((dept) => {
                       const parent = config.departments.find((d) => d.id === dept.parentDepartmentId);
                       return (
-                        <tr key={dept.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors">
-                          <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full shrink-0 inline-block" style={{ backgroundColor: dept.color || '#3b82f6' }} />
-                              <span className="truncate">{dept.name}</span>
+                        <tr key={dept.id}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <span className="config-color-dot" style={{ backgroundColor: dept.color || '#129FA9' }} />
+                              <span style={{ fontWeight: 600 }}>{dept.name}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3">
-                            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+                          <td>
+                            <span className="config-pill-inactive" style={{ fontFamily: 'monospace', fontWeight: 700 }}>
                               {dept.code}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                          <td style={{ color: '#475569' }}>
                             {parent ? `${parent.name} (${parent.code})` : '— (Top-Level)'}
                           </td>
-                          <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{dept.managerName || 'Unassigned'}</td>
-                          <td className="px-4 py-3 font-medium text-slate-900 dark:text-white whitespace-nowrap">{dept.currentHeadcount} active</td>
-                          <td className="px-4 py-3">
-                            <span
-                              title={dept.referenceSummary}
-                              className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-                                dept.totalReferences > 0
-                                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                              }`}
-                            >
+                          <td style={{ color: '#475569' }}>{dept.managerName || 'Unassigned'}</td>
+                          <td style={{ fontWeight: 600 }}>{dept.currentHeadcount} active</td>
+                          <td>
+                            <span title={dept.referenceSummary} className={dept.totalReferences > 0 ? 'config-pill-ref' : 'config-pill-ref-zero'}>
                               {dept.totalReferences} ref(s)
                             </span>
                           </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-                                dept.active !== false
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                              }`}
-                            >
+                          <td>
+                            <span className={dept.active !== false ? 'config-pill-active' : 'config-pill-inactive'}>
                               {dept.active !== false ? 'Active' : 'Inactive'}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                          <td className="text-right">
+                            <div className="config-actions-cell">
                               <button
                                 type="button"
                                 disabled={!userCanMutate}
-                                onClick={() => {
-                                  setSelectedDept(dept);
-                                  setDeptModalOpen(true);
-                                }}
-                                className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                onClick={() => { setSelectedDept(dept); setDeptModalOpen(true); }}
+                                className="config-action-btn"
                                 title="Edit Department"
                               >
-                                <Edit2 className="w-3.5 h-3.5" />
+                                <Edit2 style={{ width: '14px', height: '14px' }} />
                               </button>
                               <button
                                 type="button"
                                 disabled={!userCanMutate}
                                 onClick={() => handleToggleActive(dept.id, 'department')}
-                                className={`w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-                                  dept.active !== false
-                                    ? 'text-slate-600 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200'
-                                    : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
-                                }`}
+                                className={`config-action-btn ${dept.active !== false ? 'deactivate' : 'activate'}`}
                                 title={dept.active !== false ? 'Deactivate Department' : 'Activate Department'}
                               >
-                                <Power className="w-3.5 h-3.5" />
+                                <Power style={{ width: '14px', height: '14px' }} />
                               </button>
                               <button
                                 type="button"
                                 disabled={!userCanMutate}
                                 onClick={() => handleOpenDelete(dept, 'department')}
-                                className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="config-action-btn delete"
                                 title="Delete Department"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 style={{ width: '14px', height: '14px' }} />
                               </button>
                             </div>
                           </td>
@@ -380,43 +328,43 @@ export default function OrganizationConfigPage() {
                 </table>
               </div>
 
-              {/* Mobile Responsive Cards */}
-              <div className="block md:hidden p-4 space-y-3">
+              {/* Mobile Cards */}
+              <div className="config-mobile-cards">
                 {config.departments.map((dept) => {
                   const parent = config.departments.find((d) => d.id === dept.parentDepartmentId);
                   return (
-                    <div key={dept.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: dept.color || '#3b82f6' }} />
-                          <span className="font-bold text-sm text-slate-900 dark:text-white">{dept.name}</span>
+                    <div key={dept.id} className="config-mobile-card">
+                      <div className="config-mobile-card-header">
+                        <div className="config-mobile-card-title">
+                          <span className="config-color-dot" style={{ backgroundColor: dept.color || '#129FA9' }} />
+                          <span>{dept.name}</span>
                         </div>
-                        <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                        <span className="config-pill-inactive" style={{ fontFamily: 'monospace', fontWeight: 700 }}>
                           {dept.code}
                         </span>
                       </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                      <div className="config-mobile-card-body">
                         <div>Parent: {parent ? `${parent.name} (${parent.code})` : 'Top-Level'}</div>
                         <div>Head: {dept.managerName || 'Unassigned'}</div>
-                        <div className="flex items-center gap-2 pt-1">
-                          <span className="font-semibold text-slate-800 dark:text-slate-200">{dept.currentHeadcount} headcount</span>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 600 }}>{dept.currentHeadcount} headcount</span>
                           <span>•</span>
-                          <span className="text-blue-600 dark:text-blue-400 font-medium">{dept.totalReferences} ref(s)</span>
+                          <span className={dept.totalReferences > 0 ? 'config-pill-ref' : 'config-pill-ref-zero'}>{dept.totalReferences} ref(s)</span>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${dept.active !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                      <div className="config-mobile-card-footer">
+                        <span className={dept.active !== false ? 'config-pill-active' : 'config-pill-inactive'}>
                           {dept.active !== false ? 'Active' : 'Inactive'}
                         </span>
-                        <div className="flex items-center gap-2">
-                          <button type="button" disabled={!userCanMutate} onClick={() => { setSelectedDept(dept); setDeptModalOpen(true); }} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100">
-                            <Edit2 className="w-3.5 h-3.5" />
+                        <div className="config-actions-cell">
+                          <button type="button" disabled={!userCanMutate} onClick={() => { setSelectedDept(dept); setDeptModalOpen(true); }} className="config-action-btn">
+                            <Edit2 style={{ width: '14px', height: '14px' }} />
                           </button>
-                          <button type="button" disabled={!userCanMutate} onClick={() => handleToggleActive(dept.id, 'department')} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-amber-50">
-                            <Power className="w-3.5 h-3.5" />
+                          <button type="button" disabled={!userCanMutate} onClick={() => handleToggleActive(dept.id, 'department')} className={`config-action-btn ${dept.active !== false ? 'deactivate' : 'activate'}`}>
+                            <Power style={{ width: '14px', height: '14px' }} />
                           </button>
-                          <button type="button" disabled={!userCanMutate} onClick={() => handleOpenDelete(dept, 'department')} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600">
-                            <Trash2 className="w-3.5 h-3.5" />
+                          <button type="button" disabled={!userCanMutate} onClick={() => handleOpenDelete(dept, 'department')} className="config-action-btn delete">
+                            <Trash2 style={{ width: '14px', height: '14px' }} />
                           </button>
                         </div>
                       </div>
@@ -430,87 +378,69 @@ export default function OrganizationConfigPage() {
           {/* TAB 2: JOB POSITIONS */}
           {activeTab === 'positions' && (
             <>
-              {/* Desktop Table View */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+              {/* Desktop Table */}
+              <div className="config-desktop-table">
+                <table className="config-table">
                   <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 uppercase text-[11px] font-bold border-b border-slate-200 dark:border-slate-700">
-                      <th className="px-4 py-3" style={{ width: '32%' }}>Position Title</th>
-                      <th className="px-4 py-3" style={{ width: '22%' }}>Department</th>
-                      <th className="px-4 py-3" style={{ width: '20%' }}>Default Location</th>
-                      <th className="px-4 py-3" style={{ width: '10%' }}>Status</th>
-                      <th className="px-4 py-3" style={{ width: '10%' }}>Occupants / Refs</th>
-                      <th className="px-4 py-3 text-right" style={{ width: '6%' }}>Actions</th>
+                    <tr>
+                      <th style={{ width: '26%' }}>Position Title</th>
+                      <th style={{ width: '19%' }}>Department</th>
+                      <th style={{ width: '19%' }}>Default Location</th>
+                      <th style={{ width: '12%' }}>Occupants / Refs</th>
+                      <th style={{ width: '12%' }}>Status</th>
+                      <th style={{ width: '12%' }} className="text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                  <tbody>
                     {config.positions.map((pos) => (
-                      <tr key={pos.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white leading-snug">{pos.name}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="w-2.5 h-2.5 rounded-full shrink-0 inline-block"
-                              style={{ backgroundColor: pos.departmentColor || '#129FA9' }}
-                            />
-                            <span className="text-slate-900 dark:text-white font-medium text-xs">
-                              {pos.departmentName}
-                            </span>
+                      <tr key={pos.id}>
+                        <td style={{ fontWeight: 600 }}>{pos.name}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <span className="config-color-dot" style={{ backgroundColor: pos.departmentColor || '#129FA9' }} />
+                            <span>{pos.departmentName}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{pos.locationName}</td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-                              pos.active !== false
-                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
+                        <td style={{ color: '#475569' }}>{pos.locationName ? pos.locationName.replace('Rizurf HQ — Kuala Lumpur', 'Rizurf HQ — KL') : '—'}</td>
+                        <td>
+                          <span className={pos.active !== false ? 'config-pill-active' : 'config-pill-inactive'}>
                             {pos.active !== false ? 'Active' : 'Inactive'}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-col text-xs">
-                            <span className="font-medium text-slate-900 dark:text-white whitespace-nowrap">{pos.currentOccupantsCount} current</span>
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">{pos.totalReferences} ref(s)</span>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                            <span style={{ fontWeight: 600 }}>{pos.currentOccupantsCount} current</span>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{pos.totalReferences} ref(s)</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                        <td className="text-right">
+                          <div className="config-actions-cell">
                             <button
                               type="button"
                               disabled={!userCanMutate}
-                              onClick={() => {
-                                setSelectedPos(pos);
-                                setPosModalOpen(true);
-                              }}
-                              className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              onClick={() => { setSelectedPos(pos); setPosModalOpen(true); }}
+                              className="config-action-btn"
                               title="Edit Job Position"
                             >
-                              <Edit2 className="w-3.5 h-3.5" />
+                              <Edit2 style={{ width: '14px', height: '14px' }} />
                             </button>
                             <button
                               type="button"
                               disabled={!userCanMutate}
                               onClick={() => handleToggleActive(pos.id, 'position')}
-                              className={`w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-                                pos.active !== false
-                                  ? 'text-slate-600 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200'
-                                  : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
-                              }`}
+                              className={`config-action-btn ${pos.active !== false ? 'deactivate' : 'activate'}`}
                               title={pos.active !== false ? 'Deactivate Job Position' : 'Activate Job Position'}
                             >
-                              <Power className="w-3.5 h-3.5" />
+                              <Power style={{ width: '14px', height: '14px' }} />
                             </button>
                             <button
                               type="button"
                               disabled={!userCanMutate}
                               onClick={() => handleOpenDelete(pos, 'position')}
-                              className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="config-action-btn delete"
                               title="Delete Job Position"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 style={{ width: '14px', height: '14px' }} />
                             </button>
                           </div>
                         </td>
@@ -520,36 +450,36 @@ export default function OrganizationConfigPage() {
                 </table>
               </div>
 
-              {/* Mobile Responsive Cards */}
-              <div className="block md:hidden p-4 space-y-3">
+              {/* Mobile Cards */}
+              <div className="config-mobile-cards">
                 {config.positions.map((pos) => (
-                  <div key={pos.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm space-y-2">
-                    <div className="font-bold text-sm text-slate-900 dark:text-white">{pos.name}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: pos.departmentColor || '#129FA9' }} />
-                        <span>Dept: <span className="font-semibold text-slate-700 dark:text-slate-300">{pos.departmentName}</span></span>
+                  <div key={pos.id} className="config-mobile-card">
+                    <div className="config-mobile-card-title">{pos.name}</div>
+                    <div className="config-mobile-card-body">
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span className="config-color-dot" style={{ backgroundColor: pos.departmentColor || '#129FA9' }} />
+                        <span>Dept: <strong>{pos.departmentName}</strong></span>
                       </div>
-                      <div>Location: {pos.locationName}</div>
-                      <div className="flex items-center gap-2 pt-1">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">{pos.currentOccupantsCount} occupants</span>
+                      <div>Location: {pos.locationName ? pos.locationName.replace('Rizurf HQ — Kuala Lumpur', 'Rizurf HQ — KL') : '—'}</div>
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600 }}>{pos.currentOccupantsCount} occupants</span>
                         <span>•</span>
-                        <span className="text-blue-600 dark:text-blue-400 font-medium">{pos.totalReferences} ref(s)</span>
+                        <span className={pos.totalReferences > 0 ? 'config-pill-ref' : 'config-pill-ref-zero'}>{pos.totalReferences} ref(s)</span>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${pos.active !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                    <div className="config-mobile-card-footer">
+                      <span className={pos.active !== false ? 'config-pill-active' : 'config-pill-inactive'}>
                         {pos.active !== false ? 'Active' : 'Inactive'}
                       </span>
-                      <div className="flex items-center gap-2">
-                        <button type="button" disabled={!userCanMutate} onClick={() => { setSelectedPos(pos); setPosModalOpen(true); }} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100">
-                          <Edit2 className="w-3.5 h-3.5" />
+                      <div className="config-actions-cell">
+                        <button type="button" disabled={!userCanMutate} onClick={() => { setSelectedPos(pos); setPosModalOpen(true); }} className="config-action-btn">
+                          <Edit2 style={{ width: '14px', height: '14px' }} />
                         </button>
-                        <button type="button" disabled={!userCanMutate} onClick={() => handleToggleActive(pos.id, 'position')} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-amber-50">
-                          <Power className="w-3.5 h-3.5" />
+                        <button type="button" disabled={!userCanMutate} onClick={() => handleToggleActive(pos.id, 'position')} className={`config-action-btn ${pos.active !== false ? 'deactivate' : 'activate'}`}>
+                          <Power style={{ width: '14px', height: '14px' }} />
                         </button>
-                        <button type="button" disabled={!userCanMutate} onClick={() => handleOpenDelete(pos, 'position')} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600">
-                          <Trash2 className="w-3.5 h-3.5" />
+                        <button type="button" disabled={!userCanMutate} onClick={() => handleOpenDelete(pos, 'position')} className="config-action-btn delete">
+                          <Trash2 style={{ width: '14px', height: '14px' }} />
                         </button>
                       </div>
                     </div>
@@ -562,89 +492,69 @@ export default function OrganizationConfigPage() {
           {/* TAB 3: WORK LOCATIONS */}
           {activeTab === 'locations' && (
             <>
-              {/* Desktop Table View */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+              {/* Desktop Table */}
+              <div className="config-desktop-table">
+                <table className="config-table">
                   <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 uppercase text-[11px] font-bold border-b border-slate-200 dark:border-slate-700">
-                      <th className="px-4 py-3" style={{ width: '25%' }}>Location Name</th>
-                      <th className="px-4 py-3" style={{ width: '15%' }}>Type</th>
-                      <th className="px-4 py-3" style={{ width: '30%' }}>Address</th>
-                      <th className="px-4 py-3" style={{ width: '10%' }}>Workforce</th>
-                      <th className="px-4 py-3" style={{ width: '10%' }}>References</th>
-                      <th className="px-4 py-3" style={{ width: '5%' }}>Status</th>
-                      <th className="px-4 py-3 text-right" style={{ width: '5%' }}>Actions</th>
+                    <tr>
+                      <th style={{ width: '20%' }}>Location Name</th>
+                      <th style={{ width: '10%' }}>Type</th>
+                      <th style={{ width: '24%' }}>Address</th>
+                      <th style={{ width: '12%' }}>Workforce</th>
+                      <th style={{ width: '10%' }}>References</th>
+                      <th style={{ width: '12%' }}>Status</th>
+                      <th style={{ width: '12%' }} className="text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                  <tbody>
                     {config.locations.map((loc) => (
-                      <tr key={loc.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">{loc.name}</td>
-                        <td className="px-4 py-3">
-                          <span className="px-2.5 py-0.5 rounded text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                      <tr key={loc.id}>
+                        <td style={{ fontWeight: 600 }}>{loc.name}</td>
+                        <td>
+                          <span className="config-pill-inactive" style={{ fontWeight: 600, color: '#6b21a8', backgroundColor: '#f3e8ff', borderColor: '#e9d5ff' }}>
                             {loc.type}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400 max-w-xs truncate">{loc.address}</td>
-                        <td className="px-4 py-3 font-medium text-slate-900 dark:text-white whitespace-nowrap">{loc.currentWorkforceCount} assigned</td>
-                        <td className="px-4 py-3">
-                          <span
-                            title={loc.referenceSummary}
-                            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-                              loc.totalReferences > 0
-                                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
+                        <td style={{ color: '#64748b' }}>{loc.address}</td>
+                        <td style={{ fontWeight: 600 }}>{loc.currentWorkforceCount} assigned</td>
+                        <td>
+                          <span title={loc.referenceSummary} className={loc.totalReferences > 0 ? 'config-pill-ref' : 'config-pill-ref-zero'}>
                             {loc.totalReferences} ref(s)
                           </span>
                         </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-                              loc.active !== false
-                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
+                        <td>
+                          <span className={loc.active !== false ? 'config-pill-active' : 'config-pill-inactive'}>
                             {loc.active !== false ? 'Active' : 'Inactive'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                        <td className="text-right">
+                          <div className="config-actions-cell">
                             <button
                               type="button"
                               disabled={!userCanMutate}
-                              onClick={() => {
-                                setSelectedLoc(loc);
-                                setLocModalOpen(true);
-                              }}
-                              className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              onClick={() => { setSelectedLoc(loc); setLocModalOpen(true); }}
+                              className="config-action-btn"
                               title="Edit Work Location"
                             >
-                              <Edit2 className="w-3.5 h-3.5" />
+                              <Edit2 style={{ width: '14px', height: '14px' }} />
                             </button>
                             <button
                               type="button"
                               disabled={!userCanMutate}
                               onClick={() => handleToggleActive(loc.id, 'location')}
-                              className={`w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-                                loc.active !== false
-                                  ? 'text-slate-600 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200'
-                                  : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
-                              }`}
+                              className={`config-action-btn ${loc.active !== false ? 'deactivate' : 'activate'}`}
                               title={loc.active !== false ? 'Deactivate Work Location' : 'Activate Work Location'}
                             >
-                              <Power className="w-3.5 h-3.5" />
+                              <Power style={{ width: '14px', height: '14px' }} />
                             </button>
                             <button
                               type="button"
                               disabled={!userCanMutate}
                               onClick={() => handleOpenDelete(loc, 'location')}
-                              className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="config-action-btn delete"
                               title="Delete Work Location"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 style={{ width: '14px', height: '14px' }} />
                             </button>
                           </div>
                         </td>
@@ -654,35 +564,35 @@ export default function OrganizationConfigPage() {
                 </table>
               </div>
 
-              {/* Mobile Responsive Cards */}
-              <div className="block md:hidden p-4 space-y-3">
+              {/* Mobile Cards */}
+              <div className="config-mobile-cards">
                 {config.locations.map((loc) => (
-                  <div key={loc.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-slate-900 dark:text-white">{loc.name}</span>
-                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-purple-50 text-purple-700">{loc.type}</span>
+                  <div key={loc.id} className="config-mobile-card">
+                    <div className="config-mobile-card-header">
+                      <span className="config-mobile-card-title">{loc.name}</span>
+                      <span className="config-pill-inactive" style={{ fontWeight: 600, color: '#6b21a8', backgroundColor: '#f3e8ff' }}>{loc.type}</span>
                     </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                    <div className="config-mobile-card-body">
                       <div>{loc.address}</div>
-                      <div className="flex items-center gap-2 pt-1">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">{loc.currentWorkforceCount} workforce</span>
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600 }}>{loc.currentWorkforceCount} workforce</span>
                         <span>•</span>
-                        <span className="text-blue-600 dark:text-blue-400 font-medium">{loc.totalReferences} ref(s)</span>
+                        <span className={loc.totalReferences > 0 ? 'config-pill-ref' : 'config-pill-ref-zero'}>{loc.totalReferences} ref(s)</span>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${loc.active !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                    <div className="config-mobile-card-footer">
+                      <span className={loc.active !== false ? 'config-pill-active' : 'config-pill-inactive'}>
                         {loc.active !== false ? 'Active' : 'Inactive'}
                       </span>
-                      <div className="flex items-center gap-2">
-                        <button type="button" disabled={!userCanMutate} onClick={() => { setSelectedLoc(loc); setLocModalOpen(true); }} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100">
-                          <Edit2 className="w-3.5 h-3.5" />
+                      <div className="config-actions-cell">
+                        <button type="button" disabled={!userCanMutate} onClick={() => { setSelectedLoc(loc); setLocModalOpen(true); }} className="config-action-btn">
+                          <Edit2 style={{ width: '14px', height: '14px' }} />
                         </button>
-                        <button type="button" disabled={!userCanMutate} onClick={() => handleToggleActive(loc.id, 'location')} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-amber-50">
-                          <Power className="w-3.5 h-3.5" />
+                        <button type="button" disabled={!userCanMutate} onClick={() => handleToggleActive(loc.id, 'location')} className={`config-action-btn ${loc.active !== false ? 'deactivate' : 'activate'}`}>
+                          <Power style={{ width: '14px', height: '14px' }} />
                         </button>
-                        <button type="button" disabled={!userCanMutate} onClick={() => handleOpenDelete(loc, 'location')} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600">
-                          <Trash2 className="w-3.5 h-3.5" />
+                        <button type="button" disabled={!userCanMutate} onClick={() => handleOpenDelete(loc, 'location')} className="config-action-btn delete">
+                          <Trash2 style={{ width: '14px', height: '14px' }} />
                         </button>
                       </div>
                     </div>
@@ -732,4 +642,3 @@ export default function OrganizationConfigPage() {
     </div>
   );
 }
-

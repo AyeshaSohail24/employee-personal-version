@@ -8,7 +8,7 @@ export function DepartmentModal({ isOpen, onClose, onSave, department = null, al
   const [code, setCode] = useState('');
   const [parentDepartmentId, setParentDepartmentId] = useState('');
   const [managerEmployeeId, setManagerEmployeeId] = useState('');
-  const [color, setColor] = useState('#3b82f6');
+  const [color, setColor] = useState('#129FA9');
   const [active, setActive] = useState(true);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -19,14 +19,14 @@ export function DepartmentModal({ isOpen, onClose, onSave, department = null, al
       setCode(department.code || '');
       setParentDepartmentId(department.parentDepartmentId || '');
       setManagerEmployeeId(department.managerEmployeeId || '');
-      setColor(department.color || '#3b82f6');
+      setColor(department.color || '#129FA9');
       setActive(department.active !== false);
     } else {
       setName('');
       setCode('');
       setParentDepartmentId('');
       setManagerEmployeeId('');
-      setColor('#3b82f6');
+      setColor('#129FA9');
       setActive(true);
     }
     setErrors({});
@@ -66,103 +66,88 @@ export function DepartmentModal({ isOpen, onClose, onSave, department = null, al
     }
   };
 
-  // Filter possible parents: exclude current department and active depts only (or existing parent if inactive)
   const selectableParents = allDepartments.filter((d) => d.id !== department?.id && (d.active !== false || d.id === department?.parentDepartmentId));
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-700 my-auto max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 shrink-0">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+    <div className="config-modal-backdrop">
+      <div className="config-modal-card">
+        <div className="config-modal-header">
+          <h3 className="config-modal-title">
             {department ? 'Edit Department' : 'Create New Department'}
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-          >
-            <X className="w-5 h-5" />
+          <button type="button" onClick={onClose} className="config-modal-close">
+            <X style={{ width: '20px', height: '20px' }} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="config-modal-body">
           {errors.form && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 flex items-center gap-2 text-sm text-red-700 dark:text-red-300">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div style={{ padding: '0.75rem', borderRadius: '8px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', color: '#dc2626' }}>
+              <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0 }} />
               <span>{errors.form}</span>
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-              Department Name <span className="text-red-500">*</span>
+          <div className="config-form-group">
+            <label className="config-form-label">
+              Department Name <span style={{ color: '#dc2626' }}>*</span>
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Engineering"
-              className={`w-full h-10 px-3 py-2 text-sm rounded-lg border bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 ${
-                errors.name
-                  ? 'border-red-500 focus:ring-red-200'
-                  : 'border-slate-300 dark:border-slate-600 focus:ring-[#129FA9]/30 focus:border-[#129FA9]'
-              }`}
+              className={`config-form-control ${errors.name ? 'error' : ''}`}
             />
-            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+            {errors.name && <div className="config-form-error">{errors.name}</div>}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-                Department Code <span className="text-red-500">*</span>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="config-form-group">
+              <label className="config-form-label">
+                Department Code <span style={{ color: '#dc2626' }}>*</span>
               </label>
               <input
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="e.g. ENG"
-                className={`w-full h-10 px-3 py-2 text-sm rounded-lg border uppercase bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 ${
-                  errors.code
-                    ? 'border-red-500 focus:ring-red-200'
-                    : 'border-slate-300 dark:border-slate-600 focus:ring-[#129FA9]/30 focus:border-[#129FA9]'
-                }`}
+                className={`config-form-control ${errors.code ? 'error' : ''}`}
+                style={{ textTransform: 'uppercase' }}
               />
-              {errors.code && <p className="text-xs text-red-500 mt-1">{errors.code}</p>}
+              {errors.code && <div className="config-form-error">{errors.code}</div>}
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+            <div className="config-form-group">
+              <label className="config-form-label">
                 Accent Color
               </label>
-              <div className="flex items-center gap-2">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <input
                   type="color"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  className="w-10 h-10 p-1 rounded-lg border border-slate-300 dark:border-slate-600 cursor-pointer bg-white dark:bg-slate-900 shrink-0"
+                  style={{ width: '2.5rem', height: '2.5rem', padding: '0.2rem', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer', backgroundColor: '#ffffff', flexShrink: 0 }}
                 />
                 <input
                   type="text"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  className="w-full h-10 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono uppercase"
+                  className="config-form-control"
+                  style={{ fontFamily: 'monospace', textTransform: 'uppercase' }}
                 />
               </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+          <div className="config-form-group">
+            <label className="config-form-label">
               Parent Department
             </label>
             <select
               value={parentDepartmentId}
               onChange={(e) => setParentDepartmentId(e.target.value)}
-              className={`w-full h-10 px-3 py-2 text-sm rounded-lg border bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 ${
-                errors.parentDepartmentId
-                  ? 'border-red-500 focus:ring-red-200'
-                  : 'border-slate-300 dark:border-slate-600 focus:ring-[#129FA9]/30 focus:border-[#129FA9]'
-              }`}
+              className={`config-form-control ${errors.parentDepartmentId ? 'error' : ''}`}
             >
               <option value="">None (Top-Level Department)</option>
               {selectableParents.map((d) => (
@@ -171,17 +156,17 @@ export function DepartmentModal({ isOpen, onClose, onSave, department = null, al
                 </option>
               ))}
             </select>
-            {errors.parentDepartmentId && <p className="text-xs text-red-500 mt-1">{errors.parentDepartmentId}</p>}
+            {errors.parentDepartmentId && <div className="config-form-error">{errors.parentDepartmentId}</div>}
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+          <div className="config-form-group">
+            <label className="config-form-label">
               Head of Department
             </label>
             <select
               value={managerEmployeeId}
               onChange={(e) => setManagerEmployeeId(e.target.value)}
-              className="w-full h-10 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#129FA9]/30 focus:border-[#129FA9]"
+              className="config-form-control"
             >
               <option value="">Unassigned</option>
               {activeEmployees.map((emp) => (
@@ -192,32 +177,23 @@ export function DepartmentModal({ isOpen, onClose, onSave, department = null, al
             </select>
           </div>
 
-          <div className="flex items-center gap-2 pt-2">
+          <label className="config-form-checkbox-group">
             <input
               type="checkbox"
-              id="dept-active"
               checked={active}
               onChange={(e) => setActive(e.target.checked)}
-              className="w-4 h-4 rounded text-[#129FA9] focus:ring-[#129FA9] border-slate-300"
+              className="config-form-checkbox"
             />
-            <label htmlFor="dept-active" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+            <span style={{ fontSize: '0.8125rem', color: '#1e293b' }}>
               Active Status (Selectable for new assignments)
-            </label>
-          </div>
+            </span>
+          </label>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
+          <div className="config-modal-footer" style={{ borderTop: 'none', padding: '1rem 0 0 0', backgroundColor: 'transparent' }}>
+            <button type="button" onClick={onClose} className="btn-secondary-cancel">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 text-sm font-semibold text-white bg-[#129FA9] hover:bg-[#0e7c85] rounded-lg shadow-sm transition-colors disabled:opacity-50"
-            >
+            <button type="submit" disabled={isSubmitting} className="btn-primary-teal">
               {isSubmitting ? 'Saving...' : department ? 'Update Department' : 'Create Department'}
             </button>
           </div>
