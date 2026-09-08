@@ -8,7 +8,6 @@ import { seedEmployees } from './seedEmployees.js';
 import { seedEmploymentRecords } from './seedEmploymentRecords.js';
 import { seedUserAccounts } from './seedUserAccounts.js';
 import { seedLeaves } from './seedLeaves.js';
-import { seedAttendance } from './seedAttendance.js';
 import { seedPresenceOverrides } from './seedPresenceOverrides.js';
 import { seedActivityTypes } from './seedActivityTypes.js';
 import { seedActivities } from './seedActivities.js';
@@ -113,6 +112,21 @@ export function migrateEmployeeTagsIfNeeded(db) {
   return db;
 }
 
+export function cleanupAttendanceIfNeeded(db) {
+  if (!db) return db;
+  if ('attendance' in db) {
+    delete db.attendance;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      } catch (err) {
+        console.error('StorageEngine: failed to save attendance cleanup to localStorage.', err);
+      }
+    }
+  }
+  return db;
+}
+
 function getInitialState() {
   const base = {
     employeeTypes: seedEmployeeTypes,
@@ -125,7 +139,6 @@ function getInitialState() {
     employmentRecords: seedEmploymentRecords,
     userAccounts: seedUserAccounts,
     leaves: seedLeaves,
-    attendance: seedAttendance,
     presenceOverrides: seedPresenceOverrides,
     activityTypes: seedActivityTypes,
     activities: seedActivities,
@@ -138,7 +151,8 @@ function getInitialState() {
     offboardingPlanInstances: seedOffboardingPlanInstances,
     offboardingTaskInstances: seedOffboardingTaskInstances,
   };
-  return migrateEmployeeTagsIfNeeded(base);
+  const migrated = migrateEmployeeTagsIfNeeded(base);
+  return cleanupAttendanceIfNeeded(migrated);
 }
 
 export function loadDatabase() {
@@ -171,7 +185,8 @@ export function loadDatabase() {
     if (!parsed.offboardingTaskInstances) parsed.offboardingTaskInstances = seedOffboardingTaskInstances;
 
     const migrated = migrateEmployeeTagsIfNeeded(parsed);
-    return migrated;
+    const cleaned = cleanupAttendanceIfNeeded(migrated);
+    return cleaned;
   } catch (err) {
     if (!inMemoryDb) {
       inMemoryDb = getInitialState();

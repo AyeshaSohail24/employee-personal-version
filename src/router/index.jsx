@@ -49,9 +49,8 @@ import RetentionReportPage from '../pages/reporting/RetentionReportPage';
 // Configuration Pages
 import OrganizationConfigPage from '../pages/configuration/OrganizationConfigPage';
 import EmployeesConfigPage from '../pages/configuration/EmployeesConfigPage';
-import PresenceConfigPage from '../pages/configuration/PresenceConfigPage';
-import LifecycleConfigPage from '../pages/configuration/LifecycleConfigPage';
 import ActivitiesConfigPage from '../pages/configuration/ActivitiesConfigPage';
+import PresenceConfigPage from '../pages/configuration/PresenceConfigPage';
 import DocumentsConfigPage from '../pages/configuration/DocumentsConfigPage';
 import PermissionsConfigPage from '../pages/configuration/PermissionsConfigPage';
 
@@ -149,9 +148,8 @@ export const router = createBrowserRouter([
         children: [
           { path: 'organization', element: <OrganizationConfigPage /> },
           { path: 'employees', element: <EmployeesConfigPage /> },
-          { path: 'presence', element: <PresenceConfigPage /> },
-          { path: 'lifecycle', element: <LifecycleConfigPage /> },
           { path: 'activities', element: <ActivitiesConfigPage /> },
+          { path: 'presence', element: <PresenceConfigPage /> },
           { path: 'documents', element: <DocumentsConfigPage /> },
           { path: 'permissions', element: <PermissionsConfigPage /> },
         ],

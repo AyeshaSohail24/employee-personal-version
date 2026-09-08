@@ -56,10 +56,12 @@ export default function WorkforceOverviewPage() {
   });
 
   const presenceSegments = [
-    { label: 'Present On-site', count: presenceMetrics.presentCount || 0, color: '#059669' },
-    { label: 'Working Remote', count: presenceMetrics.remoteCount || 0, color: '#2563EB' },
+    { label: 'Present', count: presenceMetrics.presentCount || 0, color: '#059669' },
+    { label: 'Remote', count: presenceMetrics.remoteCount || 0, color: '#2563EB' },
     { label: 'On Leave', count: presenceMetrics.leaveCount || 0, color: '#D97706' },
-    { label: 'Absent / Unknown', count: (presenceMetrics.absentCount || 0) + (presenceMetrics.unknownCount || 0), color: '#DC2626' },
+    { label: 'Absent', count: presenceMetrics.absentCount || 0, color: '#DC2626' },
+    { label: 'Not Scheduled', count: presenceMetrics.notScheduledCount || 0, color: '#6B7280' },
+    { label: 'Unknown (No Signal)', count: presenceMetrics.unknownCount || 0, color: '#9CA3AF' },
   ];
 
   return (
@@ -71,7 +73,7 @@ export default function WorkforceOverviewPage() {
             Workforce Overview
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0 }}>
-            Executive HR operational dashboard, active headcount distribution, and presence health.
+            Executive HR operational dashboard, active headcount distribution, and presence status.
           </p>
         </div>
         {roleContext.isManager && (
@@ -102,7 +104,7 @@ export default function WorkforceOverviewPage() {
         {/* KPI 1: Current Headcount */}
         <div className="table-container-card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid var(--color-primary)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', uppercase: 'true' }}>CURRENT HEADCOUNT</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>CURRENT HEADCOUNT</span>
             <Users size={18} style={{ color: 'var(--color-primary)' }} />
           </div>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)' }}>{workforceMetrics.totalHeadcount}</div>
@@ -111,15 +113,15 @@ export default function WorkforceOverviewPage() {
           </div>
         </div>
 
-        {/* KPI 2: Presence Health */}
+        {/* KPI 2: Presence Signals */}
         <div className="table-container-card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #059669' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', uppercase: 'true' }}>PRESENT TODAY</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>PRESENCE SIGNALS</span>
             <UserCheck size={18} style={{ color: '#059669' }} />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)' }}>{presenceMetrics.activePresent}</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)' }}>{presenceMetrics.knownSignalCount || 0}</div>
           <div style={{ fontSize: '0.75rem', color: '#059669', marginTop: '0.2rem', fontWeight: 600 }}>
-            {presenceMetrics.presenceHealthRate}% Presence Health
+            {presenceMetrics.knownSignalCount || 0} of {presenceMetrics.totalWorkforce || 0} with known status ({presenceMetrics.signalCoverageRate || 0}% coverage)
           </div>
         </div>
 

@@ -31,7 +31,7 @@ export async function runStage6Verification() {
   }
   console.log('✅ Current workforce count is 15. Former and unstarted Upcoming employees strictly excluded.');
 
-  // 3. Verify Priority Order Resolution & Corrected Unknown Fallback
+  // 3. Verify Truthful Priority Order Resolution (Override > Leave > Remote Request > Work Schedule > System Fallback)
   const harith = overview.employees.find((e) => e.id === 'emp-008'); // Seed Manual Override
   if (harith.presenceState !== PRESENCE_STATES.PRESENT || harith.presenceSource !== PRESENCE_SOURCES.MANUAL_OVERRIDE) {
     throw new Error(`Expected emp-008 to resolve Present via Manual Override, got state=${harith.presenceState}, source=${harith.presenceSource}`);
@@ -42,28 +42,24 @@ export async function runStage6Verification() {
     throw new Error(`Expected emp-007 to resolve On Leave via Approved Leave, got state=${chloe.presenceState}, source=${chloe.presenceSource}`);
   }
 
-  const priyanka = overview.employees.find((e) => e.id === 'emp-005'); // Remote Attendance
-  if (priyanka.presenceState !== PRESENCE_STATES.REMOTE || priyanka.presenceSource !== PRESENCE_SOURCES.ATTENDANCE) {
-    throw new Error(`Expected emp-005 to resolve Remote via Attendance Check-In, got state=${priyanka.presenceState}, source=${priyanka.presenceSource}`);
+  const priyanka = overview.employees.find((e) => e.id === 'emp-005'); // Scheduled working day without explicit signal -> UNKNOWN
+  if (priyanka.presenceState !== PRESENCE_STATES.UNKNOWN || priyanka.presenceSource !== PRESENCE_SOURCES.SYSTEM) {
+    throw new Error(`Expected emp-005 to resolve Unknown via System Fallback, got state=${priyanka.presenceState}, source=${priyanka.presenceSource}`);
   }
 
-  const farah = overview.employees.find((e) => e.id === 'emp-016'); // Explicit Absent
-  if (farah.presenceState !== PRESENCE_STATES.ABSENT || farah.presenceSource !== PRESENCE_SOURCES.ATTENDANCE) {
-    throw new Error(`Expected emp-016 to resolve Absent via Attendance Check-In, got state=${farah.presenceState}, source=${farah.presenceSource}`);
+  const farah = overview.employees.find((e) => e.id === 'emp-016'); // Scheduled working day without explicit signal -> UNKNOWN (not Absent!)
+  if (farah.presenceState !== PRESENCE_STATES.UNKNOWN || farah.presenceSource !== PRESENCE_SOURCES.SYSTEM) {
+    throw new Error(`Expected emp-016 to resolve Unknown via System Fallback, got state=${farah.presenceState}, source=${farah.presenceSource}`);
   }
 
-  const aaron = overview.employees.find((e) => e.id === 'emp-017'); // Missing checkin on scheduled working day -> UNKNOWN
-  if (aaron.presenceState !== PRESENCE_STATES.UNKNOWN || aaron.presenceSource !== PRESENCE_SOURCES.WORK_SCHEDULE) {
-    throw new Error(`Expected emp-017 to resolve UNKNOWN via Work Schedule, got state=${aaron.presenceState}, source=${aaron.presenceSource}`);
-  }
-  console.log('✅ Priority order verified: Override > Leave > Attendance > Work Schedule. Missing check-in correctly resolves to UNKNOWN (not Absent!).');
+  console.log('✅ Priority order verified: Manual Override > Approved Leave > Remote Request > Work Schedule > System Fallback. Missing presence signal resolves cleanly to UNKNOWN.');
 
   // 4. Verify Work Mode vs Presence State distinction
-  const marcus = overview.employees.find((e) => e.id === 'emp-004'); // Marcus Tan (Hybrid Work Mode, Office Check-In)
-  if (marcus.workMode !== 'Hybrid' || marcus.presenceState !== PRESENCE_STATES.PRESENT) {
-    throw new Error(`Expected emp-004 Work Mode=Hybrid and Presence State=Present, got mode=${marcus.workMode}, state=${marcus.presenceState}`);
+  const marcus = overview.employees.find((e) => e.id === 'emp-004'); // Marcus Tan (Hybrid Work Mode, Unknown Presence State)
+  if (marcus.workMode !== 'Hybrid' || marcus.presenceState !== PRESENCE_STATES.UNKNOWN) {
+    throw new Error(`Expected emp-004 Work Mode=Hybrid and Presence State=Unknown, got mode=${marcus.workMode}, state=${marcus.presenceState}`);
   }
-  console.log('✅ Work Mode (Hybrid) and Presence State (Present) confirmed as separate independent concepts.');
+  console.log('✅ Work Mode (Hybrid) and Presence State (Unknown) confirmed as separate independent concepts. Scheduled office location does not derive Present.');
 
   // 5. Verify Override Creation, Clearing, and Audit Trail Preservation
   const createdOverride = await presenceService.createPresenceOverride({
@@ -82,8 +78,8 @@ export async function runStage6Verification() {
   await presenceService.clearPresenceOverride('emp-005', 'Ayesha Z. (HR Admin)');
 
   const restoredPriyanka = await presenceService.getEmployeePresence('emp-005', '2026-09-03');
-  if (restoredPriyanka.state !== PRESENCE_STATES.REMOTE || restoredPriyanka.source !== PRESENCE_SOURCES.ATTENDANCE) {
-    throw new Error(`Expected emp-005 presence to restore to derived Remote, got state=${restoredPriyanka.state}, source=${restoredPriyanka.source}`);
+  if (restoredPriyanka.state !== PRESENCE_STATES.UNKNOWN || restoredPriyanka.source !== PRESENCE_SOURCES.SYSTEM) {
+    throw new Error(`Expected emp-005 presence to restore to derived Unknown fallback, got state=${restoredPriyanka.state}, source=${restoredPriyanka.source}`);
   }
 
   // Verify Audit History preserved

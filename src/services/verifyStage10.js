@@ -154,7 +154,7 @@ export async function runStage10Verification() {
     throw new Error('Operational Health report failed to compile presence or activity metrics.');
   }
   console.log('✅ Operational Health report metrics compiled cleanly:', {
-    presenceHealthRate: healthReport.presenceMetrics.presenceHealthRate,
+    signalCoverageRate: healthReport.presenceMetrics.signalCoverageRate,
     overdueCount: healthReport.activityMetrics.overdueCount,
   });
 

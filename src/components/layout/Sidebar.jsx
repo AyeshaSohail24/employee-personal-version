@@ -381,25 +381,18 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
                 Employees
               </NavLink>
               <NavLink
-                to="/configuration/presence"
-                className={({ isActive }) => `subnav-item ${isActive ? 'active' : ''}`}
-                onClick={closeMobile}
-              >
-                Presence
-              </NavLink>
-              <NavLink
-                to="/configuration/lifecycle"
-                className={({ isActive }) => `subnav-item ${isActive ? 'active' : ''}`}
-                onClick={closeMobile}
-              >
-                Lifecycle
-              </NavLink>
-              <NavLink
                 to="/configuration/activities"
                 className={({ isActive }) => `subnav-item ${isActive ? 'active' : ''}`}
                 onClick={closeMobile}
               >
                 Activities
+              </NavLink>
+              <NavLink
+                to="/configuration/presence"
+                className={({ isActive }) => `subnav-item ${isActive ? 'active' : ''}`}
+                onClick={closeMobile}
+              >
+                Presence
               </NavLink>
               <NavLink
                 to="/configuration/documents"

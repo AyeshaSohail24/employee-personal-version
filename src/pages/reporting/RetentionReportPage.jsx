@@ -47,10 +47,12 @@ export default function RetentionReportPage() {
   const { presenceMetrics, activityMetrics, departments } = data;
 
   const presenceSegments = [
-    { label: 'Present On-site', count: presenceMetrics.presentCount || 0, color: '#059669' },
-    { label: 'Working Remote', count: presenceMetrics.remoteCount || 0, color: '#2563EB' },
+    { label: 'Present', count: presenceMetrics.presentCount || 0, color: '#059669' },
+    { label: 'Remote', count: presenceMetrics.remoteCount || 0, color: '#2563EB' },
     { label: 'On Leave', count: presenceMetrics.leaveCount || 0, color: '#D97706' },
-    { label: 'Absent / Unknown', count: (presenceMetrics.absentCount || 0) + (presenceMetrics.unknownCount || 0), color: '#DC2626' },
+    { label: 'Absent', count: presenceMetrics.absentCount || 0, color: '#DC2626' },
+    { label: 'Not Scheduled', count: presenceMetrics.notScheduledCount || 0, color: '#6B7280' },
+    { label: 'Unknown (No Signal)', count: presenceMetrics.unknownCount || 0, color: '#9CA3AF' },
   ];
 
   const sourceItems = Object.entries(activityMetrics.sourceCounts || {}).map(([src, count]) => ({
@@ -75,7 +77,7 @@ export default function RetentionReportPage() {
               Operational Health Report
             </h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0 }}>
-              Monitoring daily workforce presence stability, task activity bottlenecks, and task resolution velocity.
+              Monitoring daily workforce presence status, task activity bottlenecks, and task resolution velocity.
             </p>
           </div>
           <span style={{ fontSize: '0.725rem', fontWeight: 700, padding: '0.3rem 0.65rem', borderRadius: '12px', backgroundColor: '#F3F4F6', color: '#4B5563', border: '1px solid var(--border-light)' }}>
@@ -99,9 +101,9 @@ export default function RetentionReportPage() {
       {/* KPI Row */}
       <div className="reporting-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         <div className="table-container-card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #059669' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>PRESENCE HEALTH RATE</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#059669' }}>{presenceMetrics.presenceHealthRate}%</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{presenceMetrics.activePresent} of {presenceMetrics.totalWorkforce} present/remote</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>PRESENCE SIGNALS COVERAGE</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#059669' }}>{presenceMetrics.signalCoverageRate || 0}%</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{presenceMetrics.knownSignalCount || 0} of {presenceMetrics.totalWorkforce || 0} with known status</div>
         </div>
 
         <div className="table-container-card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #DC2626' }}>

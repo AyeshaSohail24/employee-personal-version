@@ -231,15 +231,16 @@ export function calculatePresenceAnalytics(presenceOverview = {}) {
   const summary = presenceOverview.summary || {};
   const employees = presenceOverview.employees || [];
   const total = summary.totalWorkforce || employees.length || 0;
-  const presentCount = summary.presentCount || 0;
-  const remoteCount = summary.remoteCount || 0;
-  const leaveCount = summary.leaveCount || 0;
-  const absentCount = summary.absentCount || 0;
-  const notScheduledCount = summary.notScheduledCount || 0;
-  const unknownCount = summary.unknownCount || 0;
 
-  const activePresent = presentCount + remoteCount;
-  const presenceHealthRate = total > 0 ? Math.round((activePresent / total) * 100) : 0;
+  const presentCount = summary['Present'] || summary.presentCount || 0;
+  const remoteCount = summary['Remote'] || summary.remoteCount || 0;
+  const leaveCount = summary['On Leave'] || summary.leaveCount || 0;
+  const absentCount = summary['Absent'] || summary.absentCount || 0;
+  const notScheduledCount = summary['Not Scheduled'] || summary.notScheduledCount || 0;
+  const unknownCount = summary['Unknown'] || summary.unknownCount || 0;
+
+  const knownSignalCount = presentCount + remoteCount + leaveCount + absentCount + notScheduledCount;
+  const signalCoverageRate = total > 0 ? Math.round((knownSignalCount / total) * 100) : 0;
 
   return {
     totalWorkforce: total,
@@ -249,8 +250,8 @@ export function calculatePresenceAnalytics(presenceOverview = {}) {
     absentCount,
     notScheduledCount,
     unknownCount,
-    activePresent,
-    presenceHealthRate,
+    knownSignalCount,
+    signalCoverageRate,
   };
 }
 

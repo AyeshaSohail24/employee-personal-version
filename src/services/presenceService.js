@@ -28,7 +28,6 @@ export const presenceService = {
     const locations = db.locations || [];
     const schedules = db.schedules || [];
     const leaves = db.leaves || [];
-    const attendance = db.attendance || [];
     const presenceOverrides = db.presenceOverrides || [];
 
     // 1. Get 15 current workforce employees (Active, Onboarding, Departing)
@@ -53,7 +52,6 @@ export const presenceService = {
         employees,
         records,
         leaves,
-        attendance,
         presenceOverrides,
         schedules,
         [],
@@ -135,7 +133,6 @@ export const presenceService = {
       db.employees,
       db.employmentRecords,
       db.leaves,
-      db.attendance,
       db.presenceOverrides,
       db.schedules,
       [],

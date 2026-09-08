@@ -12,7 +12,6 @@ export const PRESENCE_STATES = {
 export const PRESENCE_SOURCES = {
   MANUAL_OVERRIDE: 'Manual Override',
   APPROVED_LEAVE: 'Approved Leave',
-  ATTENDANCE: 'Attendance Check-In',
   REMOTE_REQUEST: 'Remote Work Request',
   WORK_SCHEDULE: 'Work Schedule',
   SYSTEM: 'System Fallback',
@@ -20,19 +19,21 @@ export const PRESENCE_SOURCES = {
 
 /**
  * Resolves the operational Presence State for an employee on a given reference date.
- * Strictly adheres to the priority order:
- * 1. Active Manual Override
- * 2. Approved Leave
- * 3. Explicit Attendance / Check-In State (checked_in_office -> Present, checked_in_remote -> Remote, explicit absent -> Absent)
- * 4. Date-Specific Remote Work State
- * 5. Work Schedule (non-working day -> Not Scheduled, working day with missing data -> Unknown)
- * 6. System Fallback -> Unknown
+ * Strictly adheres to the truthful presence resolution hierarchy:
+ * 1. Active Manual HR Override -> Explicit overrideState
+ * 2. Approved Leave -> On Leave
+ * 3. Approved Remote Work Request -> Remote
+ * 4. Work Schedule (non-working day -> Not Scheduled)
+ * 5. System Fallback -> Unknown ("No current presence signal")
+ *
+ * NOTE: Scheduled working day + Office location does NOT derive Present.
+ * Present and Absent cannot be derived automatically without attendance check-in logs;
+ * they are asserted exclusively via HR Manual Override.
  *
  * @param {string} employeeId
  * @param {Array<Object>} employees
  * @param {Array<Object>} records
  * @param {Array<Object>} leaves
- * @param {Array<Object>} attendance
  * @param {Array<Object>} presenceOverrides
  * @param {Array<Object>} schedules
  * @param {Array<Object>} remoteRequests
@@ -44,7 +45,6 @@ export function resolvePresenceState(
   employees = [],
   records = [],
   leaves = [],
-  attendance = [],
   presenceOverrides = [],
   schedules = [],
   remoteRequests = [],
@@ -88,35 +88,7 @@ export function resolvePresenceState(
     };
   }
 
-  // 3. Explicit Attendance / Check-In State
-  const attendanceRec = (attendance || []).find(
-    (a) => a.employeeId === employeeId && a.date === referenceDate
-  );
-  if (attendanceRec) {
-    if (attendanceRec.status === 'checked_in_office') {
-      return {
-        state: PRESENCE_STATES.PRESENT,
-        source: PRESENCE_SOURCES.ATTENDANCE,
-        details: { checkInTime: attendanceRec.checkInTime, location: 'Office' },
-      };
-    }
-    if (attendanceRec.status === 'checked_in_remote') {
-      return {
-        state: PRESENCE_STATES.REMOTE,
-        source: PRESENCE_SOURCES.ATTENDANCE,
-        details: { checkInTime: attendanceRec.checkInTime, location: 'Remote' },
-      };
-    }
-    if (attendanceRec.status === 'absent') {
-      return {
-        state: PRESENCE_STATES.ABSENT,
-        source: PRESENCE_SOURCES.ATTENDANCE,
-        details: { reason: attendanceRec.notes || 'Unreported absence' },
-      };
-    }
-  }
-
-  // 4. Date-Specific Remote Work State
+  // 3. Approved Remote Work Request
   const remoteReq = (remoteRequests || []).find(
     (r) =>
       r.employeeId === employeeId &&
@@ -131,7 +103,7 @@ export function resolvePresenceState(
     };
   }
 
-  // 5. Work Schedule
+  // 4. Work Schedule (Check for Non-Working Days)
   const currentRec = resolveCurrentRecord(employeeId, records, referenceDate);
   if (currentRec && currentRec.scheduleId) {
     const sched = (schedules || []).find((s) => s.id === currentRec.scheduleId);
@@ -149,21 +121,14 @@ export function resolvePresenceState(
           source: PRESENCE_SOURCES.WORK_SCHEDULE,
           details: { scheduleName: sched.name, dayOfWeek },
         };
-      } else {
-        // Scheduled working day but no attendance / leave / remote / override evidence -> UNKNOWN
-        return {
-          state: PRESENCE_STATES.UNKNOWN,
-          source: PRESENCE_SOURCES.WORK_SCHEDULE,
-          details: { scheduleName: sched.name, dayOfWeek, note: 'Awaiting check-in data' },
-        };
       }
     }
   }
 
-  // 6. System Fallback
+  // 5. System Fallback -> Unknown (Scheduled working day without explicit operational signal)
   return {
     state: PRESENCE_STATES.UNKNOWN,
     source: PRESENCE_SOURCES.SYSTEM,
-    details: null,
+    details: { note: 'No current presence signal' },
   };
 }
