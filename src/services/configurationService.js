@@ -5,6 +5,7 @@ import { locationService } from './locationService.js';
 import { activityTypeService } from './activityTypeService.js';
 import { employeeTypeService } from './employeeTypeService.js';
 import { employeeTagService } from './employeeTagService.js';
+import { scheduleService } from './scheduleService.js';
 import {
   canUserMutate,
   generateUniqueId,
@@ -14,12 +15,14 @@ import {
   validateActivityType,
   validateEmployeeType,
   validateEmployeeTag,
+  validateSchedule,
   calculateDepartmentReferences,
   calculatePositionReferences,
   calculateLocationReferences,
   calculateActivityTypeReferences,
   calculateEmployeeTypeReferences,
   calculateEmployeeTagReferences,
+  calculateScheduleReferences,
 } from '../domain/configurationDomain.js';
 
 /**
@@ -120,6 +123,27 @@ export const configurationService = {
     });
 
     return { employeeTypes, employeeTags };
+  },
+
+  /**
+   * Fetches full presence configuration state (work schedules) enriched with reference usage counts.
+   * @returns {Promise<Object>}
+   */
+  async getPresenceConfig() {
+    const db = loadDatabase();
+    const rawSchedules = await scheduleService.getAll();
+
+    const schedules = rawSchedules.map((sched) => {
+      const refCheck = calculateScheduleReferences(sched.id, db);
+      return {
+        ...sched,
+        totalReferences: refCheck.totalReferences,
+        referenceSummary: refCheck.summary,
+        canDelete: refCheck.totalReferences === 0,
+      };
+    });
+
+    return { schedules };
   },
 
   // ==================== DEPARTMENT MUTATIONS ====================
@@ -456,6 +480,62 @@ export const configurationService = {
     }
 
     return employeeTagService.delete(id);
+  },
+
+  // ==================== WORK SCHEDULE MUTATIONS ====================
+
+  async createSchedule(scheduleData, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const existingSchedules = await scheduleService.getAll();
+    const { isValid, errors, cleanData } = validateSchedule(scheduleData, existingSchedules);
+
+    if (!isValid) {
+      const firstErr = Object.values(errors)[0];
+      throw new Error(firstErr);
+    }
+
+    const newId = generateUniqueId('sched', existingSchedules);
+    return scheduleService.create({ ...cleanData, id: newId });
+  },
+
+  async updateSchedule(id, updateData, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const existingSchedules = await scheduleService.getAll();
+    const { isValid, errors, cleanData } = validateSchedule(updateData, existingSchedules, id);
+
+    if (!isValid) {
+      const firstErr = Object.values(errors)[0];
+      throw new Error(firstErr);
+    }
+
+    return scheduleService.update(id, cleanData);
+  },
+
+  async toggleScheduleActive(id, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+    return scheduleService.toggleActive(id);
+  },
+
+  async deleteSchedule(id, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const db = loadDatabase();
+    const refCheck = calculateScheduleReferences(id, db);
+    if (refCheck.totalReferences > 0) {
+      throw new Error(`Cannot delete work schedule: Record is referenced by ${refCheck.summary}. Deactivate it instead.`);
+    }
+
+    return scheduleService.delete(id);
   },
 };
 

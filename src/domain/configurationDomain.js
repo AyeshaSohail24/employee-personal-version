@@ -483,3 +483,92 @@ export function calculateEmployeeTagReferences(tagId, db = {}) {
   };
 }
 
+export const SUPPORTED_DAYS = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
+/**
+ * Validates Work Schedule form data.
+ */
+export function validateSchedule(scheduleData, existingSchedules = [], currentId = null) {
+  const errors = {};
+
+  const name = (scheduleData.name || '').trim();
+  const workingDays = Array.isArray(scheduleData.workingDays)
+    ? scheduleData.workingDays.filter((d) => SUPPORTED_DAYS.includes(d))
+    : [];
+  const startTime = (scheduleData.startTime || '').trim();
+  const endTime = (scheduleData.endTime || '').trim();
+  const weeklyHours = Number(scheduleData.weeklyHours);
+
+  if (!name) {
+    errors.name = 'Schedule name is required.';
+  } else {
+    const dupName = existingSchedules.find(
+      (s) => s.id !== currentId && s.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (dupName) {
+      errors.name = `A work schedule named "${name}" already exists.`;
+    }
+  }
+
+  if (workingDays.length === 0) {
+    errors.workingDays = 'At least one working day must be selected.';
+  }
+
+  const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+  if (!startTime || !timeRegex.test(startTime)) {
+    errors.startTime = 'Start time is required and must be in HH:mm format.';
+  }
+
+  if (!endTime || !timeRegex.test(endTime)) {
+    errors.endTime = 'End time is required and must be in HH:mm format.';
+  }
+
+  if (isNaN(weeklyHours) || weeklyHours <= 0) {
+    errors.weeklyHours = 'Weekly hours must be a positive number greater than 0.';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+    cleanData: {
+      name,
+      workingDays,
+      startTime,
+      endTime,
+      weeklyHours,
+      active: scheduleData.active !== undefined ? scheduleData.active : true,
+    },
+  };
+}
+
+/**
+ * Calculates complete database references for a Work Schedule entity.
+ * Checks ALL employmentRecords across all employee lifecycle statuses (Active, Onboarding, Upcoming, Departing, Former).
+ */
+export function calculateScheduleReferences(scheduleId, db = {}) {
+  if (!scheduleId) return { totalReferences: 0, details: [] };
+
+  const records = db.employmentRecords || [];
+  const recRefs = records.filter((r) => r.scheduleId === scheduleId).length;
+
+  const totalReferences = recRefs;
+  const details = [];
+
+  if (recRefs > 0) details.push(`${recRefs} employment history record(s)`);
+
+  return {
+    totalReferences,
+    details,
+    summary: details.length > 0 ? details.join(', ') : 'No references found.',
+  };
+}
+
+

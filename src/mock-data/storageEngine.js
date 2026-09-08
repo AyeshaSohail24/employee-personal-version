@@ -158,6 +158,7 @@ export function loadDatabase() {
     const parsed = JSON.parse(raw);
     if (!parsed.employeeTypes) parsed.employeeTypes = seedEmployeeTypes;
     if (!parsed.employeeTags) parsed.employeeTags = seedEmployeeTags;
+    if (!parsed.schedules) parsed.schedules = seedSchedules;
     if (!parsed.activityTypes) parsed.activityTypes = seedActivityTypes;
     if (!parsed.activities) parsed.activities = seedActivities;
     if (!parsed.onboardingPlanTemplates) parsed.onboardingPlanTemplates = seedOnboardingPlanTemplates;
