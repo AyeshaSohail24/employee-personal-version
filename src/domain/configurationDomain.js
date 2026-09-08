@@ -1,21 +1,18 @@
-/**
- * Pure domain logic and validation rules for Stage 11 Configuration & HR Master Data Management.
- */
+import { hasCapability, ROLES } from './permissionDomain.js';
 
 export const SUPPORTED_LOCATION_TYPES = ['Office', 'Branch', 'Remote', 'Client Site'];
 export const SUPPORTED_ACTIVITY_CATEGORIES = ['General', 'Compliance', 'HR', 'Onboarding', 'Offboarding'];
 export const SUPPORTED_ACTIVITY_ICONS = ['CheckSquare', 'PhoneCall', 'Calendar', 'FileText', 'ClipboardCheck', 'Clock'];
 
 /**
- * Validates if the user role has administrative mutation privileges.
- * HR Admin and HR are permitted; Manager and Employee are rejected.
+ * Validates if the user role has administrative mutation privileges for HR master data.
+ * HR Admin and HR are permitted; Manager and obsolete roles are rejected.
  * @param {string} role
+ * @param {string} [capabilityKey='manage_config_org']
  * @returns {boolean}
  */
-export function canUserMutate(role) {
-  if (!role) return false;
-  const normalized = role.trim().toLowerCase();
-  return normalized === 'hr admin' || normalized === 'hr_admin' || normalized === 'hr';
+export function canUserMutate(role, capabilityKey = 'manage_config_org') {
+  return hasCapability(role, capabilityKey);
 }
 
 /**

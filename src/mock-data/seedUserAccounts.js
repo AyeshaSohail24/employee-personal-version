@@ -4,7 +4,7 @@ export const seedUserAccounts = [
     employeeId: 'emp-005',
     username: 'priyanka.nair',
     email: 'priyanka.nair@rizurf.example',
-    role: 'Employee',
+    role: 'HR',
     status: 'Active',
   },
   {
@@ -36,7 +36,7 @@ export const seedUserAccounts = [
     employeeId: 'emp-012',
     username: 'rajiv.sharma',
     email: 'rajiv.sharma@rizurf.example',
-    role: 'Payroll',
+    role: 'Manager',
     status: 'Active',
   },
 ];

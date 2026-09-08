@@ -17,8 +17,8 @@ import { DOCUMENT_CATEGORIES } from '../../domain/documentTypeDomain';
 import { DocumentTypeModal } from '../../components/configuration/DocumentTypeModal';
 
 export default function DocumentsConfigPage() {
-  const { currentRole } = useRole();
-  const isReadOnly = currentRole === 'Manager' || currentRole === 'Employee';
+  const { currentRole, hasCapability } = useRole();
+  const isReadOnly = !hasCapability('manage_config_docs');
 
   const [documentTypes, setDocumentTypes] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');

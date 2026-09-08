@@ -10,8 +10,8 @@ import { LocationModal } from '../../components/configuration/LocationModal';
 import { DeleteConfirmModal } from '../../components/configuration/DeleteConfirmModal';
 
 export default function OrganizationConfigPage() {
-  const { currentRole, isEmployee, isManager } = useRole();
-  const userCanMutate = canUserMutate(currentRole);
+  const { currentRole, isManager } = useRole();
+  const userCanMutate = canUserMutate(currentRole, 'manage_config_org');
 
   const [activeTab, setActiveTab] = useState('departments'); // 'departments' | 'positions' | 'locations'
   const [config, setConfig] = useState({ departments: [], positions: [], locations: [] });
@@ -149,24 +149,7 @@ export default function OrganizationConfigPage() {
     await loadData();
   };
 
-  if (isEmployee) {
-    return (
-      <div className="config-page-wrapper">
-        <div className="config-header-card" style={{ textAlign: 'center', justifyContent: 'center' }}>
-          <div>
-            <ShieldAlert style={{ width: '48px', height: '48px', color: '#d97706', margin: '0 auto 1rem' }} />
-            <h2 className="config-header-title">Master Data Access Restricted</h2>
-            <p className="config-header-desc">
-              Master data configuration (Departments, Job Positions, Work Locations) requires HR or HR Admin permissions.
-            </p>
-            <div style={{ marginTop: '1rem' }}>
-              <span className="config-pill-inactive">Current Role: {currentRole}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="config-page-wrapper">

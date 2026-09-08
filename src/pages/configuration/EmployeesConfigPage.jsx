@@ -8,8 +8,8 @@ import { EmployeeTagModal } from '../../components/configuration/EmployeeTagModa
 import { DeleteConfirmModal } from '../../components/configuration/DeleteConfirmModal';
 
 export default function EmployeesConfigPage() {
-  const { currentRole, isEmployee } = useRole();
-  const userCanMutate = canUserMutate(currentRole);
+  const { currentRole } = useRole();
+  const userCanMutate = canUserMutate(currentRole, 'manage_config_emp');
 
   const [activeTab, setActiveTab] = useState('types'); // 'types' | 'tags'
   const [employeeTypes, setEmployeeTypes] = useState([]);
@@ -55,19 +55,7 @@ export default function EmployeesConfigPage() {
     setDeleteTarget(null);
   };
 
-  if (isEmployee) {
-    return (
-      <div className="config-page-wrapper">
-        <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-          <ShieldAlert style={{ width: '48px', height: '48px', color: '#ef4444', margin: '0 auto 1rem' }} />
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a' }}>Access Restricted</h2>
-          <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.5rem' }}>
-            System configuration is restricted to HR and Administrator roles.
-          </p>
-        </div>
-      </div>
-    );
-  }
+
 
   // --- Employment Type Handlers ---
   const handleSaveType = async (typeData) => {

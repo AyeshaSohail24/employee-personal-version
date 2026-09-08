@@ -3170,6 +3170,79 @@ body {
   padding: 0.85rem 0.75rem;
 }
 
+/* Permissions Configuration Matrix Table Layout & Sizing */
+.permissions-matrix-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.permissions-matrix-table col.col-perm-capability {
+  width: 28%;
+}
+
+.permissions-matrix-table col.col-perm-desc {
+  width: 33%;
+}
+
+.permissions-matrix-table col.col-perm-role {
+  width: 13%;
+}
+
+.permissions-matrix-table th,
+.permissions-matrix-table td {
+  padding: 0.75rem 0.6rem;
+  box-sizing: border-box;
+}
+
+.permissions-matrix-table th.perm-th-capability,
+.permissions-matrix-table td.perm-td-capability {
+  padding-left: 1rem;
+}
+
+.permissions-matrix-table th.perm-th-role,
+.permissions-matrix-table td.perm-td-role {
+  text-align: center;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.permissions-matrix-table th:last-child,
+.permissions-matrix-table td:last-child {
+  padding-right: 1rem;
+}
+
+.permissions-matrix-table td.perm-td-role .config-pill-active,
+.permissions-matrix-table td.perm-td-role .config-pill-inactive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.75rem;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Responsive Desktop / Mobile View Toggles */
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: block !important;
+  }
+}
+
+
+
 /* Color Dot Component */
 .config-color-dot {
   width: 9px;

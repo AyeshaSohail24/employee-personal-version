@@ -29,8 +29,8 @@ const ICON_MAP = {
 };
 
 export default function ActivitiesConfigPage() {
-  const { currentRole, isEmployee, isManager } = useRole();
-  const userCanMutate = canUserMutate(currentRole);
+  const { currentRole, isManager } = useRole();
+  const userCanMutate = canUserMutate(currentRole, 'manage_config_act');
 
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -99,24 +99,7 @@ export default function ActivitiesConfigPage() {
     await loadData();
   };
 
-  if (isEmployee) {
-    return (
-      <div className="config-page-wrapper">
-        <div className="config-header-card" style={{ textAlign: 'center', justifyContent: 'center' }}>
-          <div>
-            <ShieldAlert style={{ width: '48px', height: '48px', color: '#d97706', margin: '0 auto 1rem' }} />
-            <h2 className="config-header-title">Master Data Access Restricted</h2>
-            <p className="config-header-desc">
-              Master data configuration (Activity Types) requires HR or HR Admin permissions.
-            </p>
-            <div style={{ marginTop: '1rem' }}>
-              <span className="config-pill-inactive">Current Role: {currentRole}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="config-page-wrapper">
