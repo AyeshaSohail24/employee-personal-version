@@ -6,6 +6,11 @@ import { activityTypeService } from './activityTypeService.js';
 import { employeeTypeService } from './employeeTypeService.js';
 import { employeeTagService } from './employeeTagService.js';
 import { scheduleService } from './scheduleService.js';
+import { documentTypeService } from './documentTypeService.js';
+import {
+  validateDocumentType,
+  calculateDocumentTypeReferences,
+} from '../domain/documentTypeDomain.js';
 import {
   canUserMutate,
   generateUniqueId,
@@ -536,6 +541,79 @@ export const configurationService = {
     }
 
     return scheduleService.delete(id);
+  },
+
+  // ==================== DOCUMENT TYPE MUTATIONS ====================
+
+  async getDocumentConfig() {
+    const db = loadDatabase();
+    const rawDocumentTypes = await documentTypeService.getAll();
+
+    const documentTypes = rawDocumentTypes.map((docType) => {
+      const refCheck = calculateDocumentTypeReferences(docType.id, db);
+      return {
+        ...docType,
+        totalReferences: refCheck.totalReferences,
+        referenceSummary: refCheck.summary,
+        canDelete: refCheck.totalReferences === 0,
+      };
+    });
+
+    return { documentTypes };
+  },
+
+  async createDocumentType(documentTypeData, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const existingTypes = await documentTypeService.getAll();
+    const { isValid, errors, cleanData } = validateDocumentType(documentTypeData, existingTypes);
+
+    if (!isValid) {
+      const firstErr = Object.values(errors)[0];
+      throw new Error(firstErr);
+    }
+
+    const newId = generateUniqueId('doc-type', existingTypes);
+    return documentTypeService.create({ ...cleanData, id: newId });
+  },
+
+  async updateDocumentType(id, updateData, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const existingTypes = await documentTypeService.getAll();
+    const { isValid, errors, cleanData } = validateDocumentType(updateData, existingTypes, id);
+
+    if (!isValid) {
+      const firstErr = Object.values(errors)[0];
+      throw new Error(firstErr);
+    }
+
+    return documentTypeService.update(id, cleanData);
+  },
+
+  async toggleDocumentTypeActive(id, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+    return documentTypeService.toggleActive(id);
+  },
+
+  async deleteDocumentType(id, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const db = loadDatabase();
+    const refCheck = calculateDocumentTypeReferences(id, db);
+    if (refCheck.totalReferences > 0) {
+      throw new Error(`Cannot delete document type: Record is referenced by ${refCheck.summary}. Deactivate it instead.`);
+    }
+
+    return documentTypeService.delete(id);
   },
 };
 

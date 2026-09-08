@@ -3147,6 +3147,42 @@ body {
   white-space: nowrap;
 }
 
+.config-pill-category {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #f8fafc;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  white-space: nowrap;
+}
+
+.config-expiry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.config-expiry-badge.active {
+  background-color: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.config-expiry-badge.inactive {
+  background-color: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
 /* Action Icon Buttons Group */
 .config-actions-cell {
   display: flex;
@@ -3285,6 +3321,19 @@ body {
 }
 
 /* Form System inside Modals */
+.config-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .config-form-row {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+}
+
 .config-form-group {
   display: flex;
   flex-direction: column;
