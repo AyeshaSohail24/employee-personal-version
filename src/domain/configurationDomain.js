@@ -336,31 +336,18 @@ export function calculateLocationReferences(locId, db = {}) {
 
 /**
  * Calculates complete database references for an Activity Type entity.
- * Checks activities, onboarding/offboarding plan tasks, and task instances.
+ * Checks all activities log records.
  */
-export function calculateActivityTypeReferences(typeId, db = {}) {
-  if (!typeId) return { totalReferences: 0, details: [] };
+export function calculateActivityTypeReferences(activityTypeId, db = {}) {
+  if (!activityTypeId) return { totalReferences: 0, details: [] };
 
   const activities = db.activities || [];
-  const onboardingPlanTasks = db.onboardingPlanTasks || [];
-  const offboardingPlanTasks = db.offboardingPlanTasks || [];
-  const onboardingTaskInstances = db.onboardingTaskInstances || [];
-  const offboardingTaskInstances = db.offboardingTaskInstances || [];
+  const actRefs = activities.filter((a) => a.activityTypeId === activityTypeId || a.typeId === activityTypeId).length;
 
-  const activityRefs = activities.filter((a) => a.typeId === typeId).length;
-  const onboardingTaskRefs = onboardingPlanTasks.filter((t) => t.activityTypeId === typeId).length;
-  const offboardingTaskRefs = offboardingPlanTasks.filter((t) => t.activityTypeId === typeId).length;
-  const onboardingInstanceRefs = onboardingTaskInstances.filter((t) => t.activityTypeId === typeId).length;
-  const offboardingInstanceRefs = offboardingTaskInstances.filter((t) => t.activityTypeId === typeId).length;
-
-  const totalReferences = activityRefs + onboardingTaskRefs + offboardingTaskRefs + onboardingInstanceRefs + offboardingInstanceRefs;
+  const totalReferences = actRefs;
   const details = [];
 
-  if (activityRefs > 0) details.push(`${activityRefs} activity record(s)`);
-  if (onboardingTaskRefs > 0) details.push(`${onboardingTaskRefs} onboarding template task(s)`);
-  if (offboardingTaskRefs > 0) details.push(`${offboardingTaskRefs} offboarding template task(s)`);
-  if (onboardingInstanceRefs > 0) details.push(`${onboardingInstanceRefs} onboarding task instance(s)`);
-  if (offboardingInstanceRefs > 0) details.push(`${offboardingInstanceRefs} offboarding task instance(s)`);
+  if (actRefs > 0) details.push(`${actRefs} activity record(s)`);
 
   return {
     totalReferences,
@@ -368,3 +355,131 @@ export function calculateActivityTypeReferences(typeId, db = {}) {
     summary: details.length > 0 ? details.join(', ') : 'No references found.',
   };
 }
+
+export const SUPPORTED_TAG_CATEGORIES = ['Committee', 'Role/Skill', 'Operational', 'Status Tag', 'General'];
+
+/**
+ * Validates Employee Type form data.
+ */
+export function validateEmployeeType(typeData, existingTypes = [], currentId = null) {
+  const errors = {};
+
+  const name = (typeData.name || '').trim();
+  const code = (typeData.code || '').trim().toUpperCase();
+  const description = (typeData.description || '').trim();
+
+  if (!name) {
+    errors.name = 'Employment type name is required.';
+  } else {
+    const dupName = existingTypes.find(
+      (t) => t.id !== currentId && t.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (dupName) {
+      errors.name = `An employment type named "${name}" already exists.`;
+    }
+  }
+
+  if (!code) {
+    errors.code = 'Employment type code is required.';
+  } else {
+    const dupCode = existingTypes.find(
+      (t) => t.id !== currentId && t.code.trim().toUpperCase() === code
+    );
+    if (dupCode) {
+      errors.code = `Employment type code "${code}" is already in use by ${dupCode.name}.`;
+    }
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+    cleanData: {
+      name,
+      code,
+      description,
+      active: typeData.active !== undefined ? typeData.active : true,
+    },
+  };
+}
+
+/**
+ * Validates Employee Tag form data.
+ */
+export function validateEmployeeTag(tagData, existingTags = [], currentId = null) {
+  const errors = {};
+
+  const name = (tagData.name || '').trim();
+  const category = tagData.category || 'General';
+  const color = tagData.color || '#129FA9';
+
+  if (!name) {
+    errors.name = 'Tag name is required.';
+  } else {
+    const dupName = existingTags.find(
+      (t) => t.id !== currentId && t.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (dupName) {
+      errors.name = `An employee tag named "${name}" already exists.`;
+    }
+  }
+
+  if (!SUPPORTED_TAG_CATEGORIES.includes(category)) {
+    errors.category = `Tag category must be one of: ${SUPPORTED_TAG_CATEGORIES.join(', ')}.`;
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+    cleanData: {
+      name,
+      category,
+      color,
+      active: tagData.active !== undefined ? tagData.active : true,
+    },
+  };
+}
+
+/**
+ * Calculates complete database references for an Employee Type entity.
+ * Checks ALL employee records across all lifecycle statuses (Active, Onboarding, Upcoming, Departing, Former).
+ */
+export function calculateEmployeeTypeReferences(typeId, db = {}) {
+  if (!typeId) return { totalReferences: 0, details: [] };
+
+  const employees = db.employees || [];
+  const empRefs = employees.filter((e) => e.employeeTypeId === typeId).length;
+
+  const totalReferences = empRefs;
+  const details = [];
+
+  if (empRefs > 0) details.push(`${empRefs} employee record(s)`);
+
+  return {
+    totalReferences,
+    details,
+    summary: details.length > 0 ? details.join(', ') : 'No references found.',
+  };
+}
+
+/**
+ * Calculates complete database references for an Employee Tag entity.
+ * Checks ALL employee records across all lifecycle statuses (Active, Onboarding, Upcoming, Departing, Former).
+ */
+export function calculateEmployeeTagReferences(tagId, db = {}) {
+  if (!tagId) return { totalReferences: 0, details: [] };
+
+  const employees = db.employees || [];
+  const tagRefs = employees.filter((e) => Array.isArray(e.tags) && e.tags.includes(tagId)).length;
+
+  const totalReferences = tagRefs;
+  const details = [];
+
+  if (tagRefs > 0) details.push(`${tagRefs} employee record assignment(s)`);
+
+  return {
+    totalReferences,
+    details,
+    summary: details.length > 0 ? details.join(', ') : 'No references found.',
+  };
+}
+

@@ -3,6 +3,8 @@ import { employmentRecordService } from './employmentRecordService.js';
 import { departmentService } from './departmentService.js';
 import { locationService } from './locationService.js';
 import { positionService } from './positionService.js';
+import { employeeTypeService } from './employeeTypeService.js';
+import { employeeTagService } from './employeeTagService.js';
 import { presenceService } from './presenceService.js';
 import { activityService } from './activityService.js';
 import { onboardingService } from './onboardingService.js';
@@ -25,12 +27,14 @@ export const reportingService = {
    * Helper to load base datasets and apply canonical Manager role scoping if applicable.
    */
   async _loadBaseData({ roleContext = {}, userEmployeeId = '', referenceDate = new Date() } = {}) {
-    const [employees, records, departments, locations, positions] = await Promise.all([
+    const [employees, records, departments, locations, positions, employeeTypes, employeeTags] = await Promise.all([
       employeeService.getAll({ hydrate: true }),
       employmentRecordService.getAll(),
       departmentService.getAll(),
       locationService.getAll(),
       positionService.getAll(),
+      employeeTypeService.getAll(),
+      employeeTagService.getAll(),
     ]);
 
     let scopedEmployees = employees;
@@ -44,6 +48,8 @@ export const reportingService = {
       departments,
       locations,
       positions,
+      employeeTypes,
+      employeeTags,
       isRestricted: roleContext.isEmployee,
     };
   },
@@ -83,7 +89,8 @@ export const reportingService = {
       base.departments,
       base.locations,
       base.positions,
-      referenceDate
+      referenceDate,
+      base.employeeTypes
     );
 
     return {
@@ -119,7 +126,8 @@ export const reportingService = {
       base.departments,
       base.locations,
       base.positions,
-      referenceDate
+      referenceDate,
+      base.employeeTypes
     );
 
     return {

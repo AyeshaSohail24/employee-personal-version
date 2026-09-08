@@ -1,12 +1,12 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
 
 /**
- * Service providing asynchronous data access and CRUD operations for EmployeeType entities.
+ * Service providing asynchronous data access and CRUD operations for EmployeeTag entities.
  */
-export const employeeTypeService = {
+export const employeeTagService = {
   async getAll() {
     const db = loadDatabase();
-    return db.employeeTypes || [];
+    return db.employeeTags || [];
   },
 
   async getActive() {
@@ -19,41 +19,41 @@ export const employeeTypeService = {
     return all.find((t) => t.id === id) || null;
   },
 
-  async create(typeData) {
+  async create(tagData) {
     const db = loadDatabase();
     const newRecord = {
-      id: typeData.id,
-      name: typeData.name,
-      code: typeData.code,
-      description: typeData.description || '',
-      active: typeData.active !== undefined ? typeData.active : true,
+      id: tagData.id,
+      name: tagData.name,
+      category: tagData.category || 'General',
+      color: tagData.color || '#129FA9',
+      active: tagData.active !== undefined ? tagData.active : true,
     };
-    db.employeeTypes = db.employeeTypes || [];
-    db.employeeTypes.push(newRecord);
+    db.employeeTags = db.employeeTags || [];
+    db.employeeTags.push(newRecord);
     saveDatabase(db);
     return newRecord;
   },
 
   async update(id, updateData) {
     const db = loadDatabase();
-    const index = (db.employeeTypes || []).findIndex((t) => t.id === id);
+    const index = (db.employeeTags || []).findIndex((t) => t.id === id);
     if (index === -1) return null;
 
-    const existing = db.employeeTypes[index];
+    const existing = db.employeeTags[index];
     const updated = {
       ...existing,
       ...updateData,
       id: existing.id, // Immutable ID
     };
 
-    db.employeeTypes[index] = updated;
+    db.employeeTags[index] = updated;
     saveDatabase(db);
     return updated;
   },
 
   async toggleActive(id) {
     const db = loadDatabase();
-    const target = (db.employeeTypes || []).find((t) => t.id === id);
+    const target = (db.employeeTags || []).find((t) => t.id === id);
     if (!target) return null;
 
     target.active = !target.active;
@@ -63,10 +63,10 @@ export const employeeTypeService = {
 
   async delete(id) {
     const db = loadDatabase();
-    const initialLen = (db.employeeTypes || []).length;
-    db.employeeTypes = (db.employeeTypes || []).filter((t) => t.id !== id);
+    const initialLen = (db.employeeTags || []).length;
+    db.employeeTags = (db.employeeTags || []).filter((t) => t.id !== id);
 
-    if (db.employeeTypes.length !== initialLen) {
+    if (db.employeeTags.length !== initialLen) {
       saveDatabase(db);
       return true;
     }

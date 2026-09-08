@@ -1,4 +1,5 @@
 import { seedEmployeeTypes } from './seedEmployeeTypes.js';
+import { seedEmployeeTags } from './seedEmployeeTags.js';
 import { seedDepartments } from './seedDepartments.js';
 import { seedPositions } from './seedPositions.js';
 import { seedLocations } from './seedLocations.js';
@@ -19,9 +20,103 @@ import { seedOffboardingPlanInstances, seedOffboardingTaskInstances } from './se
 const STORAGE_KEY = 'rizurf_hr_poc_v1';
 let inMemoryDb = null;
 
+function generateStorageTagId(existingTags = []) {
+  const existingIds = new Set(existingTags.map((t) => t.id));
+  let candidate;
+  do {
+    const timestamp = Date.now();
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    candidate = `tag-${timestamp}-${randomSuffix}`;
+  } while (existingIds.has(candidate));
+  return candidate;
+}
+
+export function migrateEmployeeTagsIfNeeded(db) {
+  if (!db) return db;
+
+  let mutated = false;
+
+  if (!db.employeeTags || db.employeeTags.length === 0) {
+    db.employeeTags = [...seedEmployeeTags];
+    mutated = true;
+  }
+
+  const tagMap = new Map();
+  db.employeeTags.forEach((t) => {
+    if (t && t.name) {
+      tagMap.set(t.name.trim().toLowerCase(), t.id);
+    }
+  });
+
+  const knownTagIds = new Set(db.employeeTags.map((t) => t.id));
+
+  db.employees = (db.employees || []).map((emp) => {
+    if (!Array.isArray(emp.tags)) return { ...emp, tags: [] };
+
+    const canonicalIds = new Set();
+    let empTagsChanged = false;
+
+    emp.tags.forEach((rawTag) => {
+      if (typeof rawTag !== 'string') return;
+      const trimmed = rawTag.trim();
+      if (!trimmed) return;
+
+      // 1. Already a valid tag ID
+      if (knownTagIds.has(trimmed)) {
+        canonicalIds.add(trimmed);
+        return;
+      }
+
+      empTagsChanged = true;
+
+      // 2. Case and whitespace normalization match
+      const normalized = trimmed.toLowerCase();
+      if (tagMap.has(normalized)) {
+        canonicalIds.add(tagMap.get(normalized));
+        return;
+      }
+
+      // 3. Unknown tag -> Create canonical EmployeeTag record
+      const newTagId = generateStorageTagId(db.employeeTags);
+      const newTagRecord = {
+        id: newTagId,
+        name: trimmed,
+        category: 'General',
+        color: '#64748B',
+        active: true,
+      };
+      db.employeeTags.push(newTagRecord);
+      tagMap.set(normalized, newTagId);
+      knownTagIds.add(newTagId);
+      canonicalIds.add(newTagId);
+    });
+
+    const newTagArray = Array.from(canonicalIds);
+    if (empTagsChanged || newTagArray.length !== emp.tags.length) {
+      mutated = true;
+    }
+
+    return { ...emp, tags: newTagArray };
+  });
+
+  if (mutated) {
+    inMemoryDb = db;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      } catch (err) {
+        console.error('StorageEngine: failed to save tag migration to localStorage.', err);
+      }
+    }
+  }
+
+  return db;
+}
+
 function getInitialState() {
-  return {
+  const base = {
     employeeTypes: seedEmployeeTypes,
+    employeeTags: seedEmployeeTags,
     departments: seedDepartments,
     positions: seedPositions,
     locations: seedLocations,
@@ -43,6 +138,7 @@ function getInitialState() {
     offboardingPlanInstances: seedOffboardingPlanInstances,
     offboardingTaskInstances: seedOffboardingTaskInstances,
   };
+  return migrateEmployeeTagsIfNeeded(base);
 }
 
 export function loadDatabase() {
@@ -60,6 +156,8 @@ export function loadDatabase() {
       return initial;
     }
     const parsed = JSON.parse(raw);
+    if (!parsed.employeeTypes) parsed.employeeTypes = seedEmployeeTypes;
+    if (!parsed.employeeTags) parsed.employeeTags = seedEmployeeTags;
     if (!parsed.activityTypes) parsed.activityTypes = seedActivityTypes;
     if (!parsed.activities) parsed.activities = seedActivities;
     if (!parsed.onboardingPlanTemplates) parsed.onboardingPlanTemplates = seedOnboardingPlanTemplates;
@@ -70,7 +168,9 @@ export function loadDatabase() {
     if (!parsed.offboardingPlanTasks) parsed.offboardingPlanTasks = seedOffboardingPlanTasks;
     if (!parsed.offboardingPlanInstances) parsed.offboardingPlanInstances = seedOffboardingPlanInstances;
     if (!parsed.offboardingTaskInstances) parsed.offboardingTaskInstances = seedOffboardingTaskInstances;
-    return parsed;
+
+    const migrated = migrateEmployeeTagsIfNeeded(parsed);
+    return migrated;
   } catch (err) {
     if (!inMemoryDb) {
       inMemoryDb = getInitialState();
@@ -99,3 +199,4 @@ export function resetDatabase() {
   }
   return initial;
 }
+

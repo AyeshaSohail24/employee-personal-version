@@ -146,7 +146,8 @@ export function calculateHeadcountBreakdowns(
   departments = [],
   locations = [],
   positions = [],
-  referenceDate = new Date()
+  referenceDate = new Date(),
+  employeeTypes = []
 ) {
   const currentWorkforce = getCurrentWorkforce(employees, records, referenceDate);
   const total = currentWorkforce.length;
@@ -184,8 +185,9 @@ export function calculateHeadcountBreakdowns(
     const mode = activeRec.workMode || 'On-site';
     modeCountsMap.set(mode, (modeCountsMap.get(mode) || 0) + 1);
 
-    const empType = activeRec.employmentType || emp.employeeType || 'Full-time Regular';
-    typeCountsMap.set(empType, (typeCountsMap.get(empType) || 0) + 1);
+    const empTypeObj = emp.employeeType || (Array.isArray(employeeTypes) ? employeeTypes.find((t) => t.id === emp.employeeTypeId) : null);
+    const empTypeName = empTypeObj?.name || '—';
+    typeCountsMap.set(empTypeName, (typeCountsMap.get(empTypeName) || 0) + 1);
   });
 
   const byDepartment = Array.from(deptCountsMap.values()).map((d) => ({

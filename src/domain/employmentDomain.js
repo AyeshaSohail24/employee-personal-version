@@ -203,6 +203,8 @@ export function resolveHydratedEmployee(
   locations = [],
   schedules = [],
   allEmployees = [],
+  employeeTypes = [],
+  employeeTags = [],
   referenceDate = new Date()
 ) {
   if (!employee) return null;
@@ -228,6 +230,14 @@ export function resolveHydratedEmployee(
     ? allEmployees.find((e) => e.id === effectiveRecord.supervisorId)
     : null;
 
+  const empType = Array.isArray(employeeTypes) && employeeTypes.length > 0
+    ? employeeTypes.find((t) => t.id === employee.employeeTypeId) || null
+    : null;
+
+  const resolvedTags = Array.isArray(employee.tags) && Array.isArray(employeeTags) && employeeTags.length > 0
+    ? employee.tags.map((tagId) => employeeTags.find((t) => t.id === tagId)).filter(Boolean)
+    : [];
+
   return {
     ...employee,
     currentEmploymentRecord: currentRecord,       // Null for Former & Upcoming before start!
@@ -238,6 +248,8 @@ export function resolveHydratedEmployee(
     position: pos || null,
     location: loc || null,
     schedule: sched || null,
+    employeeType: empType || null,
+    resolvedTags,
     manager: manager ? { id: manager.id, fullName: manager.fullName, workEmail: manager.workEmail } : null,
     supervisor: supervisor ? { id: supervisor.id, fullName: supervisor.fullName, workEmail: supervisor.workEmail } : null,
   };

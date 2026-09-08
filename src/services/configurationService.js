@@ -3,6 +3,8 @@ import { departmentService } from './departmentService.js';
 import { positionService } from './positionService.js';
 import { locationService } from './locationService.js';
 import { activityTypeService } from './activityTypeService.js';
+import { employeeTypeService } from './employeeTypeService.js';
+import { employeeTagService } from './employeeTagService.js';
 import {
   canUserMutate,
   generateUniqueId,
@@ -10,14 +12,18 @@ import {
   validatePosition,
   validateLocation,
   validateActivityType,
+  validateEmployeeType,
+  validateEmployeeTag,
   calculateDepartmentReferences,
   calculatePositionReferences,
   calculateLocationReferences,
   calculateActivityTypeReferences,
+  calculateEmployeeTypeReferences,
+  calculateEmployeeTagReferences,
 } from '../domain/configurationDomain.js';
 
 /**
- * Service acting as the Administration Orchestrator for Stage 11 Configuration & Master Data.
+ * Service acting as the Administration Orchestrator for Stage 11 & Stage 12 Configuration & Master Data.
  * Enforces role authorization, referential-integrity checking, input validation, and service delegation.
  */
 export const configurationService = {
@@ -82,6 +88,38 @@ export const configurationService = {
         canDelete: refCheck.totalReferences === 0,
       };
     });
+  },
+
+  /**
+   * Fetches full employees configuration state (employeeTypes, employeeTags) enriched with reference usage counts.
+   * @returns {Promise<Object>}
+   */
+  async getEmployeesConfig() {
+    const db = loadDatabase();
+    const rawTypes = await employeeTypeService.getAll();
+    const rawTags = await employeeTagService.getAll();
+
+    const employeeTypes = rawTypes.map((type) => {
+      const refCheck = calculateEmployeeTypeReferences(type.id, db);
+      return {
+        ...type,
+        totalReferences: refCheck.totalReferences,
+        referenceSummary: refCheck.summary,
+        canDelete: refCheck.totalReferences === 0,
+      };
+    });
+
+    const employeeTags = rawTags.map((tag) => {
+      const refCheck = calculateEmployeeTagReferences(tag.id, db);
+      return {
+        ...tag,
+        totalReferences: refCheck.totalReferences,
+        referenceSummary: refCheck.summary,
+        canDelete: refCheck.totalReferences === 0,
+      };
+    });
+
+    return { employeeTypes, employeeTags };
   },
 
   // ==================== DEPARTMENT MUTATIONS ====================
@@ -307,4 +345,117 @@ export const configurationService = {
 
     return activityTypeService.delete(id);
   },
+
+  // ==================== EMPLOYEE TYPE MUTATIONS ====================
+
+  async createEmployeeType(typeData, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const existingTypes = await employeeTypeService.getAll();
+    const { isValid, errors, cleanData } = validateEmployeeType(typeData, existingTypes);
+
+    if (!isValid) {
+      const firstErr = Object.values(errors)[0];
+      throw new Error(firstErr);
+    }
+
+    const newId = generateUniqueId('type', existingTypes);
+    return employeeTypeService.create({ ...cleanData, id: newId });
+  },
+
+  async updateEmployeeType(id, updateData, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const existingTypes = await employeeTypeService.getAll();
+    const { isValid, errors, cleanData } = validateEmployeeType(updateData, existingTypes, id);
+
+    if (!isValid) {
+      const firstErr = Object.values(errors)[0];
+      throw new Error(firstErr);
+    }
+
+    return employeeTypeService.update(id, cleanData);
+  },
+
+  async toggleEmployeeTypeActive(id, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+    return employeeTypeService.toggleActive(id);
+  },
+
+  async deleteEmployeeType(id, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const db = loadDatabase();
+    const refCheck = calculateEmployeeTypeReferences(id, db);
+    if (refCheck.totalReferences > 0) {
+      throw new Error(`Cannot delete employee type: Record is referenced by ${refCheck.summary}. Deactivate it instead.`);
+    }
+
+    return employeeTypeService.delete(id);
+  },
+
+  // ==================== EMPLOYEE TAG MUTATIONS ====================
+
+  async createEmployeeTag(tagData, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const existingTags = await employeeTagService.getAll();
+    const { isValid, errors, cleanData } = validateEmployeeTag(tagData, existingTags);
+
+    if (!isValid) {
+      const firstErr = Object.values(errors)[0];
+      throw new Error(firstErr);
+    }
+
+    const newId = generateUniqueId('tag', existingTags);
+    return employeeTagService.create({ ...cleanData, id: newId });
+  },
+
+  async updateEmployeeTag(id, updateData, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const existingTags = await employeeTagService.getAll();
+    const { isValid, errors, cleanData } = validateEmployeeTag(updateData, existingTags, id);
+
+    if (!isValid) {
+      const firstErr = Object.values(errors)[0];
+      throw new Error(firstErr);
+    }
+
+    return employeeTagService.update(id, cleanData);
+  },
+
+  async toggleEmployeeTagActive(id, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+    return employeeTagService.toggleActive(id);
+  },
+
+  async deleteEmployeeTag(id, userRole = 'HR Admin') {
+    if (!canUserMutate(userRole)) {
+      throw new Error('Unauthorized: Master data configuration requires HR or HR Admin permissions.');
+    }
+
+    const db = loadDatabase();
+    const refCheck = calculateEmployeeTagReferences(id, db);
+    if (refCheck.totalReferences > 0) {
+      throw new Error(`Cannot delete employee tag: Record is referenced by ${refCheck.summary}. Deactivate it instead.`);
+    }
+
+    return employeeTagService.delete(id);
+  },
 };
+

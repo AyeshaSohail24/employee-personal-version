@@ -68,15 +68,21 @@ export default function EmployeeCardView({ employees = [] }) {
 
             {/* Footer tags */}
             <div className="emp-card-footer">
-              <span className="emp-type-badge">
-                {emp.employeeTypeId === 'type-1'
-                  ? 'Full-time'
-                  : emp.employeeTypeId === 'type-2'
-                  ? 'Contract'
-                  : emp.employeeTypeId === 'type-3'
-                  ? 'Apprentice'
-                  : 'Internship'}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span className="emp-type-badge">
+                  {emp.employeeType ? emp.employeeType.name : '—'}
+                </span>
+                {Array.isArray(emp.resolvedTags) && emp.resolvedTags.length > 0 && (
+                  <div className="emp-tag-dots-group">
+                    {emp.resolvedTags.map((tag) => (
+                      <span key={tag.id} className="tag-dot-pill" title={`${tag.name} (${tag.category || 'Tag'})`}>
+                        <span className="tag-dot" style={{ backgroundColor: tag.color || '#129FA9' }} />
+                        <span className="tag-name-text">{tag.name}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
               <span className="emp-start-date">Started {emp.startDate}</span>
             </div>
           </div>

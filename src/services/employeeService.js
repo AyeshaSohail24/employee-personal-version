@@ -28,7 +28,9 @@ export const employeeService = {
         db.positions,
         db.locations,
         db.schedules,
-        db.employees
+        db.employees,
+        db.employeeTypes,
+        db.employeeTags
       )
     );
   },
@@ -54,7 +56,9 @@ export const employeeService = {
       db.positions,
       db.locations,
       db.schedules,
-      db.employees
+      db.employees,
+      db.employeeTypes,
+      db.employeeTags
     );
   },
 
@@ -176,6 +180,26 @@ export const employeeService = {
     const newId = `emp-${Date.now()}`;
     const empCode = employeeData.employeeId || `RZ-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    const allTypes = db.employeeTypes || [];
+    const activeTypes = allTypes.filter((t) => t.active !== false);
+
+    let assignedTypeId = employeeData.employeeTypeId;
+    if (!assignedTypeId) {
+      const type1Active = activeTypes.some((t) => t.id === 'type-1');
+      if (type1Active) {
+        assignedTypeId = 'type-1';
+      } else if (activeTypes.length > 0) {
+        assignedTypeId = activeTypes[0].id;
+      } else {
+        throw new Error('Validation Error: Cannot create employee without an active Employment Type.');
+      }
+    } else {
+      const typeExists = allTypes.some((t) => t.id === assignedTypeId);
+      if (!typeExists) {
+        throw new Error(`Validation Error: Employment Type "${assignedTypeId}" does not exist.`);
+      }
+    }
+
     const newEmp = {
       id: newId,
       employeeId: empCode,
@@ -185,7 +209,7 @@ export const employeeService = {
       workEmail: employeeData.workEmail || '',
       workPhone: employeeData.workPhone || '',
       photo: (employeeData.firstName?.[0] || '') + (employeeData.lastName?.[0] || ''),
-      employeeTypeId: employeeData.employeeTypeId || 'type-1',
+      employeeTypeId: assignedTypeId,
       status: employeeData.status || 'Active',
       startDate: employeeData.startDate || new Date().toISOString().slice(0, 10),
       contractEndDate: employeeData.contractEndDate || null,
@@ -215,3 +239,4 @@ export const employeeService = {
     return this.getById(newId);
   },
 };
+
