@@ -109,7 +109,7 @@ export default function DocumentsConfigPage() {
   };
 
   return (
-    <div className="config-page-container">
+    <div className="config-page-wrapper">
       {/* 1. Header Card */}
       <div className="config-header-card">
         <div className="config-header-left">
@@ -131,39 +131,44 @@ export default function DocumentsConfigPage() {
         )}
       </div>
 
-      {/* 2. Controls & Filter Bar */}
-      <div className="config-controls-bar">
-        {/* Search */}
-        <div className="config-search-wrapper">
-          <Search size={16} className="config-search-icon" />
+      {/* 2. Search & Category Filter Toolbar */}
+      <div className="documents-config-toolbar">
+        {/* Search Field */}
+        <div className="toolbar-search-box">
+          <Search size={18} className="toolbar-search-icon" />
           <input
             type="text"
-            className="config-search-input"
-            placeholder="Search document types by name or code..."
+            className="toolbar-search-input"
+            placeholder="Search document types by name, code, or category..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search document types"
           />
         </div>
 
-        {/* Category Tabs */}
-        <div className="config-tab-container">
+        {/* Category Filter Pills */}
+        <div className="documents-config-filter-row" role="tablist" aria-label="Document Category Filters">
           <button
-            className={`config-tab-item ${selectedCategory === 'All' ? 'active' : ''}`}
+            type="button"
+            className={`documents-config-filter-btn ${selectedCategory === 'All' ? 'active' : ''}`}
             onClick={() => setSelectedCategory('All')}
+            aria-pressed={selectedCategory === 'All'}
           >
-            All
-            <span className="config-tab-count">{documentTypes.length}</span>
+            <span>All</span>
+            <span className="documents-config-filter-count">{documentTypes.length}</span>
           </button>
           {DOCUMENT_CATEGORIES.map((cat) => {
             const count = documentTypes.filter((d) => d.category === cat).length;
             return (
               <button
                 key={cat}
-                className={`config-tab-item ${selectedCategory === cat ? 'active' : ''}`}
+                type="button"
+                className={`documents-config-filter-btn ${selectedCategory === cat ? 'active' : ''}`}
                 onClick={() => setSelectedCategory(cat)}
+                aria-pressed={selectedCategory === cat}
               >
-                {cat}
-                <span className="config-tab-count">{count}</span>
+                <span>{cat}</span>
+                <span className="documents-config-filter-count">{count}</span>
               </button>
             );
           })}
@@ -191,7 +196,16 @@ export default function DocumentsConfigPage() {
           <>
             {/* Desktop Table View */}
             <div className="config-table-wrapper desktop-only">
-              <table className="config-table">
+              <table className="config-table documents-config-table">
+                <colgroup>
+                  <col className="col-doc-type" />
+                  <col className="col-code" />
+                  <col className="col-category" />
+                  <col className="col-expiry" />
+                  <col className="col-references" />
+                  <col className="col-status" />
+                  <col className="col-actions" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>DOCUMENT TYPE</th>
