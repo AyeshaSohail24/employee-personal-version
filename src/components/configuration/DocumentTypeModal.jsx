@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertCircle } from 'lucide-react';
 import { validateDocumentType, DOCUMENT_CATEGORIES } from '../../domain/documentTypeDomain';
+import { Select } from '../common/Select.jsx';
 
 export function DocumentTypeModal({ isOpen, onClose, onSave, documentType = null, allTypes = [] }) {
   const [name, setName] = useState('');
@@ -132,20 +133,15 @@ export function DocumentTypeModal({ isOpen, onClose, onSave, documentType = null
                 <label className="config-form-label">
                   Category <span style={{ color: '#dc2626' }}>*</span>
                 </label>
-                <select
-                  className={`config-form-control ${errors.category ? 'error' : ''}`}
+                <Select
+                  variant="form"
                   value={category}
                   onChange={(e) => {
                     setCategory(e.target.value);
                     if (errors.category) setErrors((prev) => ({ ...prev, category: undefined }));
                   }}
-                >
-                  {DOCUMENT_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
+                  options={DOCUMENT_CATEGORIES}
+                />
                 {errors.category && <div className="config-form-error">{errors.category}</div>}
               </div>
             </div>

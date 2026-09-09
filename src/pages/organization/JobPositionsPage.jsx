@@ -3,6 +3,7 @@ import { positionService } from '../../services/positionService';
 import { departmentService } from '../../services/departmentService';
 import PositionCard from '../../components/organization/PositionCard';
 import OrganizationSkeleton from '../../components/organization/OrganizationSkeleton';
+import Select from '../../components/common/Select';
 import { Search } from 'lucide-react';
 
 export default function JobPositionsPage() {
@@ -70,19 +71,16 @@ export default function JobPositionsPage() {
 
           <div className="filter-item">
             <label htmlFor="dept-filter">Department:</label>
-            <select
+            <Select
               id="dept-filter"
-              className="filter-select"
+              variant="filter"
               value={selectedDept}
               onChange={(e) => setSelectedDept(e.target.value)}
-            >
-              <option value="">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'All Departments' },
+                ...departments.map((d) => ({ value: d.id, label: d.name }))
+              ]}
+            />
           </div>
         </div>
       </div>

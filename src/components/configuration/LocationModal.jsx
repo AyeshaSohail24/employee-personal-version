@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertCircle } from 'lucide-react';
 import { validateLocation, SUPPORTED_LOCATION_TYPES } from '../../domain/configurationDomain';
+import { Select } from '../common/Select.jsx';
 
 export function LocationModal({ isOpen, onClose, onSave, location = null, allLocations = [] }) {
   const [name, setName] = useState('');
@@ -98,17 +99,12 @@ export function LocationModal({ isOpen, onClose, onSave, location = null, allLoc
             <label className="config-form-label">
               Location Type <span style={{ color: '#dc2626' }}>*</span>
             </label>
-            <select
+            <Select
+              variant="form"
               value={type}
               onChange={(e) => setType(e.target.value)}
-              className={`config-form-control ${errors.type ? 'error' : ''}`}
-            >
-              {SUPPORTED_LOCATION_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+              options={SUPPORTED_LOCATION_TYPES}
+            />
             {errors.type && <div className="config-form-error">{errors.type}</div>}
           </div>
 

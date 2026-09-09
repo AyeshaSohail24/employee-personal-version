@@ -7,13 +7,6 @@ export const seedLocations = [
     active: true,
   },
   {
-    id: 'loc-2',
-    name: 'Rizurf Innovation Hub — Penang',
-    type: 'Branch',
-    address: 'Suite 5-02, Gurney Tower, 10250 George Town, Penang',
-    active: true,
-  },
-  {
     id: 'loc-3',
     name: 'Remote / Work From Home',
     type: 'Remote',

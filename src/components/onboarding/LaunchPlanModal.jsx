@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Play, AlertTriangle, CheckCircle2, User, Calendar, FileText } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
 import { employeeService } from '../../services/employeeService.js';
+import Select from '../common/Select.jsx';
 
 export default function LaunchPlanModal({
   isOpen,
@@ -153,34 +154,34 @@ export default function LaunchPlanModal({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
             <div className="form-group">
               <label className="form-label">Select Onboarding Employee *</label>
-              <select
-                className="form-control-input"
+              <Select
+                variant="form"
                 value={selectedEmployeeId}
                 onChange={(e) => setSelectedEmployeeId(e.target.value)}
-              >
-                <option value="">-- Choose Employee --</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.fullName} ({emp.employeeId}) — [{emp.status}]
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: '-- Choose Employee --' },
+                  ...employees.map((emp) => ({
+                    value: emp.id,
+                    label: `${emp.fullName} (${emp.employeeId}) — [${emp.status}]`
+                  }))
+                ]}
+              />
             </div>
 
             <div className="form-group">
               <label className="form-label">Select Onboarding Template *</label>
-              <select
-                className="form-control-input"
+              <Select
+                variant="form"
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
-              >
-                <option value="">-- Choose Template --</option>
-                {templates.map((tpl) => (
-                  <option key={tpl.id} value={tpl.id}>
-                    {tpl.name} ({tpl.taskCount} tasks)
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: '-- Choose Template --' },
+                  ...templates.map((tpl) => ({
+                    value: tpl.id,
+                    label: `${tpl.name} (${tpl.taskCount} tasks)`
+                  }))
+                ]}
+              />
             </div>
           </div>
 
@@ -213,7 +214,7 @@ export default function LaunchPlanModal({
                 </div>
               </div>
 
-              {preview.hasUnresolvedRequired`Unassigned Required Tasks` && (
+              {preview.hasUnresolvedRequired && (
                 <div className="modal-warning-alert" style={{ marginBottom: '1rem', backgroundColor: '#FEF2F2', borderColor: '#FECACA', color: '#DC2626', padding: '0.75rem 1rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <AlertTriangle size={16} />
                   <span style={{ fontSize: '0.815rem' }}>
@@ -240,6 +241,17 @@ export default function LaunchPlanModal({
                       const currentAssignee = manualOverrides[pt.planTaskId] || pt.resolvedAssigneeId;
                       const isUnassignedReq = pt.required && !currentAssignee;
 
+                      const candOptions = pt.allCandidates && pt.allCandidates.length > 0
+                        ? pt.allCandidates.map(cand => ({ value: cand.id, label: `${cand.fullName} (${cand.role})` }))
+                        : (pt.resolvedAssigneeId ? [{ value: pt.resolvedAssigneeId, label: pt.resolvedAssigneeName }] : []);
+
+                      const empOptions = employees.map(emp => ({ value: emp.id, label: emp.fullName }));
+                      const allOptions = [
+                        { value: '', label: '-- Select Assignee --' },
+                        ...candOptions,
+                        ...empOptions
+                      ];
+
                       return (
                         <tr key={pt.planTaskId} style={isUnassignedReq ? { backgroundColor: '#FEF2F2' } : undefined}>
                           <td style={{ textAlign: 'center', fontWeight: 600 }}>{pt.sequence}</td>
@@ -258,30 +270,13 @@ export default function LaunchPlanModal({
                             {pt.calculatedDueDate}
                           </td>
                           <td>
-                            <select
-                              className="form-control-input"
-                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.785rem', borderColor: isUnassignedReq ? '#EF4444' : '#CBD5E1' }}
+                            <Select
+                              variant="form"
+                              style={{ borderColor: isUnassignedReq ? '#EF4444' : undefined }}
                               value={currentAssignee || ''}
                               onChange={(e) => handleAssigneeChange(pt.planTaskId, e.target.value)}
-                            >
-                              <option value="">-- Select Assignee --</option>
-                              {pt.allCandidates && pt.allCandidates.length > 0 ? (
-                                pt.allCandidates.map((cand) => (
-                                  <option key={cand.id} value={cand.id}>
-                                    {cand.fullName} ({cand.role})
-                                  </option>
-                                ))
-                              ) : (
-                                pt.resolvedAssigneeId && (
-                                  <option value={pt.resolvedAssigneeId}>{pt.resolvedAssigneeName}</option>
-                                )
-                              )}
-                              {employees.map((emp) => (
-                                <option key={emp.id} value={emp.id}>
-                                  {emp.fullName}
-                                </option>
-                              ))}
-                            </select>
+                              options={allOptions}
+                            />
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             {pt.required ? (

@@ -22,15 +22,13 @@ export default function DepartmentsPage() {
     loadData();
   }, []);
 
-  const rootDepts = departments.filter((d) => !d.parentDepartmentId);
-
   return (
     <div className="organization-page-wrapper">
       <div className="page-header">
         <div>
           <h1 className="page-title">Departments</h1>
           <p className="page-description">
-            Rizurf organizational unit hierarchy, department managers, and current headcount
+            Rizurf organizational structure, department managers, and current headcount
           </p>
         </div>
         <div className="directory-count-badge">{departments.length} Departments</div>
@@ -40,21 +38,12 @@ export default function DepartmentsPage() {
         <OrganizationSkeleton />
       ) : (
         <div className="dept-card-grid">
-          {rootDepts.map((dept) => {
-            const subDepts = departments.filter((sub) => sub.parentDepartmentId === dept.id);
-            const parent = dept.parentDepartmentId
-              ? departments.find((p) => p.id === dept.parentDepartmentId)?.name
-              : null;
-
-            return (
-              <DepartmentCard
-                key={dept.id}
-                department={dept}
-                parentDepartmentName={parent}
-                subDepartments={subDepts}
-              />
-            );
-          })}
+          {departments.map((dept) => (
+            <DepartmentCard
+              key={dept.id}
+              department={dept}
+            />
+          ))}
         </div>
       )}
     </div>

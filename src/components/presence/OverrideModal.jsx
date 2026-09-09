@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Shield, AlertCircle } from 'lucide-react';
 import { PRESENCE_STATES } from '../../domain/presenceDomain';
+import { Select } from '../common/Select.jsx';
 
 export default function OverrideModal({ employee, onClose, onSubmit }) {
   const [overrideState, setOverrideState] = useState(PRESENCE_STATES.PRESENT);
@@ -66,19 +67,20 @@ export default function OverrideModal({ employee, onClose, onSubmit }) {
             <label htmlFor="override-state-select" className="form-label">
               New Presence State <span className="required-star">*</span>
             </label>
-            <select
+            <Select
               id="override-state-select"
-              className="form-select"
+              variant="form"
               value={overrideState}
               onChange={(e) => setOverrideState(e.target.value)}
-            >
-              <option value={PRESENCE_STATES.PRESENT}>Present</option>
-              <option value={PRESENCE_STATES.REMOTE}>Remote</option>
-              <option value={PRESENCE_STATES.ON_LEAVE}>On Leave</option>
-              <option value={PRESENCE_STATES.ABSENT}>Absent</option>
-              <option value={PRESENCE_STATES.NOT_SCHEDULED}>Not Scheduled</option>
-              <option value={PRESENCE_STATES.UNKNOWN}>Unknown</option>
-            </select>
+              options={[
+                { value: PRESENCE_STATES.PRESENT, label: 'Present' },
+                { value: PRESENCE_STATES.REMOTE, label: 'Remote' },
+                { value: PRESENCE_STATES.ON_LEAVE, label: 'On Leave' },
+                { value: PRESENCE_STATES.ABSENT, label: 'Absent' },
+                { value: PRESENCE_STATES.NOT_SCHEDULED, label: 'Not Scheduled' },
+                { value: PRESENCE_STATES.UNKNOWN, label: 'Unknown' },
+              ]}
+            />
           </div>
 
           <div className="form-group">

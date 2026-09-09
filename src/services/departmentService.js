@@ -55,19 +55,12 @@ export const departmentService = {
   },
 
   /**
-   * Retrieves parent-child department tree hierarchy.
+   * Retrieves department collection.
    * @returns {Promise<Array<Object>>}
    */
   async getHierarchy() {
     const all = await this.getAll({ withCount: true });
-    const roots = all.filter((d) => !d.parentDepartmentId);
-
-    const buildNode = (dept) => ({
-      ...dept,
-      children: all.filter((child) => child.parentDepartmentId === dept.id).map(buildNode),
-    });
-
-    return roots.map(buildNode);
+    return all.map((d) => ({ ...d, children: [] }));
   },
 
   /**
@@ -83,7 +76,6 @@ export const departmentService = {
       id: deptData.id,
       name: deptData.name.trim(),
       code: deptData.code.trim().toUpperCase(),
-      parentDepartmentId: deptData.parentDepartmentId || null,
       managerEmployeeId: deptData.managerEmployeeId || null,
       color: deptData.color || '#3b82f6',
       active: deptData.active !== undefined ? deptData.active : true,
@@ -115,7 +107,6 @@ export const departmentService = {
       ...updateData,
       name: updateData.name ? updateData.name.trim() : existing.name,
       code: updateData.code ? updateData.code.trim().toUpperCase() : existing.code,
-      parentDepartmentId: updateData.parentDepartmentId !== undefined ? updateData.parentDepartmentId : existing.parentDepartmentId,
       managerEmployeeId: updateData.managerEmployeeId !== undefined ? updateData.managerEmployeeId : existing.managerEmployeeId,
       color: updateData.color || existing.color,
       active: updateData.active !== undefined ? updateData.active : existing.active,

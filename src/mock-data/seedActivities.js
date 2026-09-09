@@ -147,7 +147,7 @@ export const seedActivities = [
     id: 'act-009',
     typeId: 'act-type-1', // To Do
     title: 'Workstation Setup Verification',
-    description: 'Ensure laptop and office accessories are delivered to Penang branch.',
+    description: 'Ensure laptop and office accessories are delivered to KL HQ office.',
     employeeId: 'emp-005', // Priyanka Nair
     assigneeId: 'emp-003', // Sarah Abdullah
     dueDate: '2026-09-02', // Due Today

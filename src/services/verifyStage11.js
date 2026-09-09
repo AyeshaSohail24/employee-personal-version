@@ -4,7 +4,6 @@ import { positionService } from './positionService.js';
 import { locationService } from './locationService.js';
 import { activityTypeService } from './activityTypeService.js';
 import {
-  detectDepartmentCycle,
   validateDepartment,
   validatePosition,
   validateLocation,
@@ -79,15 +78,9 @@ export async function verifyStage11() {
     }
     assert(dupCodeErr !== null, 'Department duplicate code rejection (case-insensitive)');
 
-    // Cycle Detection: Direct self parenting & multi-level cycle (A -> B -> C -> A)
-    const mockDepts = [
-      { id: 'd-1', name: 'Dept A', parentDepartmentId: null },
-      { id: 'd-2', name: 'Dept B', parentDepartmentId: 'd-1' },
-      { id: 'd-3', name: 'Dept C', parentDepartmentId: 'd-2' },
-    ];
-    assert(detectDepartmentCycle('d-1', 'd-1', mockDepts) === true, 'Department self-parenting detected');
-    assert(detectDepartmentCycle('d-1', 'd-3', mockDepts) === true, 'Department multi-level cycle (A -> B -> C -> A) detected');
-    assert(detectDepartmentCycle('d-3', 'd-1', mockDepts) === false, 'Valid parent assignment permitted without false cycle');
+    // Flat Department validation
+    const mockDeptRes = validateDepartment({ name: 'Flat Dept', code: 'FLAT' }, initialDepts);
+    assert(mockDeptRes.isValid === true, 'Flat department validation succeeds without parent department');
 
     // Create New Department
     const newDept = await configurationService.createDepartment(
@@ -170,7 +163,7 @@ export async function verifyStage11() {
 
     // 4. Work Locations Administration
     const initialLocations = await locationService.getAll();
-    assert(initialLocations.length >= 4, 'Initial canonical work locations present (at least 4)');
+    assert(initialLocations.length >= 3, 'Initial canonical work locations present (at least 3)');
 
     // Remote Location Optional Address Validation
     const { isValid: remoteValid } = validateLocation({ name: 'Remote Hub', type: 'Remote', address: '' }, initialLocations);
@@ -181,7 +174,7 @@ export async function verifyStage11() {
 
     // Create Work Location
     const newLoc = await configurationService.createLocation(
-      { name: 'Regional Innovation Lab', type: 'Branch', address: 'Bayan Lepas, Penang' },
+      { name: 'Regional Tech Center', type: 'Branch', address: 'Tech Park, Shah Alam' },
       'HR Admin'
     );
     assert(newLoc && newLoc.id.startsWith('loc-'), 'Work location creation succeeds');

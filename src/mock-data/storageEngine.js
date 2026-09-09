@@ -128,6 +128,138 @@ export function cleanupAttendanceIfNeeded(db) {
   return db;
 }
 
+export function cleanupParentDepartmentIfNeeded(db) {
+  if (!db || !Array.isArray(db.departments)) return db;
+
+  let mutated = false;
+  db.departments = db.departments.map((dept) => {
+    if ('parentDepartmentId' in dept || 'parentDept' in dept) {
+      mutated = true;
+      const { parentDepartmentId, parentDept, ...rest } = dept;
+      return rest;
+    }
+    return dept;
+  });
+
+  if (mutated) {
+    inMemoryDb = db;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      } catch (err) {
+        console.error('StorageEngine: failed to save parent department cleanup to localStorage.', err);
+      }
+    }
+  }
+  return db;
+}
+
+export function cleanupPenangLocationIfNeeded(db) {
+  if (!db) return db;
+
+  let mutated = false;
+  const PENANG_ID = 'loc-2';
+  const HQ_ID = 'loc-1';
+
+  // 1. Remove Penang location from db.locations if present
+  if (Array.isArray(db.locations)) {
+    const penangIndex = db.locations.findIndex(
+      (l) => l.id === PENANG_ID || (l.name && l.name.includes('Penang'))
+    );
+    if (penangIndex !== -1) {
+      db.locations.splice(penangIndex, 1);
+      mutated = true;
+    }
+  }
+
+  // 2. Reassign employmentRecords referencing PENANG_ID to HQ_ID
+  if (Array.isArray(db.employmentRecords)) {
+    db.employmentRecords = db.employmentRecords.map((rec) => {
+      if (rec.locationId === PENANG_ID) {
+        mutated = true;
+        return { ...rec, locationId: HQ_ID };
+      }
+      return rec;
+    });
+  }
+
+  // 3. Reassign positions referencing PENANG_ID as defaultLocationId to HQ_ID
+  if (Array.isArray(db.positions)) {
+    db.positions = db.positions.map((pos) => {
+      if (pos.defaultLocationId === PENANG_ID) {
+        mutated = true;
+        return { ...pos, defaultLocationId: HQ_ID };
+      }
+      return pos;
+    });
+  }
+
+  if (mutated) {
+    inMemoryDb = db;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      } catch (err) {
+        console.error('StorageEngine: failed to save Penang location cleanup to localStorage.', err);
+      }
+    }
+  }
+  return db;
+}
+
+export function cleanupTechnologyDepartmentIfNeeded(db) {
+  if (!db) return db;
+
+  let mutated = false;
+  const TECH_ID = 'dept-2';
+  const EXEC_ID = 'dept-1';
+
+  // 1. Remove Technology department from db.departments if present
+  if (Array.isArray(db.departments)) {
+    const techIndex = db.departments.findIndex(
+      (d) => d.id === TECH_ID || (d.name && d.name.trim().toLowerCase() === 'technology')
+    );
+    if (techIndex !== -1) {
+      db.departments.splice(techIndex, 1);
+      mutated = true;
+    }
+  }
+
+  // 2. Reassign employmentRecords referencing TECH_ID to EXEC_ID
+  if (Array.isArray(db.employmentRecords)) {
+    db.employmentRecords = db.employmentRecords.map((rec) => {
+      if (rec.departmentId === TECH_ID) {
+        mutated = true;
+        return { ...rec, departmentId: EXEC_ID };
+      }
+      return rec;
+    });
+  }
+
+  // 3. Reassign positions referencing TECH_ID to EXEC_ID
+  if (Array.isArray(db.positions)) {
+    db.positions = db.positions.map((pos) => {
+      if (pos.departmentId === TECH_ID) {
+        mutated = true;
+        return { ...pos, departmentId: EXEC_ID };
+      }
+      return pos;
+    });
+  }
+
+  if (mutated) {
+    inMemoryDb = db;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      } catch (err) {
+        console.error('StorageEngine: failed to save Technology department cleanup to localStorage.', err);
+      }
+    }
+  }
+  return db;
+}
+
 function getInitialState() {
   const base = {
     employeeTypes: seedEmployeeTypes,
@@ -154,7 +286,10 @@ function getInitialState() {
     documentTypes: seedDocumentTypes,
   };
   const migrated = migrateEmployeeTagsIfNeeded(base);
-  return cleanupAttendanceIfNeeded(migrated);
+  const cleanedAtt = cleanupAttendanceIfNeeded(migrated);
+  const cleanedDept = cleanupParentDepartmentIfNeeded(cleanedAtt);
+  const cleanedLoc = cleanupPenangLocationIfNeeded(cleanedDept);
+  return cleanupTechnologyDepartmentIfNeeded(cleanedLoc);
 }
 
 export function loadDatabase() {
@@ -188,8 +323,11 @@ export function loadDatabase() {
     if (!parsed.documentTypes) parsed.documentTypes = seedDocumentTypes;
 
     const migrated = migrateEmployeeTagsIfNeeded(parsed);
-    const cleaned = cleanupAttendanceIfNeeded(migrated);
-    return cleaned;
+    const cleanedAtt = cleanupAttendanceIfNeeded(migrated);
+    const cleanedDept = cleanupParentDepartmentIfNeeded(cleanedAtt);
+    const cleanedLoc = cleanupPenangLocationIfNeeded(cleanedDept);
+    const cleanedTech = cleanupTechnologyDepartmentIfNeeded(cleanedLoc);
+    return cleanedTech;
   } catch (err) {
     if (!inMemoryDb) {
       inMemoryDb = getInitialState();

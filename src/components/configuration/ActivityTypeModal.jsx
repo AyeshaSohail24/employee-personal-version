@@ -6,6 +6,7 @@ import {
   SUPPORTED_ACTIVITY_CATEGORIES,
   SUPPORTED_ACTIVITY_ICONS,
 } from '../../domain/configurationDomain';
+import { Select } from '../common/Select.jsx';
 
 const ICON_MAP = {
   CheckSquare,
@@ -111,17 +112,12 @@ export function ActivityTypeModal({ isOpen, onClose, onSave, activityType = null
             <label className="config-form-label">
               Category <span style={{ color: '#dc2626' }}>*</span>
             </label>
-            <select
+            <Select
+              variant="form"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className={`config-form-control ${errors.category ? 'error' : ''}`}
-            >
-              {SUPPORTED_ACTIVITY_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              options={SUPPORTED_ACTIVITY_CATEGORIES}
+            />
             {errors.category && <div className="config-form-error">{errors.category}</div>}
           </div>
 

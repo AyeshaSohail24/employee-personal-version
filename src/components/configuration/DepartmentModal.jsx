@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertCircle } from 'lucide-react';
 import { validateDepartment } from '../../domain/configurationDomain';
+import { Select } from '../common/Select.jsx';
 
 export function DepartmentModal({ isOpen, onClose, onSave, department = null, allDepartments = [], activeEmployees = [] }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [parentDepartmentId, setParentDepartmentId] = useState('');
   const [managerEmployeeId, setManagerEmployeeId] = useState('');
   const [color, setColor] = useState('#129FA9');
   const [active, setActive] = useState(true);
@@ -17,14 +17,12 @@ export function DepartmentModal({ isOpen, onClose, onSave, department = null, al
     if (department) {
       setName(department.name || '');
       setCode(department.code || '');
-      setParentDepartmentId(department.parentDepartmentId || '');
       setManagerEmployeeId(department.managerEmployeeId || '');
       setColor(department.color || '#129FA9');
       setActive(department.active !== false);
     } else {
       setName('');
       setCode('');
-      setParentDepartmentId('');
       setManagerEmployeeId('');
       setColor('#129FA9');
       setActive(true);
@@ -47,7 +45,7 @@ export function DepartmentModal({ isOpen, onClose, onSave, department = null, al
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const rawData = { name, code, parentDepartmentId: parentDepartmentId || null, managerEmployeeId: managerEmployeeId || null, color, active };
+    const rawData = { name, code, managerEmployeeId: managerEmployeeId || null, color, active };
     const { isValid, errors: valErrors, cleanData } = validateDepartment(rawData, allDepartments, department?.id);
 
     if (!isValid) {
@@ -65,8 +63,6 @@ export function DepartmentModal({ isOpen, onClose, onSave, department = null, al
       setIsSubmitting(false);
     }
   };
-
-  const selectableParents = allDepartments.filter((d) => d.id !== department?.id && (d.active !== false || d.id === department?.parentDepartmentId));
 
   return createPortal(
     <div className="config-modal-backdrop">
@@ -142,39 +138,15 @@ export function DepartmentModal({ isOpen, onClose, onSave, department = null, al
 
           <div className="config-form-group">
             <label className="config-form-label">
-              Parent Department
-            </label>
-            <select
-              value={parentDepartmentId}
-              onChange={(e) => setParentDepartmentId(e.target.value)}
-              className={`config-form-control ${errors.parentDepartmentId ? 'error' : ''}`}
-            >
-              <option value="">None (Top-Level Department)</option>
-              {selectableParents.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} ({d.code})
-                </option>
-              ))}
-            </select>
-            {errors.parentDepartmentId && <div className="config-form-error">{errors.parentDepartmentId}</div>}
-          </div>
-
-          <div className="config-form-group">
-            <label className="config-form-label">
               Head of Department
             </label>
-            <select
+            <Select
+              variant="form"
               value={managerEmployeeId}
               onChange={(e) => setManagerEmployeeId(e.target.value)}
-              className="config-form-control"
-            >
-              <option value="">Unassigned</option>
-              {activeEmployees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.fullName} ({emp.employeeId})
-                </option>
-              ))}
-            </select>
+              placeholder="Unassigned"
+              options={activeEmployees.map((emp) => ({ value: emp.id, label: `${emp.fullName} (${emp.employeeId})` }))}
+            />
           </div>
 
           <label className="config-form-checkbox-group">

@@ -18,7 +18,7 @@ export const seedEmploymentRecords = [
   {
     id: 'rec-002-1',
     employeeId: 'emp-002',
-    departmentId: 'dept-2',
+    departmentId: 'dept-1',
     positionId: 'pos-2',
     managerId: 'emp-001',
     supervisorId: null,
@@ -140,7 +140,7 @@ export const seedEmploymentRecords = [
     positionId: 'pos-5',
     managerId: 'emp-004',
     supervisorId: null,
-    locationId: 'loc-2',
+    locationId: 'loc-1',
     scheduleId: 'sched-2',
     effectiveFrom: '2023-06-01',
     effectiveTo: '2026-05-31', // History closed!

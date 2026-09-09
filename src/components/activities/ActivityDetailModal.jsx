@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, CheckSquare, Calendar, User, Clock, CheckCircle2, RotateCcw, Edit2, Shield, Save } from 'lucide-react';
 import { resolveDueState, ACTIVITY_DUE_STATES } from '../../domain/activityDomain';
 import { formatDateDisplay } from '../../utils/dateUtils';
+import { Select } from '../common/Select.jsx';
 
 export default function ActivityDetailModal({
   isOpen,
@@ -158,18 +159,12 @@ export default function ActivityDetailModal({
                 <Shield size={15} className="dept-meta-icon" />
                 <span className="dept-meta-label">Assignee:</span>
                 {isEditing ? (
-                  <select
-                    className="filter-select"
-                    style={{ fontSize: '0.8rem' }}
+                  <Select
+                    variant="filter"
                     value={editForm.assigneeId}
                     onChange={(e) => setEditForm({ ...editForm, assigneeId: e.target.value })}
-                  >
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.fullName} ({emp.employeeId})
-                      </option>
-                    ))}
-                  </select>
+                    options={employees.map((emp) => ({ value: emp.id, label: `${emp.fullName} (${emp.employeeId})` }))}
+                  />
                 ) : (
                   <span className="dept-meta-val">
                     {activity.assigneeEmployee ? activity.assigneeEmployee.fullName : 'Unassigned'}

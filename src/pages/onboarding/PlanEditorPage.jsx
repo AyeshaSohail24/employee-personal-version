@@ -16,6 +16,7 @@ import { departmentService } from '../../services/departmentService.js';
 import { activityService } from '../../services/activityService.js';
 import { employeeService } from '../../services/employeeService.js';
 import { ASSIGNMENT_RULES } from '../../domain/onboardingDomain.js';
+import Select from '../../components/common/Select.jsx';
 
 export default function PlanEditorPage() {
   const { planId } = useParams();
@@ -277,18 +278,15 @@ export default function PlanEditorPage() {
 
             <div className="form-group">
               <label className="form-label">Applicable Department</label>
-              <select
-                className="form-control-input"
+              <Select
+                variant="form"
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
-              >
-                <option value="">General (All Departments)</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'General (All Departments)' },
+                  ...departments.map((d) => ({ value: d.id, label: d.name }))
+                ]}
+              />
             </div>
 
             <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -406,33 +404,27 @@ export default function PlanEditorPage() {
 
                   <div className="form-group">
                     <label className="form-label">Activity Type</label>
-                    <select
-                      className="form-control-input"
-                      style={{ fontSize: '0.815rem' }}
+                    <Select
+                      variant="form"
                       value={task.activityTypeId}
                       onChange={(e) => handleTaskChange(idx, 'activityTypeId', e.target.value)}
-                    >
-                      {activityTypes.map((at) => (
-                        <option key={at.id} value={at.id}>
-                          {at.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={activityTypes.map((at) => ({ value: at.id, label: at.name }))}
+                    />
                   </div>
 
                   <div className="form-group">
                     <label className="form-label">Assignment Rule</label>
-                    <select
-                      className="form-control-input"
-                      style={{ fontSize: '0.815rem' }}
+                    <Select
+                      variant="form"
                       value={task.assignmentRule}
                       onChange={(e) => handleTaskChange(idx, 'assignmentRule', e.target.value)}
-                    >
-                      <option value={ASSIGNMENT_RULES.EMPLOYEE}>Employee (New Joiner)</option>
-                      <option value={ASSIGNMENT_RULES.MANAGER}>Manager</option>
-                      <option value={ASSIGNMENT_RULES.HR}>HR Representative</option>
-                      <option value={ASSIGNMENT_RULES.SPECIFIC_EMPLOYEE}>Specific Employee</option>
-                    </select>
+                      options={[
+                        { value: ASSIGNMENT_RULES.EMPLOYEE, label: 'Employee (New Joiner)' },
+                        { value: ASSIGNMENT_RULES.MANAGER, label: 'Manager' },
+                        { value: ASSIGNMENT_RULES.HR, label: 'HR Representative' },
+                        { value: ASSIGNMENT_RULES.SPECIFIC_EMPLOYEE, label: 'Specific Employee' }
+                      ]}
+                    />
                   </div>
 
                   <div className="form-group">
@@ -452,19 +444,18 @@ export default function PlanEditorPage() {
                 {task.assignmentRule === ASSIGNMENT_RULES.SPECIFIC_EMPLOYEE && (
                   <div className="form-group" style={{ maxWidth: '300px' }}>
                     <label className="form-label">Select Specific Assignee *</label>
-                    <select
-                      className="form-control-input"
-                      style={{ fontSize: '0.815rem' }}
+                    <Select
+                      variant="form"
                       value={task.specificAssigneeId || ''}
                       onChange={(e) => handleTaskChange(idx, 'specificAssigneeId', e.target.value)}
-                    >
-                      <option value="">-- Choose Employee --</option>
-                      {employees.map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.fullName} ({e.employeeId})
-                        </option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: '', label: '-- Choose Employee --' },
+                        ...employees.map((e) => ({
+                          value: e.id,
+                          label: `${e.fullName} (${e.employeeId})`
+                        }))
+                      ]}
+                    />
                   </div>
                 )}
 

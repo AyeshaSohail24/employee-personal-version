@@ -7,7 +7,7 @@
  * Preserves full canonical location data ('Kuala Lumpur') in underlying objects while rendering concise 'KL' in compact lists.
  * 
  * @param {Object|string|null|undefined} location Location object or location name string
- * @returns {string} Compact display label (e.g. 'Rizurf HQ — KL', 'Penang Branch', 'Client Site', 'No Fixed Location')
+ * @returns {string} Compact display label (e.g. 'Rizurf HQ — KL', 'Client Site', 'No Fixed Location')
  */
 export function formatCompactLocation(location) {
   if (!location) return 'Unassigned';
@@ -18,10 +18,7 @@ export function formatCompactLocation(location) {
   if (name.includes('HQ') || name.includes('Kuala Lumpur')) {
     return 'Rizurf HQ — KL';
   }
-  if (name.includes('Penang')) {
-    return 'Penang Branch';
-  }
-  if (name.includes('Remote') || name.includes('Hub') || (typeof location === 'object' && location.type === 'Remote')) {
+  if (name.includes('Remote') || (typeof location === 'object' && location.type === 'Remote')) {
     return 'No Fixed Location';
   }
   if (name.includes('Cyberjaya') || name.includes('Client')) {

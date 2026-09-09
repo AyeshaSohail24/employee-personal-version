@@ -7,6 +7,7 @@ import PresenceTable from '../../components/presence/PresenceTable';
 import OverrideModal from '../../components/presence/OverrideModal';
 import OverrideHistoryModal from '../../components/presence/OverrideHistoryModal';
 import PresenceSkeleton from '../../components/presence/PresenceSkeleton';
+import { Select } from '../../components/common/Select.jsx';
 
 export default function PresencePage() {
   const [data, setData] = useState(null);
@@ -125,54 +126,51 @@ export default function PresencePage() {
           {/* Presence State Filter */}
           <div className="filter-item">
             <label htmlFor="presence-state-filter">Presence State:</label>
-            <select
+            <Select
               id="presence-state-filter"
-              className="filter-select"
+              variant="filter"
               value={presenceStateFilter}
               onChange={(e) => setPresenceStateFilter(e.target.value)}
-            >
-              <option value="All">All States</option>
-              <option value="Present">Present</option>
-              <option value="Remote">Remote</option>
-              <option value="On Leave">On Leave</option>
-              <option value="Absent">Absent</option>
-              <option value="Not Scheduled">Not Scheduled</option>
-              <option value="Unknown">Unknown</option>
-            </select>
+              options={[
+                { value: 'All', label: 'All States' },
+                { value: 'Present', label: 'Present' },
+                { value: 'Remote', label: 'Remote' },
+                { value: 'On Leave', label: 'On Leave' },
+                { value: 'Absent', label: 'Absent' },
+                { value: 'Not Scheduled', label: 'Not Scheduled' },
+                { value: 'Unknown', label: 'Unknown' },
+              ]}
+            />
           </div>
 
           {/* Department Filter */}
           <div className="filter-item">
             <label htmlFor="dept-filter">Department:</label>
-            <select
+            <Select
               id="dept-filter"
-              className="filter-select"
+              variant="filter"
               value={departmentId}
               onChange={(e) => setDepartmentId(e.target.value)}
-            >
-              <option value="">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+              placeholder="All Departments"
+              options={departments.map((d) => ({ value: d.id, label: d.name }))}
+            />
           </div>
 
           {/* Work Mode Filter */}
           <div className="filter-item">
             <label htmlFor="workmode-filter">Work Mode:</label>
-            <select
+            <Select
               id="workmode-filter"
-              className="filter-select"
+              variant="filter"
               value={workModeFilter}
               onChange={(e) => setWorkModeFilter(e.target.value)}
-            >
-              <option value="All">All Modes</option>
-              <option value="On-site">On-site</option>
-              <option value="Remote">Remote</option>
-              <option value="Hybrid">Hybrid</option>
-            </select>
+              options={[
+                { value: 'All', label: 'All Modes' },
+                { value: 'On-site', label: 'On-site' },
+                { value: 'Remote', label: 'Remote' },
+                { value: 'Hybrid', label: 'Hybrid' },
+              ]}
+            />
           </div>
 
           {/* Reset Filters */}

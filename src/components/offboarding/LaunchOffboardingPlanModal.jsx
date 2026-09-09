@@ -3,6 +3,7 @@ import { X, Play, AlertCircle, Calendar, UserCheck, ShieldAlert } from 'lucide-r
 import { offboardingService } from '../../services/offboardingService.js';
 import { employeeService } from '../../services/employeeService.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
+import Select from '../common/Select.jsx';
 
 export default function LaunchOffboardingPlanModal({ isOpen, onClose, onSuccess, initialEmployeeId = null }) {
   const [employees, setEmployees] = useState([]);
@@ -160,41 +161,39 @@ export default function LaunchOffboardingPlanModal({ isOpen, onClose, onSuccess,
               <label style={{ display: 'block', fontSize: '0.815rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-main)' }}>
                 Departing Employee <span style={{ color: '#DC2626' }}>*</span>
               </label>
-              <select
-                className="search-input"
-                style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.85rem', background: '#FFF', border: '1px solid var(--border-light)', borderRadius: '6px' }}
+              <Select
+                variant="form"
                 value={selectedEmployeeId}
                 onChange={(e) => setSelectedEmployeeId(e.target.value)}
-              >
-                <option value="">-- Select Departing Employee --</option>
-                {employees.map((emp) => {
-                  const statusTag = emp.status === 'Departing' ? ' [Departing]' : emp.status === 'Active' ? ' [Active]' : ` [${emp.status}]`;
-                  return (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.fullName} ({emp.employeeId}){statusTag}
-                    </option>
-                  );
-                })}
-              </select>
+                options={[
+                  { value: '', label: '-- Select Departing Employee --' },
+                  ...employees.map((emp) => {
+                    const statusTag = emp.status === 'Departing' ? ' [Departing]' : emp.status === 'Active' ? ' [Active]' : ` [${emp.status}]`;
+                    return {
+                      value: emp.id,
+                      label: `${emp.fullName} (${emp.employeeId})${statusTag}`
+                    };
+                  })
+                ]}
+              />
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: '0.815rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-main)' }}>
                 Offboarding Plan Template <span style={{ color: '#DC2626' }}>*</span>
               </label>
-              <select
-                className="search-input"
-                style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.85rem', background: '#FFF', border: '1px solid var(--border-light)', borderRadius: '6px' }}
+              <Select
+                variant="form"
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
-              >
-                <option value="">-- Select Clearance Template --</option>
-                {templates.map((tpl) => (
-                  <option key={tpl.id} value={tpl.id}>
-                    {tpl.name} ({tpl.taskCount || 0} tasks)
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: '-- Select Clearance Template --' },
+                  ...templates.map((tpl) => ({
+                    value: tpl.id,
+                    label: `${tpl.name} (${tpl.taskCount || 0} tasks)`
+                  }))
+                ]}
+              />
             </div>
           </div>
 

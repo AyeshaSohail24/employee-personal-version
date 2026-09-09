@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, CheckSquare, AlertCircle } from 'lucide-react';
 import { getTodayLocalDateString } from '../../utils/dateUtils';
 import { validateActivity } from '../../domain/activityDomain';
+import { Select } from '../common/Select.jsx';
 
 export default function CreateActivityModal({
   isOpen,
@@ -125,17 +126,12 @@ export default function CreateActivityModal({
                 <label className="form-label">
                   Activity Type <span className="required-star">*</span>
                 </label>
-                <select
-                  className="form-select"
+                <Select
+                  variant="form"
                   value={formData.typeId}
                   onChange={(e) => handleChange('typeId', e.target.value)}
-                >
-                  {activeTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} ({t.category})
-                    </option>
-                  ))}
-                </select>
+                  options={activeTypes.map((t) => ({ value: t.id, label: `${t.name} (${t.category})` }))}
+                />
                 {errors.typeId && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.typeId}</span>}
               </div>
 
@@ -145,7 +141,7 @@ export default function CreateActivityModal({
                 </label>
                 <input
                   type="date"
-                  className="form-select"
+                  className="form-input"
                   value={formData.dueDate}
                   onChange={(e) => handleChange('dueDate', e.target.value)}
                 />
@@ -159,17 +155,12 @@ export default function CreateActivityModal({
                 <label className="form-label">
                   Related Employee <span className="required-star">*</span>
                 </label>
-                <select
-                  className="form-select"
+                <Select
+                  variant="form"
                   value={formData.employeeId}
                   onChange={(e) => handleChange('employeeId', e.target.value)}
-                >
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.fullName} ({emp.status})
-                    </option>
-                  ))}
-                </select>
+                  options={employees.map((emp) => ({ value: emp.id, label: `${emp.fullName} (${emp.status})` }))}
+                />
                 {errors.employeeId && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.employeeId}</span>}
               </div>
 
@@ -177,17 +168,12 @@ export default function CreateActivityModal({
                 <label className="form-label">
                   Assignee <span className="required-star">*</span>
                 </label>
-                <select
-                  className="form-select"
+                <Select
+                  variant="form"
                   value={formData.assigneeId}
                   onChange={(e) => handleChange('assigneeId', e.target.value)}
-                >
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.fullName} ({emp.employeeId})
-                    </option>
-                  ))}
-                </select>
+                  options={employees.map((emp) => ({ value: emp.id, label: `${emp.fullName} (${emp.employeeId})` }))}
+                />
                 {errors.assigneeId && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.assigneeId}</span>}
               </div>
             </div>

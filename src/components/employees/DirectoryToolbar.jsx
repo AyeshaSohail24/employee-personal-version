@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, LayoutGrid, List, RotateCcw } from 'lucide-react';
+import { Select } from '../common/Select.jsx';
 
 export default function DirectoryToolbar({
   search,
@@ -68,90 +69,77 @@ export default function DirectoryToolbar({
           {showStatusFilter && (
             <div className="filter-item">
               <label htmlFor="status-filter">Status:</label>
-              <select
+              <Select
                 id="status-filter"
-                className="filter-select"
+                variant="filter"
                 value={selectedStatus}
                 onChange={(e) => onStatusChange(e.target.value)}
-              >
-                <option value="All">All Statuses</option>
-                <option value="Active">Active</option>
-                <option value="Onboarding">Onboarding</option>
-                <option value="Upcoming">Upcoming</option>
-                <option value="Departing">Departing</option>
-                <option value="Former">Former</option>
-              </select>
+                options={[
+                  { value: 'All', label: 'All Statuses' },
+                  { value: 'Active', label: 'Active' },
+                  { value: 'Onboarding', label: 'Onboarding' },
+                  { value: 'Upcoming', label: 'Upcoming' },
+                  { value: 'Departing', label: 'Departing' },
+                  { value: 'Former', label: 'Former' },
+                ]}
+              />
             </div>
           )}
 
           {/* Department Filter */}
           <div className="filter-item">
             <label htmlFor="dept-filter">Department:</label>
-            <select
+            <Select
               id="dept-filter"
-              className="filter-select"
+              variant="filter"
               value={selectedDept}
               onChange={(e) => onDeptChange(e.target.value)}
-            >
-              <option value="">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+              placeholder="All Departments"
+              options={departments.map((d) => ({ value: d.id, label: d.name }))}
+            />
           </div>
 
           {/* Employee Type Filter */}
           <div className="filter-item">
             <label htmlFor="type-filter">Type:</label>
-            <select
+            <Select
               id="type-filter"
-              className="filter-select"
+              variant="filter"
               value={selectedType}
               onChange={(e) => onTypeChange(e.target.value)}
-            >
-              <option value="">All Types</option>
-              {employeeTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+              placeholder="All Types"
+              options={employeeTypes.map((t) => ({ value: t.id, label: t.name }))}
+            />
           </div>
 
           {/* Location Filter */}
           <div className="filter-item">
             <label htmlFor="loc-filter">Location:</label>
-            <select
+            <Select
               id="loc-filter"
-              className="filter-select"
+              variant="filter"
               value={selectedLoc}
               onChange={(e) => onLocChange(e.target.value)}
-            >
-              <option value="">All Locations</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
+              placeholder="All Locations"
+              options={locations.map((l) => ({ value: l.id, label: l.name }))}
+            />
           </div>
 
           {/* Sort Selection */}
           <div className="filter-item">
             <label htmlFor="sort-select">Sort By:</label>
-            <select
+            <Select
               id="sort-select"
-              className="filter-select"
+              variant="filter"
               value={selectedSort}
               onChange={(e) => onSortChange(e.target.value)}
-            >
-              <option value="name-asc">Name (A–Z)</option>
-              <option value="name-desc">Name (Z–A)</option>
-              <option value="date-desc">Start Date: Newest</option>
-              <option value="date-asc">Start Date: Oldest</option>
-            </select>
+              options={[
+                { value: 'name-asc', label: 'Name (A–Z)' },
+                { value: 'name-desc', label: 'Name (Z–A)' },
+                { value: 'date-desc', label: 'Start Date: Newest' },
+                { value: 'date-asc', label: 'Start Date: Oldest' },
+              ]}
+            />
           </div>
         </div>
 

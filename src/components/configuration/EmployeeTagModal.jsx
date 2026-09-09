@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertCircle } from 'lucide-react';
 import { validateEmployeeTag, SUPPORTED_TAG_CATEGORIES } from '../../domain/configurationDomain';
+import { Select } from '../common/Select.jsx';
 
 const COLOR_PRESETS = [
   '#129FA9', // Rizurf Teal
@@ -111,17 +112,12 @@ export function EmployeeTagModal({ isOpen, onClose, onSave, employeeTag = null, 
             <label className="config-form-label">
               Category <span style={{ color: '#dc2626' }}>*</span>
             </label>
-            <select
+            <Select
+              variant="form"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className={`config-form-control ${errors.category ? 'error' : ''}`}
-            >
-              {SUPPORTED_TAG_CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
+              options={SUPPORTED_TAG_CATEGORIES}
+            />
             {errors.category && <div className="config-form-error">{errors.category}</div>}
           </div>
 

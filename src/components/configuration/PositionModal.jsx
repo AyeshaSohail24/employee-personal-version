@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertCircle } from 'lucide-react';
 import { validatePosition } from '../../domain/configurationDomain';
+import { Select } from '../common/Select.jsx';
 
 export function PositionModal({ isOpen, onClose, onSave, position = null, activeDepartments = [], activeLocations = [] }) {
   const [name, setName] = useState('');
@@ -98,18 +99,13 @@ export function PositionModal({ isOpen, onClose, onSave, position = null, active
             <label className="config-form-label">
               Department Assignment <span style={{ color: '#dc2626' }}>*</span>
             </label>
-            <select
+            <Select
+              variant="form"
               value={departmentId}
               onChange={(e) => setDepartmentId(e.target.value)}
-              className={`config-form-control ${errors.departmentId ? 'error' : ''}`}
-            >
-              <option value="">Select Department</option>
-              {activeDepartments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} ({d.code})
-                </option>
-              ))}
-            </select>
+              placeholder="Select Department"
+              options={activeDepartments.map((d) => ({ value: d.id, label: `${d.name} (${d.code})` }))}
+            />
             {errors.departmentId && <div className="config-form-error">{errors.departmentId}</div>}
           </div>
 
@@ -117,17 +113,12 @@ export function PositionModal({ isOpen, onClose, onSave, position = null, active
             <label className="config-form-label">
               Default Work Location
             </label>
-            <select
+            <Select
+              variant="form"
               value={defaultLocationId}
               onChange={(e) => setDefaultLocationId(e.target.value)}
-              className="config-form-control"
-            >
-              {activeLocations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name} ({l.type})
-                </option>
-              ))}
-            </select>
+              options={activeLocations.map((l) => ({ value: l.id, label: `${l.name} (${l.type})` }))}
+            />
           </div>
 
           <label className="config-form-checkbox-group">

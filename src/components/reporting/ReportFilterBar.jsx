@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, Filter, RefreshCw } from 'lucide-react';
+import Select from '../common/Select';
 
 export default function ReportFilterBar({
   search = '',
@@ -40,34 +41,32 @@ export default function ReportFilterBar({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
           {/* Department Select */}
           {departments.length > 0 && (
-            <select
-              className="form-control"
+            <Select
+              variant="filter"
               value={departmentId}
               onChange={(e) => onDepartmentChange && onDepartmentChange(e.target.value)}
-              style={{ height: '38px', fontSize: '0.85rem', minWidth: '160px' }}
-            >
-              <option value="">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+              style={{ minWidth: '160px' }}
+              options={[
+                { value: '', label: 'All Departments' },
+                ...departments.map((d) => ({ value: d.id, label: d.name }))
+              ]}
+            />
           )}
 
           {/* Work Mode Select */}
           {onWorkModeChange && (
-            <select
-              className="form-control"
+            <Select
+              variant="filter"
               value={workModeFilter}
               onChange={(e) => onWorkModeChange(e.target.value)}
-              style={{ height: '38px', fontSize: '0.85rem', minWidth: '140px' }}
-            >
-              <option value="All">All Work Modes</option>
-              <option value="On-site">On-site</option>
-              <option value="Hybrid">Hybrid</option>
-              <option value="Remote">Remote</option>
-            </select>
+              style={{ minWidth: '140px' }}
+              options={[
+                { value: 'All', label: 'All Work Modes' },
+                { value: 'On-site', label: 'On-site' },
+                { value: 'Hybrid', label: 'Hybrid' },
+                { value: 'Remote', label: 'Remote' }
+              ]}
+            />
           )}
 
           {/* Reset Button */}

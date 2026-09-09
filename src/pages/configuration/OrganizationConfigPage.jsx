@@ -232,19 +232,17 @@ export default function OrganizationConfigPage() {
                 <table className="config-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '20%' }}>Department Name</th>
-                      <th style={{ width: '8%' }}>Code</th>
-                      <th style={{ width: '15%' }}>Parent Dept</th>
-                      <th style={{ width: '15%' }}>Head of Dept</th>
-                      <th style={{ width: '10%' }}>Headcount</th>
-                      <th style={{ width: '8%' }}>References</th>
-                      <th style={{ width: '12%' }}>Status</th>
-                      <th style={{ width: '12%' }} className="text-right">Actions</th>
+                      <th style={{ width: '25%' }}>Department Name</th>
+                      <th style={{ width: '10%' }}>Code</th>
+                      <th style={{ width: '23%' }}>Head of Dept</th>
+                      <th style={{ width: '12%' }}>Headcount</th>
+                      <th style={{ width: '10%' }}>References</th>
+                      <th style={{ width: '10%' }}>Status</th>
+                      <th style={{ width: '10%' }} className="text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {config.departments.map((dept) => {
-                      const parent = config.departments.find((d) => d.id === dept.parentDepartmentId);
                       return (
                         <tr key={dept.id}>
                           <td>
@@ -257,9 +255,6 @@ export default function OrganizationConfigPage() {
                             <span className="config-pill-inactive" style={{ fontFamily: 'monospace', fontWeight: 700 }}>
                               {dept.code}
                             </span>
-                          </td>
-                          <td style={{ color: '#475569' }}>
-                            {parent ? `${parent.name} (${parent.code})` : '— (Top-Level)'}
                           </td>
                           <td style={{ color: '#475569' }}>{dept.managerName || 'Unassigned'}</td>
                           <td style={{ fontWeight: 600 }}>{dept.currentHeadcount} active</td>
@@ -314,7 +309,6 @@ export default function OrganizationConfigPage() {
               {/* Mobile Cards */}
               <div className="config-mobile-cards">
                 {config.departments.map((dept) => {
-                  const parent = config.departments.find((d) => d.id === dept.parentDepartmentId);
                   return (
                     <div key={dept.id} className="config-mobile-card">
                       <div className="config-mobile-card-header">
@@ -327,7 +321,6 @@ export default function OrganizationConfigPage() {
                         </span>
                       </div>
                       <div className="config-mobile-card-body">
-                        <div>Parent: {parent ? `${parent.name} (${parent.code})` : 'Top-Level'}</div>
                         <div>Head: {dept.managerName || 'Unassigned'}</div>
                         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', alignItems: 'center' }}>
                           <span style={{ fontWeight: 600 }}>{dept.currentHeadcount} headcount</span>

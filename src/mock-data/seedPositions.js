@@ -11,7 +11,7 @@ export const seedPositions = [
   {
     id: 'pos-2',
     name: 'Chief Technology Officer',
-    departmentId: 'dept-2',
+    departmentId: 'dept-1',
     defaultManagerId: 'emp-001',
     defaultScheduleId: 'sched-1',
     defaultLocationId: 'loc-1',

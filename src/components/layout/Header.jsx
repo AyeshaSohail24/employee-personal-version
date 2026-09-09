@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, Search, Bell, ChevronRight, User } from 'lucide-react';
 import { useRole } from '../../state/RoleContext';
+import { Select } from '../common/Select.jsx';
 
 export default function Header({ toggleMobileSidebar }) {
   const location = useLocation();
@@ -66,21 +67,16 @@ export default function Header({ toggleMobileSidebar }) {
           />
         </div>
 
-        {/* Role Switcher Shell for Permissions Demo */}
+        {/* Role Switcher Shell for Permissions */}
         <div className="role-switcher">
-          <label htmlFor="role-select">Role Demo:</label>
-          <select
+          <label htmlFor="role-select">Role:</label>
+          <Select
             id="role-select"
-            className="role-select"
+            variant="role"
             value={currentRole}
+            options={roles}
             onChange={(e) => setCurrentRole(e.target.value)}
-          >
-            {roles.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         {/* Notification Indicator */}

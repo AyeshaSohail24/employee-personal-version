@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, Plus, RotateCcw, Filter } from 'lucide-react';
+import Select from '../common/Select';
 
 export default function ActivityToolbar({
   scope = 'all', // 'my' | 'all' | 'overdue'
@@ -61,88 +62,87 @@ export default function ActivityToolbar({
           {/* Activity Type Filter */}
           <div className="filter-item">
             <span>Type:</span>
-            <select
-              className="filter-select"
+            <Select
+              variant="filter"
               value={filters.typeId || ''}
               onChange={(e) => handleSelectChange('typeId', e.target.value)}
-            >
-              <option value="">All Types</option>
-              {activityTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'All Types' },
+                ...activityTypes.map((t) => ({ value: t.id, label: t.name }))
+              ]}
+            />
           </div>
 
           {/* Assignee Filter (Hidden on 'my' view) */}
           {!isMyView && (
             <div className="filter-item">
               <span>Assignee:</span>
-              <select
-                className="filter-select"
+              <Select
+                variant="filter"
                 value={filters.assigneeId || ''}
                 onChange={(e) => handleSelectChange('assigneeId', e.target.value)}
-              >
-                <option value="">All Assignees</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.fullName} ({emp.employeeId})
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'All Assignees' },
+                  ...employees.map((emp) => ({
+                    value: emp.id,
+                    label: `${emp.fullName} (${emp.employeeId})`
+                  }))
+                ]}
+              />
             </div>
           )}
 
           {/* Related Employee Filter */}
           <div className="filter-item">
             <span>Related To:</span>
-            <select
-              className="filter-select"
+            <Select
+              variant="filter"
               value={filters.employeeId || ''}
               onChange={(e) => handleSelectChange('employeeId', e.target.value)}
-            >
-              <option value="">All Employees</option>
-              {employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.fullName} ({emp.status})
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'All Employees' },
+                ...employees.map((emp) => ({
+                  value: emp.id,
+                  label: `${emp.fullName} (${emp.status})`
+                }))
+              ]}
+            />
           </div>
 
           {/* Due State Filter (Hidden on 'overdue' view) */}
           {!isOverdueView && (
             <div className="filter-item">
               <span>Status:</span>
-              <select
-                className="filter-select"
+              <Select
+                variant="filter"
                 value={filters.dueState || ''}
                 onChange={(e) => handleSelectChange('dueState', e.target.value)}
-              >
-                <option value="">All States</option>
-                <option value="Overdue">Overdue</option>
-                <option value="Due Today">Due Today</option>
-                <option value="Upcoming">Upcoming</option>
-                <option value="Completed">Completed</option>
-              </select>
+                options={[
+                  { value: '', label: 'All States' },
+                  { value: 'Overdue', label: 'Overdue' },
+                  { value: 'Due Today', label: 'Due Today' },
+                  { value: 'Upcoming', label: 'Upcoming' },
+                  { value: 'Completed', label: 'Completed' }
+                ]}
+              />
             </div>
           )}
 
           {/* Source Filter */}
           <div className="filter-item">
             <span>Source:</span>
-            <select
-              className="filter-select"
+            <Select
+              variant="filter"
               value={filters.source || ''}
               onChange={(e) => handleSelectChange('source', e.target.value)}
-            >
-              <option value="">All Sources</option>
-              <option value="Manual">Manual</option>
-              <option value="Onboarding">Onboarding</option>
-              <option value="Offboarding">Offboarding</option>
-              <option value="System">System</option>
-            </select>
+              options={[
+                { value: '', label: 'All Sources' },
+                { value: 'Manual', label: 'Manual' },
+                { value: 'Onboarding', label: 'Onboarding' },
+                { value: 'Offboarding', label: 'Offboarding' },
+                { value: 'System', label: 'System' }
+              ]}
+            />
           </div>
 
           {/* Clear Filters */}
@@ -157,15 +157,16 @@ export default function ActivityToolbar({
         {/* Sort Select */}
         <div className="filter-item">
           <span>Sort By:</span>
-          <select
-            className="filter-select"
+          <Select
+            variant="filter"
             value={filters.sortBy || 'dueDate'}
             onChange={(e) => handleSelectChange('sortBy', e.target.value)}
-          >
-            <option value="dueDate">Due Date (Earliest)</option>
-            <option value="createdAt">Creation Date</option>
-            <option value="title">Title (A-Z)</option>
-          </select>
+            options={[
+              { value: 'dueDate', label: 'Due Date (Earliest)' },
+              { value: 'createdAt', label: 'Creation Date' },
+              { value: 'title', label: 'Title (A-Z)' }
+            ]}
+          />
         </div>
       </div>
     </div>

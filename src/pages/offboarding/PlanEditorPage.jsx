@@ -15,6 +15,7 @@ import { offboardingService } from '../../services/offboardingService.js';
 import { activityService } from '../../services/activityService.js';
 import { departmentService } from '../../services/departmentService.js';
 import { employeeService } from '../../services/employeeService.js';
+import Select from '../../components/common/Select.jsx';
 
 export default function OffboardingPlanEditorPage() {
   const { planId } = useParams();
@@ -274,19 +275,15 @@ export default function OffboardingPlanEditorPage() {
               <label style={{ display: 'block', fontSize: '0.815rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-main)' }}>
                 Target Department Scope
               </label>
-              <select
-                className="search-input"
+              <Select
+                variant="form"
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.85rem', background: '#FFF', border: '1px solid var(--border-light)', borderRadius: '6px' }}
-              >
-                <option value="">General / All Departments</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'General / All Departments' },
+                  ...departments.map((d) => ({ value: d.id, label: d.name }))
+                ]}
+              />
             </div>
           </div>
 
@@ -399,18 +396,15 @@ export default function OffboardingPlanEditorPage() {
                     <label style={{ display: 'block', fontSize: '0.785rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                       Activity Type
                     </label>
-                    <select
-                      className="search-input"
+                    <Select
+                      variant="form"
                       value={task.activityTypeId}
                       onChange={(e) => handleTaskChange(index, 'activityTypeId', e.target.value)}
-                      style={{ width: '100%', padding: '0.4rem 0.65rem', fontSize: '0.825rem', background: '#FFF', border: '1px solid var(--border-light)', borderRadius: '6px' }}
-                    >
-                      {activityTypes.map((type) => (
-                        <option key={type.id} value={type.id}>
-                          {type.name} ({type.category})
-                        </option>
-                      ))}
-                    </select>
+                      options={activityTypes.map((type) => ({
+                        value: type.id,
+                        label: `${type.name} (${type.category})`
+                      }))}
+                    />
                   </div>
 
                   <div>
@@ -434,17 +428,17 @@ export default function OffboardingPlanEditorPage() {
                     <label style={{ display: 'block', fontSize: '0.785rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                       Assignment Rule
                     </label>
-                    <select
-                      className="search-input"
+                    <Select
+                      variant="form"
                       value={task.assignmentRule}
                       onChange={(e) => handleTaskChange(index, 'assignmentRule', e.target.value)}
-                      style={{ width: '100%', padding: '0.4rem 0.65rem', fontSize: '0.825rem', background: '#FFF', border: '1px solid var(--border-light)', borderRadius: '6px' }}
-                    >
-                      <option value="employee">Departing Employee</option>
-                      <option value="manager">Manager (from record)</option>
-                      <option value="hr">HR Representative</option>
-                      <option value="specific_employee">Specific Employee</option>
-                    </select>
+                      options={[
+                        { value: 'employee', label: 'Departing Employee' },
+                        { value: 'manager', label: 'Manager (from record)' },
+                        { value: 'hr', label: 'HR Representative' },
+                        { value: 'specific_employee', label: 'Specific Employee' }
+                      ]}
+                    />
                   </div>
 
                   {task.assignmentRule === 'specific_employee' && (
@@ -452,19 +446,18 @@ export default function OffboardingPlanEditorPage() {
                       <label style={{ display: 'block', fontSize: '0.785rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                         Select Specific Assignee
                       </label>
-                      <select
-                        className="search-input"
+                      <Select
+                        variant="form"
                         value={task.specificAssigneeId}
                         onChange={(e) => handleTaskChange(index, 'specificAssigneeId', e.target.value)}
-                        style={{ width: '100%', padding: '0.4rem 0.65rem', fontSize: '0.825rem', background: '#FFF', border: '1px solid var(--border-light)', borderRadius: '6px' }}
-                      >
-                        <option value="">-- Choose Assignee --</option>
-                        {employees.map((emp) => (
-                          <option key={emp.id} value={emp.id}>
-                            {emp.fullName} ({emp.employeeId})
-                          </option>
-                        ))}
-                      </select>
+                        options={[
+                          { value: '', label: '-- Choose Assignee --' },
+                          ...employees.map((emp) => ({
+                            value: emp.id,
+                            label: `${emp.fullName} (${emp.employeeId})`
+                          }))
+                        ]}
+                      />
                     </div>
                   )}
 

@@ -34,34 +34,6 @@ export function generateUniqueId(prefix, existingRecords = []) {
 }
 
 /**
- * Detects if assigning targetParentId as the parent of deptId creates a hierarchy cycle (e.g. A -> B -> C -> A).
- * Uses Depth-First Search traversing up the parent chain.
- * @param {string|null} deptId - The department being modified (null for new creation)
- * @param {string|null} targetParentId - The proposed parent department ID
- * @param {Array<Object>} existingDepts - All current department records
- * @returns {boolean} True if a cycle would be formed, false otherwise.
- */
-export function detectDepartmentCycle(deptId, targetParentId, existingDepts = []) {
-  if (!deptId || !targetParentId) return false;
-  if (deptId === targetParentId) return true; // Direct self-parenting
-
-  const deptMap = new Map(existingDepts.map((d) => [d.id, d]));
-  let currentId = targetParentId;
-  const visited = new Set();
-
-  while (currentId) {
-    if (currentId === deptId) return true; // Reached target department -> Cycle detected!
-    if (visited.has(currentId)) break; // Prevent infinite loop in pre-existing bad data
-    visited.add(currentId);
-
-    const parentDept = deptMap.get(currentId);
-    currentId = parentDept ? parentDept.parentDepartmentId : null;
-  }
-
-  return false;
-}
-
-/**
  * Validates Department form data.
  */
 export function validateDepartment(deptData, existingDepts = [], currentId = null) {
@@ -69,7 +41,6 @@ export function validateDepartment(deptData, existingDepts = [], currentId = nul
 
   const name = (deptData.name || '').trim();
   const code = (deptData.code || '').trim().toUpperCase();
-  const parentDepartmentId = deptData.parentDepartmentId || null;
 
   if (!name) {
     errors.name = 'Department name is required.';
@@ -93,19 +64,12 @@ export function validateDepartment(deptData, existingDepts = [], currentId = nul
     }
   }
 
-  if (currentId && parentDepartmentId === currentId) {
-    errors.parentDepartmentId = 'A department cannot be its own parent.';
-  } else if (currentId && parentDepartmentId && detectDepartmentCycle(currentId, parentDepartmentId, existingDepts)) {
-    errors.parentDepartmentId = 'Selecting this parent creates a circular department hierarchy cycle.';
-  }
-
   return {
     isValid: Object.keys(errors).length === 0,
     errors,
     cleanData: {
       name,
       code,
-      parentDepartmentId,
       managerEmployeeId: deptData.managerEmployeeId || null,
       color: deptData.color || '#3b82f6',
       active: deptData.active !== undefined ? deptData.active : true,
@@ -247,22 +211,19 @@ export function calculateDepartmentReferences(deptId, db = {}) {
 
   const records = db.employmentRecords || [];
   const positions = db.positions || [];
-  const depts = db.departments || [];
   const onboardingPlanTasks = db.onboardingPlanTasks || [];
   const offboardingPlanTasks = db.offboardingPlanTasks || [];
 
   const empRecordRefs = records.filter((r) => r.departmentId === deptId).length;
   const positionRefs = positions.filter((p) => p.departmentId === deptId).length;
-  const childDeptRefs = depts.filter((d) => d.parentDepartmentId === deptId).length;
   const onboardingTaskRefs = onboardingPlanTasks.filter((t) => t.departmentId === deptId).length;
   const offboardingTaskRefs = offboardingPlanTasks.filter((t) => t.departmentId === deptId).length;
 
-  const totalReferences = empRecordRefs + positionRefs + childDeptRefs + onboardingTaskRefs + offboardingTaskRefs;
+  const totalReferences = empRecordRefs + positionRefs + onboardingTaskRefs + offboardingTaskRefs;
   const details = [];
 
   if (empRecordRefs > 0) details.push(`${empRecordRefs} employment history record(s)`);
   if (positionRefs > 0) details.push(`${positionRefs} job position(s)`);
-  if (childDeptRefs > 0) details.push(`${childDeptRefs} child department(s)`);
   if (onboardingTaskRefs > 0) details.push(`${onboardingTaskRefs} onboarding template task(s)`);
   if (offboardingTaskRefs > 0) details.push(`${offboardingTaskRefs} offboarding template task(s)`);
 
