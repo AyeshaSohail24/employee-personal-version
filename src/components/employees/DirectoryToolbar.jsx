@@ -9,18 +9,18 @@ export default function DirectoryToolbar({
   onStatusChange,
   selectedDept,
   onDeptChange,
-  selectedType,
+  selectedType = 'All',
   onTypeChange,
-  selectedLoc,
-  onLocChange,
+  selectedMode = 'All',
+  onModeChange,
+  selectedAllowance = 'All',
+  onAllowanceChange,
   selectedSort,
   onSortChange,
   viewMode,
   onViewModeChange,
   onResetFilters,
   departments = [],
-  employeeTypes = [],
-  locations = [],
   showStatusFilter = false,
   hasActiveFilters = false,
 }) {
@@ -33,7 +33,7 @@ export default function DirectoryToolbar({
           <input
             type="text"
             className="toolbar-search-input"
-            placeholder="Search by name, ID, position, department, email..."
+            placeholder="Search ID, name, email, department..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
           />
@@ -65,6 +65,68 @@ export default function DirectoryToolbar({
       <div className="toolbar-bottom-row">
         {/* Filters Group */}
         <div className="filters-group">
+          {/* Department Filter */}
+          <div className="filter-item">
+            <label htmlFor="dept-filter">Department:</label>
+            <Select
+              id="dept-filter"
+              variant="filter"
+              value={selectedDept}
+              onChange={(e) => onDeptChange(e.target.value)}
+              placeholder="All Departments"
+              options={departments.map((d) => ({ value: d.id, label: d.name }))}
+            />
+          </div>
+
+          {/* Type Filter (normalized directory classification: Employee | Intern) */}
+          <div className="filter-item">
+            <label htmlFor="type-filter">Type:</label>
+            <Select
+              id="type-filter"
+              variant="filter"
+              value={selectedType}
+              onChange={(e) => onTypeChange(e.target.value)}
+              options={[
+                { value: 'All', label: 'All Types' },
+                { value: 'Employee', label: 'Employee' },
+                { value: 'Intern', label: 'Intern' },
+              ]}
+            />
+          </div>
+
+          {/* Mode Filter */}
+          <div className="filter-item">
+            <label htmlFor="mode-filter">Mode:</label>
+            <Select
+              id="mode-filter"
+              variant="filter"
+              value={selectedMode}
+              onChange={(e) => onModeChange(e.target.value)}
+              options={[
+                { value: 'All', label: 'All Modes' },
+                { value: 'On-site', label: 'On-site' },
+                { value: 'Remote', label: 'Remote' },
+                { value: 'Hybrid', label: 'Hybrid' },
+              ]}
+            />
+          </div>
+
+          {/* Salary Filter (user-facing label only; underlying data remains the existing Paid/Unpaid allowance field) */}
+          <div className="filter-item">
+            <label htmlFor="allowance-filter">Salary:</label>
+            <Select
+              id="allowance-filter"
+              variant="filter"
+              value={selectedAllowance}
+              onChange={(e) => onAllowanceChange(e.target.value)}
+              options={[
+                { value: 'All', label: 'Paid & Unpaid' },
+                { value: 'Paid', label: 'Paid' },
+                { value: 'Unpaid', label: 'Unpaid' },
+              ]}
+            />
+          </div>
+
           {/* Status Filter (Only visible on /employees route) */}
           {showStatusFilter && (
             <div className="filter-item">
@@ -85,45 +147,6 @@ export default function DirectoryToolbar({
               />
             </div>
           )}
-
-          {/* Department Filter */}
-          <div className="filter-item">
-            <label htmlFor="dept-filter">Department:</label>
-            <Select
-              id="dept-filter"
-              variant="filter"
-              value={selectedDept}
-              onChange={(e) => onDeptChange(e.target.value)}
-              placeholder="All Departments"
-              options={departments.map((d) => ({ value: d.id, label: d.name }))}
-            />
-          </div>
-
-          {/* Employee Type Filter */}
-          <div className="filter-item">
-            <label htmlFor="type-filter">Type:</label>
-            <Select
-              id="type-filter"
-              variant="filter"
-              value={selectedType}
-              onChange={(e) => onTypeChange(e.target.value)}
-              placeholder="All Types"
-              options={employeeTypes.map((t) => ({ value: t.id, label: t.name }))}
-            />
-          </div>
-
-          {/* Location Filter */}
-          <div className="filter-item">
-            <label htmlFor="loc-filter">Location:</label>
-            <Select
-              id="loc-filter"
-              variant="filter"
-              value={selectedLoc}
-              onChange={(e) => onLocChange(e.target.value)}
-              placeholder="All Locations"
-              options={locations.map((l) => ({ value: l.id, label: l.name }))}
-            />
-          </div>
 
           {/* Sort Selection */}
           <div className="filter-item">

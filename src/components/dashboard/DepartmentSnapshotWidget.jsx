@@ -15,7 +15,7 @@ export default function DepartmentSnapshotWidget({ departments = [], totalActive
             <p className="widget-subtitle">Current workforce headcount by department</p>
           </div>
         </div>
-        <Link to="/organization/departments" className="widget-action-link">
+        <Link to="/employees" className="widget-action-link">
           <span>View All</span>
           <ArrowRight size={14} />
         </Link>

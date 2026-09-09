@@ -15,7 +15,7 @@ export default function DepartingWidget({ employees = [] }) {
             <p className="widget-subtitle">Team members currently undergoing offboarding transition</p>
           </div>
         </div>
-        <Link to="/employees/departing" className="widget-action-link">
+        <Link to="/employees?status=Departing" className="widget-action-link">
           <span>View All</span>
           <ArrowRight size={14} />
         </Link>

@@ -87,7 +87,7 @@ export default function DashboardPage() {
           title="Active Employees"
           value={metrics.activeCount}
           subtitle="Currently employed workforce"
-          linkTo="/employees/active"
+          linkTo="/employees?status=Active"
           badgeBg="#ECFDF5"
           badgeColor="#059669"
         />
@@ -97,7 +97,7 @@ export default function DashboardPage() {
           title="New Joiners & Upcoming"
           value={metrics.newJoinersGroupCount}
           subtitle={`${metrics.onboardingCount} Onboarding · ${metrics.upcomingCount} Upcoming`}
-          linkTo="/employees/new-joiners"
+          linkTo="/employees?status=Onboarding"
           badgeBg="var(--color-primary-light)"
           badgeColor="var(--color-primary)"
         />
@@ -107,7 +107,7 @@ export default function DashboardPage() {
           title="Departing Employees"
           value={metrics.departingCount}
           subtitle="Undergoing offboarding transition"
-          linkTo="/employees/departing"
+          linkTo="/employees?status=Departing"
           badgeBg="#FFFBEB"
           badgeColor="#D97706"
         />
@@ -117,7 +117,7 @@ export default function DashboardPage() {
           title="Former Employees"
           value={metrics.formerCount}
           subtitle="Archived historical records"
-          linkTo="/employees/former"
+          linkTo="/employees?status=Former"
           badgeBg="#F1F5F9"
           badgeColor="#64748B"
         />

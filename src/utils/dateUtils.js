@@ -76,3 +76,44 @@ export function addDaysToLocalDate(dateStr, days = 0) {
   return `${rYear}-${rMonth}-${rDay}`;
 }
 
+/**
+ * Calculates employment/internship duration progress from a Start and (optional) End date.
+ * Single centralized source for the Employees Directory Duration column/card — must not be
+ * reimplemented separately per view.
+ *
+ * - No end date: 'ongoing' state, no percent (never fabricates an end date).
+ * - Reference date before start: 'upcoming' state, 0% progress, "Starts in X days".
+ * - Reference date within [start, end): 'active' state, elapsed % clamped 0-100, "X days left".
+ * - Reference date on/after end: 'completed' state, 100% progress.
+ *
+ * @param {string} startDate 'YYYY-MM-DD'
+ * @param {string|null} contractEndDate 'YYYY-MM-DD' or null/undefined
+ * @param {string} [referenceDate] 'YYYY-MM-DD', defaults to today (local)
+ * @returns {{ state: 'ongoing'|'upcoming'|'active'|'completed', percent: number|null, label: string }}
+ */
+export function calculateDurationProgress(startDate, contractEndDate, referenceDate = getTodayLocalDateString()) {
+  if (!startDate || !contractEndDate) {
+    return { state: 'ongoing', percent: null, label: 'Ongoing' };
+  }
+
+  const start = startDate.slice(0, 10);
+  const end = contractEndDate.slice(0, 10);
+  const ref = referenceDate.slice(0, 10);
+
+  if (ref < start) {
+    const daysUntilStart = getDaysDifference(start, ref);
+    return { state: 'upcoming', percent: 0, label: `Starts in ${daysUntilStart} day${daysUntilStart === 1 ? '' : 's'}` };
+  }
+
+  if (ref >= end) {
+    return { state: 'completed', percent: 100, label: 'Completed' };
+  }
+
+  const totalDays = getDaysDifference(end, start);
+  const elapsedDays = getDaysDifference(ref, start);
+  const percent = totalDays > 0 ? Math.min(100, Math.max(0, Math.round((elapsedDays / totalDays) * 100))) : 100;
+  const daysLeft = getDaysDifference(end, ref);
+
+  return { state: 'active', percent, label: `${daysLeft} day${daysLeft === 1 ? '' : 's'} left` };
+}
+

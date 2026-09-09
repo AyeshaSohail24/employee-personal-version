@@ -2,11 +2,10 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, Search, Bell, ChevronRight, User } from 'lucide-react';
 import { useRole } from '../../state/RoleContext';
-import { Select } from '../common/Select.jsx';
 
 export default function Header({ toggleMobileSidebar }) {
   const location = useLocation();
-  const { currentRole, setCurrentRole, roles } = useRole();
+  const { currentRole } = useRole();
 
   // Helper to construct dynamic breadcrumbs from URL pathname
   const pathSegments = location.pathname.split('/').filter(Boolean);
@@ -67,18 +66,6 @@ export default function Header({ toggleMobileSidebar }) {
           />
         </div>
 
-        {/* Role Switcher Shell for Permissions */}
-        <div className="role-switcher">
-          <label htmlFor="role-select">Role:</label>
-          <Select
-            id="role-select"
-            variant="role"
-            value={currentRole}
-            options={roles}
-            onChange={(e) => setCurrentRole(e.target.value)}
-          />
-        </div>
-
         {/* Notification Indicator */}
         <button className="icon-btn" aria-label="Notifications">
           <Bell size={20} />
@@ -97,3 +84,4 @@ export default function Header({ toggleMobileSidebar }) {
     </header>
   );
 }
+

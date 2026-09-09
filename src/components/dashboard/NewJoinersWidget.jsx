@@ -15,7 +15,7 @@ export default function NewJoinersWidget({ employees = [] }) {
             <p className="widget-subtitle">Employees currently onboarding or scheduled to start</p>
           </div>
         </div>
-        <Link to="/employees/new-joiners" className="widget-action-link">
+        <Link to="/employees?status=Onboarding" className="widget-action-link">
           <span>View All</span>
           <ArrowRight size={14} />
         </Link>

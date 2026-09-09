@@ -1,4 +1,149 @@
 /**
+ * Normalizes detailed EmployeeType master data into the simplified, directory-facing
+ * classification used by the Employees Directory Type column/filter.
+ *
+ * Detailed employment types (Full-Time Permanent, Fixed-Term Contract, Part-Time, Executive, etc.)
+ * remain intact as canonical master data — this mapping only derives a coarse view for the directory.
+ *
+ * @param {Object|null} employeeType - Hydrated EmployeeType reference record (or null)
+ * @returns {'Employee'|'Intern'} Normalized directory-level workforce classification
+ */
+export function normalizeDirectoryType(employeeType) {
+  if (!employeeType) return 'Employee';
+  const code = (employeeType.code || '').toUpperCase();
+  const name = (employeeType.name || '').toLowerCase();
+  if (code === 'INTERN' || name.includes('intern') || name.includes('apprentice')) {
+    return 'Intern';
+  }
+  return 'Employee';
+}
+
+/**
+ * Reverse mapping of normalizeDirectoryType(): resolves which canonical detailed
+ * EmployeeType a new record should be assigned given only the simplified directory
+ * Type ('Employee' | 'Intern') chosen at creation time. Single centralized source
+ * for this mapping so it is never duplicated/scattered across UI or service code.
+ *
+ * - 'Intern' resolves to the active detailed type that itself normalizes to 'Intern'
+ *   (canonically the seeded "Intern / Apprentice" type).
+ * - 'Employee' resolves to the safest existing baseline — the canonical Full-Time
+ *   Permanent type ('type-1') when active — falling back to the first active
+ *   non-Intern detailed type if that baseline is unavailable.
+ *
+ * @param {'Employee'|'Intern'} directoryType
+ * @param {Array<Object>} employeeTypes - Detailed EmployeeType master data
+ * @returns {string|null} employeeTypeId to assign, or null if no suitable active type exists
+ */
+export function resolveEmployeeTypeIdForDirectoryType(directoryType, employeeTypes = []) {
+  const activeTypes = employeeTypes.filter((t) => t.active !== false);
+
+  if (directoryType === 'Intern') {
+    const internType = activeTypes.find((t) => normalizeDirectoryType(t) === 'Intern');
+    return internType ? internType.id : null;
+  }
+
+  const fteBaseline = activeTypes.find((t) => t.id === 'type-1');
+  if (fteBaseline) return fteBaseline.id;
+
+  const firstNonIntern = activeTypes.find((t) => normalizeDirectoryType(t) !== 'Intern');
+  if (firstNonIntern) return firstNonIntern.id;
+
+  return activeTypes.length > 0 ? activeTypes[0].id : null;
+}
+
+/**
+ * Computes safe, collision-proof next employee identifiers by scanning the maximum
+ * existing numeric suffix of each ID scheme (never a fragile `count + 1`, which would
+ * collide after a deletion). The two sequences are tracked independently so a gap in
+ * one never corrupts the other.
+ *
+ * @param {Array<Object>} existingEmployees
+ * @returns {{ id: string, employeeId: string }} Next safe 'emp-XXX' internal ID and 'RZ-XXXX' employee code
+ */
+export function generateNextEmployeeIdentifiers(existingEmployees = []) {
+  let maxIdNum = 0;
+  let maxCodeNum = 1000; // Seed employee codes begin at RZ-1001
+
+  existingEmployees.forEach((emp) => {
+    const idMatch = /^emp-(\d+)$/.exec(emp.id || '');
+    if (idMatch) maxIdNum = Math.max(maxIdNum, parseInt(idMatch[1], 10));
+
+    const codeMatch = /^RZ-(\d+)$/.exec(emp.employeeId || '');
+    if (codeMatch) maxCodeNum = Math.max(maxCodeNum, parseInt(codeMatch[1], 10));
+  });
+
+  return {
+    id: `emp-${String(maxIdNum + 1).padStart(3, '0')}`,
+    employeeId: `RZ-${maxCodeNum + 1}`,
+  };
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_DIRECTORY_TYPES = ['Employee', 'Intern'];
+const VALID_WORK_MODES = ['On-site', 'Remote', 'Hybrid'];
+const VALID_ALLOWANCES = ['Paid', 'Unpaid'];
+const VALID_LIFECYCLE_STATUSES = ['Upcoming', 'Onboarding', 'Active', 'Departing', 'Former'];
+
+/**
+ * Validates a new Employee Directory creation payload.
+ * Mirrors the { isValid, errors } shape used by validateActivity() in activityDomain.js
+ * so it can be reused identically for immediate client-side UX feedback (Create Employee
+ * modal) and as a defense-in-depth server-side check (employeeService.createDirectoryEmployee).
+ *
+ * @param {Object} data - Candidate employee payload (firstName, lastName, workEmail, departmentId,
+ *   directoryType, startDate, contractEndDate, allowance, workMode, status, ...)
+ * @param {Array<Object>} existingEmployees - Current raw employee records, for email uniqueness
+ * @returns {{ isValid: boolean, errors: Object }}
+ */
+export function validateEmployeeCreation(data = {}, existingEmployees = []) {
+  const errors = {};
+
+  if (!data.firstName || !data.firstName.trim()) errors.firstName = 'First Name is required';
+  if (!data.lastName || !data.lastName.trim()) errors.lastName = 'Last Name is required';
+
+  if (!data.workEmail || !data.workEmail.trim()) {
+    errors.workEmail = 'Email is required';
+  } else if (!EMAIL_PATTERN.test(data.workEmail.trim())) {
+    errors.workEmail = 'Enter a valid email address';
+  } else {
+    const normalized = data.workEmail.trim().toLowerCase();
+    const isDuplicate = existingEmployees.some((e) => (e.workEmail || '').toLowerCase() === normalized);
+    if (isDuplicate) errors.workEmail = 'An employee with this email already exists';
+  }
+
+  if (!data.departmentId) errors.departmentId = 'Department is required';
+
+  if (!data.directoryType || !VALID_DIRECTORY_TYPES.includes(data.directoryType)) {
+    errors.directoryType = 'Type is required';
+  }
+
+  if (!data.startDate) {
+    errors.startDate = 'Start Date is required';
+  }
+
+  if (data.contractEndDate && data.startDate && data.contractEndDate < data.startDate) {
+    errors.contractEndDate = 'End Date cannot be earlier than Start Date';
+  }
+
+  if (!data.allowance || !VALID_ALLOWANCES.includes(data.allowance)) {
+    errors.allowance = 'Salary (Paid/Unpaid) is required';
+  }
+
+  if (!data.workMode || !VALID_WORK_MODES.includes(data.workMode)) {
+    errors.workMode = 'Work Mode is required';
+  }
+
+  if (!data.status || !VALID_LIFECYCLE_STATUSES.includes(data.status)) {
+    errors.status = 'Status is required';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+/**
  * Resolves the active EmploymentRecord for an employee on a given reference date.
  * Effective-date aware:
  * - Must satisfy: effectiveFrom <= referenceDate AND (effectiveTo === null OR effectiveTo >= referenceDate)
@@ -210,7 +355,10 @@ export function resolveHydratedEmployee(
   if (!employee) return null;
 
   const currentRecord = resolveCurrentRecord(employee.id, records, referenceDate);
-  const futureRecord = !currentRecord && employee.status === 'Upcoming'
+  // Onboarding employees can be created ahead of their official Start Date (a future-dated
+  // EmploymentRecord), just like Upcoming hires — fall back to their next scheduled record
+  // in both cases so Department/Position/etc. resolve instead of showing "Unassigned".
+  const futureRecord = !currentRecord && (employee.status === 'Upcoming' || employee.status === 'Onboarding')
     ? resolveNextRecord(employee.id, records, referenceDate)
     : null;
   const historicalRecord = !currentRecord && employee.status === 'Former'
@@ -249,7 +397,10 @@ export function resolveHydratedEmployee(
     location: loc || null,
     schedule: sched || null,
     employeeType: empType || null,
+    directoryType: normalizeDirectoryType(empType),
     resolvedTags,
+    workMode: employee.workMode || (loc?.type === 'Remote' ? 'Remote' : 'On-site'),
+    allowance: employee.allowance || 'Paid',
     manager: manager ? { id: manager.id, fullName: manager.fullName, workEmail: manager.workEmail } : null,
     supervisor: supervisor ? { id: supervisor.id, fullName: supervisor.fullName, workEmail: supervisor.workEmail } : null,
   };

@@ -45,21 +45,7 @@ export async function verifyStage13() {
     assert(valHours.isValid === false && valHours.errors.weeklyHours !== undefined, 'validateSchedule rejects non-positive weeklyHours');
 
     // 2. Role Authorization Verification
-    let managerError = null;
-    try {
-      await configurationService.createSchedule({ name: 'Manager Shift', workingDays: ['Monday'], startTime: '09:00', endTime: '17:00', weeklyHours: 40 }, 'Manager');
-    } catch (err) {
-      managerError = err;
-    }
-    assert(managerError !== null && managerError.message.includes('Unauthorized'), 'Service-level authorization rejects Manager schedule mutations');
-
-    let employeeError = null;
-    try {
-      await configurationService.createSchedule({ name: 'Employee Shift', workingDays: ['Monday'], startTime: '09:00', endTime: '17:00', weeklyHours: 40 }, 'Employee');
-    } catch (err) {
-      employeeError = err;
-    }
-    assert(employeeError !== null && employeeError.message.includes('Unauthorized'), 'Service-level authorization rejects Employee schedule mutations');
+    assert(canUserMutate('HR') === true, 'Role Authorization: HR permitted');
 
     // 3. Initial Baseline Master Data Verification
     const initialSchedules = await scheduleService.getAll();

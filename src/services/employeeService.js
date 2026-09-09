@@ -1,5 +1,10 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
-import { resolveHydratedEmployee } from '../domain/employmentDomain.js';
+import {
+  resolveHydratedEmployee,
+  validateEmployeeCreation,
+  resolveEmployeeTypeIdForDirectoryType,
+  generateNextEmployeeIdentifiers,
+} from '../domain/employmentDomain.js';
 import { filterEmployeesByStatus } from '../domain/lifecycleDomain.js';
 
 /**
@@ -86,10 +91,29 @@ export const employeeService = {
    * @param {string} [options.sortBy='name-asc'] - 'name-asc', 'name-desc', 'date-desc', 'date-asc'
    * @returns {Promise<Object>} { employees, baseCount, totalFilteredCount }
    */
+  /**
+   * Queries employees with route scope, user filters, search, and sorting.
+   *
+   * @param {Object} options
+   * @param {string} [options.baseLifecycleScope='All'] - 'All', 'Active', 'NewJoiners', 'Departing', 'Former'
+   * @param {string} [options.statusFilter=''] - User-selected status filter (only active when baseLifecycleScope is 'All')
+   * @param {string} [options.departmentId='']
+   * @param {string} [options.typeFilter=''] - 'All', 'Employee', 'Intern' (normalized directory classification)
+   * @param {string} [options.modeFilter=''] - 'All', 'On-site', 'Remote', 'Hybrid'
+   * @param {string} [options.allowanceFilter=''] - 'All', 'Paid', 'Unpaid' (surfaced in UI as "Salary")
+   * @param {string} [options.employeeTypeId='']
+   * @param {string} [options.locationId='']
+   * @param {string} [options.search='']
+   * @param {string} [options.sortBy='name-asc'] - 'name-asc', 'name-desc', 'date-desc', 'date-asc'
+   * @returns {Promise<Object>} { employees, baseCount, totalFilteredCount }
+   */
   async queryEmployees({
     baseLifecycleScope = 'All',
     statusFilter = '',
     departmentId = '',
+    typeFilter = '',
+    modeFilter = '',
+    allowanceFilter = '',
     employeeTypeId = '',
     locationId = '',
     search = '',
@@ -124,26 +148,38 @@ export const employeeService = {
       filtered = filtered.filter((e) => e.department && e.department.id === departmentId);
     }
 
-    // 4. Interactive Employee Type filter
+    // 3b. Interactive Type filter (normalized directory classification: Employee | Intern)
+    if (typeFilter && typeFilter !== 'All') {
+      filtered = filtered.filter((e) => e.directoryType === typeFilter);
+    }
+
+    // 4. Interactive Mode filter
+    if (modeFilter && modeFilter !== 'All') {
+      filtered = filtered.filter((e) => e.workMode === modeFilter);
+    }
+
+    // 5. Interactive Allowance filter
+    if (allowanceFilter && allowanceFilter !== 'All') {
+      filtered = filtered.filter((e) => e.allowance === allowanceFilter);
+    }
+
+    // Legacy/fallback filters (employeeTypeId, locationId) if passed
     if (employeeTypeId) {
       filtered = filtered.filter((e) => e.employeeTypeId === employeeTypeId);
     }
-
-    // 5. Interactive Location filter
     if (locationId) {
       filtered = filtered.filter((e) => e.location && e.location.id === locationId);
     }
 
-    // 6. Text Search (case-insensitive across name, ID, position, department, email)
+    // 6. Text Search (case-insensitive across employee ID, name, email, department)
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
       filtered = filtered.filter((e) => {
-        const nameMatch = e.fullName?.toLowerCase().includes(q);
         const codeMatch = e.employeeId?.toLowerCase().includes(q);
-        const posMatch = e.position?.name?.toLowerCase().includes(q);
-        const deptMatch = e.department?.name?.toLowerCase().includes(q);
+        const nameMatch = e.fullName?.toLowerCase().includes(q);
         const emailMatch = e.workEmail?.toLowerCase().includes(q);
-        return nameMatch || codeMatch || posMatch || deptMatch || emailMatch;
+        const deptMatch = e.department?.name?.toLowerCase().includes(q);
+        return codeMatch || nameMatch || emailMatch || deptMatch;
       });
     }
 
@@ -211,6 +247,8 @@ export const employeeService = {
       photo: (employeeData.firstName?.[0] || '') + (employeeData.lastName?.[0] || ''),
       employeeTypeId: assignedTypeId,
       status: employeeData.status || 'Active',
+      workMode: employeeData.workMode || 'On-site',
+      allowance: employeeData.allowance || 'Paid',
       startDate: employeeData.startDate || new Date().toISOString().slice(0, 10),
       contractEndDate: employeeData.contractEndDate || null,
       tags: employeeData.tags || [],
@@ -237,6 +275,104 @@ export const employeeService = {
 
     saveDatabase(db);
     return this.getById(newId);
+  },
+
+  /**
+   * Creates a new employee from the Employees Directory "Create Employee" modal.
+   * Kept as a separate operation from create() (used by legacy verifyStage12 with a
+   * looser payload) so this stricter, fully-validated directory creation flow cannot
+   * regress that existing caller.
+   *
+   * Data flow: CreateEmployeeModal -> employeeService.createDirectoryEmployee()
+   * -> validation/ID/type-mapping domain helpers -> storage engine -> hydration (getById).
+   * The UI never touches localStorage or seed files directly.
+   *
+   * @param {Object} employeeData - firstName, lastName, workEmail, workPhone, icPassportNumber,
+   *   homeAddress, directoryType ('Employee'|'Intern'), startDate, contractEndDate, allowance,
+   *   workMode, status, notes
+   * @param {Object} [initialRecordData] - departmentId (required), managerId (optional "Supervisor")
+   * @returns {Promise<Object>} The newly created, hydrated employee
+   */
+  async createDirectoryEmployee(employeeData = {}, initialRecordData = {}) {
+    const db = loadDatabase();
+    const existingEmployees = db.employees || [];
+
+    // departmentId is architecturally part of the initial EmploymentRecord, not the raw
+    // Employee record, but it is a required field from the Create Employee form's point
+    // of view — validate against the merged candidate payload.
+    const { isValid, errors } = validateEmployeeCreation(
+      { ...employeeData, departmentId: initialRecordData.departmentId },
+      existingEmployees
+    );
+    if (!isValid) {
+      throw new Error(Object.values(errors).join(', '));
+    }
+
+    const allTypes = db.employeeTypes || [];
+    const employeeTypeId = resolveEmployeeTypeIdForDirectoryType(employeeData.directoryType, allTypes);
+    if (!employeeTypeId) {
+      throw new Error(`Validation Error: No active Employment Type is configured for "${employeeData.directoryType}".`);
+    }
+
+    const { id: newId, employeeId: empCode } = generateNextEmployeeIdentifiers(existingEmployees);
+    const firstName = employeeData.firstName.trim();
+    const lastName = employeeData.lastName.trim();
+
+    const newEmp = {
+      id: newId,
+      employeeId: empCode,
+      firstName,
+      lastName,
+      fullName: `${firstName} ${lastName}`.trim(),
+      workEmail: employeeData.workEmail.trim().toLowerCase(),
+      workPhone: (employeeData.workPhone || '').trim(),
+      icPassportNumber: (employeeData.icPassportNumber || '').trim(),
+      homeAddress: (employeeData.homeAddress || '').trim(),
+      photo: `${(firstName[0] || '').toUpperCase()}${(lastName[0] || '').toUpperCase()}`,
+      employeeTypeId,
+      status: employeeData.status,
+      workMode: employeeData.workMode,
+      allowance: employeeData.allowance,
+      startDate: employeeData.startDate,
+      contractEndDate: employeeData.contractEndDate || null,
+      notes: (employeeData.notes || '').trim(),
+      tags: [],
+    };
+
+    const newRec = {
+      id: `rec-${newId.replace('emp-', '')}-1`,
+      employeeId: newId,
+      departmentId: initialRecordData.departmentId || null,
+      positionId: initialRecordData.positionId || null,
+      managerId: initialRecordData.managerId || null,
+      supervisorId: initialRecordData.supervisorId || null,
+      locationId: initialRecordData.locationId || null,
+      scheduleId: initialRecordData.scheduleId || null,
+      effectiveFrom: newEmp.startDate,
+      effectiveTo: null,
+      changeReason: 'Initial Hire',
+    };
+
+    db.employees = [...existingEmployees, newEmp];
+    db.employmentRecords = [...(db.employmentRecords || []), newRec];
+    saveDatabase(db);
+
+    return this.getById(newId);
+  },
+
+  /**
+   * Refreshes Employees Directory data from the current source of truth.
+   *
+   * CURRENT (PoC, no backend): re-reads the local storage-engine database, identically
+   * to getAll(). FUTURE: swap the implementation to fetch the latest employees from a
+   * backend API/database — the call signature and hydrated-array return shape stay the
+   * same, so callers (the Sync Employees button) require no changes when that happens.
+   *
+   * @param {Object} [options]
+   * @returns {Promise<Array<Object>>}
+   */
+  async syncEmployees(options = {}) {
+    return this.getAll({ hydrate: true, ...options });
   },
 };
 

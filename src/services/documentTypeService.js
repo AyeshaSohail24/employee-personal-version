@@ -1,4 +1,5 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
+import { calculateDocumentTypeReferences } from '../domain/documentTypeDomain.js';
 
 /**
  * Service providing asynchronous data access and CRUD operations for DocumentType entities.
@@ -71,6 +72,11 @@ export const documentTypeService = {
     const db = loadDatabase();
     if (!db.documentTypes) return false;
 
+    const refs = calculateDocumentTypeReferences(id, db);
+    if (refs.totalReferences > 0) {
+      throw new Error(`Cannot delete Document Type "${id}" because it is referenced.`);
+    }
+
     const index = db.documentTypes.findIndex((d) => d.id === id);
     if (index === -1) return false;
 
@@ -79,3 +85,4 @@ export const documentTypeService = {
     return true;
   },
 };
+

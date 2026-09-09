@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext } from 'react';
 import { ROLES as DOMAIN_ROLES, CANONICAL_ROLES, hasCapability as checkCapability } from '../domain/permissionDomain';
 
 const RoleContext = createContext();
@@ -6,7 +6,8 @@ const RoleContext = createContext();
 export const ROLES = DOMAIN_ROLES;
 
 export function RoleProvider({ children }) {
-  const [currentRole, setCurrentRole] = useState(ROLES.HR_ADMIN);
+  const currentRole = ROLES.HR;
+  const setCurrentRole = () => {};
 
   const hasCapability = (capabilityKey) => checkCapability(currentRole, capabilityKey);
 
@@ -14,9 +15,9 @@ export function RoleProvider({ children }) {
     currentRole,
     setCurrentRole,
     roles: CANONICAL_ROLES,
-    isManager: currentRole === ROLES.MANAGER,
-    isHR: currentRole === ROLES.HR,
-    isHRAdmin: currentRole === ROLES.HR_ADMIN,
+    isManager: false,
+    isHR: true,
+    isHRAdmin: false,
     hasCapability,
   };
 
@@ -30,3 +31,4 @@ export function useRole() {
   }
   return context;
 }
+
