@@ -4036,6 +4036,29 @@ input.form-control:focus {
   background-color: var(--color-primary-hover);
 }
 
+/* Destructive confirm action (e.g. "Delete" in a permanent-delete confirmation modal) — same
+   shape/weight as .btn-primary, red instead of teal so it reads as irreversible. */
+.btn-danger {
+  padding: 0.5rem 1rem;
+  border: none;
+  background-color: #DC2626;
+  color: #FFFFFF;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-danger:hover {
+  background-color: #B91C1C;
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Override Audit History List */
 .history-list {
   display: flex;
@@ -5252,9 +5275,186 @@ input.form-control:focus {
   }
 }
 
+/* ==========================================================================
+   Notes workspace (personal HR notepad — replaces the old Activities module)
+   ========================================================================== */
 
+.notes-toolbar {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+}
 
+.notes-toolbar-search {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
 
+.notes-toolbar .custom-select-container {
+  flex: 0 0 auto;
+  min-width: 170px;
+}
+
+.notes-empty-state {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+@media (max-width: 1200px) {
+  .notes-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .notes-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.note-card {
+  background-color: var(--bg-card);
+  border: 1px solid #D6DEE8;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.15rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+.note-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: #C7D2DE;
+  transform: translateY(-1px);
+}
+
+/* Color accent — a thin top border only; the card body stays neutral/professional. */
+.note-card--accent-teal { border-top: 3px solid var(--color-primary); }
+.note-card--accent-blue { border-top: 3px solid #2563EB; }
+.note-card--accent-green { border-top: 3px solid #059669; }
+.note-card--accent-amber { border-top: 3px solid #D97706; }
+.note-card--accent-purple { border-top: 3px solid #7C3AED; }
+
+.note-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.note-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.35;
+}
+
+.note-card-pin-indicator {
+  flex-shrink: 0;
+  color: var(--color-primary);
+  margin-top: 0.2rem;
+}
+
+.note-category-badge {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--color-primary-light);
+  color: var(--color-primary-active);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.note-content-preview {
+  margin: 0;
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.note-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-primary-active);
+  background: #F0FDFA;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+}
+
+.note-card-footer {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.note-updated-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.note-card-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+/* Note Editor Modal */
+.note-editor-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .note-editor-field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.note-editor-content-area {
+  min-height: 280px;
+  resize: vertical;
+}
 
 
 

@@ -5,10 +5,6 @@ import { auditService, AUDIT_ACTIONS } from './auditService.js';
 import {
   filterActivities,
   sortActivities,
-  resolveDueState,
-  validateActivity,
-  ACTIVITY_SOURCES,
-  ACTIVITY_DUE_STATES,
 } from '../domain/activityDomain.js';
 import { getTodayLocalDateString } from '../utils/dateUtils.js';
 
@@ -137,17 +133,6 @@ export const activityService = {
   },
 
   /**
-   * Helper to fetch activities assigned to the specified user.
-   */
-  async getMyActivities(assigneeId, options = {}) {
-    return this.getAll({
-      ...options,
-      scope: 'my',
-      currentUserId: assigneeId,
-    });
-  },
-
-  /**
    * Helper to fetch overdue incomplete activities.
    */
   async getOverdueActivities(referenceDate = getTodayLocalDateString(), options = {}) {
@@ -156,102 +141,6 @@ export const activityService = {
       scope: 'overdue',
       referenceDate,
     });
-  },
-
-  /**
-   * Creates a new manual activity.
-   */
-  async create(activityData = {}, currentUserId = 'emp-001') {
-    const { isValid, errors } = validateActivity(activityData);
-    if (!isValid) {
-      const errorMsg = Object.values(errors).join(', ');
-      throw new Error(`Validation failed: ${errorMsg}`);
-    }
-
-    const db = loadDatabase();
-    const activities = db.activities || [];
-
-    const newId = `act-${String(activities.length + 1).padStart(3, '0')}`;
-    const nowIso = new Date().toISOString();
-
-    const newActivity = {
-      id: newId,
-      typeId: activityData.typeId,
-      title: activityData.title.trim(),
-      description: (activityData.description || activityData.notes || '').trim(),
-      employeeId: activityData.employeeId,
-      assigneeId: activityData.assigneeId,
-      dueDate: activityData.dueDate,
-      completed: false,
-      completedAt: null,
-      completedBy: null,
-      source: activityData.source || ACTIVITY_SOURCES.MANUAL,
-      sourceEntityType: activityData.sourceEntityType || null,
-      sourceEntityId: activityData.sourceEntityId || null,
-      createdAt: nowIso,
-      createdBy: currentUserId,
-      updatedAt: nowIso,
-    };
-
-    db.activities = [newActivity, ...activities];
-    saveDatabase(db);
-
-    // Audit log integration
-    try {
-      await auditService.logAction(
-        currentUserId,
-        AUDIT_ACTIONS.ACTIVITY_CREATED || 'ACTIVITY_CREATED',
-        'Activity',
-        newId,
-        `Created activity "${newActivity.title}" for ${newActivity.dueDate}`
-      );
-    } catch (auditErr) {
-      // Graceful fallback if audit action key varies
-    }
-
-    return this.getById(newId);
-  },
-
-  /**
-   * Updates an existing activity record.
-   */
-  async update(id, updateData = {}, currentUserId = 'emp-001') {
-    const db = loadDatabase();
-    const activities = db.activities || [];
-    const index = activities.findIndex((a) => a.id === id);
-
-    if (index === -1) {
-      throw new Error(`Activity with ID "${id}" not found.`);
-    }
-
-    const existing = activities[index];
-    const updatedRecord = {
-      ...existing,
-      ...updateData,
-      title: updateData.title ? updateData.title.trim() : existing.title,
-      description: updateData.description !== undefined
-        ? updateData.description.trim()
-        : (updateData.notes !== undefined ? updateData.notes.trim() : existing.description),
-      sourceEntityType: updateData.sourceEntityType !== undefined ? updateData.sourceEntityType : existing.sourceEntityType,
-      sourceEntityId: updateData.sourceEntityId !== undefined ? updateData.sourceEntityId : existing.sourceEntityId,
-      updatedAt: new Date().toISOString(),
-    };
-
-    activities[index] = updatedRecord;
-    db.activities = activities;
-    saveDatabase(db);
-
-    try {
-      await auditService.logAction(
-        currentUserId,
-        AUDIT_ACTIONS.ACTIVITY_UPDATED || 'ACTIVITY_UPDATED',
-        'Activity',
-        id,
-        `Updated activity "${updatedRecord.title}"`
-      );
-    } catch (auditErr) {}
-
-    return this.getById(id);
   },
 
   /**
@@ -352,36 +241,5 @@ export const activityService = {
     }
 
     return this.getById(id);
-  },
-
-  /**
-   * Calculates KPI summary counts (Overdue, Due Today, Upcoming, Completed) for the target population.
-   */
-  async getSummaryStats(options = {}) {
-    const { scope = 'all', currentUserId = null, referenceDate = getTodayLocalDateString() } = options;
-    const allActivities = await this.getAll({ scope, currentUserId, referenceDate });
-
-    const stats = {
-      overdueCount: 0,
-      dueTodayCount: 0,
-      upcomingCount: 0,
-      completedCount: 0,
-      totalCount: allActivities.length,
-    };
-
-    allActivities.forEach((act) => {
-      const state = resolveDueState(act, referenceDate);
-      if (state === ACTIVITY_DUE_STATES.COMPLETED) {
-        stats.completedCount += 1;
-      } else if (state === ACTIVITY_DUE_STATES.DUE_TODAY) {
-        stats.dueTodayCount += 1;
-      } else if (state === ACTIVITY_DUE_STATES.OVERDUE) {
-        stats.overdueCount += 1;
-      } else if (state === ACTIVITY_DUE_STATES.UPCOMING) {
-        stats.upcomingCount += 1;
-      }
-    });
-
-    return stats;
   },
 };

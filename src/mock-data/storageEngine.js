@@ -18,6 +18,7 @@ import { seedOffboardingPlanInstances, seedOffboardingTaskInstances } from './se
 import { seedDocumentTypes } from './seedDocumentTypes.js';
 import { seedUpcomingCandidates } from './seedUpcomingCandidates.js';
 import { seedEmailTemplates } from './seedEmailTemplates.js';
+import { seedNotes } from './seedNotes.js';
 
 const STORAGE_KEY = 'rizurf_hr_poc_v1';
 let inMemoryDb = null;
@@ -341,6 +342,7 @@ function getInitialState() {
     upcomingCandidates: seedUpcomingCandidates,
     emailTemplates: seedEmailTemplates,
     candidateEmailLog: [],
+    notes: seedNotes,
   };
   const migrated = migrateEmployeeTagsIfNeeded(base);
   const cleanedAtt = cleanupAttendanceIfNeeded(migrated);
@@ -382,6 +384,7 @@ export function loadDatabase() {
     if (!parsed.upcomingCandidates) parsed.upcomingCandidates = seedUpcomingCandidates;
     if (!parsed.emailTemplates) parsed.emailTemplates = seedEmailTemplates;
     if (!parsed.candidateEmailLog) parsed.candidateEmailLog = [];
+    if (!parsed.notes) parsed.notes = seedNotes;
 
     const migrated = migrateEmployeeTagsIfNeeded(parsed);
     const cleanedAtt = cleanupAttendanceIfNeeded(migrated);

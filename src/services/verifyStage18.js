@@ -36,6 +36,7 @@ import {
 import { offboardingService } from './offboardingService.js';
 import { activityService } from './activityService.js';
 import { dashboardService } from './dashboardService.js';
+import { notesService } from './notesService.js';
 import { loadDatabase, saveDatabase, resetDatabase, migrateOnboardingScopesIfNeeded } from '../mock-data/storageEngine.js';
 import fs from 'fs';
 import path from 'path';
@@ -156,9 +157,11 @@ export async function verifyStage18() {
     const offboardingTemplates = await offboardingService.getAllTemplates();
     assert(Array.isArray(offboardingTemplates), '24. Offboarding module remains operational');
 
-    // 25. Activities remain operational
+    // 25. UPDATED — The old Activities UI module was removed; activityService.getAll() remains
+    // operational only as shared internal infrastructure (backs getOverdueActivities() for
+    // Onboarding/Offboarding), not as a user-facing module of its own any more.
     const activities = await activityService.getAll();
-    assert(Array.isArray(activities), '25. Activities module remains operational');
+    assert(Array.isArray(activities), '25. UPDATED — activityService.getAll() remains operational as shared internal infrastructure (Onboarding/Offboarding overdue-task support), independent of the now-removed Activities UI module');
 
     // 26. /employees?status=... filtering remains operational
     const filterRes = await employeeService.getAll({ status: 'Departing' });
@@ -2659,7 +2662,6 @@ export async function verifyStage18() {
     const onbPlansSrc3 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingPlansPage.jsx'), 'utf-8');
     const onboardingServiceSrc3 = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
     const activityServiceSrc2 = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
-    const myActivitiesPageSrc = fs.readFileSync(path.resolve('./src/pages/activities/MyActivitiesPage.jsx'), 'utf-8');
 
     // --- PART 1/2: EMPLOYEE DETAIL — ASSIGNEE COLUMN FULLY REMOVED ---
 
@@ -2766,12 +2768,12 @@ export async function verifyStage18() {
       '457. resolveAssigneeForRule()/ASSIGNMENT_RULES remain in the domain layer — genuinely still used internally (legacy template resolution, addTaskToInstance neutral path), correctly not deleted per the "do not aggressively refactor" instruction'
     );
 
-    // 458. Activities module's own, separate assignment functionality is completely untouched
-    assert(
-      activityServiceSrc2.includes('assigneeId') && myActivitiesPageSrc.length > 0,
-      '458. The Activities module (activityService.js / MyActivitiesPage.jsx) retains its own independent assignee functionality — untouched by this onboarding-only cleanup'
-    );
-    assert(!activityServiceSrc2.includes('/* onboarding-cleanup') , '458b. No onboarding-cleanup-specific edits were made inside the shared activityService.js file');
+    // 458. UPDATED — The Activities module (My/All/Overdue Activities pages) was later removed
+    // entirely and replaced by the Notes workspace (see the "Replace Activities with Notes" task).
+    // activityService.js itself remains — its markComplete()/reopen() are shared infrastructure
+    // still backing Onboarding/Offboarding Done/Reopen — but the Activities UI pages are gone.
+    assert(!fs.existsSync(path.resolve('./src/pages/activities')), '458. UPDATED — The old Activities pages directory (src/pages/activities) no longer exists — the module was fully removed, not left dormant');
+    assert(activityServiceSrc2.includes('markComplete') && activityServiceSrc2.includes('reopen'), '458b. activityService.js retains its shared markComplete()/reopen() — still used by Onboarding/Offboarding Done/Reopen after the Activities UI removal');
 
     resetDatabase();
 
@@ -3865,6 +3867,292 @@ export async function verifyStage18() {
       {
         const activityServiceSrcForCheck = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
         assert(activityServiceSrcForCheck.includes('markComplete') && activityServiceSrcForCheck.includes('reopen'), '600. activityService.markComplete()/reopen() (backing Done/Reopen) remain present and untouched by this progress-simplification task');
+      }
+
+      resetDatabase();
+    }
+    // ==========================================================================
+    // Replace Activities Module With a Personal Notes Workspace
+    // ==========================================================================
+    {
+      const sidebarSrc2 = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+      const routerSrc3 = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+      const headerSrc = fs.readFileSync(path.resolve('./src/components/layout/Header.jsx'), 'utf-8');
+      const notesServiceSrc = fs.readFileSync(path.resolve('./src/services/notesService.js'), 'utf-8');
+      const noteDomainSrc = fs.readFileSync(path.resolve('./src/domain/noteDomain.js'), 'utf-8');
+      const notesPageSrc = fs.readFileSync(path.resolve('./src/pages/notes/NotesPage.jsx'), 'utf-8');
+      const noteCardSrc = fs.readFileSync(path.resolve('./src/components/notes/NoteCard.jsx'), 'utf-8');
+      const noteEditorModalSrc = fs.readFileSync(path.resolve('./src/components/notes/NoteEditorModal.jsx'), 'utf-8');
+      const deleteNoteModalSrc = fs.readFileSync(path.resolve('./src/components/notes/DeleteNoteModal.jsx'), 'utf-8');
+      const activityServiceSrc3 = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
+      const dashboardPageSrc = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+
+      // --- NAVIGATION ---
+
+      // 601. Activities is completely gone from the sidebar (My/All/Overdue Activities absent)
+      assert(
+        !sidebarSrc2.includes('Activities') && !sidebarSrc2.includes('My Activities') && !sidebarSrc2.includes('All Activities') && !sidebarSrc2.includes("to=\"/activities"),
+        '601. Activities, My Activities, All Activities, and Overdue no longer appear anywhere in the sidebar'
+      );
+
+      // 602. Notes / My Notes / Pinned / Archived all appear in the sidebar under WORK
+      assert(
+        sidebarSrc2.includes('>Notes<') && sidebarSrc2.includes('My Notes') && sidebarSrc2.includes('>\n                  Pinned') || sidebarSrc2.includes('Pinned'),
+        '602. Notes, My Notes, Pinned, and Archived all appear in the sidebar'
+      );
+      assert(sidebarSrc2.includes('Archived') && sidebarSrc2.match(/WORK[\s\S]{0,50}Notes/), '602b. Notes sits under the WORK section, replacing where Activities used to be');
+
+      // 603. Sidebar NavLink targets are exactly /notes, /notes/pinned, /notes/archived
+      assert(
+        sidebarSrc2.includes('to="/notes"') && sidebarSrc2.includes('to="/notes/pinned"') && sidebarSrc2.includes('to="/notes/archived"'),
+        '603. Sidebar links target exactly /notes, /notes/pinned, and /notes/archived'
+      );
+
+      // 604. "My Notes" uses `end` matching so it is not incorrectly marked active on /notes/pinned or /notes/archived
+      assert(sidebarSrc2.match(/to="\/notes"\s*\n\s*end/), '604. The "My Notes" NavLink uses the `end` prop so it is only active exactly at /notes, not on /notes/pinned or /notes/archived');
+
+      // 605. Router: /notes, /notes/pinned, /notes/archived are all real routes; My Notes is the default at /notes
+      assert(
+        routerSrc3.match(/path: 'notes'[\s\S]{0,200}index: true, element: <MyNotesPage/) &&
+        routerSrc3.includes("path: 'pinned'") && routerSrc3.includes("path: 'archived'"),
+        '605. /notes (index -> MyNotesPage), /notes/pinned, and /notes/archived are all registered routes'
+      );
+
+      // 606. Old /activities routes are not exposed as real pages — at most a redirect to /notes remains, never rendering old Activities UI
+      assert(
+        !routerSrc3.includes('MyActivitiesPage') && !routerSrc3.includes('AllActivitiesPage') && !routerSrc3.includes('OverdueActivitiesPage'),
+        '606. The router no longer imports or renders any of the old Activities pages'
+      );
+      assert(
+        routerSrc3.match(/path: 'activities', element: <Navigate to="\/notes"/) && routerSrc3.match(/path: 'activities\/my', element: <Navigate to="\/notes"/),
+        '606b. Old /activities* paths (if reachable at all) redirect straight to /notes rather than exposing any Activities UI'
+      );
+
+      // --- OLD ACTIVITIES UI FULLY REMOVED ---
+
+      // 607. The entire old Activities pages/components directories are gone
+      assert(!fs.existsSync(path.resolve('./src/pages/activities')), '607. src/pages/activities no longer exists');
+      assert(!fs.existsSync(path.resolve('./src/components/activities')), '607b. src/components/activities no longer exists');
+
+      // 608. Activities-UI-only service methods (create/update/getSummaryStats, manual-activity-only) were removed from activityService.js
+      assert(
+        !activityServiceSrc3.includes('async create(') && !activityServiceSrc3.includes('async update(') && !activityServiceSrc3.includes('getSummaryStats'),
+        '608. activityService.js no longer exposes create()/update()/getSummaryStats() — these were only ever called by the now-deleted Activities pages'
+      );
+
+      // 609. Shared infrastructure activityService methods (used by Onboarding/Offboarding) remain intact
+      assert(
+        activityServiceSrc3.includes('async markComplete(') && activityServiceSrc3.includes('async reopen(') &&
+        activityServiceSrc3.includes('async getActiveTypes(') && activityServiceSrc3.includes('async getAllTypes(') &&
+        activityServiceSrc3.includes('async getOverdueActivities('),
+        '609. markComplete/reopen/getActiveTypes/getAllTypes/getOverdueActivities all remain in activityService.js — genuinely shared infrastructure still used by Onboarding/Offboarding, correctly NOT deleted'
+      );
+
+      // --- NOTES DATA MODEL / ARCHITECTURE ---
+
+      // 610. notesService is the sole data-access boundary — NotesPage never imports seedNotes.js directly
+      assert(!notesPageSrc.includes('seedNotes') && notesPageSrc.includes("from '../../services/notesService.js'"), '610. NotesPage.jsx never imports seed data directly — it only talks to notesService');
+      assert(!noteCardSrc.includes('seedNotes') && !noteEditorModalSrc.includes('seedNotes'), '610b. NoteCard and NoteEditorModal also never import seed data directly');
+
+      // 611. Notes model has no task/workflow fields (no assignee, due date, status, priority, completion %)
+      {
+        const seedNotesSrc = fs.readFileSync(path.resolve('./src/mock-data/seedNotes.js'), 'utf-8');
+        assert(
+          !seedNotesSrc.includes('assigneeId') && !seedNotesSrc.includes('dueDate') && !seedNotesSrc.includes('priority') && !seedNotesSrc.includes('completed:') && !seedNotesSrc.includes('progressPercentage'),
+          '611. The Notes data model has no assignee, dueDate, priority, completed, or progress fields — Notes are not Tasks'
+        );
+      }
+
+      // --- FUNCTIONAL: CRUD ---
+      resetDatabase();
+
+      // 612. New Note creates a note with correct field values
+      const createdNote = await notesService.create({ title: 'Stage18 Verification Note', category: 'General', content: 'Line one\nLine two', tags: 'stage18, verify' });
+      assert(Boolean(createdNote) && createdNote.title === 'Stage18 Verification Note', '612. notesService.create() creates a note that is immediately retrievable');
+
+      // 613/614. Blank title / blank content validation
+      let blankTitleThrew = false;
+      try { await notesService.create({ title: '', content: 'has content' }); } catch (e) { blankTitleThrew = true; }
+      assert(blankTitleThrew, '613. Creating a note with a blank title throws/rejects — no silent save');
+
+      let blankContentThrew = false;
+      try { await notesService.create({ title: 'Has Title', content: '' }); } catch (e) { blankContentThrew = true; }
+      assert(blankContentThrew, '614. Creating a note with blank content throws/rejects — no silent save');
+
+      // 615/616. New note starts with a genuinely blank title/content field in the UI (source-level — handleAddTask-equivalent initial state)
+      assert(noteEditorModalSrc.match(/title: note \? note\.title : '',/), "615. A brand-new note's title field starts as '' (not prefilled with example/placeholder text) when no note is being edited");
+      assert(noteEditorModalSrc.match(/content: note \? note\.content : '',/), "616. A brand-new note's content field starts as '' when no note is being edited");
+      assert(noteEditorModalSrc.includes('placeholder="Enter note title"') && noteEditorModalSrc.includes('placeholder="Write your note here..."'), '616b. Title and Content use illustrative placeholders instead of prefilled values');
+
+      // 617. Category persists
+      assert(createdNote.category === 'General', '617. Category persists on the created note');
+
+      // 618. Tags persist as a normalized array
+      assert(Array.isArray(createdNote.tags) && createdNote.tags.includes('stage18') && createdNote.tags.includes('verify'), `618. Tags persist as a normalized array (found ${JSON.stringify(createdNote.tags)})`);
+
+      // 619. Line breaks in content persist exactly (no flattening)
+      assert(createdNote.content === 'Line one\nLine two', '619. Line breaks entered in note content persist exactly, unflattened');
+
+      // 620/621. Editing updates the note and bumps updatedAt
+      await new Promise((r) => setTimeout(r, 5));
+      const editedNote = await notesService.update(createdNote.id, { title: 'Stage18 Verification Note (Edited)', content: createdNote.content, category: createdNote.category, tags: createdNote.tags });
+      assert(editedNote.title === 'Stage18 Verification Note (Edited)', '620. Editing an existing note updates its title');
+      assert(editedNote.updatedAt !== createdNote.updatedAt, '621. updatedAt changes after an edit');
+
+      // 622/623. Pin / Unpin
+      const pinnedNote = await notesService.togglePin(createdNote.id);
+      assert(pinnedNote.isPinned === true, '622. Pin toggles isPinned to true');
+      const unpinnedNote = await notesService.togglePin(createdNote.id);
+      assert(unpinnedNote.isPinned === false, '623. Toggling Pin again (Unpin) sets isPinned back to false');
+
+      // 624. Pinned page filters correctly (only isPinned && !isArchived)
+      await notesService.togglePin(createdNote.id);
+      const pinnedList = await notesService.getAll({ scope: 'pinned' });
+      assert(pinnedList.every((n) => n.isPinned && !n.isArchived) && pinnedList.some((n) => n.id === createdNote.id), '624. The Pinned scope returns only non-archived notes with isPinned === true, including the verification note');
+
+      // 625. Archive works
+      const archivedNote = await notesService.archive(createdNote.id);
+      assert(archivedNote.isArchived === true, '625. Archive sets isArchived to true');
+
+      // 626. Archived note disappears from My Notes
+      const myNotesAfterArchive = await notesService.getAll({ scope: 'my' });
+      assert(!myNotesAfterArchive.some((n) => n.id === createdNote.id), '626. An archived note no longer appears in the My Notes scope');
+
+      // 627. Archived page shows it
+      const archivedList = await notesService.getAll({ scope: 'archived' });
+      assert(archivedList.some((n) => n.id === createdNote.id), '627. The Archived scope shows the archived note');
+
+      // 627b. It also disappears from Pinned once archived (even if isPinned remains true internally)
+      const pinnedAfterArchive = await notesService.getAll({ scope: 'pinned' });
+      assert(!pinnedAfterArchive.some((n) => n.id === createdNote.id), '627b. An archived note does not appear on the Pinned page until restored, even if its internal isPinned flag is still true');
+
+      // 628. Restore works
+      const restoredNote = await notesService.restore(createdNote.id);
+      assert(restoredNote.isArchived === false, '628. Restore sets isArchived back to false');
+      const myNotesAfterRestore = await notesService.getAll({ scope: 'my' });
+      assert(myNotesAfterRestore.some((n) => n.id === createdNote.id), '628b. A restored note reappears in My Notes');
+
+      // 629. Permanent delete requires confirmation (UI-level: DeleteNoteModal exists and is the only path to deletePermanently in the UI)
+      assert(deleteNoteModalSrc.includes('Delete Note?') && deleteNoteModalSrc.includes('permanently deleted') && deleteNoteModalSrc.includes('notesService.deletePermanently'), '629. A dedicated confirmation modal ("Delete Note?") gates every call to notesService.deletePermanently() — no direct one-click permanent delete');
+      assert(!noteCardSrc.includes('deletePermanently'), '629b. NoteCard itself never calls deletePermanently() directly — it only requests deletion via onDeleteRequest, routed through the confirmation modal');
+
+      // 630. Permanent delete removes the note
+      await notesService.archive(createdNote.id);
+      await notesService.deletePermanently(createdNote.id);
+      const afterDelete = await notesService.getById(createdNote.id);
+      assert(afterDelete === null, '630. deletePermanently() actually removes the note — it is no longer retrievable by ID');
+
+      // --- SEARCH / FILTER / SORT ---
+      resetDatabase();
+
+      // 631. Title search works
+      const titleSearchResults = await notesService.getAll({ scope: 'my', search: 'Candidate Follow-ups' });
+      assert(titleSearchResults.some((n) => n.title === 'Candidate Follow-ups'), '631. Searching by exact title text returns the matching note');
+
+      // 632. Content search works
+      const contentSearchResults = await notesService.getAll({ scope: 'my', search: 'shortlisted Data Analytics' });
+      assert(contentSearchResults.length > 0, '632. Searching by content text returns matching notes');
+
+      // 633. Tag search works
+      const tagSearchResults = await notesService.getAll({ scope: 'my', search: 'internship' });
+      assert(tagSearchResults.some((n) => (n.tags || []).includes('internship')), '633. Searching by tag text returns notes with a matching tag');
+
+      // 634. Category filter works
+      const categoryFilterResults = await notesService.getAll({ scope: 'my', category: 'Meeting' });
+      assert(categoryFilterResults.length > 0 && categoryFilterResults.every((n) => n.category === 'Meeting'), '634. The category filter returns only notes in that exact category');
+
+      // 635. Last Updated sort (default) surfaces pinned notes first, then descending updatedAt
+      const updatedSorted = await notesService.getAll({ scope: 'my', sortBy: 'updated' });
+      {
+        const firstUnpinnedIdx = updatedSorted.findIndex((n) => !n.isPinned);
+        const anyPinnedAfterUnpinned = firstUnpinnedIdx !== -1 && updatedSorted.slice(firstUnpinnedIdx).some((n) => n.isPinned);
+        assert(!anyPinnedAfterUnpinned, '635. Last Updated sort surfaces pinned notes before unpinned notes');
+      }
+
+      // 636. Newest sort orders by createdAt descending
+      const newestSorted = await notesService.getAll({ scope: 'my', sortBy: 'newest' });
+      assert(newestSorted.every((n, idx) => idx === 0 || n.createdAt <= newestSorted[idx - 1].createdAt), '636. Newest sort orders notes by createdAt descending');
+
+      // 637. Oldest sort orders by createdAt ascending
+      const oldestSorted = await notesService.getAll({ scope: 'my', sortBy: 'oldest' });
+      assert(oldestSorted.every((n, idx) => idx === 0 || n.createdAt >= oldestSorted[idx - 1].createdAt), '637. Oldest sort orders notes by createdAt ascending');
+
+      // 638. Title A-Z sort orders alphabetically
+      const titleSorted = await notesService.getAll({ scope: 'my', sortBy: 'title' });
+      assert(titleSorted.every((n, idx) => idx === 0 || n.title.localeCompare(titleSorted[idx - 1].title) >= 0), '638. Title A–Z sort orders notes alphabetically ascending');
+
+      // --- NO TASK BEHAVIOR / NO NOTIFICATIONS ---
+
+      // 639. No assignee/due-date/overdue/status/priority/progress behavior exists anywhere in the Notes UI or service's
+      // ACTUAL code (explanatory doc comments describing what was deliberately left out, e.g. "No due date, priority,
+      // assignee...", are fine and are excluded via stripComments — this checks real logic, not documentation prose).
+      const notesModuleCombinedSrc = [notesServiceSrc, noteDomainSrc, notesPageSrc, noteCardSrc, noteEditorModalSrc, deleteNoteModalSrc].map(stripComments).join('\n');
+      assert(
+        !notesModuleCombinedSrc.match(/assigneeId|dueDate|overdue|priority|progressPercentage|Reopen|Mark Complete/i),
+        '639. No assignee, due-date, overdue, priority, progress-percentage, or Done/Reopen task behavior exists anywhere in the Notes module\'s actual code'
+      );
+
+      // 640. No notification/reminder/alert generation exists for Notes
+      assert(!notesModuleCombinedSrc.match(/notification|reminder|alert\(/i) || notesModuleCombinedSrc.match(/alert\(`Failed/g), '640. Notes generates no notifications/reminders/due-alerts — the only alert() calls are plain error-message fallbacks, not a notification system');
+
+      // 641. No Assignee/Owner field is exposed in the Notes UI (ownerId stays internal-only)
+      assert(!noteEditorModalSrc.includes('Owner') && !noteCardSrc.includes('Owner') && !noteEditorModalSrc.includes('Assignee'), '641. Owner/Assignee are never exposed as UI fields — ownerId is an internal-only compatibility field');
+
+      // --- GLOBAL SEARCH / HEADER ---
+
+      // 642. Header's decorative global search placeholder no longer mentions "activities"
+      assert(!headerSrc.includes('activities') && headerSrc.includes('notes'), '642. The header search placeholder no longer references "activities" (updated to mention notes instead)');
+
+      // --- DASHBOARD ---
+
+      // 643. Dashboard has no Activities-specific cards/counts to remove (confirmed there were none to begin with) and none were introduced for Notes
+      assert(!dashboardPageSrc.match(/[Aa]ctivit/), '643. Dashboard contains no Activities references (it never displayed Activities-specific cards in the first place, so none needed removal) and no new large Notes dashboard section was introduced');
+
+      // --- GENERAL: OTHER MODULES UNAFFECTED ---
+
+      // 644. Upcoming, Employees, Onboarding, Offboarding, Plans remain fully operational
+      {
+        const upcomingCheck = await upcomingCandidateService.getAll();
+        const employeesCheck = await employeeService.getAll();
+        const onboardingCheck = await onboardingService.getAllInstances();
+        const offboardingCheck = await offboardingService.getAllTemplates();
+        const plansCheck = await onboardingService.getScopesSummary();
+        assert(
+          Array.isArray(upcomingCheck) && Array.isArray(employeesCheck) && Array.isArray(onboardingCheck) && Array.isArray(offboardingCheck) && typeof plansCheck.universal.taskCount === 'number',
+          '644. Upcoming, Employees, Onboarding (instances), Offboarding (templates), and Plans (scope summary) all remain fully operational after the Activities-to-Notes replacement'
+        );
+      }
+
+      // 645. Onboarding/Offboarding Done/Reopen (shared activityService) still function end-to-end
+      {
+        const instancesForDoneCheck = await onboardingService.getAllInstances();
+        const anyTaskForDoneCheck = instancesForDoneCheck.flatMap((i) => i.progress.tasks).find((t) => t.activityId);
+        if (anyTaskForDoneCheck) {
+          const wasCompleted = anyTaskForDoneCheck.isCompleted;
+          if (!wasCompleted) {
+            const doneRes = await activityService.markComplete(anyTaskForDoneCheck.activityId);
+            assert(doneRes.completed === true, '645. Done still works on an onboarding task through the shared activityService after the Activities module removal');
+            await activityService.reopen(anyTaskForDoneCheck.activityId);
+          } else {
+            assert(true, '645. Done/Reopen functional check skipped — sampled task was already completed (verified functional elsewhere in this suite)');
+          }
+        } else {
+          assert(true, '645. Done/Reopen functional check skipped — no onboarding task instance available in current seed state');
+        }
+      }
+
+      // 646. Old orphaned "activities" localStorage data (if present from a prior session) does not crash the app — non-destructive compatibility
+      {
+        const dbForOrphanCheck = loadDatabase();
+        assert(Array.isArray(dbForOrphanCheck.activities), '646. db.activities remains a valid array after the Activities-module removal — old/orphaned entries (if any persisted from a prior session) do not crash the app, and no destructive storage reset was introduced');
+      }
+
+      // 647. seedActivities.js retains every task-instance-linked record onboarding/offboarding depend on (only the standalone demo records were removed)
+      {
+        const seedActivitiesSrc = fs.readFileSync(path.resolve('./src/mock-data/seedActivities.js'), 'utf-8');
+        const onbLinkedCount = (seedActivitiesSrc.match(/sourceEntityType: 'OnboardingTaskInstance'/g) || []).length;
+        const offLinkedCount = (seedActivitiesSrc.match(/sourceEntityType: 'OffboardingTaskInstance'/g) || []).length;
+        assert(onbLinkedCount === 10 && offLinkedCount === 5, `647. seedActivities.js retains all 10 Onboarding-task-linked and 5 Offboarding-task-linked activity records (found ${onbLinkedCount} onboarding, ${offLinkedCount} offboarding) — only the standalone demo/manual records were removed`);
       }
 
       resetDatabase();

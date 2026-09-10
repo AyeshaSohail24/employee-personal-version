@@ -61,7 +61,7 @@ export default function Header({ toggleMobileSidebar }) {
           <input
             type="text"
             className="search-input"
-            placeholder="Search employees, activities..."
+            placeholder="Search employees, notes..."
             aria-label="Global Search"
           />
         </div>

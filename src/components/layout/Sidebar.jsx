@@ -6,7 +6,10 @@ import {
   UserPlus2,
   UserCheck,
   UserX,
-  CheckSquare,
+  NotebookPen,
+  FileText,
+  Pin,
+  Archive,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
@@ -18,7 +21,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const [openSections, setOpenSections] = useState({
     onboarding: location.pathname.startsWith('/onboarding'),
     offboarding: location.pathname.startsWith('/offboarding'),
-    activities: location.pathname.startsWith('/activities'),
+    notes: location.pathname.startsWith('/notes'),
   });
 
   React.useEffect(() => {
@@ -28,8 +31,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
     if (location.pathname.startsWith('/offboarding')) {
       setOpenSections((prev) => ({ ...prev, offboarding: true }));
     }
-    if (location.pathname.startsWith('/activities')) {
-      setOpenSections((prev) => ({ ...prev, activities: true }));
+    if (location.pathname.startsWith('/notes')) {
+      setOpenSections((prev) => ({ ...prev, notes: true }));
     }
   }, [location.pathname]);
 
@@ -165,41 +168,45 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         {/* WORK Section */}
         <div style={{ marginTop: '1.25rem' }}>
           <div className="nav-section-title">WORK</div>
-          
-          {/* Activities */}
+
+          {/* Notes — personal HR working notepad */}
           <div>
             <button
               className="nav-group-header"
-              onClick={() => toggleSection('activities')}
+              onClick={() => toggleSection('notes')}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <CheckSquare size={18} />
-                <span>Activities</span>
+                <NotebookPen size={18} />
+                <span>Notes</span>
               </span>
-              {openSections.activities ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              {openSections.notes ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
             </button>
-            {openSections.activities && (
+            {openSections.notes && (
               <div className="nav-sublist">
                 <NavLink
-                  to="/activities/my"
+                  to="/notes"
+                  end
                   className={({ isActive }) => `subnav-item ${isActive ? 'active' : ''}`}
                   onClick={closeMobile}
                 >
-                  My Activities
+                  <FileText size={14} style={{ marginRight: '0.4rem', verticalAlign: '-2px' }} />
+                  My Notes
                 </NavLink>
                 <NavLink
-                  to="/activities/all"
+                  to="/notes/pinned"
                   className={({ isActive }) => `subnav-item ${isActive ? 'active' : ''}`}
                   onClick={closeMobile}
                 >
-                  All Activities
+                  <Pin size={14} style={{ marginRight: '0.4rem', verticalAlign: '-2px' }} />
+                  Pinned
                 </NavLink>
                 <NavLink
-                  to="/activities/overdue"
+                  to="/notes/archived"
                   className={({ isActive }) => `subnav-item ${isActive ? 'active' : ''}`}
                   onClick={closeMobile}
                 >
-                  Overdue
+                  <Archive size={14} style={{ marginRight: '0.4rem', verticalAlign: '-2px' }} />
+                  Archived
                 </NavLink>
               </div>
             )}

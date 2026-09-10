@@ -23,10 +23,10 @@ import OffboardingEmployeeDetailPage from '../pages/offboarding/OffboardingEmplo
 import OffboardingPlansPage from '../pages/offboarding/OffboardingPlansPage';
 import OffboardingPlanEditorPage from '../pages/offboarding/PlanEditorPage';
 
-// Activities Pages
-import MyActivitiesPage from '../pages/activities/MyActivitiesPage';
-import AllActivitiesPage from '../pages/activities/AllActivitiesPage';
-import OverdueActivitiesPage from '../pages/activities/OverdueActivitiesPage';
+// Notes Pages (personal HR notepad — replaces the old Activities module)
+import MyNotesPage from '../pages/notes/MyNotesPage';
+import PinnedNotesPage from '../pages/notes/PinnedNotesPage';
+import ArchivedNotesPage from '../pages/notes/ArchivedNotesPage';
 
 import NotFoundPage from '../pages/NotFoundPage';
 
@@ -71,16 +71,23 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // Activities routes
+      // Notes routes (personal HR notepad)
       {
-        path: 'activities',
+        path: 'notes',
         children: [
-          { index: true, element: <Navigate to="/activities/my" replace /> },
-          { path: 'my', element: <MyActivitiesPage /> },
-          { path: 'all', element: <AllActivitiesPage /> },
-          { path: 'overdue', element: <OverdueActivitiesPage /> },
+          { index: true, element: <MyNotesPage /> },
+          { path: 'pinned', element: <PinnedNotesPage /> },
+          { path: 'archived', element: <ArchivedNotesPage /> },
         ],
       },
+
+      // Legacy Activities routes — the Activities module was removed; these are safety
+      // redirects only (not exposed anywhere in the UI) so any old bookmarked/shared link
+      // lands somewhere useful instead of a dead 404.
+      { path: 'activities', element: <Navigate to="/notes" replace /> },
+      { path: 'activities/my', element: <Navigate to="/notes" replace /> },
+      { path: 'activities/all', element: <Navigate to="/notes" replace /> },
+      { path: 'activities/overdue', element: <Navigate to="/notes" replace /> },
 
       { path: '*', element: <NotFoundPage /> },
     ],
