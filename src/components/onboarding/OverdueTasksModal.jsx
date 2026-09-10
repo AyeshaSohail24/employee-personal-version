@@ -1,0 +1,91 @@
+import React, { useEffect } from 'react';
+import { X, AlertTriangle, CheckCircle2 } from 'lucide-react';
+
+/**
+ * Overdue Onboarding Tasks popup — reached from the Dashboard's "Overdue Tasks" button
+ * instead of a permanently-visible side panel. Presentation-only: the parent page owns
+ * fetching the overdue task list (via the existing activityService.getOverdueActivities()
+ * path, filtered to source === 'Onboarding') and the Mark Complete handler, so no new
+ * overdue-task data source or calculation is introduced here.
+ */
+export default function OverdueTasksModal({ isOpen, onClose, tasks = [], onMarkComplete }) {
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card modal-scroll-shell" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title-group">
+            <div className="modal-icon-badge" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <h3 className="modal-title">Overdue Onboarding Tasks</h3>
+              <p className="modal-subtitle">Tasks requiring HR attention</p>
+            </div>
+          </div>
+          <button type="button" className="modal-close-btn" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          {tasks.length === 0 ? (
+            <div style={{ padding: '1.5rem 0', textAlign: 'center', color: '#059669', fontSize: '0.85rem' }}>
+              <CheckCircle2 size={24} style={{ marginBottom: '0.35rem' }} />
+              <div>All onboarding tasks are on schedule!</div>
+            </div>
+          ) : (
+            <div className="notification-list app-scroll-area">
+              {tasks.map((task) => (
+                <div
+                  key={task.id}
+                  style={{
+                    padding: '0.75rem',
+                    background: '#FEF2F2',
+                    borderRadius: '6px',
+                    border: '1px solid #FECACA',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.35rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.815rem', color: '#991B1B' }}>
+                      {task.title}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: '#DC2626', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      Due {task.dueDate}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.735rem', color: '#7F1D1D' }}>
+                    For: <strong>{task.relatedEmployee?.fullName || 'Employee'}</strong> · Assigned: {task.assigneeEmployee?.fullName || 'Unassigned'}
+                  </div>
+                  <div style={{ textAlign: 'right', marginTop: '0.2rem' }}>
+                    <button
+                      type="button"
+                      className="btn-compact-override"
+                      style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', backgroundColor: '#FFF', color: '#059669', borderColor: '#A7F3D0' }}
+                      onClick={() => onMarkComplete(task.id)}
+                    >
+                      Mark Complete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

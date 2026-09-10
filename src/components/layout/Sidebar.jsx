@@ -105,13 +105,6 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             {openSections.onboarding && (
               <div className="nav-sublist">
                 <NavLink
-                  to="/onboarding/dashboard"
-                  className={({ isActive }) => `subnav-item ${isActive ? 'active' : ''}`}
-                  onClick={closeMobile}
-                >
-                  Dashboard
-                </NavLink>
-                <NavLink
                   to="/onboarding/employees"
                   className={({ isActive }) => `subnav-item ${isActive ? 'active' : ''}`}
                   onClick={closeMobile}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Play, AlertTriangle, CheckCircle2, User, Calendar, FileText } from 'lucide-react';
+import { X, Play, AlertTriangle, User, Calendar, FileText } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
 import { employeeService } from '../../services/employeeService.js';
 import Select from '../common/Select.jsx';
@@ -41,6 +41,15 @@ export default function LaunchPlanModal({
       setPreview(null);
     }
   }, [selectedEmployeeId, selectedTemplateId]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const loadInitialOptions = async () => {
     try {
@@ -130,30 +139,35 @@ export default function LaunchPlanModal({
     });
 
   return (
-    <div className="modal-backdrop-overlay">
-      <div className="modal-container-card" style={{ maxWidth: '850px', width: '92%' }}>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card xl-modal modal-scroll-shell" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
-            <Play size={20} className="modal-icon-teal" />
-            <h2>Launch Onboarding Plan</h2>
+            <div className="modal-icon-badge">
+              <Play size={20} />
+            </div>
+            <div>
+              <h3 className="modal-title">Launch Onboarding Plan</h3>
+              <p className="modal-subtitle">Assign an onboarding plan to an employee or intern.</p>
+            </div>
           </div>
-          <button type="button" className="btn-icon-close" onClick={onClose}>
+          <button type="button" className="modal-close-btn" onClick={onClose}>
             <X size={18} />
           </button>
         </div>
 
-        <div className="modal-body-content" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
+        <div className="modal-body modal-body-spacious">
           {error && (
-            <div className="modal-error-alert" style={{ marginBottom: '1rem' }}>
+            <div className="modal-error-alert" style={{ marginBottom: '1.25rem' }}>
               <AlertTriangle size={16} />
               <span>{error}</span>
             </div>
           )}
 
           {/* Form Selectors */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
-            <div className="form-group">
-              <label className="form-label">Select Onboarding Employee *</label>
+          <div className="modal-field-grid-2">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Select Onboarding Employee <span className="required-star">*</span></label>
               <Select
                 variant="form"
                 value={selectedEmployeeId}
@@ -168,8 +182,8 @@ export default function LaunchPlanModal({
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Select Onboarding Template *</label>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Select Onboarding Template <span className="required-star">*</span></label>
               <Select
                 variant="form"
                 value={selectedTemplateId}
@@ -193,9 +207,9 @@ export default function LaunchPlanModal({
           )}
 
           {preview && !previewLoading && (
-            <div className="preview-container-box" style={{ background: '#F8FAFC', borderRadius: '8px', padding: '1rem', border: '1px solid #E2E8F0' }}>
+            <div style={{ background: '#F8FAFC', borderRadius: '8px', padding: '1rem', border: '1px solid #E2E8F0' }}>
               {/* Summary Header */}
-              <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1rem', background: '#FFF', padding: '0.85rem 1rem', borderRadius: '6px', border: '1px solid #E2E8F0', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1rem', background: '#FFF', padding: '0.85rem 1rem', borderRadius: '6px', border: '1px solid #E2E8F0', alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <User size={16} style={{ color: 'var(--color-primary)' }} />
                   <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{preview.employee.fullName}</span>
@@ -215,7 +229,7 @@ export default function LaunchPlanModal({
               </div>
 
               {preview.hasUnresolvedRequired && (
-                <div className="modal-warning-alert" style={{ marginBottom: '1rem', backgroundColor: '#FEF2F2', borderColor: '#FECACA', color: '#DC2626', padding: '0.75rem 1rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ marginBottom: '1rem', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', padding: '0.75rem 1rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <AlertTriangle size={16} />
                   <span style={{ fontSize: '0.815rem' }}>
                     One or more required tasks are unassigned. Please select an assignee for required tasks before launching.
@@ -262,7 +276,7 @@ export default function LaunchPlanModal({
                             )}
                           </td>
                           <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <span className="badge-timing" style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.725rem', fontWeight: 600 }}>
+                            <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.725rem', fontWeight: 600 }}>
                               Day {pt.relativeOffsetDays >= 0 ? `+${pt.relativeOffsetDays}` : pt.relativeOffsetDays}
                             </span>
                           </td>
@@ -295,7 +309,7 @@ export default function LaunchPlanModal({
           )}
         </div>
 
-        <div className="modal-footer" style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+        <div className="modal-footer modal-footer-spacious">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={loading}>
             Cancel
           </button>
@@ -307,7 +321,7 @@ export default function LaunchPlanModal({
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
           >
             <Play size={14} />
-            <span>{loading ? 'Launching Plan...' : 'Confirm & Launch Plan'}</span>
+            <span>{loading ? 'Launching Plan...' : 'Launch Onboarding Plan'}</span>
           </button>
         </div>
       </div>

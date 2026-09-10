@@ -11,7 +11,6 @@ import AllEmployeesPage from '../pages/employees/AllEmployeesPage';
 import UpcomingPage from '../pages/upcoming/UpcomingPage';
 
 // Onboarding Pages
-import OnboardingDashboardPage from '../pages/onboarding/OnboardingDashboardPage';
 import OnboardingEmployeesPage from '../pages/onboarding/OnboardingEmployeesPage';
 import OnboardingEmployeeDetailPage from '../pages/onboarding/OnboardingEmployeeDetailPage';
 import OnboardingPlansPage from '../pages/onboarding/OnboardingPlansPage';
@@ -49,8 +48,7 @@ export const router = createBrowserRouter([
       {
         path: 'onboarding',
         children: [
-          { index: true, element: <Navigate to="/onboarding/dashboard" replace /> },
-          { path: 'dashboard', element: <OnboardingDashboardPage /> },
+          { index: true, element: <Navigate to="/onboarding/employees" replace /> },
           { path: 'employees', element: <OnboardingEmployeesPage /> },
           { path: 'employees/:employeeId', element: <OnboardingEmployeeDetailPage /> },
           { path: 'plans', element: <OnboardingPlansPage /> },

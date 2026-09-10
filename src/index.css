@@ -3370,6 +3370,69 @@ body {
   max-width: 650px;
 }
 
+/* Extra-large modal size variant — extends the existing wide-modal tier for modals with
+   richer content (Launch Onboarding Plan's task preview table, Add Task's longer form). */
+.modal-card.xl-modal {
+  max-width: 1000px;
+}
+
+.modal-card.xl-modal.modal-scroll-shell {
+  max-height: 92vh;
+}
+
+/* Spacious modal body variant — generous padding and field spacing, scoped to this class so
+   the shared .form-group/.form-label spacing used across the rest of the app is untouched. */
+.modal-body-spacious {
+  padding: 1.75rem;
+}
+
+.modal-body-spacious .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.modal-body-spacious .form-label {
+  margin-bottom: 0.5rem;
+}
+
+.modal-body-spacious .modal-field-grid-2 {
+  margin-bottom: 1.5rem;
+}
+
+/* Footer variant matching the spacious body — clear separation from the scrollable content
+   above it, with comfortable padding so the action buttons don't sit flush against the edges. */
+.modal-scroll-shell > .modal-footer.modal-footer-spacious,
+.modal-scroll-shell > form > .modal-footer.modal-footer-spacious {
+  margin-top: 0;
+  padding: 1.1rem 1.75rem;
+  border-top: 1px solid var(--border-light);
+  background-color: var(--bg-subtle);
+}
+
+/* Relative Timing (Day Offset) guidance — subtle helper text, not a warning box. */
+.relative-timing-help {
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.relative-timing-help p {
+  margin: 0 0 0.4rem;
+}
+
+.relative-timing-help ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.relative-timing-help strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
 .modal-header {
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--border-light);
@@ -3947,6 +4010,39 @@ input.form-control:focus {
   .onboarding-dashboard-header .header-actions {
     width: 100%;
     justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+/* Onboarding Employees table: tighten padding/type size at the ~1024px breakpoint only, so the
+   Action column (View Progress) stays visible without horizontal scrolling wherever it reasonably
+   fits — this is a scoped override, not a change to the shared .presence-data-table used elsewhere. */
+@media (max-width: 1100px) {
+  .onboarding-employees-table thead th,
+  .onboarding-employees-table .presence-table-row td {
+    padding: 0.5rem 0.35rem;
+  }
+  .onboarding-employees-table thead th {
+    font-size: 0.68rem;
+  }
+  .onboarding-employees-table .presence-badge {
+    padding: 0.16rem 0.4rem;
+    font-size: 0.68rem;
+  }
+}
+
+/* Onboarding modal field grids (Launch Plan's Employee/Template selectors, Add Task's
+   Timing/Assignee selectors): 2 columns on comfortable widths, collapsing to 1 column on
+   narrow modals so labels/dropdowns never crowd or truncate at ~375px. */
+.modal-field-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 480px) {
+  .modal-field-grid-2 {
+    grid-template-columns: 1fr;
   }
 }
 

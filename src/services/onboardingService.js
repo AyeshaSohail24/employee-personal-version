@@ -7,9 +7,11 @@ import {
   derivePlanInstanceStatus,
   calculatePlanProgress,
   reconcilePlanInstanceCompletion,
+  resolveAssigneeForRule,
   PLAN_INSTANCE_STATUS,
 } from '../domain/onboardingDomain.js';
-import { getTodayLocalDateString } from '../utils/dateUtils.js';
+import { resolveCurrentRecord, resolveNextRecord } from '../domain/employmentDomain.js';
+import { addDaysToLocalDate, getTodayLocalDateString } from '../utils/dateUtils.js';
 
 export const onboardingService = {
   /**
@@ -365,6 +367,125 @@ export const onboardingService = {
     } catch (err) {}
 
     return this.getInstanceById(newInstId);
+  },
+
+  /**
+   * Adds a single task to ONE employee's already-launched onboarding PlanInstance.
+   * Employee-specific only — never touches onboardingPlanTasks/onboardingPlanTemplates,
+   * so the reusable template and every other employee's plan instance are unaffected.
+   * Due date reuses the same anchorDate + relativeOffsetDays math as launchPlanInstance
+   * (via addDaysToLocalDate), and assignee resolution reuses resolveAssigneeForRule() —
+   * both centralized in onboardingDomain.js rather than recalculated here.
+   */
+  async addTaskToInstance(planInstanceId, taskData = {}, currentUserId = 'emp-001') {
+    if (!taskData.title || !taskData.title.trim()) {
+      throw new Error('Task title is required.');
+    }
+
+    const db = loadDatabase();
+    const planInstances = db.onboardingPlanInstances || [];
+    const planInstance = planInstances.find((inst) => inst.id === planInstanceId);
+    if (!planInstance) {
+      throw new Error(`PlanInstance with ID "${planInstanceId}" not found.`);
+    }
+
+    const employee = await employeeService.getById(planInstance.employeeId);
+    if (!employee) {
+      throw new Error(`Employee for plan instance "${planInstanceId}" not found.`);
+    }
+
+    const records = await employmentRecordService.getAll();
+    const userAccounts = db.userAccounts || [];
+    const allEmployees = await employeeService.getAll();
+    const referenceDate = getTodayLocalDateString();
+    const currentRecord = resolveCurrentRecord(employee.id, records, referenceDate);
+    const futureRecord = resolveNextRecord(employee.id, records, referenceDate);
+    const effectiveRecord = currentRecord || futureRecord;
+
+    const relativeOffsetDays = parseInt(taskData.relativeOffsetDays || 0, 10);
+    // Manually-added employee-specific tasks don't collect an assignee rule in the UI — a
+    // falsy rule is the existing neutral default resolveAssigneeForRule() already understands
+    // (short-circuits to { assigneeId: null, assigneeName: 'Unassigned', isResolved: false }
+    // before touching any assignment logic), so no new enum/value is introduced here.
+    const assignmentRule = taskData.assignmentRule || null;
+    const specificAssigneeId = taskData.specificAssigneeId || null;
+
+    const resolution = resolveAssigneeForRule(
+      assignmentRule,
+      employee,
+      effectiveRecord,
+      userAccounts,
+      allEmployees,
+      specificAssigneeId
+    );
+
+    const calculatedDueDate = addDaysToLocalDate(planInstance.anchorDate, relativeOffsetDays);
+
+    const rawTaskInstances = db.onboardingTaskInstances || [];
+    const rawActivities = db.activities || [];
+    const existingInstTasks = rawTaskInstances.filter((t) => t.planInstanceId === planInstanceId);
+    const nextSequence = existingInstTasks.length > 0
+      ? Math.max(...existingInstTasks.map((t) => t.sequence || 0)) + 1
+      : 1;
+
+    const nowIso = new Date().toISOString();
+    const uniqueSuffix = `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 900 + 100)}`;
+    const newTiId = `ti-${planInstanceId}-manual-${uniqueSuffix}`;
+    const newActId = `act-onb-manual-${uniqueSuffix}`;
+
+    const taskInst = {
+      id: newTiId,
+      planInstanceId,
+      planTaskId: null, // manually added — not tied to a reusable plan template task
+      activityId: newActId,
+      title: taskData.title.trim(),
+      description: (taskData.description || '').trim(),
+      activityTypeId: taskData.activityTypeId || 'act-type-1',
+      assignmentRule,
+      originallyResolvedAssigneeId: resolution.assigneeId,
+      relativeOffsetDays,
+      originallyCalculatedDueDate: calculatedDueDate,
+      required: Boolean(taskData.required),
+      sequence: nextSequence,
+      createdAt: nowIso,
+      manuallyAdded: true,
+    };
+
+    const activity = {
+      id: newActId,
+      typeId: taskInst.activityTypeId,
+      title: taskInst.title,
+      description: taskInst.description,
+      employeeId: employee.id,
+      assigneeId: resolution.assigneeId,
+      dueDate: calculatedDueDate,
+      completed: false,
+      completedAt: null,
+      completedBy: null,
+      source: 'Onboarding',
+      sourceEntityType: 'OnboardingTaskInstance',
+      sourceEntityId: newTiId,
+      createdAt: nowIso,
+      createdBy: currentUserId,
+      updatedAt: nowIso,
+    };
+
+    db.onboardingTaskInstances = [taskInst, ...rawTaskInstances];
+    db.activities = [activity, ...rawActivities];
+
+    saveDatabase(db);
+
+    try {
+      await auditService.logAction(
+        currentUserId,
+        AUDIT_ACTIONS.ONBOARDING_TASK_ADDED || 'ONBOARDING_TASK_ADDED',
+        'PlanInstance',
+        planInstanceId,
+        `Added task "${taskInst.title}" to ${employee.fullName}'s onboarding plan instance`
+      );
+    } catch (err) {}
+
+    return this.getInstanceById(planInstanceId);
   },
 
   /**

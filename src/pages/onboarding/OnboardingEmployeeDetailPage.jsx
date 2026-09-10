@@ -11,12 +11,14 @@ import {
   FileText,
   RotateCcw,
   Eye,
+  Plus,
 } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
 import { onboardingService } from '../../services/onboardingService.js';
 import { activityService } from '../../services/activityService.js';
 import { PLAN_INSTANCE_STATUS } from '../../domain/onboardingDomain.js';
 import LaunchPlanModal from '../../components/onboarding/LaunchPlanModal.jsx';
+import AddTaskModal from '../../components/onboarding/AddTaskModal.jsx';
 
 export default function OnboardingEmployeeDetailPage() {
   const { employeeId } = useParams();
@@ -24,6 +26,7 @@ export default function OnboardingEmployeeDetailPage() {
   const [planInstance, setPlanInstance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
+  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -224,10 +227,19 @@ export default function OnboardingEmployeeDetailPage() {
 
           {/* Task Breakdown Table */}
           <div className="table-container-card">
-            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-light)' }}>
+            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
                 Onboarding Task Breakdown & Operational Status
               </h3>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem', fontSize: '0.8rem', flexShrink: 0 }}
+                onClick={() => setIsAddTaskModalOpen(true)}
+              >
+                <Plus size={14} />
+                <span>Add Task</span>
+              </button>
             </div>
 
             <table className="presence-data-table" style={{ width: '100%' }}>
@@ -269,9 +281,11 @@ export default function OnboardingEmployeeDetailPage() {
                         <div style={{ fontSize: '0.815rem', fontWeight: 500 }}>
                           {act && act.assigneeEmployee ? act.assigneeEmployee.fullName : 'Unassigned'}
                         </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          Rule: {task.assignmentRule}
-                        </div>
+                        {task.assignmentRule && (
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            Rule: {task.assignmentRule}
+                          </div>
+                        )}
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         {act && (
@@ -302,6 +316,17 @@ export default function OnboardingEmployeeDetailPage() {
         preselectedEmployeeId={employee.id}
         onSuccess={() => loadData()}
       />
+
+      {/* Add Task Modal (employee-specific plan instance only) */}
+      {planInstance && (
+        <AddTaskModal
+          isOpen={isAddTaskModalOpen}
+          onClose={() => setIsAddTaskModalOpen(false)}
+          planInstanceId={planInstance.id}
+          employeeName={employee.fullName}
+          onSuccess={() => loadData()}
+        />
+      )}
     </div>
   );
 }

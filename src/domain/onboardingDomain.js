@@ -19,6 +19,19 @@ export const PLAN_INSTANCE_STATUS = {
 };
 
 /**
+ * Resolves the full onboarding history population: everyone who currently has, or has ever
+ * had, an onboarding plan instance, plus anyone Upcoming/Onboarding without one yet. This
+ * backs the Employees page so historical/completed plans remain reachable without a
+ * dedicated history tab.
+ */
+export function resolveAllOnboardingHistory(employees, instanceMap) {
+  return employees.filter((emp) => {
+    if (emp.status === 'Upcoming' || emp.status === 'Onboarding') return true;
+    return instanceMap.has(emp.id);
+  });
+}
+
+/**
  * Resolves the appropriate anchor start date for an onboarding plan instance.
  * Preserves effective-date rules strictly without weakening resolveCurrentRecord().
  */

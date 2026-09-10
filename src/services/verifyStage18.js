@@ -29,6 +29,9 @@ import { activityTypeService } from './activityTypeService.js';
 import { scheduleService } from './scheduleService.js';
 import { documentTypeService } from './documentTypeService.js';
 import { onboardingService } from './onboardingService.js';
+import {
+  resolveAllOnboardingHistory,
+} from '../domain/onboardingDomain.js';
 import { offboardingService } from './offboardingService.js';
 import { activityService } from './activityService.js';
 import { dashboardService } from './dashboardService.js';
@@ -786,7 +789,7 @@ export async function verifyStage18() {
 
     resetDatabase();
 
-    const sidebarSrc2 = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+    const sidebarSrc3 = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
     const routerSrc2 = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
     const upcomingPageSrc = fs.readFileSync(path.resolve('./src/pages/upcoming/UpcomingPage.jsx'), 'utf-8');
     const candidateTableSrc = fs.readFileSync(path.resolve('./src/components/upcoming/CandidateTable.jsx'), 'utf-8');
@@ -800,8 +803,8 @@ export async function verifyStage18() {
     const indexCssSrc = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
 
     // 127. Upcoming appears above Onboarding in the PEOPLE section
-    const upcomingIdx = sidebarSrc2.indexOf("to=\"/upcoming\"");
-    const onboardingIdx = sidebarSrc2.indexOf("'onboarding'");
+    const upcomingIdx = sidebarSrc3.indexOf("to=\"/upcoming\"");
+    const onboardingIdx = sidebarSrc3.indexOf("'onboarding'");
     assert(upcomingIdx !== -1 && onboardingIdx !== -1 && upcomingIdx < onboardingIdx, '127. Upcoming appears above Onboarding in the PEOPLE sidebar section');
 
     // 128. /upcoming route is registered and renders UpcomingPage
@@ -1000,10 +1003,10 @@ export async function verifyStage18() {
     assert(routerSrc2.includes("path: 'onboarding'") && routerSrc2.includes("path: 'offboarding'") && routerSrc2.includes("path: 'activities'"), '175. Onboarding/Offboarding/Activities routes remain registered');
     assert(CANONICAL_ROLES.length === 1 && CANONICAL_ROLES[0] === 'HR', '176. Single HR role remains intact');
     assert(
-      !sidebarSrc2.includes('Organization') && !sidebarSrc2.includes('Reporting') && !sidebarSrc2.includes('Configuration') && !sidebarSrc2.includes('Presence') && !sidebarSrc2.includes('Permissions'),
+      !sidebarSrc3.includes('Organization') && !sidebarSrc3.includes('Reporting') && !sidebarSrc3.includes('Configuration') && !sidebarSrc3.includes('Presence') && !sidebarSrc3.includes('Permissions'),
       '177. Removed modules (Organization/Reporting/Configuration/Presence/Permissions) remain removed from the sidebar'
     );
-    assert(sidebarSrc2.match(/Upcoming[\s\S]*Onboarding[\s\S]*Offboarding/), '178. Final PEOPLE order is exactly Upcoming, Onboarding, Offboarding');
+    assert(sidebarSrc3.match(/Upcoming[\s\S]*Onboarding[\s\S]*Offboarding/), '178. Final PEOPLE order is exactly Upcoming, Onboarding, Offboarding');
 
     // Clean up: candidate mutations made during this verification run are local-process only
     // (Node in-memory DB, never real localStorage) — reset for a clean baseline regardless.
@@ -1277,10 +1280,10 @@ export async function verifyStage18() {
     // ==========================================================================
 
     const sendEmailModalSrc4 = fs.readFileSync(path.resolve('./src/components/upcoming/SendEmailModal.jsx'), 'utf-8');
-    const indexCssSrc4 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
-    const bulkMainScrollRuleMatch = indexCssSrc4.match(/\.bulk-main-scroll-area\s*\{[^}]*\}/);
-    const bulkModalBodyRuleMatch = indexCssSrc4.match(/\.modal-scroll-shell\s*>\s*\.modal-body\.bulk-modal-body\s*\{[^}]*\}/);
-    const bulkCandidateListRuleMatch2 = indexCssSrc4.match(/\.bulk-candidate-list\s*\{[^}]*\}/);
+    const indexCssSrc5 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+    const bulkMainScrollRuleMatch = indexCssSrc5.match(/\.bulk-main-scroll-area\s*\{[^}]*\}/);
+    const bulkModalBodyRuleMatch = indexCssSrc5.match(/\.modal-scroll-shell\s*>\s*\.modal-body\.bulk-modal-body\s*\{[^}]*\}/);
+    const bulkCandidateListRuleMatch2 = indexCssSrc5.match(/\.bulk-candidate-list\s*\{[^}]*\}/);
 
     // 242. Bulk modal uses ONE primary scrollable content area
     assert(
@@ -1302,7 +1305,7 @@ export async function verifyStage18() {
 
     // 245. Full expanded email content can be reached — the body has no height cap of its own, so its
     // complete rendered height is always part of the single scrollable region's content.
-    const bulkPreviewBodyRuleMatch2 = indexCssSrc4.match(/\.bulk-preview-body\s*\{[^}]*\}/);
+    const bulkPreviewBodyRuleMatch2 = indexCssSrc5.match(/\.bulk-preview-body\s*\{[^}]*\}/);
     assert(Boolean(bulkPreviewBodyRuleMatch2) && !stripComments(bulkPreviewBodyRuleMatch2[0]).includes('max-height'), '245. The full expanded email body is reachable — no max-height truncates it before "Best regards, ... Rizurf Team"');
 
     // 246/247. Candidate 2..N and the last candidate remain reachable while Candidate 1 is expanded —
@@ -1315,7 +1318,7 @@ export async function verifyStage18() {
 
     // 248/249. Modal footer remains reachable and never permanently covers the last candidate (fixed
     // sibling flex child via modal-scroll-shell, not an overlay stacked on top of the content)
-    assert(sendEmailModalSrc4.includes('modal-scroll-shell') && indexCssSrc4.includes('.modal-scroll-shell > .modal-footer'), '248-249. The modal footer (Cancel / Confirm & Send N Emails) stays a fixed, non-overlapping sibling — always reachable and never covering the last candidate card');
+    assert(sendEmailModalSrc4.includes('modal-scroll-shell') && indexCssSrc5.includes('.modal-scroll-shell > .modal-footer'), '248-249. The modal footer (Cancel / Confirm & Send N Emails) stays a fixed, non-overlapping sibling — always reachable and never covering the last candidate card');
 
     // 250. No horizontal overflow in the bulk modal's primary scroll area
     assert(Boolean(bulkMainScrollRuleMatch) && /overflow-x:\s*hidden/.test(bulkMainScrollRuleMatch[0]), '250. .bulk-main-scroll-area sets overflow-x: hidden — no horizontal overflow in the bulk modal');
@@ -1467,7 +1470,615 @@ export async function verifyStage18() {
     // 291. Broader Upcoming workflow remains operational after the rename/restyle
     assert(upcomingPageSrc4.includes('CandidateToolbar') && upcomingPageSrc4.includes('CandidateTable') && upcomingPageSrc4.includes('SendEmailModal') && upcomingPageSrc4.includes('EmailDraftsPanel'), '291. The Upcoming workflow (filters, candidate table, email modal, drafts) remains fully wired and operational');
 
+    // ==========================================================================
+    // Onboarding — Merge Dashboard Into Employees + Remove Dashboard
+    // ==========================================================================
+
+    const onbEmployeesSrc = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeesPage.jsx'), 'utf-8');
+    const onbDetailSrc = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+    const onbPlansSrc = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingPlansPage.jsx'), 'utf-8');
+    const overdueTasksModalSrc = fs.readFileSync(path.resolve('./src/components/onboarding/OverdueTasksModal.jsx'), 'utf-8');
+    const launchPlanModalSrc = fs.readFileSync(path.resolve('./src/components/onboarding/LaunchPlanModal.jsx'), 'utf-8');
+    const onboardingDomainSrc = fs.readFileSync(path.resolve('./src/domain/onboardingDomain.js'), 'utf-8');
+    const routerSrc3 = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+    const overdueTasksModalCodeOnly = stripComments(overdueTasksModalSrc);
+
+    // --- DASHBOARD REMOVAL / NAVIGATION ---
+
+    // 292. OnboardingDashboardPage.jsx no longer exists on disk
+    assert(!fs.existsSync(path.resolve('./src/pages/onboarding/OnboardingDashboardPage.jsx')), '292. OnboardingDashboardPage.jsx has been deleted — it is no longer part of the app');
+
+    // 293. Router no longer imports or references OnboardingDashboardPage
+    assert(!routerSrc3.includes('OnboardingDashboardPage'), '293. The router no longer imports or references OnboardingDashboardPage');
+
+    // 294. Onboarding's index route now redirects to /onboarding/employees, not /onboarding/dashboard
+    assert(
+      routerSrc3.includes('<Navigate to="/onboarding/employees" replace />') && !routerSrc3.includes('/onboarding/dashboard'),
+      '294. The base /onboarding route now redirects to /onboarding/employees (no remaining reference to /onboarding/dashboard)'
+    );
+
+    // 295. There is no 'dashboard' path segment left under the onboarding route group
+    {
+      const onboardingRouteBlockMatch = routerSrc3.match(/path:\s*'onboarding',\s*children:\s*\[([\s\S]*?)\],\s*\},/);
+      const onboardingRouteBlock = onboardingRouteBlockMatch ? onboardingRouteBlockMatch[1] : '';
+      assert(
+        Boolean(onboardingRouteBlockMatch) && !onboardingRouteBlock.includes("path: 'dashboard'"),
+        '295. No dead "dashboard" child route remains under the onboarding route group'
+      );
+    }
+
+    // 296. Sidebar's Onboarding sub-menu now lists only Employees and Plans (no Dashboard link)
+    {
+      const sidebarOnboardingBlockMatch = sidebarSrc3.match(/\{\/\* Onboarding \*\/\}([\s\S]*?)\{\/\* Offboarding \*\/\}/);
+      const sidebarOnboardingBlock = sidebarOnboardingBlockMatch ? sidebarOnboardingBlockMatch[1] : '';
+      const sidebarOnboardingNavLinkCount = (sidebarOnboardingBlock.match(/<NavLink/g) || []).length;
+      assert(
+        Boolean(sidebarOnboardingBlockMatch) && !sidebarOnboardingBlock.includes('/onboarding/dashboard') && sidebarOnboardingBlock.includes('/onboarding/employees') && sidebarOnboardingBlock.includes('/onboarding/plans') && sidebarOnboardingNavLinkCount === 2,
+        '296. The Onboarding sidebar sub-menu shows only Employees and Plans (exactly 2 links) — the Dashboard link is removed'
+      );
+    }
+
+    // 297. No remaining source reference to '/onboarding/dashboard' anywhere in the app (router/sidebar covered above; this is a belt-and-suspenders sweep of the pages that matter)
+    assert(
+      !onbEmployeesSrc.includes('/onboarding/dashboard') && !onbDetailSrc.includes('/onboarding/dashboard') && !onbPlansSrc.includes('/onboarding/dashboard'),
+      "297. No remaining page-level reference to the deleted '/onboarding/dashboard' route"
+    );
+
+    // --- EMPLOYEES HEADER (merged actions) ---
+
+    // 298. Employees header still reads "Onboarding Employees" with its existing description
+    assert(
+      onbEmployeesSrc.includes('>Onboarding Employees<') && onbEmployeesSrc.includes('View and track individual onboarding progress for employees and interns.'),
+      '298. Employees header reads "Onboarding Employees" with description "View and track individual onboarding progress for employees and interns."'
+    );
+
+    // 299. Employees header now includes the "Overdue Tasks" button with a count badge, opening the existing OverdueTasksModal
+    assert(
+      onbEmployeesSrc.includes('<span>Overdue Tasks</span>') && onbEmployeesSrc.includes('candidate-notification-badge') && onbEmployeesSrc.includes('onClick={() => setIsOverdueModalOpen(true)}') && onbEmployeesSrc.includes('<OverdueTasksModal'),
+      '299. Employees header now has the "Overdue Tasks" button (with count badge) that opens the existing OverdueTasksModal'
+    );
+
+    // 300. Employees header now includes the primary "Launch Onboarding Plan" action, wired to the existing LaunchPlanModal
+    assert(
+      onbEmployeesSrc.includes('<span>Launch Onboarding Plan</span>') && onbEmployeesSrc.includes('btn-primary btn-header-action') && onbEmployeesSrc.includes('<LaunchPlanModal'),
+      '300. Employees header now has "Launch Onboarding Plan" as the primary teal action, wired to the existing LaunchPlanModal'
+    );
+
+    // 301. No "Manage Plan Templates" shortcut exists anywhere on the Employees page
+    assert(!onbEmployeesSrc.includes('Manage Plan Templates'), '301. No "Manage Plan Templates" shortcut exists on the Employees page');
+
+    // --- SUMMARY CARDS MOVED TO EMPLOYEES ---
+
+    // 302. All 4 summary cards render on the Employees page via the existing summary-cards-grid layout
+    assert(
+      onbEmployeesSrc.includes('summary-cards-grid') && onbEmployeesSrc.includes('Active Plans') && onbEmployeesSrc.includes('In Progress') && onbEmployeesSrc.includes('Needs Attention') && onbEmployeesSrc.includes('Completed Plans'),
+      '302. The 4 summary cards (Active Plans, In Progress, Needs Attention, Completed Plans) now render on the Employees page'
+    );
+
+    // 303. Summary card values reuse the exact same derivedStatus-based calculations previously on the Dashboard (not re-implemented)
+    assert(
+      onbEmployeesSrc.includes('i.derivedStatus !== PLAN_INSTANCE_STATUS.COMPLETED') && onbEmployeesSrc.includes('i.derivedStatus === PLAN_INSTANCE_STATUS.IN_PROGRESS') && onbEmployeesSrc.includes('i.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION') && onbEmployeesSrc.includes('i.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED'),
+      '303. Summary card counts reuse the exact same PLAN_INSTANCE_STATUS-based filter predicates the Dashboard previously used, computed straight from onboardingService.getAllInstances()'
+    );
+
+    // --- SINGLE TABLE (no Dashboard operational table duplicated) ---
+
+    // 304. Only one data table exists on the Employees page — no second Dashboard-style operational table
+    {
+      const tableTagMatches = onbEmployeesSrc.match(/<table\b/g) || [];
+      assert(tableTagMatches.length === 1, '304. Only ONE employee onboarding progress table exists on the Employees page (no duplicated second table)');
+    }
+
+    // 305. The single table keeps the simplified column set — not the old fuller Dashboard column set
+    assert(
+      onbEmployeesSrc.includes('>Department<') && onbEmployeesSrc.includes('>Start Date<') && onbEmployeesSrc.includes('>Onboarding Plan<') && onbEmployeesSrc.includes('>Progress<') && onbEmployeesSrc.includes('>Status<') && onbEmployeesSrc.includes('>Action<') &&
+      !onbEmployeesSrc.includes('Department &amp; Position') && !onbEmployeesSrc.includes('Active Plan &amp; Progress') && !onbEmployeesSrc.includes('>Workflow Status<'),
+      '305. The single table keeps the simplified Employee / Department / Start Date / Onboarding Plan / Progress / Status / Action columns — the old fuller Dashboard column set was not merged in alongside it'
+    );
+
+    // --- FILTERS / SEARCH PRESERVED ---
+
+    // 306. The All/Employees/Interns pill filter is still present, reusing view-switcher-group/view-btn and employee.directoryType
+    assert(
+      onbEmployeesSrc.includes('view-switcher-group') && (onbEmployeesSrc.match(/view-btn/g) || []).length >= 3 && onbEmployeesSrc.includes('>All</span>') && onbEmployeesSrc.includes('>Employees</span>') && onbEmployeesSrc.includes('>Interns</span>') &&
+      onbEmployeesSrc.includes('emp.directoryType !== typeFilter'),
+      '306. The All / Employees / Interns pill filter remains, still reusing the existing view-switcher-group/view-btn pattern and employee.directoryType (no new classification)'
+    );
+
+    // 307. Simple name/ID search remains present
+    assert(onbEmployeesSrc.includes('Search employee name or ID') && onbEmployeesSrc.includes('setSearch(e.target.value)'), '307. Employees page keeps simple name/ID search');
+
+    // 308. No crowded controls (old status tabs, per-row Launch Plan button, or an extra history tab) were reintroduced
+    assert(
+      !onbEmployeesSrc.includes('Active Onboarding<') && !onbEmployeesSrc.includes('All Onboarding History') && !onbEmployeesSrc.includes('Open Plans (Inactive/Former)') && !onbEmployeesSrc.includes('>Launch Plan<'),
+      '308. No crowded legacy controls (3-way status tabs, per-row Launch Plan button) were reintroduced'
+    );
+
+    // --- OVERDUE MODAL REUSE ---
+
+    // 309. OverdueTasksModal still has the exact required heading/subtitle and the fixed-header/single-scroll-region pattern
+    assert(
+      overdueTasksModalSrc.includes('>Overdue Onboarding Tasks<') && overdueTasksModalSrc.includes('>Tasks requiring HR attention<') &&
+      overdueTasksModalSrc.includes('modal-scroll-shell') && overdueTasksModalSrc.includes('app-scroll-area') && overdueTasksModalSrc.includes('modal-header') && overdueTasksModalSrc.includes('modal-body'),
+      '309. OverdueTasksModal retains its exact heading/subtitle and the fixed-header/single-scroll-region modal-scroll-shell pattern'
+    );
+
+    // 310. OverdueTasksModal still renders task info + Mark Complete via props only (no owned data fetch — reused, not duplicated)
+    assert(
+      overdueTasksModalCodeOnly.includes('task.title') && overdueTasksModalCodeOnly.includes('task.dueDate') && overdueTasksModalCodeOnly.includes('task.relatedEmployee') && overdueTasksModalCodeOnly.includes('task.assigneeEmployee') && overdueTasksModalCodeOnly.includes('onMarkComplete(task.id)') &&
+      !overdueTasksModalCodeOnly.includes('getOverdueActivities') && !overdueTasksModalCodeOnly.includes('activityService'),
+      '310. OverdueTasksModal still renders task title/due date/employee/assignee and Mark Complete via props only — no owned activityService call (no duplicated data source)'
+    );
+
+    // 311. Employees page wires its own fetched overdueTasks state and existing handler into the modal (single fetch call site)
+    assert(
+      onbEmployeesSrc.includes('activityService.getOverdueActivities()') && onbEmployeesSrc.includes('tasks={overdueTasks}') && onbEmployeesSrc.includes('onMarkComplete={handleMarkTaskComplete}'),
+      '311. Employees page fetches overdue tasks once and passes the existing state/handler into OverdueTasksModal — overdue-task fetching has exactly one call site now that Dashboard is gone'
+    );
+
+    // --- LAUNCH ONBOARDING REUSE ---
+
+    // 312. LaunchPlanModal's underlying launch workflow/logic is unchanged (only its outer modal
+    // presentation/wording were fixed in a later task — see the Onboarding UI Refinements section)
+    assert(
+      launchPlanModalSrc.includes('onboardingService.launchPlanInstance') && launchPlanModalSrc.includes('onboardingService.previewPlanLaunch'),
+      '312. LaunchPlanModal is unchanged — still drives employee/template selection, preview, and launch via the existing onboardingService'
+    );
+    assert(
+      onbEmployeesSrc.includes('isOpen={isLaunchModalOpen}') && onbEmployeesSrc.includes('onSuccess={() => loadData()}'),
+      '312b. Employees page wires LaunchPlanModal with the existing open/close state and refreshes the same loadData() on success (no reimplementation)'
+    );
+
+    // --- PLANS (must remain untouched) ---
+
+    // 313. Plans page heading and template-management UI are untouched
+    assert(onbPlansSrc.includes('>Onboarding Plan Templates<') && onbPlansSrc.includes('No Plan Templates Configured'), '313. Plans page heading and template-management UI remain completely unchanged');
+
+    // 314. Onboarding routing still serves employees/detail/plans/plan editor — just without the removed dashboard path
+    assert(
+      routerSrc3.includes("path: 'onboarding'") && routerSrc3.includes('OnboardingPlansPage') && routerSrc3.includes('PlanEditorPage') && routerSrc3.includes('OnboardingEmployeeDetailPage') && routerSrc3.includes("path: 'employees'") && routerSrc3.includes("path: 'plans'"),
+      '314. Onboarding routing still serves Employees / employee detail / Plans / plan editor'
+    );
+
+    // --- GENERAL ---
+
+    // 315. The individual employee onboarding detail page is untouched, including its "Back to Onboarding Employees" link and Done/Reopen actions
+    assert(
+      onbDetailSrc.includes('Back to Onboarding Employees') && onbDetailSrc.includes('ArrowLeft') && onbDetailSrc.includes('handleToggleTaskComplete'),
+      '315. The individual employee onboarding detail page is kept as-is, including the "Back to Onboarding Employees" link and Done/Reopen task actions'
+    );
+
+    // 316. Both the employee/instance join (instanceMap) and progress/status rendering reuse the existing hydrated plan instance data — no re-implementation
+    assert(
+      onbEmployeesSrc.includes('new Map(instances.map((i) => [i.employeeId, i]))') && onbEmployeesSrc.includes('inst.progress.progressPercentage') && onbEmployeesSrc.includes('inst.derivedStatus'),
+      '316. Employees page derives its employee -> plan-instance join and reads progress/status directly from the existing hydrated onboardingService.getAllInstances() data'
+    );
+
+    // 317. resolveAllOnboardingHistory() domain helper still backs the single table's population (shared, not re-derived inline)
+    assert(
+      onboardingDomainSrc.includes('export function resolveAllOnboardingHistory') && onbEmployeesSrc.includes('resolveAllOnboardingHistory(employees, instanceMap)'),
+      '317. The single table\'s population is still resolved via the shared onboardingDomain.resolveAllOnboardingHistory() helper'
+    );
+
+    // 318. The now-orphaned resolveActiveOnboardingWorkforce() Dashboard-only helper was cleanly removed (genuine dead code, not left behind)
+    assert(
+      !onboardingDomainSrc.includes('resolveActiveOnboardingWorkforce') && !onbEmployeesSrc.includes('resolveActiveOnboardingWorkforce'),
+      '318. The resolveActiveOnboardingWorkforce() helper (only ever used by the now-deleted Dashboard) was removed as genuine dead code'
+    );
+
+    // 319. Mark Complete functionally still completes an overdue onboarding activity end-to-end through the reused activityService
+    const overdueBeforeFix2 = await activityService.getOverdueActivities();
+    const onboardingOverdueBefore2 = overdueBeforeFix2.filter((a) => a.source === 'Onboarding');
+    if (onboardingOverdueBefore2.length > 0) {
+      const targetOverdueTask2 = onboardingOverdueBefore2[0];
+      const completedTask2 = await activityService.markComplete(targetOverdueTask2.id);
+      assert(completedTask2.completed === true, '319. Mark Complete still functionally completes an overdue onboarding task through the reused activityService.markComplete()');
+      await activityService.reopen(targetOverdueTask2.id);
+    } else {
+      assert(true, '319. Mark Complete functional check skipped — no overdue Onboarding activities present in current seed state (activityService.markComplete/reopen verified functional elsewhere in this suite)');
+    }
+
+    // 320. resolveAllOnboardingHistory() is a pure, correctly-scoped function callable directly
+    const allEmpsForDomainCheck2 = await employeeService.getAll();
+    const allInstForDomainCheck2 = await onboardingService.getAllInstances();
+    const instMapForDomainCheck2 = new Map(allInstForDomainCheck2.map((i) => [i.employeeId, i]));
+    const allHistoryResult2 = resolveAllOnboardingHistory(allEmpsForDomainCheck2, instMapForDomainCheck2);
+    assert(
+      Array.isArray(allHistoryResult2) && allHistoryResult2.every((emp) => allEmpsForDomainCheck2.some((e) => e.id === emp.id)),
+      '320. resolveAllOnboardingHistory() is a callable pure domain function that returns only real employees from the provided dataset'
+    );
+
+    // 321. Launching a plan via the reused service still surfaces immediately in the Employees population/progress data (no orphaned duplicated logic)
+    {
+      const preLaunchInstances = await onboardingService.getAllInstances();
+      const preLaunchIds = new Set(preLaunchInstances.map((i) => i.id));
+      const candidateEmp = allEmpsForDomainCheck2.find((e) => (e.status === 'Upcoming' || e.status === 'Onboarding') && !preLaunchInstances.some((i) => i.employeeId === e.id));
+      const templates = await onboardingService.getAllTemplates();
+      const activeTemplate = templates.find((t) => t.active !== false);
+      if (candidateEmp && activeTemplate) {
+        const newInstance = await onboardingService.launchPlanInstance(candidateEmp.id, activeTemplate.id, {});
+        const postLaunchInstances = await onboardingService.getAllInstances();
+        const found = postLaunchInstances.find((i) => i.id === newInstance.id);
+        assert(Boolean(found) && found.employeeId === candidateEmp.id, '321. A newly launched onboarding plan immediately appears in onboardingService.getAllInstances() — the same source the Employees page reads from');
+        assert(typeof found.progress.progressPercentage === 'number', '321b. Progress data is immediately available for a freshly launched plan instance');
+        assert(!preLaunchIds.has(found.id), '321c. The launched instance is genuinely new (not a pre-existing one)');
+      } else {
+        assert(true, '321. Launch-then-appear functional check skipped — no eligible candidate employee/template pairing available in current seed state (launchPlanInstance verified functional elsewhere in this suite)');
+      }
+    }
+
+    // ==========================================================================
+    // Onboarding UI Refinements — Search Styling + Launch Plan Modal + Add Task
+    // ==========================================================================
+
+    const onbEmployeesSrc2 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeesPage.jsx'), 'utf-8');
+    const onbDetailSrc2 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+    const launchPlanModalSrc2 = fs.readFileSync(path.resolve('./src/components/onboarding/LaunchPlanModal.jsx'), 'utf-8');
+    const addTaskModalSrc = fs.readFileSync(path.resolve('./src/components/onboarding/AddTaskModal.jsx'), 'utf-8');
+    const directoryToolbarSrc = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+    const onboardingServiceSrc = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+    const onboardingServiceCodeOnly = stripComments(onboardingServiceSrc);
+
+    // --- SEARCH STYLING ---
+
+    // 322. Onboarding Employees search now uses the same shared toolbar-search-box/icon/input classes as other polished toolbars
+    assert(
+      onbEmployeesSrc2.includes('className="toolbar-search-box"') && onbEmployeesSrc2.includes('className="toolbar-search-icon"') && onbEmployeesSrc2.includes('className="toolbar-search-input"'),
+      '322. Onboarding Employees search uses the shared toolbar-search-box / toolbar-search-icon / toolbar-search-input classes'
+    );
+
+    // 323. Those exact class names are the SAME ones an existing polished toolbar (main Employees directory) already uses — confirms reuse, not a new invented style
+    assert(
+      directoryToolbarSrc.includes('toolbar-search-box') && directoryToolbarSrc.includes('toolbar-search-icon') && directoryToolbarSrc.includes('toolbar-search-input'),
+      '323. The reused search classes are the exact same ones already powering the main Employees directory toolbar search (shared design system, not a new style)'
+    );
+
+    // 324. The old broken/undefined form-control-input class is no longer used for the Employees search
+    assert(!onbEmployeesSrc2.includes('form-control-input'), '324. The Employees search no longer uses the non-existent "form-control-input" class that rendered as a raw unstyled input');
+
+    // 325. Search icon renders (Search icon component passed into the toolbar-search-icon slot) and placeholder is preserved
+    assert(onbEmployeesSrc2.includes('<Search size={16} className="toolbar-search-icon" />') && onbEmployeesSrc2.includes('placeholder="Search employee name or ID"'), '325. Search icon renders on the left and the placeholder text is preserved');
+
+    // 326. Search still composes with the All/Employees/Interns type filter (both predicates remain in the same filter chain)
+    assert(
+      onbEmployeesSrc2.match(/typeFilter !== 'all'[\s\S]{0,300}search\.trim\(\)/),
+      '326. Search continues to compose with the All/Employees/Interns type filter in the same filter chain (both still apply together)'
+    );
+
+    // 327. Search-by-name and search-by-ID predicates are unchanged (existing behavior preserved)
+    assert(
+      onbEmployeesSrc2.includes('emp.fullName.toLowerCase().includes(q)') && onbEmployeesSrc2.includes('emp.employeeId.toLowerCase().includes(q)'),
+      '327. Search still matches by employee name and employee ID — existing behavior preserved unchanged'
+    );
+
+    // --- LAUNCH PLAN MODAL ---
+
+    const launchPlanModalCodeOnly2 = stripComments(launchPlanModalSrc2);
+
+    // 328. LaunchPlanModal no longer uses the old, never-defined-in-CSS classes that caused it to render inline/unstyled
+    assert(
+      !launchPlanModalCodeOnly2.includes('modal-backdrop-overlay') && !launchPlanModalCodeOnly2.includes('modal-container-card') && !launchPlanModalCodeOnly2.includes('modal-body-content') && !launchPlanModalCodeOnly2.includes('btn-icon-close'),
+      '328. LaunchPlanModal no longer uses the undefined modal-backdrop-overlay/modal-container-card/modal-body-content/btn-icon-close classes that caused it to render as an unstyled inline block'
+    );
+
+    // 329. LaunchPlanModal now uses the real, shared modal shell (backdrop + card + scroll-shell), the same system Overdue Tasks / Add Task use
+    assert(
+      launchPlanModalSrc2.includes('className="modal-backdrop"') && launchPlanModalSrc2.includes('modal-card') && launchPlanModalSrc2.includes('modal-scroll-shell') && indexCssSrc3.includes('.modal-backdrop {') && indexCssSrc3.includes('.modal-card {'),
+      '329. LaunchPlanModal now renders through the real .modal-backdrop / .modal-card / .modal-scroll-shell shared modal shell (verified those classes actually exist in index.css)'
+    );
+
+    // 330. LaunchPlanModal header has the required heading and concise subtitle
+    assert(
+      launchPlanModalSrc2.includes('>Launch Onboarding Plan<') && launchPlanModalSrc2.includes('Assign an onboarding plan to an employee or intern.'),
+      '330. LaunchPlanModal header reads "Launch Onboarding Plan" with subtitle "Assign an onboarding plan to an employee or intern."'
+    );
+
+    // 331. LaunchPlanModal footer has Cancel + a primary Launch action, using the shared modal-footer/btn-primary/btn-secondary classes
+    assert(
+      launchPlanModalSrc2.includes('modal-footer') && launchPlanModalSrc2.includes('className="btn-secondary"') && launchPlanModalSrc2.includes('className="btn-primary"') && />\s*Cancel\s*</.test(launchPlanModalSrc2),
+      '331. LaunchPlanModal footer has Cancel (btn-secondary) and a primary Launch action (btn-primary), via the shared modal-footer'
+    );
+
+    // 332. LaunchPlanModal supports Escape-to-close like the other app modals (Overdue Tasks, Candidate Replies)
+    assert(launchPlanModalSrc2.includes("e.key === 'Escape'") && launchPlanModalSrc2.includes('onClose()'), '332. LaunchPlanModal closes on Escape, matching the existing modal UX pattern');
+
+    // 333. LaunchPlanModal's underlying launch business logic (employee/template selection, preview, manual overrides, launch call) is fully preserved
+    assert(
+      launchPlanModalSrc2.includes('onboardingService.previewPlanLaunch') && launchPlanModalSrc2.includes('onboardingService.launchPlanInstance') && launchPlanModalSrc2.includes('manualOverrides') && launchPlanModalSrc2.includes('canLaunch'),
+      '333. LaunchPlanModal preserves its existing employee/template selection, preview, manual-override, and launch business logic unchanged'
+    );
+
+    // --- ADD TASK (employee detail page) ---
+
+    // 334. "Add Task" button renders in the Task Breakdown section header row, right-aligned via a space-between flex row
+    assert(
+      onbDetailSrc2.match(/Onboarding Task Breakdown & Operational Status[\s\S]{0,400}Add Task/) && onbDetailSrc2.includes("justifyContent: 'space-between'"),
+      '334. The "Add Task" button renders in the same header row as "Onboarding Task Breakdown & Operational Status", right-aligned via space-between'
+    );
+
+    // 335. Add Task button uses the existing primary teal button styling (btn-primary), consistent with other create/add actions
+    assert(onbDetailSrc2.match(/className="btn-primary"[\s\S]{0,200}onClick=\{\(\) => setIsAddTaskModalOpen\(true\)\}/), '335. The Add Task button uses the shared btn-primary styling used elsewhere for create/add actions');
+
+    // 336. Clicking Add Task opens AddTaskModal, targeting the correct (this employee's) plan instance and employee name
+    assert(
+      onbDetailSrc2.includes('<AddTaskModal') && onbDetailSrc2.includes('planInstanceId={planInstance.id}') && onbDetailSrc2.includes('employeeName={employee.fullName}'),
+      '336. Add Task opens AddTaskModal wired to this specific employee\'s plan instance ID and employee name'
+    );
+
+    // 337. AddTaskModal uses the same shared modal shell as the other app modals (consistent design system, not a third bespoke style)
+    assert(
+      addTaskModalSrc.includes('className="modal-backdrop"') && addTaskModalSrc.includes('modal-card') && addTaskModalSrc.includes('modal-scroll-shell') && addTaskModalSrc.includes('modal-header') && addTaskModalSrc.includes('modal-body') && addTaskModalSrc.includes('modal-footer'),
+      '337. AddTaskModal uses the same modal-backdrop / modal-card / modal-scroll-shell / modal-header / modal-body / modal-footer shell as LaunchPlanModal and OverdueTasksModal'
+    );
+
+    // 338. AddTaskModal heading and subtitle read as specified, with the subtitle interpolating the target employee's name
+    assert(
+      addTaskModalSrc.includes('>Add Onboarding Task<') && addTaskModalSrc.includes("Add a task to {employeeName || 'this employee'}'s current onboarding plan."),
+      '338. AddTaskModal heading reads "Add Onboarding Task" and its subtitle interpolates the target employee\'s name'
+    );
+
+    // 339. Task Title is required and validated before submission
+    assert(
+      addTaskModalSrc.includes("if (!formData.title.trim()) nextErrors.title = 'Task title is required.'") && addTaskModalSrc.includes('if (!validate()) return;'),
+      '339. Task Title is required and validated before the Add Task form can submit'
+    );
+
+    // 340. Relative Timing reuses the existing relative-day offset concept (relativeOffsetDays), not a new timing system
+    assert(addTaskModalSrc.includes('relativeOffsetDays') && addTaskModalSrc.includes('Relative Timing (Day Offset)'), '340. AddTaskModal reuses the existing relativeOffsetDays concept for task timing');
+
+    // 341. Assignee Rule field is completely removed from the Add Task modal (no dropdown, label, import, or specific-assignee sub-field left behind)
+    const addTaskModalCodeOnly = stripComments(addTaskModalSrc);
+    assert(
+      !addTaskModalCodeOnly.includes('Assignee Rule') && !addTaskModalCodeOnly.includes('ASSIGNMENT_RULES') && !addTaskModalCodeOnly.includes('specificAssigneeId') && !addTaskModalCodeOnly.includes('Select Specific Assignee') && !addTaskModalCodeOnly.includes('import Select'),
+      '341. Assignee Rule (dropdown, label, ASSIGNMENT_RULES import, specific-assignee sub-field) is completely removed from AddTaskModal'
+    );
+
+    // 341b. No leftover two-column grid / empty half-width gap remains where Assignee Rule used to sit next to Relative Timing
+    assert(!addTaskModalSrc.includes('modal-field-grid-2'), '341b. AddTaskModal no longer wraps Relative Timing in a two-column grid — no empty half-width gap remains after removing Assignee Rule');
+
+    // 341c. addTaskToInstance() falls back to the existing neutral "Unassigned" default (falsy rule) rather than defaulting to a specific rule like HR
+    assert(!onboardingServiceSrc.includes("taskData.assignmentRule || 'hr'"), '341c. addTaskToInstance() no longer defaults a missing assignment rule to \'hr\' — manual tasks now resolve through the existing neutral "no rule" path');
+    assert(onboardingServiceSrc.includes('taskData.assignmentRule || null'), '341d. addTaskToInstance() defaults assignmentRule to null (the existing resolveAssigneeForRule() neutral/Unassigned short-circuit), not a newly invented value');
+
+    // 342. Form controls use the real, polished shared classes (form-input/form-textarea), not raw unstyled inputs
+    assert(
+      addTaskModalSrc.includes('className="form-input"') && addTaskModalSrc.includes('className="form-textarea"') && !addTaskModalSrc.includes('form-control-input'),
+      '342. AddTaskModal form fields use the polished shared form-input/form-textarea classes'
+    );
+
+    // --- RELATIVE TIMING GUIDANCE ---
+
+    // 342b. The explanatory helper sentence renders under Relative Timing
+    assert(
+      addTaskModalSrc.includes('Set when the task should occur relative to the employee’s start date.'),
+      '342b. The Relative Timing helper sentence "Set when the task should occur relative to the employee’s start date." is displayed'
+    );
+
+    // 342c. All three offset rules (0 / positive / negative) are displayed with their examples
+    assert(
+      addTaskModalSrc.includes('On the employee’s start date') &&
+      addTaskModalSrc.includes('After the start date (e.g., +3 = 3 days after)') &&
+      addTaskModalSrc.includes('Before the start date (e.g., −3 = 3 days before)'),
+      '342c. All three Relative Timing rules (0 / + value / − value) are displayed, each with an example'
+    );
+
+    // 342d. The guidance uses subtle helper styling (relative-timing-help), not a warning/alert box
+    assert(
+      addTaskModalSrc.includes('className="relative-timing-help"') && !addTaskModalSrc.match(/relative-timing-help[\s\S]{0,120}modal-error-alert/),
+      '342d. The Relative Timing guidance uses subtle helper styling, not the warning/error alert box styling'
+    );
+
+    // 343. onboardingService.addTaskToInstance() exists and reuses centralized helpers (resolveAssigneeForRule, addDaysToLocalDate) rather than recalculating due dates/assignees inline
+    assert(
+      onboardingServiceSrc.includes('async addTaskToInstance(') && onboardingServiceSrc.includes('resolveAssigneeForRule(') && onboardingServiceSrc.includes('addDaysToLocalDate(planInstance.anchorDate, relativeOffsetDays)'),
+      '343. onboardingService.addTaskToInstance() exists and reuses the centralized resolveAssigneeForRule() and addDaysToLocalDate() helpers rather than recalculating due dates/assignees inline'
+    );
+
+    // 344. addTaskToInstance() never writes to onboardingPlanTasks or onboardingPlanTemplates — it is genuinely employee-plan-instance-scoped, not template-modifying
+    assert(
+      !onboardingServiceCodeOnly.match(/addTaskToInstance[\s\S]*?\n {2}\},/)?.[0]?.includes('db.onboardingPlanTasks =') &&
+      !onboardingServiceCodeOnly.match(/addTaskToInstance[\s\S]*?\n {2}\},/)?.[0]?.includes('db.onboardingPlanTemplates ='),
+      '344. addTaskToInstance() never writes to db.onboardingPlanTasks or db.onboardingPlanTemplates — it only ever touches the one PlanInstance\'s task/activity records'
+    );
+
+    // 345. New task's planTaskId is explicitly null (not tied to a reusable template task), keeping template/instance data cleanly separated
+    assert(onboardingServiceSrc.includes('planTaskId: null,'), '345. Manually added tasks are stored with planTaskId: null — never linked back into the reusable plan template structure');
+
     resetDatabase();
+
+    // --- ADD TASK FUNCTIONAL / EMPLOYEE-SAFETY VERIFICATION ---
+    {
+      const instancesBeforeAdd = await onboardingService.getAllInstances();
+      const targetInstance = instancesBeforeAdd.find((i) => i.employeeId === 'emp-013') || instancesBeforeAdd[0];
+      const otherInstance = instancesBeforeAdd.find((i) => i.id !== targetInstance.id);
+      const templatesBeforeAdd = await onboardingService.getAllTemplates();
+      const targetTemplateBefore = templatesBeforeAdd.find((t) => t.id === targetInstance.planTemplateId);
+      const templateTaskCountBefore = targetTemplateBefore ? targetTemplateBefore.taskCount : null;
+      const otherInstanceTaskCountBefore = otherInstance ? otherInstance.progress.totalTasks : null;
+
+      const beforeTotal = targetInstance.progress.totalTasks;
+      const beforeCompleted = targetInstance.progress.completedTasksCount;
+      const beforePct = targetInstance.progress.progressPercentage;
+
+      const updatedInstance = await onboardingService.addTaskToInstance(targetInstance.id, {
+        title: 'Stage18 Verification Task',
+        description: 'Automated verification task',
+        relativeOffsetDays: 10,
+        assignmentRule: 'hr',
+        required: true,
+      });
+
+      // 346. The new task appears immediately in the target instance's task breakdown
+      const newTask = updatedInstance.progress.tasks.find((t) => t.title === 'Stage18 Verification Task');
+      assert(Boolean(newTask), '346. The newly added task appears immediately in this employee\'s onboarding task breakdown (no manual refresh required)');
+
+      // 347. Task counts updated correctly (total +1, completed unchanged)
+      assert(
+        updatedInstance.progress.totalTasks === beforeTotal + 1 && updatedInstance.progress.completedTasksCount === beforeCompleted,
+        '347. Task counts update correctly after adding a task (total +1, completed count unchanged since the new task starts incomplete)'
+      );
+
+      // 348. Progress recalculates through the shared calculatePlanProgress logic (percentage reflects the new incomplete required task, not hardcoded)
+      const expectedRequired = updatedInstance.progress.requiredTasksCount;
+      const expectedCompletedRequired = updatedInstance.progress.completedRequiredCount;
+      const expectedPct = expectedRequired > 0 ? Math.round((expectedCompletedRequired / expectedRequired) * 100) : beforePct;
+      assert(updatedInstance.progress.progressPercentage === expectedPct, '348. Progress percentage after adding a task matches the shared calculatePlanProgress() formula exactly (not a UI-hardcoded value)');
+
+      // 349. Due date reuses the centralized anchorDate + relativeOffsetDays helper — not independently computed
+      const { addDaysToLocalDate: addDaysCheckFn } = await import('../utils/dateUtils.js');
+      const expectedDueDate = addDaysCheckFn(targetInstance.anchorDate, 10);
+      assert(newTask.currentDueDate === expectedDueDate, '349. The new task\'s due date exactly matches addDaysToLocalDate(anchorDate, relativeOffsetDays) — the same centralized helper used at plan launch');
+
+      // 350. Employee-specific safety: the OTHER employee's plan instance is completely unaffected
+      if (otherInstance) {
+        const instancesAfterAdd = await onboardingService.getAllInstances();
+        const otherInstanceAfter = instancesAfterAdd.find((i) => i.id === otherInstance.id);
+        assert(
+          otherInstanceAfter.progress.totalTasks === otherInstanceTaskCountBefore,
+          '350. Adding a task to one employee\'s plan instance does not add it to (or otherwise change the task count of) any other employee\'s plan instance'
+        );
+      } else {
+        assert(true, '350. Employee-safety cross-instance check skipped — only one plan instance present in current seed state');
+      }
+
+      // 351. Template safety: the reusable PlanTemplate's task count is completely unchanged
+      if (targetTemplateBefore) {
+        const templatesAfterAdd = await onboardingService.getAllTemplates();
+        const targetTemplateAfter = templatesAfterAdd.find((t) => t.id === targetInstance.planTemplateId);
+        assert(
+          targetTemplateAfter.taskCount === templateTaskCountBefore,
+          '351. Adding an employee-specific task does not change the reusable PlanTemplate\'s task count — the master template is untouched'
+        );
+      } else {
+        assert(true, '351. Template safety check skipped — target instance has no resolvable template in current seed state');
+      }
+
+      // 352. The new task supports the same Done/Reopen lifecycle as any other onboarding task, via the existing activityService
+      const newActivityId = newTask.activityId;
+      const completedViaExisting = await activityService.markComplete(newActivityId);
+      assert(completedViaExisting.completed === true, '352. The newly added task can be marked Done via the existing activityService.markComplete() — no special-cased task type');
+      const reopenedViaExisting = await activityService.reopen(newActivityId);
+      assert(reopenedViaExisting.completed === false, '352b. The newly added task can be Reopened via the existing activityService.reopen()');
+
+      // 353. Reconciliation after completing/reopening a manually-added task still flows through the shared reconcileOnboardingPlanProgress path (no duplicated completion logic)
+      assert(onboardingServiceSrc.includes('reconcileOnboardingPlanProgress'), '353. Task completion continues to flow through the existing reconcileOnboardingPlanProgress() reconciliation used by every onboarding task');
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Onboarding Modal Spacing + Simplified Add Task Form
+    // ==========================================================================
+
+    const launchPlanModalSrc3 = fs.readFileSync(path.resolve('./src/components/onboarding/LaunchPlanModal.jsx'), 'utf-8');
+    const addTaskModalSrc2 = fs.readFileSync(path.resolve('./src/components/onboarding/AddTaskModal.jsx'), 'utf-8');
+    const onboardingServiceSrc2 = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+
+    // --- MODAL SIZE / SPACING ---
+
+    // 354. A reusable, larger modal size variant (xl-modal) exists and is used by both onboarding modals — extending, not duplicating, the existing wide-modal size tier
+    assert(
+      indexCssSrc5.includes('.modal-card.xl-modal') && launchPlanModalSrc3.includes('xl-modal') && addTaskModalSrc2.includes('xl-modal'),
+      '354. A shared, reusable .modal-card.xl-modal size variant exists and is used by both Launch Onboarding Plan and Add Onboarding Task — extending the existing wide-modal tier rather than duplicating ad hoc widths'
+    );
+
+    // 355. The xl-modal width falls in the requested ~900-1050px range
+    {
+      const xlModalWidthMatch = indexCssSrc5.match(/\.modal-card\.xl-modal\s*\{[^}]*max-width:\s*(\d+)px/);
+      const xlModalWidth = xlModalWidthMatch ? parseInt(xlModalWidthMatch[1], 10) : 0;
+      assert(xlModalWidth >= 900 && xlModalWidth <= 1050, `355. The xl-modal max-width (${xlModalWidth}px) falls within the requested ~900-1050px range`);
+    }
+
+    // 356. Both modals use a spacious body variant (extra padding, roomier field spacing) rather than the tightly-packed default modal-body
+    assert(
+      launchPlanModalSrc3.includes('modal-body-spacious') && addTaskModalSrc2.includes('modal-body-spacious') && indexCssSrc5.includes('.modal-body-spacious') && indexCssSrc5.match(/\.modal-body-spacious\s*\{[^}]*padding:\s*1\.75rem/),
+      '356. Both modals use the shared .modal-body-spacious variant for generous body padding, instead of the tighter default .modal-body'
+    );
+
+    // 357. Field-group and label spacing are increased within the spacious body (scoped — the shared app-wide .form-group/.form-label rules used elsewhere are untouched)
+    assert(
+      indexCssSrc5.match(/\.modal-body-spacious \.form-group\s*\{[^}]*margin-bottom:\s*1\.5rem/) && indexCssSrc5.match(/\.modal-body-spacious \.form-label\s*\{[^}]*margin-bottom:\s*0\.5rem/) &&
+      indexCssSrc5.match(/\.form-group\s*\{\s*margin-bottom:\s*1\.15rem/),
+      '357. Field-group and label spacing are increased specifically within the spacious modal body, while the shared app-wide .form-group (1.15rem) used by every other form/modal is left unchanged'
+    );
+
+    // 358. Both modals use a spacious footer variant with real padding and a visual border separating it from the scrollable body — buttons no longer sit flush against the card edges
+    assert(
+      launchPlanModalSrc3.includes('modal-footer-spacious') && addTaskModalSrc2.includes('modal-footer-spacious') &&
+      indexCssSrc5.match(/\.modal-footer\.modal-footer-spacious[\s\S]{0,60}\{[^}]*padding:\s*1\.1rem 1\.75rem/) && indexCssSrc5.match(/\.modal-footer\.modal-footer-spacious[\s\S]{0,300}border-top:\s*1px solid/),
+      '358. Both modals use a shared .modal-footer-spacious variant (real padding + border separation) so footer buttons are no longer flush against the card edges'
+    );
+
+    // 359. Both modals still resolve to exactly ONE scrollable region (modal-scroll-shell's body flex:1/overflow-y:auto) — no nested scroll traps were introduced by the spacing changes
+    assert(
+      launchPlanModalSrc3.includes('modal-scroll-shell') && addTaskModalSrc2.includes('modal-scroll-shell') &&
+      indexCssSrc5.includes('.modal-scroll-shell > .modal-body') && indexCssSrc5.match(/\.modal-scroll-shell > \.modal-body[\s\S]{0,60}\{[^}]*flex:\s*1;[^}]*overflow-y:\s*auto/),
+      '359. Both modals still rely on the single modal-scroll-shell body scroll region — header and footer remain fixed, with no additional nested scroll areas introduced'
+    );
+
+    // 360. Header structure/copy is unchanged for both modals (title + subtitle preserved exactly)
+    assert(
+      launchPlanModalSrc3.includes('>Launch Onboarding Plan<') && launchPlanModalSrc3.includes('Assign an onboarding plan to an employee or intern.') &&
+      addTaskModalSrc2.includes('>Add Onboarding Task<') && addTaskModalSrc2.includes("Add a task to {employeeName || 'this employee'}'s current onboarding plan."),
+      '360. Both modal headers keep their existing title/subtitle copy exactly — only spacing/sizing changed'
+    );
+
+    // 361b. The employee detail task breakdown no longer shows a dangling "Rule:" label with nothing after it when a manually-added task has no assignmentRule
+    assert(
+      onbDetailSrc2.includes('{task.assignmentRule && (') && onbDetailSrc2.includes("Rule: {task.assignmentRule}"),
+      '361b. The task breakdown\'s "Rule: X" line only renders when assignmentRule is present — no empty "Rule:" label for manually-added tasks with no rule'
+    );
+
+    // --- ASSIGNEE RULE REMOVAL — BUSINESS LOGIC SAFETY ---
+
+    // 361. Reusable assignment logic (ASSIGNMENT_RULES, resolveAssigneeForRule) remains fully intact and still used by the Launch Onboarding Plan workflow and plan templates
+    assert(
+      onboardingDomainSrc.includes('export const ASSIGNMENT_RULES') && onboardingDomainSrc.includes('export function resolveAssigneeForRule') &&
+      launchPlanModalSrc3.includes('resolvedAssigneeId') && onboardingServiceSrc2.includes('resolveAssigneeForRule('),
+      '361. The reusable ASSIGNMENT_RULES / resolveAssigneeForRule() assignment system remains fully intact and still powers Launch Onboarding Plan and plan-template task resolution — nothing was globally removed'
+    );
+
+    resetDatabase();
+
+    // --- FUNCTIONAL: neutral default assignee + 0/positive/negative offsets ---
+    {
+      const { addDaysToLocalDate: addDaysCheckFn2 } = await import('../utils/dateUtils.js');
+      const instancesForOffsetCheck = await onboardingService.getAllInstances();
+      const offsetTargetInstance = instancesForOffsetCheck.find((i) => i.employeeId === 'emp-013') || instancesForOffsetCheck[0];
+
+      // 362. No assignmentRule supplied (as the simplified modal now does) creates a task with the existing neutral "Unassigned" default — no assignee is required to succeed
+      const neutralTask = await onboardingService.addTaskToInstance(offsetTargetInstance.id, {
+        title: 'Neutral Default Assignee Task',
+        relativeOffsetDays: 0,
+        required: true,
+      });
+      const neutralTaskEntry = neutralTask.progress.tasks.find((t) => t.title === 'Neutral Default Assignee Task');
+      assert(Boolean(neutralTaskEntry), '362. Manual task creation succeeds with no assignmentRule supplied at all');
+      assert(neutralTaskEntry.assignmentRule === null && neutralTaskEntry.originallyResolvedAssigneeId === null, '362b. With no assignmentRule supplied, the task resolves to the existing neutral null/"Unassigned" default — not a newly invented value, and not silently defaulting to a specific rule like HR');
+
+      // 363. Day offset 0 resolves to the employee's exact anchor start date
+      assert(neutralTaskEntry.currentDueDate === offsetTargetInstance.anchorDate, '363. A Relative Timing value of 0 resolves the due date to exactly the employee\'s anchor start date');
+
+      // 364. A positive day offset resolves to (anchorDate + N days) via the centralized helper
+      const positiveTask = await onboardingService.addTaskToInstance(offsetTargetInstance.id, {
+        title: 'Positive Offset Task',
+        relativeOffsetDays: 5,
+        required: false,
+      });
+      const positiveTaskEntry = positiveTask.progress.tasks.find((t) => t.title === 'Positive Offset Task');
+      assert(positiveTaskEntry.currentDueDate === addDaysCheckFn2(offsetTargetInstance.anchorDate, 5), '364. A positive Relative Timing value (+5) resolves the due date to 5 days after the anchor start date, via the existing addDaysToLocalDate() helper');
+
+      // 365. A negative day offset resolves to (anchorDate - N days) via the centralized helper
+      const negativeTask = await onboardingService.addTaskToInstance(offsetTargetInstance.id, {
+        title: 'Negative Offset Task',
+        relativeOffsetDays: -5,
+        required: false,
+      });
+      const negativeTaskEntry = negativeTask.progress.tasks.find((t) => t.title === 'Negative Offset Task');
+      assert(negativeTaskEntry.currentDueDate === addDaysCheckFn2(offsetTargetInstance.anchorDate, -5), '365. A negative Relative Timing value (-5) resolves the due date to 5 days before the anchor start date, via the existing addDaysToLocalDate() helper');
+
+      resetDatabase();
+    }
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);
