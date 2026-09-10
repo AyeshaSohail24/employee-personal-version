@@ -8,8 +8,11 @@ import {
   calculatePlanProgress,
   reconcilePlanInstanceCompletion,
   resolveAssigneeForRule,
+  resolveOnboardingAnchorDate,
+  composeOnboardingTasks,
   PLAN_INSTANCE_STATUS,
 } from '../domain/onboardingDomain.js';
+import { departmentService } from './departmentService.js';
 import { resolveCurrentRecord, resolveNextRecord } from '../domain/employmentDomain.js';
 import { addDaysToLocalDate, getTodayLocalDateString } from '../utils/dateUtils.js';
 
@@ -225,7 +228,153 @@ export const onboardingService = {
   },
 
   /**
+   * Fetches all active, scope-tagged onboarding task definitions (Universal / Employee /
+   * Intern / Department) — the raw building blocks composeOnboardingTasks() combines per
+   * employee. Legacy tasks without a scopeType (pre-migration) are excluded here; the
+   * storageEngine migration backfills scopeType on every load so this should not occur.
+   */
+  async getScopeTaskDefinitions() {
+    const db = loadDatabase();
+    return (db.onboardingPlanTasks || []).filter((t) => t.active !== false && t.scopeType);
+  },
+
+  /**
+   * Fetches summary counts (task count + required count) AND the actual ordered task list for
+   * each of the 4 task scopes, with Department scope expanded into one row per real Department
+   * (dynamically sourced — never hardcoded). Backs the Plans/Onboarding Setup page's 4 scope
+   * sections/cards, including their inline read-only task-list preview. The `tasks` array here
+   * is sorted by the exact same `sequence` field (ascending) as getScopeTasks() (the editor's
+   * data source) — a single read path, not a second composition/ordering implementation.
+   */
+  async getScopesSummary() {
+    const tasks = await this.getScopeTaskDefinitions();
+    const departments = await departmentService.getAll({ withCount: false });
+    const bySequence = (a, b) => (a.sequence || 0) - (b.sequence || 0);
+
+    const summarizeScope = (scopeType) => {
+      const scoped = tasks.filter((t) => t.scopeType === scopeType).sort(bySequence);
+      return { taskCount: scoped.length, requiredCount: scoped.filter((t) => t.required).length, tasks: scoped };
+    };
+
+    const departmentSummaries = departments.map((dept) => {
+      const scoped = tasks.filter((t) => t.scopeType === 'department' && t.scopeDepartmentId === dept.id).sort(bySequence);
+      return {
+        department: dept,
+        taskCount: scoped.length,
+        requiredCount: scoped.filter((t) => t.required).length,
+        tasks: scoped,
+      };
+    });
+
+    return {
+      universal: summarizeScope('universal'),
+      employee: summarizeScope('employee'),
+      intern: summarizeScope('intern'),
+      departments: departmentSummaries,
+    };
+  },
+
+  /**
+   * Fetches the ordered task list for ONE scope (used by the "Manage Tasks" editor).
+   */
+  async getScopeTasks(scopeType, departmentId = null) {
+    const tasks = await this.getScopeTaskDefinitions();
+    return tasks
+      .filter((t) => t.scopeType === scopeType && (scopeType !== 'department' || t.scopeDepartmentId === departmentId))
+      .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+  },
+
+  /**
+   * Replaces the task set for ONE scope. Mirrors updateTemplate()'s existing
+   * soft-replace-by-key pattern (every other scope's tasks are left untouched), but keyed by
+   * scope instead of planTemplateId. No minimum-task-count validation — a scope may
+   * legitimately be empty (e.g. a brand-new department, or Universal before HR configures it).
+   * New tasks are never given an assignmentRule — they use the established neutral/unassigned
+   * path (resolveAssigneeForRule(null, ...)), same as every other post-assignment-removal task.
+   */
+  async saveScopeTasks(scopeType, departmentId = null, tasksData = [], currentUserId = 'emp-001') {
+    const db = loadDatabase();
+    const allTasks = db.onboardingPlanTasks || [];
+
+    const isSameScope = (t) => t.scopeType === scopeType && (scopeType !== 'department' || t.scopeDepartmentId === departmentId);
+    const otherTasks = allTasks.filter((t) => !isSameScope(t));
+
+    const newTasks = (tasksData || []).map((t, index) => ({
+      id: t.id && String(t.id).startsWith('pt-') ? t.id : `pt-scope-${scopeType}${departmentId ? `-${departmentId}` : ''}-${index + 1}-${Date.now().toString().slice(-4)}`,
+      planTemplateId: null,
+      scopeType,
+      scopeDepartmentId: scopeType === 'department' ? departmentId : null,
+      activityTypeId: t.activityTypeId || 'act-type-1',
+      title: (t.title || '').trim(),
+      description: (t.description || '').trim(),
+      assignmentRule: null,
+      specificAssigneeId: null,
+      relativeOffsetDays: parseInt(t.relativeOffsetDays || 0, 10),
+      required: Boolean(t.required),
+      sequence: index + 1,
+      active: true,
+    }));
+
+    db.onboardingPlanTasks = [...otherTasks, ...newTasks];
+    saveDatabase(db);
+
+    try {
+      await auditService.logAction(
+        currentUserId,
+        AUDIT_ACTIONS.ONBOARDING_TEMPLATE_UPDATED || 'ONBOARDING_TEMPLATE_UPDATED',
+        'OnboardingTaskScope',
+        departmentId ? `${scopeType}:${departmentId}` : scopeType,
+        `Updated ${scopeType} onboarding task scope${departmentId ? ` (${departmentId})` : ''} with ${newTasks.length} tasks`
+      );
+    } catch (err) {}
+
+    return this.getScopeTasks(scopeType, departmentId);
+  },
+
+  /**
+   * Composes an employee's full applicable onboarding task set (Universal + Employee/Intern +
+   * Department) via the centralized composeOnboardingTasks() domain function, calculating due
+   * dates off the same anchor-date resolution used everywhere else in onboarding. This is the
+   * SAME function launchPlanInstance() calls below — the preview and the actual launch can
+   * never drift apart because they share one code path and one set of inputs.
+   */
+  async previewOnboardingComposition(employeeId, referenceDate = getTodayLocalDateString()) {
+    const employee = await employeeService.getById(employeeId);
+    if (!employee) throw new Error(`Employee with ID "${employeeId}" not found.`);
+
+    const records = await employmentRecordService.getAll();
+    const anchorDate = resolveOnboardingAnchorDate(employee, records, referenceDate);
+
+    if (!anchorDate) {
+      return {
+        isValid: false,
+        error: `Employee ${employee.fullName} does not have a valid start date.`,
+        employee,
+        anchorDate: null,
+        tasks: [],
+        typeScope: employee.directoryType === 'Intern' ? 'intern' : 'employee',
+        departmentId: (employee.department && employee.department.id) || null,
+        counts: { universal: 0, typeSpecific: 0, department: 0, total: 0, required: 0 },
+      };
+    }
+
+    const taskDefinitions = await this.getScopeTaskDefinitions();
+    const composition = composeOnboardingTasks(employee, taskDefinitions, anchorDate);
+
+    return {
+      isValid: composition.counts.total > 0,
+      error: composition.counts.total === 0 ? 'No onboarding tasks are configured for this employee.' : null,
+      employee,
+      anchorDate,
+      ...composition,
+    };
+  },
+
+  /**
    * Generates a preview for launching a plan template for an employee.
+   * LEGACY — kept for historical templates (getAllTemplates/getTemplateById remain available
+   * for getAllInstances()'s template-name lookup); the Launch Onboarding Plan UI no longer
+   * calls this, use previewOnboardingComposition() instead.
    */
   async previewPlanLaunch(employeeId, templateId, referenceDate = getTodayLocalDateString()) {
     const db = loadDatabase();
@@ -251,9 +400,15 @@ export const onboardingService = {
   },
 
   /**
-   * Single-write, validate-first PoC persistence launch transaction.
+   * Single-write, validate-first PoC persistence launch transaction. Composed from reusable
+   * scope-based task definitions (Universal + Employee/Intern + Department) via the same
+   * previewOnboardingComposition() used by the Launch modal's preview panel, so the launched
+   * instance's task set always exactly matches what HR was shown before clicking Launch.
+   * Creates a full SNAPSHOT of the currently-applicable tasks: later edits to Universal or
+   * Department scopes never retroactively change an already-launched instance, because these
+   * task-instance records are plain field-copies, never re-read live from onboardingPlanTasks.
    */
-  async launchPlanInstance(employeeId, templateId, manualOverrides = {}, currentUserId = 'emp-001') {
+  async launchPlanInstance(employeeId, currentUserId = 'emp-001') {
     const db = loadDatabase();
     const employee = await employeeService.getById(employeeId);
     if (!employee) throw new Error(`Employee with ID "${employeeId}" not found.`);
@@ -274,17 +429,17 @@ export const onboardingService = {
       throw new Error(`Employee ${employee.fullName} already has an active onboarding plan (In Progress / Needs Attention).`);
     }
 
-    // Assignment is no longer a concept in the onboarding UI (Launch Onboarding Plan only
-    // collects employee + template), so launching is never blocked on unresolved assignees —
-    // every previewed task is created below regardless of whether it resolved an assignee.
-    const preview = await this.previewPlanLaunch(employeeId, templateId);
+    const preview = await this.previewOnboardingComposition(employeeId);
+    if (!preview.isValid || preview.counts.total === 0) {
+      throw new Error(preview.error || 'No onboarding tasks are configured for this employee.');
+    }
 
     const nowIso = new Date().toISOString();
     const newInstId = `inst-${String(existingInstances.length + 1).padStart(3, '0')}`;
 
     const newPlanInstance = {
       id: newInstId,
-      planTemplateId: templateId,
+      planTemplateId: null,
       employeeId,
       startedAt: preview.anchorDate,
       anchorDate: preview.anchorDate,
@@ -297,30 +452,29 @@ export const onboardingService = {
     const newActivities = [];
     const existingActivityCount = rawActivities.length;
 
-    preview.taskPreviews.forEach((pt, index) => {
-      // manualOverrides is always {} now that the Launch modal no longer collects per-task
-      // assignees; pt.resolvedAssigneeId naturally stays null for assignment-rule-free tasks
-      // and every task is still created — it simply renders with no assignee, exactly like
-      // the existing neutral/unassigned path already used by manually-added employee tasks.
-      const resolvedAssigneeId = manualOverrides[pt.planTaskId] || pt.resolvedAssigneeId;
-
+    // No assignee is ever resolved here — composable scope tasks never carry an assignmentRule
+    // (they use the same neutral/unassigned architecture as manually-added employee tasks), so
+    // every task instance below is created with assigneeId: null, exactly like addTaskToInstance().
+    preview.tasks.forEach((pt, index) => {
       const newActId = `act-onb-gen-${String(existingActivityCount + index + 1).padStart(3, '0')}`;
       const newTiId = `ti-${newInstId}-${index + 1}`;
 
       const taskInst = {
         id: newTiId,
         planInstanceId: newInstId,
-        planTaskId: pt.planTaskId,
+        planTaskId: pt.id,
         activityId: newActId,
         title: pt.title,
         description: pt.description,
         activityTypeId: pt.activityTypeId,
-        assignmentRule: pt.assignmentRule,
-        originallyResolvedAssigneeId: resolvedAssigneeId,
+        assignmentRule: null,
+        originallyResolvedAssigneeId: null,
         relativeOffsetDays: pt.relativeOffsetDays,
         originallyCalculatedDueDate: pt.calculatedDueDate,
         required: pt.required,
         sequence: pt.sequence,
+        scopeType: pt.scopeType,
+        scopeDepartmentId: pt.scopeDepartmentId || null,
         createdAt: nowIso,
       };
 
@@ -330,7 +484,7 @@ export const onboardingService = {
         title: pt.title,
         description: pt.description,
         employeeId,
-        assigneeId: resolvedAssigneeId,
+        assigneeId: null,
         dueDate: pt.calculatedDueDate,
         completed: false,
         completedAt: null,
@@ -360,7 +514,7 @@ export const onboardingService = {
         AUDIT_ACTIONS.ONBOARDING_PLAN_LAUNCHED || 'ONBOARDING_PLAN_LAUNCHED',
         'PlanInstance',
         newInstId,
-        `Launched Onboarding Plan "${preview.template.name}" for employee ${employee.fullName} (${newTaskInstances.length} tasks)`
+        `Launched composed Onboarding Plan for employee ${employee.fullName} (${newTaskInstances.length} tasks: ${preview.counts.universal} universal, ${preview.counts.typeSpecific} ${preview.typeScope}, ${preview.counts.department} department)`
       );
     } catch (err) {}
 

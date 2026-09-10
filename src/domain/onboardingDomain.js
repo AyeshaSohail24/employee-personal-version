@@ -230,6 +230,65 @@ export function generatePlanPreview({
   };
 }
 
+export const ONBOARDING_TASK_SCOPES = {
+  UNIVERSAL: 'universal',
+  EMPLOYEE: 'employee',
+  INTERN: 'intern',
+  DEPARTMENT: 'department',
+};
+
+/**
+ * Composes an employee's full set of applicable onboarding tasks from reusable scope-based
+ * task definitions: Universal + (Employee OR Intern, by directoryType) + Department (by the
+ * employee's own department ID). Each scope is sorted independently by its own `sequence`
+ * field, then concatenated in that fixed order, and re-numbered into one clean ascending
+ * sequence for the resulting plan instance. This is the SINGLE source of composition truth —
+ * both the Launch modal's preview and the actual launch transaction call this same function
+ * with the same inputs, so a previewed count can never drift from what actually gets launched.
+ */
+export function composeOnboardingTasks(employee, taskDefinitions = [], anchorDate = null) {
+  const typeScope = employee && employee.directoryType === 'Intern'
+    ? ONBOARDING_TASK_SCOPES.INTERN
+    : ONBOARDING_TASK_SCOPES.EMPLOYEE;
+  const departmentId = (employee && employee.department && employee.department.id) || null;
+
+  const bySequence = (a, b) => (a.sequence || 0) - (b.sequence || 0);
+  const activeDefs = (taskDefinitions || []).filter((t) => t && t.active !== false);
+
+  const universalTasks = activeDefs
+    .filter((t) => t.scopeType === ONBOARDING_TASK_SCOPES.UNIVERSAL)
+    .sort(bySequence);
+
+  const typeTasks = activeDefs
+    .filter((t) => t.scopeType === typeScope)
+    .sort(bySequence);
+
+  const departmentTasks = departmentId
+    ? activeDefs
+        .filter((t) => t.scopeType === ONBOARDING_TASK_SCOPES.DEPARTMENT && t.scopeDepartmentId === departmentId)
+        .sort(bySequence)
+    : [];
+
+  const composed = [...universalTasks, ...typeTasks, ...departmentTasks];
+
+  const tasks = composed.map((t, idx) => ({
+    ...t,
+    scopeSequence: t.sequence,
+    sequence: idx + 1,
+    calculatedDueDate: anchorDate ? addDaysToLocalDate(anchorDate, t.relativeOffsetDays || 0) : null,
+  }));
+
+  const counts = {
+    universal: universalTasks.length,
+    typeSpecific: typeTasks.length,
+    department: departmentTasks.length,
+    total: tasks.length,
+    required: tasks.filter((t) => t.required).length,
+  };
+
+  return { tasks, typeScope, departmentId, counts };
+}
+
 /**
  * Calculates plan execution progress percentage and task metrics based on linked activities.
  * Task order is always the stable, ascending `sequence` field — never storage/insertion order.

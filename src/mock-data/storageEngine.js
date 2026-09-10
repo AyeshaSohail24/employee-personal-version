@@ -115,6 +115,58 @@ export function migrateEmployeeTagsIfNeeded(db) {
   return db;
 }
 
+/**
+ * Migrates legacy onboardingPlanTasks (tied only to a full PlanTemplate via planTemplateId)
+ * into the composable scope model by additively tagging scopeType/scopeDepartmentId.
+ * Non-destructive: existing fields (planTemplateId, assignmentRule, specificAssigneeId, etc.)
+ * are preserved untouched for historical/legacy display — only new fields are added.
+ * Mapping is derived from the task's own template metadata, never from guessing at task
+ * titles/content: a template with a real departmentId becomes that Department's scope; a
+ * template with no department is Employee scope unless its NAME is clearly an
+ * internship/apprenticeship template, in which case it becomes Intern scope. Nothing is ever
+ * classified as Universal here — Universal starts empty and is populated later by HR via the UI.
+ */
+export function migrateOnboardingScopesIfNeeded(db) {
+  if (!db || !Array.isArray(db.onboardingPlanTasks)) return db;
+
+  const needsMigration = db.onboardingPlanTasks.some((t) => t && !t.scopeType);
+  if (!needsMigration) return db;
+
+  const templates = db.onboardingPlanTemplates || [];
+  const templateMap = new Map(templates.map((t) => [t.id, t]));
+
+  db.onboardingPlanTasks = db.onboardingPlanTasks.map((t) => {
+    if (!t || t.scopeType) return t;
+
+    const tpl = templateMap.get(t.planTemplateId) || null;
+    let scopeType = 'employee';
+    let scopeDepartmentId = null;
+
+    if (tpl) {
+      if (tpl.departmentId) {
+        scopeType = 'department';
+        scopeDepartmentId = tpl.departmentId;
+      } else {
+        const nameLower = (tpl.name || '').toLowerCase();
+        scopeType = /intern|apprentice/.test(nameLower) ? 'intern' : 'employee';
+      }
+    }
+
+    return { ...t, scopeType, scopeDepartmentId };
+  });
+
+  inMemoryDb = db;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    } catch (err) {
+      console.error('StorageEngine: failed to save onboarding scope migration to localStorage.', err);
+    }
+  }
+
+  return db;
+}
+
 export function cleanupAttendanceIfNeeded(db) {
   if (!db) return db;
   if ('attendance' in db) {
@@ -294,7 +346,8 @@ function getInitialState() {
   const cleanedAtt = cleanupAttendanceIfNeeded(migrated);
   const cleanedDept = cleanupParentDepartmentIfNeeded(cleanedAtt);
   const cleanedLoc = cleanupPenangLocationIfNeeded(cleanedDept);
-  return cleanupTechnologyDepartmentIfNeeded(cleanedLoc);
+  const cleanedTech = cleanupTechnologyDepartmentIfNeeded(cleanedLoc);
+  return migrateOnboardingScopesIfNeeded(cleanedTech);
 }
 
 export function loadDatabase() {
@@ -335,7 +388,7 @@ export function loadDatabase() {
     const cleanedDept = cleanupParentDepartmentIfNeeded(cleanedAtt);
     const cleanedLoc = cleanupPenangLocationIfNeeded(cleanedDept);
     const cleanedTech = cleanupTechnologyDepartmentIfNeeded(cleanedLoc);
-    return cleanedTech;
+    return migrateOnboardingScopesIfNeeded(cleanedTech);
   } catch (err) {
     if (!inMemoryDb) {
       inMemoryDb = getInitialState();

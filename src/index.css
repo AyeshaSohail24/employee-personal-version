@@ -3730,6 +3730,252 @@ input.form-control:focus {
   transform: translateY(-1px);
 }
 
+/* Onboarding Plans — composable task scope sections (Universal / Employee / Intern / Department) */
+
+/* Scoped to the Plans page header only — .page-title/.page-subtitle are shared across many
+   pages, so spacing/text treatment here is deliberately namespaced under
+   .onboarding-plans-header rather than changed globally. */
+.onboarding-plans-header .page-title {
+  margin: 0 0 0.6rem 0;
+}
+
+.onboarding-plans-header .page-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-width: 720px;
+}
+
+/* Section-transition gap — deliberately larger than the 1.75rem gap BETWEEN scope sections
+   below, so the page introduction reads as clearly separate from the scope content that
+   follows it (not just another paragraph immediately above the Universal Tasks card). */
+.onboarding-plans-header {
+  margin-bottom: 2rem;
+}
+
+.onboarding-scope-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.onboarding-scope-section-title {
+  margin: 0 0 0.85rem 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* align-items: start — now that cards show their own task list, Employee/Intern (and each
+   Department card) should size to their own content instead of CSS Grid's default row-stretch
+   forcing a shorter scope's card up to match a longer neighbor's height. */
+.onboarding-scope-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.onboarding-scope-grid-dept {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+/* Card surface — noticeably more distinct from the light --bg-app page background than the
+   generic .table-container-card default (subtle border + shadow-sm was too close to invisible
+   against --bg-app here). A slightly cooler/darker border and a step-up to shadow-md gives
+   these configuration cards clear boundaries while staying flat/clean, not "KPI card" heavy. */
+.onboarding-scope-card {
+  padding: 1.4rem;
+  border-color: #D6DEE8;
+  box-shadow: var(--shadow-md);
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+.onboarding-scope-card:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: #C7D2DE;
+  transform: translateY(-1px);
+}
+
+.onboarding-scope-card--compact {
+  padding: 1.1rem;
+}
+
+/* Universal Tasks is the broadest scope — a slightly stronger (not louder) treatment: a soft
+   teal-tinted border instead of the shared neutral one, reusing the existing
+   --color-primary-border token rather than inventing a new color. */
+.onboarding-scope-card--emphasized {
+  border-color: var(--color-primary-border);
+}
+
+.onboarding-scope-card--emphasized:hover {
+  border-color: var(--color-primary);
+}
+
+.onboarding-scope-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.onboarding-scope-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.onboarding-scope-card-icon--compact {
+  width: 32px;
+  height: 32px;
+}
+
+.onboarding-scope-card-icon--emphasized {
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.onboarding-scope-card-title {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.onboarding-scope-card-title--compact {
+  font-size: 0.9rem;
+}
+
+.onboarding-scope-card-description {
+  margin: 0.35rem 0 0 0;
+  font-size: 0.79rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  max-width: 460px;
+}
+
+/* Read-only inline preview of a scope's configured tasks (title/description/relative timing).
+   Bounded to a sensible max-height so a scope with many tasks can't stretch the whole Plans
+   page — only this inner list scrolls, reusing the app's existing .app-scroll-area scrollbar
+   styling but with overflow switched from always-visible `scroll` to `auto` so a short list
+   never shows a scrollbar at all. */
+.onboarding-scope-task-list {
+  margin-top: 0.9rem;
+  max-height: 260px;
+  overflow-y: auto;
+  /* Comfortable gutter between task content and the scrollbar itself — the previous 0.35rem
+     left text sitting almost flush against the 8px-wide .app-scroll-area thumb. scrollbar-gutter
+     reserves the track space up front where supported; the padding is the real fix either way. */
+  padding-right: 0.75rem;
+  scrollbar-gutter: stable;
+}
+
+.onboarding-scope-task-row {
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border-light);
+}
+
+.onboarding-scope-task-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.onboarding-scope-task-title {
+  display: block;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.onboarding-scope-task-description {
+  margin: 0.2rem 0 0.4rem 0;
+  font-size: 0.77rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  /* Preserve HR's own line breaks (pre-line keeps newlines but still collapses/wraps other
+     whitespace normally) without touching the stored plain-text description or rendering HTML. */
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.onboarding-scope-task-timing {
+  display: inline-block;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.onboarding-scope-task-list-empty {
+  margin-top: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px dashed var(--border-light);
+  border-radius: var(--radius-md);
+  font-size: 0.77rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.onboarding-scope-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.onboarding-scope-card-counts {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.onboarding-scope-card-count-main {
+  color: var(--text-main);
+}
+
+.onboarding-scope-card-count-required {
+  color: #DC2626;
+}
+
+.onboarding-scope-card-action {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1024px) {
+  .onboarding-scope-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .onboarding-scope-grid-dept {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .onboarding-scope-grid-2,
+  .onboarding-scope-grid-dept {
+    grid-template-columns: 1fr;
+  }
+}
+
 .modal-footer {
   display: flex;
   align-items: center;

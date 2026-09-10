@@ -7,88 +7,88 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
-  FileText,
   AlertTriangle,
-  CheckCircle2,
+  Globe2,
+  UsersRound,
+  GraduationCap,
+  Building2,
 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
 import { departmentService } from '../../services/departmentService.js';
 import { activityService } from '../../services/activityService.js';
 import Select from '../../components/common/Select.jsx';
 
+const SCOPE_META = {
+  universal: {
+    title: 'Universal Tasks',
+    subtitle: 'These tasks are included for everyone.',
+    icon: <Globe2 size={20} />,
+  },
+  employee: {
+    title: 'Employee Tasks',
+    subtitle: 'These tasks are added for employees.',
+    icon: <UsersRound size={20} />,
+  },
+  intern: {
+    title: 'Intern Tasks',
+    subtitle: 'These tasks are added for interns and apprentices.',
+    icon: <GraduationCap size={20} />,
+  },
+};
+
 export default function PlanEditorPage() {
-  const { planId } = useParams();
+  const { scopeSegment, departmentId: departmentIdParam } = useParams();
   const navigate = useNavigate();
-  const isEditing = Boolean(planId && planId !== 'new');
 
-  const [departments, setDepartments] = useState([]);
+  // '/onboarding/plans/department/:departmentId' -> scopeType 'department'
+  // '/onboarding/plans/universal|employee|intern' -> scopeType is the segment itself
+  const isDepartmentScope = scopeSegment === 'department';
+  const scopeType = isDepartmentScope ? 'department' : scopeSegment;
+  const departmentId = isDepartmentScope ? departmentIdParam : null;
+
   const [activityTypes, setActivityTypes] = useState([]);
-
-  const [name, setName] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
-  const [description, setDescription] = useState('');
-  const [active, setActive] = useState(true);
+  const [department, setDepartment] = useState(null);
   const [tasks, setTasks] = useState([]);
 
-  const [loading, setLoading] = useState(isEditing);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    loadOptions();
-    if (isEditing) {
-      loadTemplate(planId);
-    } else {
-      // Default initial tasks for new template
-      setTasks([
-        {
-          id: 'temp-1',
-          title: 'Prepare workstation and access credentials',
-          description: 'Setup laptop, email account, internal portal access, and desk setup.',
-          activityTypeId: 'act-type-4',
-          relativeOffsetDays: -5,
-          required: true,
-          sequence: 1,
-        },
-        {
-          id: 'temp-2',
-          title: 'Conduct HR Orientation Session',
-          description: 'Welcome new hire, review company benefits, policies, and workplace overview.',
-          activityTypeId: 'act-type-3',
-          relativeOffsetDays: 0,
-          required: true,
-          sequence: 2,
-        },
-      ]);
-    }
-  }, [planId]);
+    loadEditor();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeSegment, departmentIdParam]);
 
-  const loadOptions = async () => {
-    try {
-      const depts = await departmentService.getAll();
-      const types = await activityService.getActiveTypes();
-
-      setDepartments(depts);
-      setActivityTypes(types);
-    } catch (err) {
-      console.error('Failed to load plan builder options:', err);
-    }
-  };
-
-  const loadTemplate = async (id) => {
+  const loadEditor = async () => {
     setLoading(true);
+    setError(null);
+    setNotFound(false);
+
+    const validScope = scopeType === 'universal' || scopeType === 'employee' || scopeType === 'intern' || (scopeType === 'department' && departmentId);
+    if (!validScope) {
+      setNotFound(true);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const tpl = await onboardingService.getTemplateById(id);
-      if (!tpl) {
-        setError(`Plan Template "${id}" not found.`);
-        return;
+      const types = await activityService.getActiveTypes();
+      setActivityTypes(types);
+
+      if (scopeType === 'department') {
+        const dept = await departmentService.getById(departmentId);
+        if (!dept) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
+        setDepartment(dept);
       }
-      setName(tpl.name);
-      setDepartmentId(tpl.departmentId || '');
-      setDescription(tpl.description || '');
-      setActive(tpl.active !== false);
+
+      const scopeTasks = await onboardingService.getScopeTasks(scopeType, departmentId);
       setTasks(
-        (tpl.tasks || []).map((t, idx) => ({
+        scopeTasks.map((t, idx) => ({
           id: t.id,
           title: t.title,
           description: t.description || '',
@@ -127,10 +127,6 @@ export default function PlanEditorPage() {
   };
 
   const handleRemoveTask = (index) => {
-    if (tasks.length <= 1) {
-      alert('Plan template must contain at least 1 task.');
-      return;
-    }
     setTasks((prev) => prev.filter((_, i) => i !== index).map((t, idx) => ({ ...t, sequence: idx + 1 })));
   };
 
@@ -151,20 +147,8 @@ export default function PlanEditorPage() {
     e.preventDefault();
     setError(null);
 
-    if (!name.trim()) {
-      setError('Template name is required.');
-      return;
-    }
-
-    if (tasks.length === 0) {
-      setError('Template must contain at least 1 task.');
-      return;
-    }
-
-    if (!tasks.some((t) => t.required)) {
-      setError('Template must contain at least 1 required task.');
-    }
-
+    // Scopes may legitimately be empty (e.g. a brand-new department, or Universal before HR
+    // configures it) — the only validation left is that any task present has a title.
     for (let i = 0; i < tasks.length; i++) {
       if (!tasks[i].title.trim()) {
         setError(`Task #${i + 1} is missing a title.`);
@@ -174,19 +158,7 @@ export default function PlanEditorPage() {
 
     setSaving(true);
     try {
-      const payload = {
-        name: name.trim(),
-        departmentId: departmentId || null,
-        description: description.trim(),
-        active,
-      };
-
-      if (isEditing) {
-        await onboardingService.updateTemplate(planId, payload, tasks);
-      } else {
-        await onboardingService.createTemplate(payload, tasks);
-      }
-
+      await onboardingService.saveScopeTasks(scopeType, departmentId, tasks);
       navigate('/onboarding/plans');
     } catch (err) {
       setError(err.message);
@@ -195,33 +167,55 @@ export default function PlanEditorPage() {
     }
   };
 
-  if (loading) {
+  if (notFound) {
     return (
       <div className="page-layout-container">
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Loading template editor...
+        <div style={{ padding: '3rem', textAlign: 'center' }}>
+          <h2>Task Scope Not Found</h2>
+          <Link to="/onboarding/plans" className="btn-secondary" style={{ marginTop: '1rem', display: 'inline-block' }}>
+            Back to Onboarding Plans
+          </Link>
         </div>
       </div>
     );
   }
+
+  if (loading) {
+    return (
+      <div className="page-layout-container">
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+          Loading task scope editor...
+        </div>
+      </div>
+    );
+  }
+
+  const meta = scopeType === 'department'
+    ? {
+        title: `${department.name} Tasks`,
+        subtitle: `These tasks are added for people in ${department.name}.`,
+        icon: <Building2 size={20} />,
+      }
+    : SCOPE_META[scopeType];
 
   return (
     <div className="page-layout-container">
       {/* Back link */}
       <div style={{ marginBottom: '1rem' }}>
         <Link to="/onboarding/plans" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
-          <ArrowLeft size={14} /> Back to Plan Templates
+          <ArrowLeft size={14} /> Back to Onboarding Plans
         </Link>
       </div>
 
       <form onSubmit={handleSave}>
         {/* Header Title & Actions */}
         <div className="page-header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 className="page-title">{isEditing ? 'Edit Plan Template' : 'Create Onboarding Plan Template'}</h1>
-            <p className="page-subtitle">
-              Configure template metadata, task sequences, and relative offset days.
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div className="modal-icon-badge">{meta.icon}</div>
+            <div>
+              <h1 className="page-title">{meta.title}</h1>
+              <p className="page-subtitle">{meta.subtitle}</p>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <Link to="/onboarding/plans" className="btn-secondary" style={{ textDecoration: 'none' }}>
@@ -234,7 +228,7 @@ export default function PlanEditorPage() {
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
             >
               <Save size={15} />
-              <span>{saving ? 'Saving...' : 'Save Plan Template'}</span>
+              <span>{saving ? 'Saving...' : 'Save Tasks'}</span>
             </button>
           </div>
         </div>
@@ -246,65 +240,11 @@ export default function PlanEditorPage() {
           </div>
         )}
 
-        {/* Template Header Form */}
-        <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
-          <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.975rem', fontWeight: 600 }}>Template Settings</h3>
-
-          <div className="plan-template-settings-grid" style={{ marginBottom: '1.25rem' }}>
-            <div className="form-group">
-              <label className="form-label">Template Name <span className="required-star">*</span></label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g. Standard Employee Onboarding"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Applicable Department</label>
-              <Select
-                variant="form"
-                value={departmentId}
-                onChange={(e) => setDepartmentId(e.target.value)}
-                options={[
-                  { value: '', label: 'General (All Departments)' },
-                  ...departments.map((d) => ({ value: d.id, label: d.name }))
-                ]}
-              />
-            </div>
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-              <label className="form-label">Status</label>
-              <label className="styled-checkbox-label" style={{ height: '38px' }}>
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={(e) => setActive(e.target.checked)}
-                />
-                <span>Active Template</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Description</label>
-            <textarea
-              className="form-textarea form-textarea-lg"
-              placeholder="Describe the purpose and target audience for this plan template..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-        </div>
-
         {/* Task Builder List */}
         <div className="table-container-card" style={{ padding: '1.25rem', background: '#FFF' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h3 style={{ margin: 0, fontSize: '0.975rem', fontWeight: 600 }}>
-              Plan Tasks ({tasks.length})
+              Tasks ({tasks.length})
             </h3>
             <button
               type="button"
@@ -316,6 +256,12 @@ export default function PlanEditorPage() {
               <span>Add Task</span>
             </button>
           </div>
+
+          {tasks.length === 0 && (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', border: '1px dashed var(--border-light)', borderRadius: 'var(--radius-lg)', marginBottom: '1rem' }}>
+              No tasks in this scope yet. Click "Add Task" to get started.
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {tasks.map((task, idx) => (

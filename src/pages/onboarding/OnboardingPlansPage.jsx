@@ -1,163 +1,196 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  FileText,
-  Plus,
-  Edit,
-  Copy,
-  CheckCircle2,
-  XCircle,
-  Play,
-  Layers,
-  ChevronRight,
-} from 'lucide-react';
+import { Globe2, UsersRound, GraduationCap, Building2, Settings2 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
-import LaunchPlanModal from '../../components/onboarding/LaunchPlanModal.jsx';
+
+function formatRelativeOffset(days) {
+  const value = days || 0;
+  if (value === 0) return 'Day 0';
+  return value > 0 ? `Day +${value}` : `Day ${value}`;
+}
+
+// Read-only preview of a scope's configured tasks, in their existing configured sequence order
+// (never re-sorted here — the order already comes pre-sorted by sequence from
+// onboardingService.getScopesSummary()). No Edit/Delete/Move controls live here; those only
+// exist in the "Manage Tasks" editor this card links to.
+function ScopeTaskList({ tasks, emptyStateMessage }) {
+  if (!tasks || tasks.length === 0) {
+    return (
+      <div className="onboarding-scope-task-list-empty">
+        {emptyStateMessage}
+      </div>
+    );
+  }
+
+  return (
+    <div className="onboarding-scope-task-list app-scroll-area">
+      {tasks.map((task) => (
+        <div key={task.id} className="onboarding-scope-task-row">
+          <span className="onboarding-scope-task-title">{task.title}</span>
+          {task.description && (
+            <p className="onboarding-scope-task-description">{task.description}</p>
+          )}
+          <span className="onboarding-scope-task-timing">{formatRelativeOffset(task.relativeOffsetDays)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCount, requiredCount, to, compact = false, emphasized = false }) {
+  const cardClassName = [
+    'table-container-card',
+    'onboarding-scope-card',
+    compact ? 'onboarding-scope-card--compact' : '',
+    emphasized ? 'onboarding-scope-card--emphasized' : '',
+  ].filter(Boolean).join(' ');
+
+  const iconClassName = [
+    'onboarding-scope-card-icon',
+    compact ? 'onboarding-scope-card-icon--compact' : '',
+    emphasized ? 'onboarding-scope-card-icon--emphasized' : '',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <div className={cardClassName}>
+      <div className="onboarding-scope-card-header">
+        <div className={iconClassName}>
+          {icon}
+        </div>
+        <div>
+          <h3 className={`onboarding-scope-card-title ${compact ? 'onboarding-scope-card-title--compact' : ''}`}>
+            {title}
+          </h3>
+          {description && (
+            <p className="onboarding-scope-card-description">{description}</p>
+          )}
+        </div>
+      </div>
+
+      <ScopeTaskList tasks={tasks} emptyStateMessage={emptyStateMessage} />
+
+      <div className="onboarding-scope-card-footer">
+        <div className="onboarding-scope-card-counts">
+          <strong className="onboarding-scope-card-count-main">{taskCount}</strong> task{taskCount === 1 ? '' : 's'}
+          {' · '}
+          <strong className="onboarding-scope-card-count-required">{requiredCount}</strong> required
+        </div>
+        <Link to={to} className="btn-secondary onboarding-scope-card-action">
+          <Settings2 size={13} />
+          <span>Manage Tasks</span>
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default function OnboardingPlansPage() {
-  const [templates, setTemplates] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
-  const [preselectedTplId, setPreselectedTplId] = useState(null);
 
   useEffect(() => {
-    loadTemplates();
+    loadSummary();
   }, []);
 
-  const loadTemplates = async () => {
+  const loadSummary = async () => {
     setLoading(true);
     try {
-      const data = await onboardingService.getAllTemplates();
-      setTemplates(data);
+      const data = await onboardingService.getScopesSummary();
+      setSummary(data);
     } catch (err) {
-      console.error('Failed to load onboarding templates:', err);
+      console.error('Failed to load onboarding task scope summary:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleToggleActive = async (id) => {
-    try {
-      await onboardingService.toggleTemplateActive(id);
-      await loadTemplates();
-    } catch (err) {
-      alert(`Failed to toggle template status: ${err.message}`);
-    }
-  };
-
-  const handleOpenLaunchModal = (tplId) => {
-    setPreselectedTplId(tplId);
-    setIsLaunchModalOpen(true);
-  };
-
   return (
     <div className="page-layout-container">
-      {/* Page Header */}
-      <div className="page-header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 className="page-title">Onboarding Plan Templates</h1>
+      <div className="page-header-container">
+        <div className="onboarding-plans-header">
+          <h1 className="page-title">Onboarding Plans</h1>
           <p className="page-subtitle">
-            Configure reusable onboarding plan templates and relative task schedules.
+            Configure reusable onboarding tasks by scope. Universal, employee/intern, and department tasks are combined automatically when onboarding is launched.
           </p>
         </div>
-        <Link to="/onboarding/plans/new" className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}>
-          <Plus size={16} />
-          <span>Create Plan Template</span>
-        </Link>
       </div>
 
-      {/* Templates Grid / List */}
-      {loading ? (
+      {loading || !summary ? (
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Loading plan templates...
-        </div>
-      ) : templates.length === 0 ? (
-        <div className="table-container-card" style={{ padding: '3rem', textAlign: 'center' }}>
-          <FileText size={36} style={{ color: 'var(--border-dark)', marginBottom: '0.5rem' }} />
-          <h3>No Plan Templates Configured</h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-            Click "Create Plan Template" to build your first reusable onboarding workflow.
-          </p>
-          <Link to="/onboarding/plans/new" className="btn-primary">
-            Create Plan Template
-          </Link>
+          Loading onboarding task scopes...
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.25rem' }}>
-          {templates.map((tpl) => (
-            <div key={tpl.id} className="table-container-card plan-template-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '0.725rem', fontWeight: 700, padding: '0.15rem 0.45rem', borderRadius: '4px', background: tpl.department ? '#EFF6FF' : '#F1F5F9', color: tpl.department ? '#1D4ED8' : '#475569' }}>
-                    {tpl.department ? tpl.department.name : 'General (All Depts)'}
-                  </span>
+        <div className="onboarding-scope-sections">
+          {/* Universal Tasks — full width */}
+          <section>
+            <ScopeCard
+              emphasized
+              icon={<Globe2 size={20} />}
+              title="Universal Tasks"
+              description="Included in every onboarding plan."
+              tasks={summary.universal.tasks}
+              emptyStateMessage="No universal tasks configured yet. Add tasks here to include them in every onboarding plan."
+              taskCount={summary.universal.taskCount}
+              requiredCount={summary.universal.requiredCount}
+              to="/onboarding/plans/universal"
+            />
+          </section>
 
-                  <button
-                    type="button"
-                    onClick={() => handleToggleActive(tpl.id)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                    title={tpl.active !== false ? 'Deactivate Template' : 'Activate Template'}
-                  >
-                    <span className="presence-badge" style={tpl.active !== false ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : { backgroundColor: '#F1F5F9', color: '#64748B', borderColor: '#CBD5E1' }}>
-                      {tpl.active !== false ? 'Active' : 'Inactive'}
-                    </span>
-                  </button>
-                </div>
-
-                <h3 style={{ margin: '0.25rem 0 0.5rem 0', fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                  {tpl.name}
-                </h3>
-
-                <p style={{ fontSize: '0.815rem', color: 'var(--text-muted)', lineHeight: '1.4', marginBottom: '1rem', minHeight: '2.8em' }}>
-                  {tpl.description || 'No description provided.'}
-                </p>
-
-                <div style={{ display: 'flex', gap: '1.25rem', fontSize: '0.785rem', color: 'var(--text-muted)', padding: '0.5rem 0', borderTop: '1px solid var(--border-light)', borderBottom: '1px solid var(--border-light)', marginBottom: '1rem' }}>
-                  <div>
-                    Total Tasks: <strong style={{ color: 'var(--text-main)' }}>{tpl.taskCount}</strong>
-                  </div>
-                  <div>
-                    Required: <strong style={{ color: '#DC2626' }}>{tpl.requiredTaskCount}</strong>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Link
-                  to={`/onboarding/plans/${tpl.id}/edit`}
-                  className="btn-secondary"
-                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.785rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', textDecoration: 'none' }}
-                >
-                  <Edit size={13} />
-                  <span>Edit Plan</span>
-                </Link>
-
-                <button
-                  type="button"
-                  className="btn-primary"
-                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.785rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                  onClick={() => handleOpenLaunchModal(tpl.id)}
-                  disabled={tpl.active === false}
-                >
-                  <Play size={13} />
-                  <span>Launch</span>
-                </button>
-              </div>
+          {/* Employee / Intern — side by side */}
+          <section>
+            <h2 className="onboarding-scope-section-title">Type-Specific Tasks</h2>
+            <div className="onboarding-scope-grid-2">
+              <ScopeCard
+                icon={<UsersRound size={20} />}
+                title="Employee Tasks"
+                description="Included for employees in addition to Universal Tasks."
+                tasks={summary.employee.tasks}
+                emptyStateMessage="No employee-specific tasks configured yet."
+                taskCount={summary.employee.taskCount}
+                requiredCount={summary.employee.requiredCount}
+                to="/onboarding/plans/employee"
+              />
+              <ScopeCard
+                icon={<GraduationCap size={20} />}
+                title="Intern Tasks"
+                description="Included for interns and apprentices in addition to Universal Tasks."
+                tasks={summary.intern.tasks}
+                emptyStateMessage="No intern-specific tasks configured yet."
+                taskCount={summary.intern.taskCount}
+                requiredCount={summary.intern.requiredCount}
+                to="/onboarding/plans/intern"
+              />
             </div>
-          ))}
+          </section>
+
+          {/* Department Tasks — compact scalable grid, rendered dynamically */}
+          <section>
+            <h2 className="onboarding-scope-section-title">Department Tasks</h2>
+            {summary.departments.length === 0 ? (
+              <div className="table-container-card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                No departments configured yet.
+              </div>
+            ) : (
+              <div className="onboarding-scope-grid-dept">
+                {summary.departments.map((row) => (
+                  <ScopeCard
+                    key={row.department.id}
+                    compact
+                    icon={<Building2 size={16} />}
+                    title={row.department.name}
+                    description="Configure department-specific onboarding tasks."
+                    tasks={row.tasks}
+                    emptyStateMessage="No department-specific tasks configured. Universal and type-specific tasks will still apply."
+                    taskCount={row.taskCount}
+                    requiredCount={row.requiredCount}
+                    to={`/onboarding/plans/department/${row.department.id}`}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       )}
-
-      {/* Launch Plan Modal */}
-      <LaunchPlanModal
-        isOpen={isLaunchModalOpen}
-        onClose={() => {
-          setIsLaunchModalOpen(false);
-          setPreselectedTplId(null);
-        }}
-        preselectedTemplateId={preselectedTplId}
-        onSuccess={() => loadTemplates()}
-      />
     </div>
   );
 }
