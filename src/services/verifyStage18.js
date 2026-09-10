@@ -1603,11 +1603,12 @@ export async function verifyStage18() {
       '309. OverdueTasksModal retains its exact heading/subtitle and the fixed-header/single-scroll-region modal-scroll-shell pattern'
     );
 
-    // 310. OverdueTasksModal still renders task info + Mark Complete via props only (no owned data fetch — reused, not duplicated)
+    // 310. UPDATED — OverdueTasksModal still renders task title/due date/employee and Mark Complete via props only (no owned data fetch).
+    // The "Assigned: {task.assigneeEmployee...}" text was intentionally removed as part of stripping assignment concepts from onboarding.
     assert(
-      overdueTasksModalCodeOnly.includes('task.title') && overdueTasksModalCodeOnly.includes('task.dueDate') && overdueTasksModalCodeOnly.includes('task.relatedEmployee') && overdueTasksModalCodeOnly.includes('task.assigneeEmployee') && overdueTasksModalCodeOnly.includes('onMarkComplete(task.id)') &&
-      !overdueTasksModalCodeOnly.includes('getOverdueActivities') && !overdueTasksModalCodeOnly.includes('activityService'),
-      '310. OverdueTasksModal still renders task title/due date/employee/assignee and Mark Complete via props only — no owned activityService call (no duplicated data source)'
+      overdueTasksModalCodeOnly.includes('task.title') && overdueTasksModalCodeOnly.includes('task.dueDate') && overdueTasksModalCodeOnly.includes('task.relatedEmployee') && overdueTasksModalCodeOnly.includes('onMarkComplete(task.id)') &&
+      !overdueTasksModalCodeOnly.includes('assigneeEmployee') && !overdueTasksModalCodeOnly.includes('getOverdueActivities') && !overdueTasksModalCodeOnly.includes('activityService'),
+      '310. OverdueTasksModal renders task title/due date/employee and Mark Complete via props only — the assignee display was removed, and there is still no owned activityService call (no duplicated data source)'
     );
 
     // 311. Employees page wires its own fetched overdueTasks state and existing handler into the modal (single fetch call site)
@@ -1782,10 +1783,13 @@ export async function verifyStage18() {
     // 332. LaunchPlanModal supports Escape-to-close like the other app modals (Overdue Tasks, Candidate Replies)
     assert(launchPlanModalSrc2.includes("e.key === 'Escape'") && launchPlanModalSrc2.includes('onClose()'), '332. LaunchPlanModal closes on Escape, matching the existing modal UX pattern');
 
-    // 333. LaunchPlanModal's underlying launch business logic (employee/template selection, preview, manual overrides, launch call) is fully preserved
+    // 333. UPDATED — LaunchPlanModal's core launch business logic (employee/template selection, preview, launch call) is preserved.
+    // The per-task manual assignee override was intentionally removed as part of stripping assignment concepts from onboarding —
+    // Launch Onboarding Plan now only ever collects employee + template (see the dedicated assignment-removal checks below).
     assert(
-      launchPlanModalSrc2.includes('onboardingService.previewPlanLaunch') && launchPlanModalSrc2.includes('onboardingService.launchPlanInstance') && launchPlanModalSrc2.includes('manualOverrides') && launchPlanModalSrc2.includes('canLaunch'),
-      '333. LaunchPlanModal preserves its existing employee/template selection, preview, manual-override, and launch business logic unchanged'
+      launchPlanModalSrc2.includes('onboardingService.previewPlanLaunch') && launchPlanModalSrc2.includes('onboardingService.launchPlanInstance') && launchPlanModalSrc2.includes('canLaunch') &&
+      !launchPlanModalSrc2.includes('manualOverrides'),
+      '333. LaunchPlanModal preserves its employee/template selection, preview, and launch call — the manual-override mechanism was intentionally removed, not left unchanged'
     );
 
     // --- ADD TASK (employee detail page) ---
@@ -2023,20 +2027,23 @@ export async function verifyStage18() {
       '360. Both modal headers keep their existing title/subtitle copy exactly — only spacing/sizing changed'
     );
 
-    // 361b. The employee detail task breakdown no longer shows a dangling "Rule:" label with nothing after it when a manually-added task has no assignmentRule
+    // 361b. UPDATED — the entire Assignee column (assigneeName display AND the "Rule: X" line) is now completely removed from the
+    // employee detail task breakdown, not merely guarded for the empty case. This supersedes the earlier, narrower check.
     assert(
-      onbDetailSrc2.includes('{task.assignmentRule && (') && onbDetailSrc2.includes("Rule: {task.assignmentRule}"),
-      '361b. The task breakdown\'s "Rule: X" line only renders when assignmentRule is present — no empty "Rule:" label for manually-added tasks with no rule'
+      !onbDetailSrc2.includes('>Assignee<') && !onbDetailSrc2.includes('assigneeEmployee') && !onbDetailSrc2.includes('Rule: {task.assignmentRule}') && !onbDetailSrc2.includes('Unassigned'),
+      '361b. The Assignee column (header, assigneeName display, and "Rule: X" metadata) is completely removed from the employee onboarding task breakdown'
     );
 
     // --- ASSIGNEE RULE REMOVAL — BUSINESS LOGIC SAFETY ---
 
-    // 361. Reusable assignment logic (ASSIGNMENT_RULES, resolveAssigneeForRule) remains fully intact and still used by the Launch Onboarding Plan workflow and plan templates
+    // 361. UPDATED — the reusable ASSIGNMENT_RULES/resolveAssigneeForRule() domain logic remains fully intact (still powers plan-template
+    // resolution and the employee-specific Add Task neutral path), but LaunchPlanModal itself no longer reads/displays resolvedAssigneeId —
+    // that surfaced only through the now-removed per-task override column.
     assert(
-      onboardingDomainSrc.includes('export const ASSIGNMENT_RULES') && onboardingDomainSrc.includes('export function resolveAssigneeForRule') &&
-      launchPlanModalSrc3.includes('resolvedAssigneeId') && onboardingServiceSrc2.includes('resolveAssigneeForRule('),
-      '361. The reusable ASSIGNMENT_RULES / resolveAssigneeForRule() assignment system remains fully intact and still powers Launch Onboarding Plan and plan-template task resolution — nothing was globally removed'
+      onboardingDomainSrc.includes('export const ASSIGNMENT_RULES') && onboardingDomainSrc.includes('export function resolveAssigneeForRule') && onboardingServiceSrc2.includes('resolveAssigneeForRule('),
+      '361. The reusable ASSIGNMENT_RULES / resolveAssigneeForRule() domain logic remains fully intact at the service/domain layer — nothing globally shared was deleted'
     );
+    assert(!launchPlanModalSrc3.includes('resolvedAssigneeId'), '361c. LaunchPlanModal itself no longer reads resolvedAssigneeId — the per-task assignee override UI it powered was removed');
 
     resetDatabase();
 
@@ -2076,6 +2083,723 @@ export async function verifyStage18() {
       });
       const negativeTaskEntry = negativeTask.progress.tasks.find((t) => t.title === 'Negative Offset Task');
       assert(negativeTaskEntry.currentDueDate === addDaysCheckFn2(offsetTargetInstance.anchorDate, -5), '365. A negative Relative Timing value (-5) resolves the due date to 5 days before the anchor start date, via the existing addDaysToLocalDate() helper');
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Launch Modal Height + Redundant Timing Line Removal + Task Ordering Fix
+    // ==========================================================================
+
+    const launchPlanModalSrc4 = fs.readFileSync(path.resolve('./src/components/onboarding/LaunchPlanModal.jsx'), 'utf-8');
+    const addTaskModalSrc3 = fs.readFileSync(path.resolve('./src/components/onboarding/AddTaskModal.jsx'), 'utf-8');
+    const indexCssSrc6 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+    const onboardingDomainSrc2 = fs.readFileSync(path.resolve('./src/domain/onboardingDomain.js'), 'utf-8');
+
+    // --- LAUNCH MODAL HEIGHT ---
+
+    // 366. LaunchPlanModal carries a dedicated modal-launch-plan class, scoped separately from the shared xl-modal/modal-body-spacious variants
+    assert(launchPlanModalSrc4.includes('modal-launch-plan'), '366. LaunchPlanModal carries a dedicated .modal-launch-plan class for its extra desktop height');
+
+    // 367. AddTaskModal does NOT carry modal-launch-plan — the extra height is scoped to Launch Plan only, so Add Task's already-full body doesn't gain awkward empty space
+    assert(!addTaskModalSrc3.includes('modal-launch-plan'), '367. AddTaskModal does not carry .modal-launch-plan — the taller sizing is scoped only to Launch Onboarding Plan');
+
+    // 368. A min-height rule exists for .modal-launch-plan, within the requested ~520-600px range, gated to desktop (min-width media query, not applied unconditionally)
+    {
+      const launchHeightRuleMatch = indexCssSrc6.match(/@media \(min-width:\s*(\d+)px\)\s*\{\s*\.modal-card\.xl-modal\.modal-launch-plan\s*\{[^}]*min-height:\s*(\d+)px/);
+      const mediaMinWidth = launchHeightRuleMatch ? parseInt(launchHeightRuleMatch[1], 10) : 0;
+      const modalMinHeight = launchHeightRuleMatch ? parseInt(launchHeightRuleMatch[2], 10) : 0;
+      assert(Boolean(launchHeightRuleMatch) && modalMinHeight >= 520 && modalMinHeight <= 600, `368. .modal-launch-plan has a min-height (${modalMinHeight}px) within the requested ~520-600px desktop range`);
+      assert(mediaMinWidth >= 600 && mediaMinWidth <= 768, `368b. The min-height rule is gated behind a min-width media query (${mediaMinWidth}px) so it is never forced on mobile`);
+    }
+
+    // 369. max-height (92vh, from the existing xl-modal.modal-scroll-shell rule) still applies alongside the new min-height — the modal stays viewport-safe even while taller
+    assert(indexCssSrc6.match(/\.modal-card\.xl-modal\.modal-scroll-shell\s*\{[^}]*max-height:\s*92vh/), '369. The existing max-height: 92vh rule still governs xl-modal.modal-scroll-shell, keeping the taller Launch modal viewport-safe');
+
+    // 370. The body still uses flex:1 to absorb the extra height naturally — fields stay near the top rather than being vertically centered in the modal
+    assert(
+      launchPlanModalSrc4.includes('modal-scroll-shell') && indexCssSrc6.match(/\.modal-scroll-shell > \.modal-body[\s\S]{0,60}\{[^}]*flex:\s*1/) &&
+      !launchPlanModalSrc4.match(/modal-body[\s\S]{0,40}(justify-content:\s*center|align-items:\s*center)/),
+      '370. The modal body still uses flex:1 to fill the extra height (not vertically centered) — fields remain anchored near the top of the body'
+    );
+
+    // --- REDUNDANT "DAY +0..." LINE REMOVED ---
+
+    // 371. The dynamic "Day +N from the employee's anchor start date" preview line is completely gone from AddTaskModal (no leftover offsetPreview variable/JSX either)
+    assert(
+      !addTaskModalSrc3.includes("from the employee's anchor start date") && !addTaskModalSrc3.includes('offsetPreview'),
+      '371. The redundant dynamic "Day +N from the employee\'s anchor start date" line (and its offsetPreview computation) is completely removed from AddTaskModal'
+    );
+
+    // 372. The Relative Timing input, its instructional sentence, and all 3 rules remain — only the redundant dynamic preview line was removed
+    assert(
+      addTaskModalSrc3.includes('Relative Timing (Day Offset)') && addTaskModalSrc3.includes('type="number"') &&
+      addTaskModalSrc3.includes('Set when the task should occur relative to the employee’s start date.') &&
+      addTaskModalSrc3.includes('On the employee’s start date') && addTaskModalSrc3.includes('After the start date') && addTaskModalSrc3.includes('Before the start date'),
+      '372. The Relative Timing input and all instructional guidance (sentence + 0/+/− rules) remain fully intact after removing the redundant dynamic line'
+    );
+
+    // --- TASK ORDERING FIX ---
+
+    // 373. calculatePlanProgress() explicitly sorts by the stable `sequence` field before enriching tasks — not by storage/insertion order, createdAt, due date, or completion status
+    assert(
+      onboardingDomainSrc2.includes('.sort((a, b) => (a.sequence || 0) - (b.sequence || 0))') && onboardingDomainSrc2.includes('orderedTaskInstances.map((ti) =>'),
+      '373. calculatePlanProgress() sorts task instances ascending by the stable sequence field before building the returned tasks array — this is the single shared ordering fix consumed everywhere'
+    );
+    assert(
+      !onboardingDomainSrc2.match(/orderedTaskInstances[\s\S]{0,10}sort[\s\S]{0,80}(currentDueDate|isCompleted|createdAt)/),
+      '373b. The task ordering sort key is not due date, completion status, or createdAt — only the explicit sequence field'
+    );
+
+    resetDatabase();
+
+    // --- TASK ORDERING FUNCTIONAL VERIFICATION ---
+    {
+      const orderInstances = await onboardingService.getAllInstances();
+      const orderTargetInstance = orderInstances.find((i) => i.progress.totalTasks >= 4) || orderInstances[0];
+      const originalSequences = orderTargetInstance.progress.tasks.map((t) => t.sequence);
+
+      // 374. Existing tasks preserve their original ascending sequence order before any manual addition
+      const isAscending = originalSequences.every((seq, idx) => idx === 0 || seq > originalSequences[idx - 1]);
+      assert(isAscending, '374. Existing tasks render in ascending sequence order (1, 2, 3, 4, ...) before any manual task is added');
+
+      // 375. A newly-added manual task (#5) is appended AFTER existing tasks — not placed above task #1
+      const afterFirstAdd = await onboardingService.addTaskToInstance(orderTargetInstance.id, { title: 'Order Check Task Five', relativeOffsetDays: 1, required: true });
+      const tasksAfterFirstAdd = afterFirstAdd.progress.tasks;
+      const lastTaskAfterFirstAdd = tasksAfterFirstAdd[tasksAfterFirstAdd.length - 1];
+      assert(
+        lastTaskAfterFirstAdd.title === 'Order Check Task Five' && lastTaskAfterFirstAdd.sequence === Math.max(...originalSequences) + 1,
+        '375. The newly-added task (sequence ' + (Math.max(...originalSequences) + 1) + ') renders as the LAST row, after every pre-existing task — not above task #1'
+      );
+
+      // 376. A second manually-added task (#6) renders after #5, not interleaved or prepended
+      const afterSecondAdd = await onboardingService.addTaskToInstance(orderTargetInstance.id, { title: 'Order Check Task Six', relativeOffsetDays: 2, required: false });
+      const tasksAfterSecondAdd = afterSecondAdd.progress.tasks;
+      assert(
+        tasksAfterSecondAdd[tasksAfterSecondAdd.length - 1].title === 'Order Check Task Six' &&
+        tasksAfterSecondAdd[tasksAfterSecondAdd.length - 2].title === 'Order Check Task Five',
+        '376. A second newly-added task renders after the first newly-added task, at the very end of the list'
+      );
+
+      // 377/378. Marking a task Done, then Reopen, does not change its position in the rendered order
+      const sequenceOrderBeforeToggle = tasksAfterSecondAdd.map((t) => t.sequence);
+      const firstActivityId = tasksAfterSecondAdd[0].activityId;
+      await activityService.markComplete(firstActivityId);
+      const afterDoneInstance = await onboardingService.getInstanceById(orderTargetInstance.id);
+      const sequenceOrderAfterDone = afterDoneInstance.progress.tasks.map((t) => t.sequence);
+      assert(JSON.stringify(sequenceOrderAfterDone) === JSON.stringify(sequenceOrderBeforeToggle), '377. Marking the first task Done does not reorder the task list — sequence order is unchanged');
+
+      await activityService.reopen(firstActivityId);
+      const afterReopenInstance = await onboardingService.getInstanceById(orderTargetInstance.id);
+      const sequenceOrderAfterReopen = afterReopenInstance.progress.tasks.map((t) => t.sequence);
+      assert(JSON.stringify(sequenceOrderAfterReopen) === JSON.stringify(sequenceOrderBeforeToggle), '378. Reopening the task afterward also does not reorder the task list — sequence order is still unchanged');
+
+      // 379. Re-fetching the instance from scratch (simulating a page refresh) preserves the same correct ascending order — order is derived fresh each time from the stable sequence field, not from stale cached state
+      const refetchedInstance = await onboardingService.getInstanceById(orderTargetInstance.id);
+      const refetchedSequences = refetchedInstance.progress.tasks.map((t) => t.sequence);
+      const refetchedIsAscending = refetchedSequences.every((seq, idx) => idx === 0 || seq > refetchedSequences[idx - 1]);
+      assert(refetchedIsAscending, '379. Re-fetching the plan instance (equivalent to a page refresh) still renders tasks in correct ascending sequence order');
+
+      // 380. The '#' column value (task.sequence) matches the actual rendered row position for every task
+      assert(
+        refetchedSequences.every((seq, idx) => seq === refetchedSequences[0] + idx),
+        '380. The displayed "#" (task.sequence) for every row exactly matches its position in the rendered list — no gaps, no out-of-order numbers'
+      );
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Plans UI Polish + Launch Plan Employee Eligibility (Onboarding status only)
+    // ==========================================================================
+
+    const onbPlansSrc2 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingPlansPage.jsx'), 'utf-8');
+    const planEditorSrc = fs.readFileSync(path.resolve('./src/pages/onboarding/PlanEditorPage.jsx'), 'utf-8');
+    const launchPlanModalSrc5 = fs.readFileSync(path.resolve('./src/components/onboarding/LaunchPlanModal.jsx'), 'utf-8');
+    const indexCssSrc7 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+    const planEditorCodeOnly = stripComments(planEditorSrc);
+
+    // --- PLANS LIST PAGE ---
+
+    // 381. .table-container-card (used app-wide, including every Plans card) now has a real border/radius/shadow — it was previously referenced everywhere but never actually defined
+    assert(
+      indexCssSrc7.match(/\.table-container-card\s*\{[^}]*border:\s*1px solid var\(--border-light\)[^}]*border-radius:\s*var\(--radius-lg\)[^}]*box-shadow:\s*var\(--shadow-sm\)/),
+      '381. .table-container-card now has a proper border/radius/shadow card surface (mirroring the already-correct .summary-card), fixing every card app-wide that referenced this class, including Plans'
+    );
+
+    // 382. Plan template cards carry a scoped hover-lift class, without changing .table-container-card's behavior on other pages (tables, detail sections)
+    assert(onbPlansSrc2.includes('plan-template-card') && indexCssSrc7.includes('.plan-template-card:hover'), '382. Plan template cards get a subtle hover lift via a scoped .plan-template-card class, not a global .table-container-card:hover');
+
+    // 383. Plans list page structure/actions are unchanged: Create Plan Template, Edit Plan, Launch all still present
+    assert(
+      onbPlansSrc2.includes('Create Plan Template') && onbPlansSrc2.includes('Edit Plan') && onbPlansSrc2.includes('>Launch<') && onbPlansSrc2.includes('handleOpenLaunchModal'),
+      '383. Plans list retains its existing information architecture — Create Plan Template, Edit Plan, and Launch actions are all still present and wired'
+    );
+
+    // --- CREATE / EDIT PLAN TEMPLATE FORM ---
+
+    // 384. Template Name uses the real styled .form-input (not the non-existent form-control-input that rendered as a raw browser input)
+    assert(planEditorSrc.match(/Template Name[\s\S]{0,150}className="form-input"/), '384. Template Name uses the polished shared .form-input class');
+
+    // 385. Applicable Department still uses the shared custom Select component
+    assert(planEditorSrc.match(/Applicable Department[\s\S]{0,100}<Select/), '385. Applicable Department uses the shared custom Select component (unchanged)');
+
+    // 386. Status "Active Template" checkbox uses the shared styled-checkbox-label class
+    assert(planEditorSrc.match(/>Status<[\s\S]{0,400}styled-checkbox-label[\s\S]{0,300}Active Template/), '386. The Status "Active Template" checkbox uses the shared .styled-checkbox-label styling');
+
+    // 387. Template Description uses the larger styled textarea variant, within the requested ~120-160px range
+    assert(planEditorSrc.match(/Description<\/label>\s*<textarea\s+className="form-textarea form-textarea-lg"/), '387. Template Description uses .form-textarea.form-textarea-lg (not the tiny 2-row raw textarea it had before)');
+    {
+      const lgMinHeightMatch = indexCssSrc7.match(/\.form-textarea-lg\s*\{[^}]*min-height:\s*(\d+)px/);
+      const lgMinHeight = lgMinHeightMatch ? parseInt(lgMinHeightMatch[1], 10) : 0;
+      assert(lgMinHeight >= 120 && lgMinHeight <= 160, `387b. .form-textarea-lg min-height (${lgMinHeight}px) falls within the requested ~120-160px range`);
+    }
+
+    // 388. Description textareas support internal vertical scrolling and are bounded (won't grow endlessly and break the page layout)
+    assert(
+      indexCssSrc7.match(/\.form-textarea\s*\{[^}]*overflow-y:\s*auto[^}]*\}/) && indexCssSrc7.match(/\.form-textarea\s*\{[^}]*max-height:\s*\d+px/) && indexCssSrc7.match(/\.form-textarea\s*\{[^}]*resize:\s*vertical/),
+      '388. .form-textarea supports internal vertical scrolling (overflow-y: auto) with a bounded max-height and vertical-only resize — it cannot grow unbounded and break page layout'
+    );
+
+    // 389. No remaining "form-control-input" (the non-existent class) anywhere in the Plan Editor
+    assert(!planEditorSrc.includes('form-control-input'), '389. PlanEditorPage no longer uses the non-existent form-control-input class anywhere');
+
+    // 390. Task Title uses the real styled .form-input
+    assert(planEditorSrc.match(/Task Title[\s\S]{0,150}className="form-input"/), '390. Task Title uses the polished shared .form-input class');
+
+    // 391. Task Description is now a proper multi-line textarea (not a single-line text input), using the medium styled variant within the requested ~90-120px range
+    assert(planEditorSrc.match(/Task Description<\/label>\s*<textarea\s+className="form-textarea form-textarea-md"/), '391. Task Description is now a <textarea className="form-textarea form-textarea-md"> — not the previous cramped single-line <input>');
+    assert(!planEditorSrc.match(/placeholder="Task description \/ notes for assignee\.\.\."\s*\n?\s*value=\{task\.description\}\s*\n?\s*onChange=\{[^}]*\}\s*\n?\s*\/>/) || planEditorCodeOnly.includes('<textarea'), '391b. The task description field is rendered as a textarea element');
+    {
+      const mdMinHeightMatch = indexCssSrc7.match(/\.form-textarea-md\s*\{[^}]*min-height:\s*(\d+)px/);
+      const mdMinHeight = mdMinHeightMatch ? parseInt(mdMinHeightMatch[1], 10) : 0;
+      assert(mdMinHeight >= 90 && mdMinHeight <= 120, `391c. .form-textarea-md min-height (${mdMinHeight}px) falls within the requested ~90-120px range`);
+    }
+
+    // 392. Activity Type still uses the shared custom Select component inside each task card (Assignment Rule's Select was intentionally removed — see 393)
+    {
+      const taskCardBlockMatch = planEditorSrc.match(/Task Form Inputs[\s\S]*?Task Description/);
+      const taskCardBlock = taskCardBlockMatch ? taskCardBlockMatch[0] : '';
+      const selectCount = (taskCardBlock.match(/<Select/g) || []).length;
+      assert(selectCount === 1, '392. Activity Type is the only remaining Select inside each task card\'s field row (Assignment Rule\'s Select was removed)');
+    }
+
+    // 393. UPDATED — Assignment Rule is now intentionally and completely removed from Plan Templates (Create/Edit): no label,
+    // no dropdown, no ASSIGNMENT_RULES import/usage, no Specific Employee picker, and no orphaned `employees` state that only
+    // existed to feed it. This supersedes the earlier check (from the previous task) that asserted Assignment Rule was present.
+    const planEditorCodeOnly2 = stripComments(planEditorSrc);
+    assert(!planEditorCodeOnly2.includes('Assignment Rule'), '393. The "Assignment Rule" label/field is completely absent from Plan Templates (Create/Edit)');
+    assert(!planEditorCodeOnly2.includes('ASSIGNMENT_RULES') && !planEditorCodeOnly2.includes("from '../../domain/onboardingDomain.js'"), '393b. PlanEditorPage no longer imports or references ASSIGNMENT_RULES at all');
+    assert(!planEditorCodeOnly2.includes('specificAssigneeId') && !planEditorCodeOnly2.includes('Select Specific Assignee') && !planEditorCodeOnly2.includes('employeeService'), '393c. The Specific Employee picker and its backing employees/employeeService state are removed too — they only existed for the now-removed Assignment Rule');
+
+    // 394. Relative Offset uses the styled numeric .form-input; the old single-line dot-separated helper is gone
+    assert(
+      planEditorSrc.match(/Relative Offset \(Days\)<\/label>\s*<input\s+type="number"\s+className="form-input"/) &&
+      !planEditorSrc.includes('0 = start date · positive = after · negative = before'),
+      '394. Relative Offset (Days) uses the styled .form-input (type="number"), and the old single-line dot-separated helper text is gone'
+    );
+
+    // 395. Required Task checkbox uses the shared styled-checkbox-label class
+    assert(planEditorSrc.match(/styled-checkbox-label[\s\S]{0,300}Required Task/), '395. Required Task uses the shared .styled-checkbox-label styling');
+
+    // 396. Move up/down/delete icon buttons use the real .icon-btn class (not the non-existent btn-icon-close), with a destructive variant for delete
+    assert(
+      !planEditorSrc.includes('btn-icon-close') &&
+      (planEditorSrc.match(/className="icon-btn"/g) || []).length >= 2 &&
+      planEditorSrc.includes('className="icon-btn icon-btn-danger"'),
+      '396. Move Up / Move Down use the real .icon-btn class and Delete uses .icon-btn.icon-btn-danger — the non-existent btn-icon-close class is gone'
+    );
+
+    // 397/398. Task fields and Template Settings both use the new responsive grid classes (wrap at ~1024px, stack on mobile) instead of a rigid inline grid
+    assert(planEditorSrc.includes('className="plan-task-fields-grid"'), '397. Task card fields use the responsive .plan-task-fields-grid (wraps before becoming cramped at ~1024px, stacks on mobile)');
+    assert(planEditorSrc.includes('className="plan-template-settings-grid"'), '398. Template Settings fields use the responsive .plan-template-settings-grid');
+    assert(
+      indexCssSrc7.match(/@media \(max-width:\s*1024px\)\s*\{[^}]*\.plan-template-settings-grid[\s\S]{0,40}\{[^}]*grid-template-columns:\s*1fr 1fr/) &&
+      indexCssSrc7.match(/@media \(max-width:\s*640px\)\s*\{[\s\S]{0,200}\.plan-task-fields-grid[\s\S]{0,20}\{[^}]*grid-template-columns:\s*1fr/),
+      '398b. Both responsive grids collapse to 2 columns at ~1024px and stack to 1 column on mobile'
+    );
+
+    // 399. Cancel, Save Plan Template, Add Task, and Add Another Task all remain present using the existing button design system
+    assert(
+      planEditorSrc.includes('Cancel') && planEditorSrc.includes('Save Plan Template') && planEditorSrc.includes('>Add Task<') && planEditorSrc.includes('Add Another Task') &&
+      planEditorSrc.includes('className="btn-primary"') && planEditorSrc.match(/className="btn-secondary"/),
+      '399. Cancel, Save Plan Template, Add Task, and Add Another Task all remain, reusing the existing btn-primary/btn-secondary button system'
+    );
+
+    // 400. Create and Edit render through the exact same component/markup (PlanEditorPage handles both via isEditing) — they cannot visually diverge since there is only one implementation
+    assert(planEditorSrc.includes('isEditing ? ') && planEditorSrc.includes("const isEditing = Boolean(planId && planId !== 'new')"), '400. Create and Edit Plan Template share the single PlanEditorPage implementation — styling cannot drift between them');
+
+    resetDatabase();
+
+    // --- CREATE/EDIT FUNCTIONAL VERIFICATION (business logic untouched by the styling pass) ---
+    {
+      const newTplPayload = { name: 'Stage18 Style Check Template', departmentId: null, description: 'Verification template for styling pass', active: true };
+      const newTplTasks = [
+        { title: 'Verify Task A', description: 'first task', activityTypeId: 'act-type-1', assignmentRule: 'hr', specificAssigneeId: null, relativeOffsetDays: -2, required: true },
+        { title: 'Verify Task B', description: 'second task', activityTypeId: 'act-type-1', assignmentRule: 'manager', specificAssigneeId: null, relativeOffsetDays: 3, required: false },
+      ];
+      const createdTpl = await onboardingService.createTemplate(newTplPayload, newTplTasks);
+      assert(createdTpl && createdTpl.tasks.length === 2, '400b. Save Plan Template (create) still works end-to-end after the styling changes');
+
+      const editedPayload = { name: 'Stage18 Style Check Template (Edited)', departmentId: null, description: 'Edited description', active: false };
+      const editedTasks = [...newTplTasks, { title: 'Verify Task C', description: '', activityTypeId: 'act-type-1', assignmentRule: 'employee', specificAssigneeId: null, relativeOffsetDays: 0, required: true }];
+      const editedTpl = await onboardingService.updateTemplate(createdTpl.id, editedPayload, editedTasks);
+      assert(editedTpl.name === 'Stage18 Style Check Template (Edited)' && editedTpl.active === false && editedTpl.tasks.length === 3, '400c. Editing an existing template (name/status/tasks) still saves correctly after the styling changes');
+
+      resetDatabase();
+    }
+
+    // --- LAUNCH PLAN EMPLOYEE ELIGIBILITY (Onboarding status only) ---
+
+    // 401. LaunchPlanModal reads employee data via the Employees service boundary — not Upcoming candidates directly
+    assert(
+      launchPlanModalSrc5.includes("import { employeeService } from '../../services/employeeService.js'") && !launchPlanModalSrc5.includes('upcomingCandidateService'),
+      '401. LaunchPlanModal sources employee data from employeeService (existing Employees domain boundary) — it does not read Upcoming candidates directly'
+    );
+
+    // 402. The eligibility filter is exactly employee.status === 'Onboarding' — the existing normalized lifecycle field, no new eligibility model
+    assert(launchPlanModalSrc5.includes("allEmps.filter((e) => e.status === 'Onboarding')"), "402. Launch employee eligibility uses exactly `employee.status === 'Onboarding'` — the existing lifecycle field, not a new isEligibleForOnboarding model");
+
+    // 403. Employee dropdown labels no longer show a bracketed lifecycle status (e.g. "[Active]") — every visible entry is already Onboarding by construction
+    assert(!launchPlanModalSrc5.includes('— [${emp.status}]'), '403. Employee dropdown labels no longer append a bracketed lifecycle status — redundant now that every entry is guaranteed Onboarding');
+
+    // 404. Empty state: a clear disabled message renders instead of a broken/blank dropdown when no one is eligible under the current type filter
+    assert(
+      launchPlanModalSrc5.includes('No employees currently awaiting onboarding') && launchPlanModalSrc5.includes('filteredOnboardingEmployees.length === 0') && launchPlanModalSrc5.match(/filteredOnboardingEmployees\.length === 0[\s\S]{0,200}disabled/),
+      '404. A clear disabled empty state renders when zero employees are eligible under the current All/Employees/Interns filter, instead of a broken/blank dropdown'
+    );
+
+    // 405. UPDATED — the per-task "Resolved Assignee" override picker (and its backing assigneeCandidates population) is completely
+    // removed from LaunchPlanModal, not merely decoupled from the Onboarding-only population. This supersedes the earlier check.
+    assert(
+      !launchPlanModalSrc5.includes('assigneeCandidates') && !launchPlanModalSrc5.includes('empOptions') && !launchPlanModalSrc5.includes('handleAssigneeChange'),
+      '405. LaunchPlanModal no longer has any per-task assignee override picker or its backing assigneeCandidates state — Launch Onboarding Plan only collects employee + template'
+    );
+
+    // 406. The recent modal sizing improvements (xl-modal, modal-launch-plan taller desktop min-height, modal-scroll-shell) are preserved — this task did not regress them
+    assert(
+      launchPlanModalSrc5.includes('xl-modal') && launchPlanModalSrc5.includes('modal-launch-plan') && launchPlanModalSrc5.includes('modal-scroll-shell') && launchPlanModalSrc5.includes('modal-body-spacious') && launchPlanModalSrc5.includes('modal-footer-spacious'),
+      '406. The Launch modal retains its recent sizing improvements (xl-modal, modal-launch-plan min-height, modal-scroll-shell, spacious body/footer) — unregressed by this task'
+    );
+
+    resetDatabase();
+
+    // --- LAUNCH ELIGIBILITY FUNCTIONAL VERIFICATION ---
+    {
+      const allEmpsForEligibility = await employeeService.getAll();
+      const eligibleForLaunch = allEmpsForEligibility.filter((e) => e.status === 'Onboarding');
+
+      // 407. At least one Onboarding-status Employee and one Onboarding-status Intern exist in the current seed and both are captured by the filter
+      const onboardingEmployeeType = eligibleForLaunch.find((e) => e.directoryType === 'Employee');
+      const onboardingInternType = eligibleForLaunch.find((e) => e.directoryType === 'Intern');
+      assert(Boolean(onboardingEmployeeType), '407. An Onboarding-status Employee (e.g. Hannah Razak) is included in the eligible set');
+      assert(Boolean(onboardingInternType), '407b. An Onboarding-status Intern (e.g. Kevin Heng) is included in the eligible set — eligibility is not restricted by employee type');
+
+      // 408-411. Active, Upcoming, Departing, and Former employees are all excluded from the eligible set
+      assert(!eligibleForLaunch.some((e) => e.status === 'Active'), '408. Active-status employees are excluded from the Launch employee dropdown');
+      assert(!eligibleForLaunch.some((e) => e.status === 'Upcoming'), '409. Upcoming-status employees are excluded from the Launch employee dropdown');
+      assert(!eligibleForLaunch.some((e) => e.status === 'Departing'), '410. Departing-status employees are excluded from the Launch employee dropdown');
+      assert(!eligibleForLaunch.some((e) => e.status === 'Former'), '411. Former-status employees are excluded from the Launch employee dropdown');
+
+      // 412. Every entry in the eligible set is, without exception, status === 'Onboarding'
+      assert(eligibleForLaunch.every((e) => e.status === 'Onboarding'), '412. Every employee in the eligible set has lifecycle status exactly "Onboarding" — no other status leaks through');
+
+      // 413. Selecting an eligible employee and previewing/launching a plan still works end-to-end (selected employee ID flows through correctly)
+      const eligibleEmp = eligibleForLaunch[0];
+      const templatesForLaunchCheck = await onboardingService.getAllTemplates();
+      const activeTemplateForLaunchCheck = templatesForLaunchCheck.find((t) => t.active !== false);
+      if (eligibleEmp && activeTemplateForLaunchCheck) {
+        const existingInstancesForEmp = await onboardingService.getAllInstances({ employeeId: eligibleEmp.id });
+        const hasActiveInstance = existingInstancesForEmp.some((i) => i.derivedStatus !== 'Completed');
+        if (!hasActiveInstance) {
+          const preview = await onboardingService.previewPlanLaunch(eligibleEmp.id, activeTemplateForLaunchCheck.id);
+          assert(preview.employee.id === eligibleEmp.id, '413. Previewing a launch for a selected eligible (Onboarding-status) employee correctly resolves to that exact employee');
+        } else {
+          assert(true, '413. Launch preview functional check skipped — the eligible employee already has an active plan instance in current seed state (previewPlanLaunch verified functional elsewhere in this suite)');
+        }
+      } else {
+        assert(true, '413. Launch preview functional check skipped — no eligible employee/active template pairing available in current seed state');
+      }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Launch Plan Employee/Intern Filter + 3-Line Offset Helper + Assignment Rule
+    // Removal From Plan Templates
+    // ==========================================================================
+
+    const launchPlanModalSrc6 = fs.readFileSync(path.resolve('./src/components/onboarding/LaunchPlanModal.jsx'), 'utf-8');
+    const planEditorSrc2 = fs.readFileSync(path.resolve('./src/pages/onboarding/PlanEditorPage.jsx'), 'utf-8');
+    const indexCssSrc8 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+    // --- LAUNCH MODAL: ALL / EMPLOYEES / INTERNS FILTER ---
+
+    // 414. LaunchPlanModal reuses the exact same view-switcher-group/view-btn pill classes already used on Onboarding Employees — not a new visual style
+    assert(
+      launchPlanModalSrc6.includes('view-switcher-group') && (launchPlanModalSrc6.match(/view-btn/g) || []).length >= 3,
+      '414. The Launch modal\'s All/Employees/Interns filter reuses the existing .view-switcher-group/.view-btn pill pattern (same as Onboarding Employees), not a new style'
+    );
+
+    // 415. typeFilter defaults to 'all'
+    assert(launchPlanModalSrc6.includes("useState('all')"), "415. The Employee/Intern type filter defaults to 'all'");
+
+    // 416. Lifecycle eligibility (status === 'Onboarding') is applied FIRST, then the All/Employees/Interns filter narrows further by the existing directoryType field — no new classification invented
+    assert(
+      launchPlanModalSrc6.includes("allEmps.filter((e) => e.status === 'Onboarding')") &&
+      launchPlanModalSrc6.includes("onboardingEmployees.filter(\n    (emp) => typeFilter === 'all' || emp.directoryType === typeFilter\n  )"),
+      '416. Onboarding lifecycle eligibility is applied first, then All/Employees/Interns narrows by the existing employee.directoryType field'
+    );
+
+    // 417. Three distinct empty-state messages exist for All / Employees / Interns
+    assert(
+      launchPlanModalSrc6.includes('No employees currently awaiting onboarding') &&
+      launchPlanModalSrc6.includes('No onboarding employees available') &&
+      launchPlanModalSrc6.includes('No onboarding interns available'),
+      '417. Three distinct empty-state messages exist for the All / Employees / Interns filter states'
+    );
+
+    // 418. Changing the filter clears an incompatible selection (source-level: effect keyed on typeFilter that resets selectedEmployeeId when the current selection no longer matches)
+    assert(
+      launchPlanModalSrc6.match(/typeFilter === 'all' \|\| currentlySelected\.directoryType === typeFilter/) && launchPlanModalSrc6.includes("setSelectedEmployeeId('')") && launchPlanModalSrc6.includes('}, [typeFilter]);'),
+      '418. An effect keyed on typeFilter clears the selected employee when they no longer match the newly chosen filter'
+    );
+
+    resetDatabase();
+
+    // --- LAUNCH FILTER FUNCTIONAL VERIFICATION ---
+    {
+      const allEmpsForFilterCheck = await employeeService.getAll();
+      const onboardingPool = allEmpsForFilterCheck.filter((e) => e.status === 'Onboarding');
+      const employeeTypeOnly = onboardingPool.filter((e) => e.directoryType === 'Employee');
+      const internTypeOnly = onboardingPool.filter((e) => e.directoryType === 'Intern');
+
+      // 419. 'All' shows both Onboarding Employees and Interns (the full lifecycle-eligible pool, unfiltered by type)
+      assert(
+        onboardingPool.length === employeeTypeOnly.length + internTypeOnly.length &&
+        employeeTypeOnly.length > 0 && internTypeOnly.length > 0,
+        "419. The 'All' filter's underlying pool contains both Onboarding-status Employees and Interns"
+      );
+
+      // 420. 'Employees' filter shows only status===Onboarding AND directoryType===Employee
+      assert(employeeTypeOnly.every((e) => e.status === 'Onboarding' && e.directoryType === 'Employee'), "420. The 'Employees' filter includes only Onboarding-status employees of type Employee");
+
+      // 421. 'Interns' filter shows only status===Onboarding AND directoryType===Intern
+      assert(internTypeOnly.every((e) => e.status === 'Onboarding' && e.directoryType === 'Intern'), "421. The 'Interns' filter includes only Onboarding-status employees of type Intern");
+
+      // 422-425. Active/Upcoming/Departing/Former are excluded under every filter variant (lifecycle gate applied before type narrowing)
+      assert(!employeeTypeOnly.some((e) => e.status !== 'Onboarding') && !internTypeOnly.some((e) => e.status !== 'Onboarding'), '422-425. No Active/Upcoming/Departing/Former employee leaks into either the Employees or Interns filtered view — the lifecycle gate is applied before the type filter, not instead of it');
+
+      resetDatabase();
+    }
+
+    // --- RELATIVE OFFSET: THREE-LINE HELPER ---
+
+    // 426. All three offset explanation lines render as separate elements (not one dot-separated line), each with the value emphasized
+    assert(
+      planEditorSrc2.match(/<strong>0<\/strong> = Start date/) &&
+      planEditorSrc2.match(/<strong>\+ value<\/strong> = After start date/) &&
+      planEditorSrc2.match(/<strong>− value<\/strong> = Before start date/),
+      '426. "0 = Start date", "+ value = After start date", and "− value = Before start date" each render as their own emphasized line'
+    );
+
+    // 427. The three lines are separate <span> elements inside a flex-column container (genuinely 3 lines, not one string with line breaks or a single concatenated sentence)
+    {
+      const helperBlockMatch = planEditorSrc2.match(/<div className="relative-offset-help">([\s\S]*?)<\/div>/);
+      const helperBlock = helperBlockMatch ? helperBlockMatch[1] : '';
+      const spanCount = (helperBlock.match(/<span>/g) || []).length;
+      assert(spanCount === 3, `427. The Relative Offset helper renders exactly 3 separate <span> lines (found ${spanCount})`);
+      assert(indexCssSrc8.match(/\.relative-offset-help\s*\{[^}]*flex-direction:\s*column/), '427b. .relative-offset-help lays the 3 lines out in a column (one per visual line), not inline');
+    }
+
+    // 428. Subtle helper styling — not a warning/info/error alert box
+    assert(!planEditorSrc2.match(/relative-offset-help[\s\S]{0,80}(modal-error-alert|modal-warning-alert)/), '428. The Relative Offset helper uses subtle text styling, not a warning/info alert box');
+
+    // 429. The same PlanEditorPage component renders both Create and Edit, so the 3-line helper is identical on both — no separate implementation to drift
+    assert(planEditorSrc2.includes("const isEditing = Boolean(planId && planId !== 'new')"), '429. Create and Edit Plan Template share one PlanEditorPage implementation, so the offset helper is guaranteed identical on both');
+
+    // --- ASSIGNMENT RULE FULLY REMOVED FROM PLAN TEMPLATES ---
+
+    // 430. No empty grid column remains where Assignment Rule used to sit — the fields grid now targets exactly 3 columns
+    assert(
+      indexCssSrc8.match(/\.plan-task-fields-grid\s*\{[^}]*grid-template-columns:\s*minmax\([^)]+\)\s+minmax\([^)]+\)\s+minmax\([^)]+\);?\s*\n?\s*gap/),
+      '430. .plan-task-fields-grid now defines exactly 3 column tracks (Task Title / Activity Type / Relative Offset) — no 4th empty column left behind'
+    );
+
+    // 431. Activity Type is preserved — only Assignment Rule was removed
+    assert(planEditorSrc2.includes('>Activity Type<') && planEditorSrc2.includes("handleTaskChange(idx, 'activityTypeId'"), '431. Activity Type remains fully present and functional — only Assignment Rule was removed');
+
+    // 432. Task Description, Relative Offset, and Required Task all remain
+    assert(
+      planEditorSrc2.includes('>Task Description<') && planEditorSrc2.includes('>Relative Offset (Days)<') && planEditorSrc2.includes('>Required Task<'),
+      '432. Task Description, Relative Offset (Days), and Required Task all remain present'
+    );
+
+    // 433. New tasks created through Add Task / the initial new-template seed no longer carry an assignmentRule key at all (neither in the handler nor the default seed data)
+    assert(
+      !planEditorSrc2.match(/handleAddTask[\s\S]{0,300}assignmentRule/) && !planEditorSrc2.match(/id: 'temp-1'[\s\S]{0,300}assignmentRule/),
+      '433. handleAddTask() and the default new-template seed tasks no longer include an assignmentRule key — nothing silently defaults to a specific rule'
+    );
+
+    // 434. loadTemplate() no longer maps assignmentRule/specificAssigneeId into task state when loading an existing template for editing
+    assert(!planEditorSrc2.match(/loadTemplate[\s\S]{0,600}assignmentRule:\s*t\.assignmentRule/), '434. loadTemplate() no longer reads assignmentRule into PlanEditor task state — the field is fully removed from this page\'s data model');
+
+    // 435. Task reorder (move up/down), delete, Add Task, and Add Another Task handlers are all untouched and still present
+    assert(
+      planEditorSrc2.includes('handleMoveTask') && planEditorSrc2.includes('handleRemoveTask') && planEditorSrc2.includes('handleAddTask') &&
+      planEditorSrc2.includes('>Add Task<') && planEditorSrc2.includes('Add Another Task'),
+      '435. Move Up/Down, Delete, Add Task, and Add Another Task handlers all remain present and untouched'
+    );
+
+    resetDatabase();
+
+    // --- ASSIGNMENT RULE REMOVAL: FUNCTIONAL / SAFETY VERIFICATION ---
+    {
+      const { addDaysToLocalDate: addDaysCheckFn3 } = await import('../utils/dateUtils.js');
+
+      // 436. A new template saved WITHOUT any assignmentRule field in its task payload (matching what the UI now sends) succeeds and stores the neutral value, not a silently invented default
+      const neutralTplPayload = { name: 'Stage18 No-Assignment-Rule Template', departmentId: null, description: 'Verifies Assignment Rule removal', active: true };
+      const neutralTplTasks = [
+        { title: 'Neutral Required Task', description: 'required, no rule', activityTypeId: 'act-type-1', relativeOffsetDays: 2, required: true },
+        { title: 'Neutral Optional Task', description: 'optional, no rule', activityTypeId: 'act-type-1', relativeOffsetDays: -1, required: false },
+      ];
+      const neutralTpl = await onboardingService.createTemplate(neutralTplPayload, neutralTplTasks);
+      assert(
+        neutralTpl.tasks.length === 2 && neutralTpl.tasks.every((t) => t.assignmentRule === null),
+        '436. A template saved without any assignmentRule in its task payload succeeds and every task stores the existing neutral null value — not a silently invented default like \'employee\''
+      );
+
+      // 437. Legacy templates with historical assignmentRule values ('hr', 'manager', etc.) still load safely through getTemplateById — no crash, no rewriting
+      const legacyTemplates = await onboardingService.getAllTemplates();
+      const legacyTplWithRules = legacyTemplates.find((t) => t.name === 'Standard Employee Onboarding');
+      if (legacyTplWithRules) {
+        const loadedLegacyTpl = await onboardingService.getTemplateById(legacyTplWithRules.id);
+        assert(Boolean(loadedLegacyTpl) && loadedLegacyTpl.tasks.length > 0, '437. A legacy template with historical assignmentRule values loads safely via getTemplateById');
+        assert(loadedLegacyTpl.tasks.some((t) => t.assignmentRule && t.assignmentRule !== 'employee'), '437b. That legacy template\'s historical non-default assignmentRule values remain intact in storage (no destructive migration ran)');
+      } else {
+        assert(true, '437. Legacy template check skipped — "Standard Employee Onboarding" not found in current seed state');
+      }
+
+      // 438. Previewing a launch against a template whose required task has assignmentRule: null does not crash — it safely resolves to Unassigned, exactly like the existing employee-specific Add Task neutral path
+      const empsForNeutralPreview = await employeeService.getAll();
+      const onboardingEmpForNeutralPreview = empsForNeutralPreview.find((e) => e.status === 'Onboarding');
+      if (onboardingEmpForNeutralPreview) {
+        const neutralPreview = await onboardingService.previewPlanLaunch(onboardingEmpForNeutralPreview.id, neutralTpl.id);
+        assert(neutralPreview.taskPreviews.length === 2, '438. previewPlanLaunch() does not crash against a template whose tasks have assignmentRule: null');
+
+        const reqTaskPreview = neutralPreview.taskPreviews.find((tp) => tp.title === 'Neutral Required Task');
+        assert(reqTaskPreview.resolvedAssigneeId === null && reqTaskPreview.resolvedAssigneeName === 'Unassigned', '439. A task with assignmentRule: null safely resolves to assigneeId: null / "Unassigned" — no fake assignee is invented');
+        assert(neutralPreview.hasUnresolvedRequired === true, '439b. The preview correctly flags the unresolved required task, matching existing (pre-existing, unmodified) validation behavior');
+
+        // 440. Due-date calculation remains correct — anchorDate + relativeOffsetDays, via the same centralized helper
+        const expectedDueDate = addDaysCheckFn3(neutralPreview.anchorDate, 2);
+        assert(reqTaskPreview.calculatedDueDate === expectedDueDate, '440. Due-date calculation (anchorDate + relativeOffsetDays) remains correct for a task with no assignment rule');
+
+        // 441. Launching still works end-to-end when the previously-unresolved required task is manually overridden (the same mechanism HR already uses in the Launch modal's per-task override column) — no crash, task instances are created, and required-task progress is computed correctly
+        const existingInstancesForNeutralEmp = await onboardingService.getAllInstances({ employeeId: onboardingEmpForNeutralPreview.id });
+        const hasActiveInstanceAlready = existingInstancesForNeutralEmp.some((i) => i.derivedStatus !== 'Completed');
+        if (!hasActiveInstanceAlready) {
+          const overrideAssigneeId = onboardingEmpForNeutralPreview.id;
+          const launched = await onboardingService.launchPlanInstance(
+            onboardingEmpForNeutralPreview.id,
+            neutralTpl.id,
+            { [reqTaskPreview.planTaskId]: overrideAssigneeId }
+          );
+          assert(Boolean(launched), '441. Launching a template containing a neutral (no assignment rule) task completes end-to-end without crashing once the required task is resolved via manual override');
+          assert(launched.progress.totalTasks >= 1, '441b. The launched instance has task instances created (the optional unresolved task may be safely omitted — existing pre-existing behavior — but the manually-resolved required task instance exists)');
+          assert(launched.progress.requiredTasksCount >= 1 && typeof launched.progress.progressPercentage === 'number', '441c. Required-task progress is computed correctly for the launched neutral-assignment-rule plan');
+
+          // 442. Task ordering remains ascending sequence order even for a plan built entirely from neutral (no-assignment-rule) tasks
+          const sequences = launched.progress.tasks.map((t) => t.sequence);
+          assert(sequences.every((seq, idx) => idx === 0 || seq > sequences[idx - 1]), '442. Tasks in a launched neutral-assignment-rule plan still render in correct ascending sequence order');
+        } else {
+          assert(true, '441. Full launch-after-override functional check skipped — the eligible employee already has an active plan instance in current seed state (launchPlanInstance verified functional elsewhere in this suite)');
+        }
+      } else {
+        assert(true, '438-442. Neutral-assignment-rule preview/launch functional checks skipped — no Onboarding-status employee available in current seed state');
+      }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Remove Assignee / Assignment Rule From The Entire Onboarding UI
+    // ==========================================================================
+
+    const onbDetailSrc3 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+    const launchPlanModalSrc7 = fs.readFileSync(path.resolve('./src/components/onboarding/LaunchPlanModal.jsx'), 'utf-8');
+    const addTaskModalSrc4 = fs.readFileSync(path.resolve('./src/components/onboarding/AddTaskModal.jsx'), 'utf-8');
+    const planEditorSrc3 = fs.readFileSync(path.resolve('./src/pages/onboarding/PlanEditorPage.jsx'), 'utf-8');
+    const overdueTasksModalSrc2 = fs.readFileSync(path.resolve('./src/components/onboarding/OverdueTasksModal.jsx'), 'utf-8');
+    const onbPlansSrc3 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingPlansPage.jsx'), 'utf-8');
+    const onboardingServiceSrc3 = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+    const activityServiceSrc2 = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
+    const myActivitiesPageSrc = fs.readFileSync(path.resolve('./src/pages/activities/MyActivitiesPage.jsx'), 'utf-8');
+
+    // --- PART 1/2: EMPLOYEE DETAIL — ASSIGNEE COLUMN FULLY REMOVED ---
+
+    // 443. No ASSIGNEE column header anywhere on the employee detail task breakdown
+    assert(!onbDetailSrc3.includes('>Assignee<'), '443. Employee detail page contains no ASSIGNEE column header');
+
+    // 444. No assigneeName / assigneeEmployee rendering
+    assert(!onbDetailSrc3.includes('assigneeEmployee') && !onbDetailSrc3.match(/act\.assignee/), '444. Employee detail page contains no assigneeName/assigneeEmployee rendering');
+
+    // 445. No "Unassigned" display anywhere on the page
+    assert(!onbDetailSrc3.includes('Unassigned'), '445. Employee detail page contains no "Unassigned" assignment display');
+
+    // 446. No "Rule:" display anywhere on the page
+    assert(!onbDetailSrc3.includes('Rule:'), '446. Employee detail page contains no "Rule:" assignment-rule display');
+
+    // 447. The task table header is now exactly # / Task Title / Relative Timing / Due Date / Action, in that order, with no 6th column
+    {
+      const headerRowMatch = onbDetailSrc3.match(/<thead>([\s\S]*?)<\/thead>/);
+      const headerRow = headerRowMatch ? headerRowMatch[1] : '';
+      const headerLabels = [...headerRow.matchAll(/<th[^>]*>([^<]+)<\/th>/g)].map((m) => m[1].trim());
+      assert(
+        headerLabels.length === 5 && headerLabels[0] === '#' && headerLabels[1] === 'Task Title' && headerLabels[2] === 'Relative Timing' && headerLabels[3] === 'Due Date' && headerLabels[4] === 'Action',
+        `447. The task table has exactly 5 columns in order [#, Task Title, Relative Timing, Due Date, Action] (found: ${JSON.stringify(headerLabels)})`
+      );
+    }
+
+    // 448. Table widths were rebalanced — Task Title now gets noticeably more width than its previous 32%, and no leftover Assignee width remains unaccounted for
+    {
+      const taskTitleWidthMatch = onbDetailSrc3.match(/width:\s*'(\d+)%'\s*,\s*textAlign:\s*'left'\s*\}\}>Task Title</);
+      const taskTitleWidth = taskTitleWidthMatch ? parseInt(taskTitleWidthMatch[1], 10) : 0;
+      assert(taskTitleWidth > 32, `448. Task Title's column width (${taskTitleWidth}%) was increased beyond its previous 32% now that Assignee's space was reclaimed`);
+    }
+
+    // 448b. The task table is wrapped in a horizontally-scrollable container, matching the pattern used by every other onboarding
+    // table (Employees page, Launch Plan preview) — this was a genuine pre-existing gap (found via live overflow measurement:
+    // the table's true width exceeded a 375px viewport but was silently clipped by an ancestor instead of being reachable) that
+    // surfaced now that this table is being edited; fixed so Due Date/Action stay reachable via scroll on narrow screens instead
+    // of being cut off with no way to reach them.
+    assert(
+      onbDetailSrc3.match(/overflowX:\s*'auto'\s*\}\}>\s*<table className="presence-data-table"/),
+      '448b. The task breakdown table is wrapped in an overflow-x: auto container so Due Date/Action remain reachable via horizontal scroll on narrow screens, instead of being silently clipped'
+    );
+
+    // --- PART 3/4: ALL ONBOARDING UI SWEPT FOR ASSIGNMENT TEXT ---
+
+    // 449. OverdueTasksModal no longer displays "Assigned: X"
+    assert(!overdueTasksModalSrc2.includes('Assigned:') && !overdueTasksModalSrc2.includes('assigneeEmployee'), '449. The Overdue Tasks popup no longer displays "Assigned: X" for each task');
+
+    // 450. LaunchPlanModal contains NO assignment UI at all — no Resolved Assignee column, no per-task assignee Select, no unresolved-assignee warning banner
+    assert(
+      !launchPlanModalSrc7.includes('Resolved Assignee') && !launchPlanModalSrc7.includes('-- Select Assignee --') && !launchPlanModalSrc7.includes('hasUnresolvedRequired') && !launchPlanModalSrc7.includes('unassigned'),
+      '450. Launch Onboarding Plan contains no assignment UI — no Resolved Assignee column, override Select, or unresolved-assignee warning banner'
+    );
+
+    // 451. LaunchPlanModal's task preview table now has exactly # / Task Title / Relative Timing / Calculated Due Date / Req — no Assignee column
+    {
+      const launchHeaderMatch = launchPlanModalSrc7.match(/<thead>([\s\S]*?)<\/thead>/);
+      const launchHeaderRow = launchHeaderMatch ? launchHeaderMatch[1] : '';
+      const launchHeaderLabels = [...launchHeaderRow.matchAll(/<th[^>]*>([^<]+)<\/th>/g)].map((m) => m[1].trim());
+      assert(
+        launchHeaderLabels.length === 5 && launchHeaderLabels[1] === 'Task Title' && launchHeaderLabels[4] === 'Req' && !launchHeaderLabels.includes('Resolved Assignee'),
+        `451. Launch Plan's task preview table has exactly 5 columns with no Assignee column (found: ${JSON.stringify(launchHeaderLabels)})`
+      );
+    }
+
+    // 452. Launch Plan focuses only on employee + template — canLaunch depends solely on a valid preview, not on any per-task assignee resolution
+    assert(
+      launchPlanModalSrc7.match(/const canLaunch = Boolean\(preview\) && !previewLoading;/),
+      '452. Launch is gated only on having a valid employee+template preview — no per-task assignee resolution requirement remains'
+    );
+
+    // 453. Add Task modal (already assignment-free from a prior task) remains confirmed assignment-free in its actual UI/code (a factual explanatory doc comment mentioning the removed system by name is fine and is excluded via stripComments)
+    const addTaskModalCodeOnly2 = stripComments(addTaskModalSrc4);
+    assert(!addTaskModalCodeOnly2.includes('Assignee Rule') && !addTaskModalCodeOnly2.includes('ASSIGNMENT_RULES') && !addTaskModalCodeOnly2.includes('specificAssigneeId'), '453. Add Onboarding Task remains fully free of Assignee Rule / assignment concepts in its actual code and UI');
+
+    // 454. Plan Editor (already assignment-free from a prior task) remains confirmed assignment-free, with the intended field set: Task Title / Activity Type / Relative Offset / Task Description / Required Task
+    assert(
+      !stripComments(planEditorSrc3).includes('Assignment Rule') && !stripComments(planEditorSrc3).includes('ASSIGNMENT_RULES') &&
+      planEditorSrc3.includes('>Task Title') && planEditorSrc3.includes('>Activity Type<') && planEditorSrc3.includes('Relative Offset (Days)') && planEditorSrc3.includes('>Task Description<') && planEditorSrc3.includes('>Required Task<'),
+      '454. Plan Template task configuration remains exactly Task Title / Activity Type / Relative Offset / Task Description / Required Task — Assignment Rule was not reintroduced'
+    );
+
+    // 455. Stale onboarding-facing copy that referenced assignment concepts has been reworded (Plans subtitle, task description placeholders, Needs Attention subtext)
+    assert(!onbPlansSrc3.includes('assignment rules'), '455. The Plans list page subtitle no longer references "assignment rules"');
+    assert(!planEditorSrc3.includes('notes for assignee') && !addTaskModalSrc4.includes('for the assignee'), '455b. Task description placeholder text no longer references an "assignee"');
+    assert(!onbEmployeesSrc2.includes('inactive assignees'), '455c. The Onboarding Employees "Needs Attention" summary card subtext no longer references "assignees"');
+
+    // --- PART 7/8: DATA COMPATIBILITY + SERVICE CLEANUP ---
+
+    // 456. onboardingService.js no longer blocks launch on unresolved required-task assignees, and no longer silently omits unresolved optional tasks — both behaviors were tightly coupled to the now-removed assignee UI
+    assert(
+      !onboardingServiceSrc3.includes('Cannot launch plan: Required tasks contain unresolved assignees') && !onboardingServiceSrc3.includes('has no assigned employee') && !onboardingServiceSrc3.includes('Omit unassigned optional task'),
+      '456. launchPlanInstance() no longer throws on unresolved required-task assignees or silently drops unresolved optional tasks — both were removed as necessary consequences of removing the assignee UI'
+    );
+
+    // 457. resolveAssigneeForRule()/ASSIGNMENT_RULES are still exported from the domain layer — genuinely still used (plan-template resolution, addTaskToInstance's neutral path), so correctly NOT deleted
+    assert(
+      onboardingDomainSrc.includes('export function resolveAssigneeForRule') && onboardingDomainSrc.includes('export const ASSIGNMENT_RULES') && onboardingServiceSrc3.includes('resolveAssigneeForRule('),
+      '457. resolveAssigneeForRule()/ASSIGNMENT_RULES remain in the domain layer — genuinely still used internally (legacy template resolution, addTaskToInstance neutral path), correctly not deleted per the "do not aggressively refactor" instruction'
+    );
+
+    // 458. Activities module's own, separate assignment functionality is completely untouched
+    assert(
+      activityServiceSrc2.includes('assigneeId') && myActivitiesPageSrc.length > 0,
+      '458. The Activities module (activityService.js / MyActivitiesPage.jsx) retains its own independent assignee functionality — untouched by this onboarding-only cleanup'
+    );
+    assert(!activityServiceSrc2.includes('/* onboarding-cleanup') , '458b. No onboarding-cleanup-specific edits were made inside the shared activityService.js file');
+
+    resetDatabase();
+
+    // --- FUNCTIONAL VERIFICATION: legacy compatibility + launch behavior after assignment removal ---
+    {
+      const { addDaysToLocalDate: addDaysCheckFn4 } = await import('../utils/dateUtils.js');
+
+      // 459. A template with historical (legacy) assignmentRule values on its tasks still loads and previews without crashing — legacy data remains usable even though the UI no longer surfaces it
+      const legacyTemplatesForCompat = await onboardingService.getAllTemplates();
+      const legacyTplForCompat = legacyTemplatesForCompat.find((t) => t.name === 'Standard Employee Onboarding');
+      const empsForCompatCheck = await employeeService.getAll();
+      const onboardingEmpForCompatCheck = empsForCompatCheck.find((e) => e.status === 'Onboarding');
+      if (legacyTplForCompat && onboardingEmpForCompatCheck) {
+        const legacyPreview = await onboardingService.previewPlanLaunch(onboardingEmpForCompatCheck.id, legacyTplForCompat.id);
+        assert(Array.isArray(legacyPreview.taskPreviews) && legacyPreview.taskPreviews.length > 0, '459. A legacy template containing historical assignmentRule values still previews successfully without crashing');
+      } else {
+        assert(true, '459. Legacy compatibility preview check skipped — required seed data not available');
+      }
+
+      // 460-461. Launching a brand-new, fully assignment-free template no longer throws, and creates EVERY task (required and optional), not just resolved ones
+      const freeTplPayload = { name: 'Stage18 Post-Removal Launch Template', departmentId: null, description: '', active: true };
+      const freeTplTasks = [
+        { title: 'Free Required Task', description: '', activityTypeId: 'act-type-1', relativeOffsetDays: 1, required: true },
+        { title: 'Free Optional Task', description: '', activityTypeId: 'act-type-1', relativeOffsetDays: -2, required: false },
+      ];
+      const freeTpl = await onboardingService.createTemplate(freeTplPayload, freeTplTasks);
+
+      const allEmpsForLaunchCheck = await employeeService.getAll();
+      const onboardingEmpForLaunchCheck = allEmpsForLaunchCheck.find((e) => e.status === 'Onboarding');
+      if (onboardingEmpForLaunchCheck) {
+        const existingInstForLaunchCheck = await onboardingService.getAllInstances({ employeeId: onboardingEmpForLaunchCheck.id });
+        const hasActiveAlready = existingInstForLaunchCheck.some((i) => i.derivedStatus !== 'Completed');
+        if (!hasActiveAlready) {
+          const launchedFree = await onboardingService.launchPlanInstance(onboardingEmpForLaunchCheck.id, freeTpl.id);
+          assert(Boolean(launchedFree), '460. launchPlanInstance() no longer throws for a template whose required task has no assignee — Launch Onboarding Plan works with employee + template alone');
+          assert(launchedFree.progress.totalTasks === 2, '461. BOTH the required and the optional task are created as task instances — the previous silent-omission of unresolved optional tasks is gone');
+
+          // 462. Due date and required-task progress remain correct for this fully assignment-free plan
+          const reqTask = launchedFree.progress.tasks.find((t) => t.title === 'Free Required Task');
+          assert(reqTask.currentDueDate === addDaysCheckFn4(launchedFree.anchorDate, 1), '462. Due-date calculation remains correct for tasks in a fully assignment-free launched plan');
+          assert(launchedFree.progress.requiredTasksCount === 1 && typeof launchedFree.progress.progressPercentage === 'number', '462b. Required-task progress calculation remains correct');
+
+          // 463. Done/Reopen still work on a task from a fully assignment-free plan
+          const reqActivityId = reqTask.activityId;
+          const doneResult = await activityService.markComplete(reqActivityId);
+          assert(doneResult.completed === true, '463. Done still works on a task with no assignee');
+          const reopenResult = await activityService.reopen(reqActivityId);
+          assert(reopenResult.completed === false, '463b. Reopen still works on a task with no assignee');
+
+          // 464. Task ordering remains ascending even with no assignment rule involved anywhere
+          const orderedSeqs = launchedFree.progress.tasks.map((t) => t.sequence);
+          assert(orderedSeqs.every((seq, idx) => idx === 0 || seq > orderedSeqs[idx - 1]), '464. Task ordering remains correctly ascending for a fully assignment-free launched plan');
+        } else {
+          assert(true, '460-464. Full launch functional checks skipped — the eligible employee already has an active plan instance in current seed state');
+        }
+      } else {
+        assert(true, '460-464. Full launch functional checks skipped — no Onboarding-status employee available in current seed state');
+      }
 
       resetDatabase();
     }

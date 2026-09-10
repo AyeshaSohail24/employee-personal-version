@@ -81,12 +81,6 @@ export default function AddTaskModal({ isOpen, onClose, onSuccess, planInstanceI
     }
   };
 
-  const offsetPreview = (() => {
-    const n = parseInt(formData.relativeOffsetDays || 0, 10);
-    if (Number.isNaN(n)) return '';
-    return `Day ${n >= 0 ? `+${n}` : n}`;
-  })();
-
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card xl-modal modal-scroll-shell" onClick={(e) => e.stopPropagation()}>
@@ -130,7 +124,7 @@ export default function AddTaskModal({ isOpen, onClose, onSuccess, planInstanceI
               <label className="form-label">Description</label>
               <textarea
                 className="form-textarea"
-                placeholder="Optional details for the assignee..."
+                placeholder="Optional details for this task..."
                 value={formData.description}
                 onChange={(e) => handleChange('description', e.target.value)}
               />
@@ -146,7 +140,6 @@ export default function AddTaskModal({ isOpen, onClose, onSuccess, planInstanceI
                 value={formData.relativeOffsetDays}
                 onChange={(e) => handleChange('relativeOffsetDays', e.target.value)}
               />
-              {offsetPreview && <span className="form-hint">{offsetPreview} from the employee's anchor start date</span>}
 
               <div className="relative-timing-help">
                 <p>Set when the task should occur relative to the employee’s start date.</p>

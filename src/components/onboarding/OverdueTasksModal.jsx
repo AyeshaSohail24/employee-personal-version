@@ -68,7 +68,7 @@ export default function OverdueTasksModal({ isOpen, onClose, tasks = [], onMarkC
                     </span>
                   </div>
                   <div style={{ fontSize: '0.735rem', color: '#7F1D1D' }}>
-                    For: <strong>{task.relatedEmployee?.fullName || 'Employee'}</strong> · Assigned: {task.assigneeEmployee?.fullName || 'Unassigned'}
+                    For: <strong>{task.relatedEmployee?.fullName || 'Employee'}</strong>
                   </div>
                   <div style={{ textAlign: 'right', marginTop: '0.2rem' }}>
                     <button

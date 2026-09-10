@@ -14,8 +14,6 @@ import {
 import { onboardingService } from '../../services/onboardingService.js';
 import { departmentService } from '../../services/departmentService.js';
 import { activityService } from '../../services/activityService.js';
-import { employeeService } from '../../services/employeeService.js';
-import { ASSIGNMENT_RULES } from '../../domain/onboardingDomain.js';
 import Select from '../../components/common/Select.jsx';
 
 export default function PlanEditorPage() {
@@ -25,7 +23,6 @@ export default function PlanEditorPage() {
 
   const [departments, setDepartments] = useState([]);
   const [activityTypes, setActivityTypes] = useState([]);
-  const [employees, setEmployees] = useState([]);
 
   const [name, setName] = useState('');
   const [departmentId, setDepartmentId] = useState('');
@@ -49,8 +46,6 @@ export default function PlanEditorPage() {
           title: 'Prepare workstation and access credentials',
           description: 'Setup laptop, email account, internal portal access, and desk setup.',
           activityTypeId: 'act-type-4',
-          assignmentRule: ASSIGNMENT_RULES.MANAGER,
-          specificAssigneeId: '',
           relativeOffsetDays: -5,
           required: true,
           sequence: 1,
@@ -60,8 +55,6 @@ export default function PlanEditorPage() {
           title: 'Conduct HR Orientation Session',
           description: 'Welcome new hire, review company benefits, policies, and workplace overview.',
           activityTypeId: 'act-type-3',
-          assignmentRule: ASSIGNMENT_RULES.HR,
-          specificAssigneeId: '',
           relativeOffsetDays: 0,
           required: true,
           sequence: 2,
@@ -74,11 +67,9 @@ export default function PlanEditorPage() {
     try {
       const depts = await departmentService.getAll();
       const types = await activityService.getActiveTypes();
-      const emps = await employeeService.getAll();
 
       setDepartments(depts);
       setActivityTypes(types);
-      setEmployees(emps.filter((e) => e.status !== 'Former'));
     } catch (err) {
       console.error('Failed to load plan builder options:', err);
     }
@@ -102,8 +93,6 @@ export default function PlanEditorPage() {
           title: t.title,
           description: t.description || '',
           activityTypeId: t.activityTypeId,
-          assignmentRule: t.assignmentRule,
-          specificAssigneeId: t.specificAssigneeId || '',
           relativeOffsetDays: t.relativeOffsetDays || 0,
           required: t.required !== false,
           sequence: idx + 1,
@@ -122,8 +111,6 @@ export default function PlanEditorPage() {
       title: 'New Onboarding Task',
       description: '',
       activityTypeId: activityTypes.length > 0 ? activityTypes[0].id : 'act-type-1',
-      assignmentRule: ASSIGNMENT_RULES.EMPLOYEE,
-      specificAssigneeId: '',
       relativeOffsetDays: 0,
       required: true,
       sequence: tasks.length + 1,
@@ -233,7 +220,7 @@ export default function PlanEditorPage() {
           <div>
             <h1 className="page-title">{isEditing ? 'Edit Plan Template' : 'Create Onboarding Plan Template'}</h1>
             <p className="page-subtitle">
-              Configure template metadata, task sequences, relative offset days, and assignment rules.
+              Configure template metadata, task sequences, and relative offset days.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -263,12 +250,12 @@ export default function PlanEditorPage() {
         <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
           <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.975rem', fontWeight: 600 }}>Template Settings</h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="plan-template-settings-grid" style={{ marginBottom: '1.25rem' }}>
             <div className="form-group">
-              <label className="form-label">Template Name *</label>
+              <label className="form-label">Template Name <span className="required-star">*</span></label>
               <input
                 type="text"
-                className="form-control-input"
+                className="form-input"
                 placeholder="e.g. Standard Employee Onboarding"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -289,9 +276,9 @@ export default function PlanEditorPage() {
               />
             </div>
 
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
               <label className="form-label">Status</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+              <label className="styled-checkbox-label" style={{ height: '38px' }}>
                 <input
                   type="checkbox"
                   checked={active}
@@ -302,11 +289,10 @@ export default function PlanEditorPage() {
             </div>
           </div>
 
-          <div className="form-group">
+          <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Description</label>
             <textarea
-              className="form-control-input"
-              rows={2}
+              className="form-textarea form-textarea-lg"
               placeholder="Describe the purpose and target audience for this plan template..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -336,13 +322,13 @@ export default function PlanEditorPage() {
               <div
                 key={task.id || idx}
                 style={{
-                  padding: '1rem',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '8px',
+                  padding: '1.25rem',
+                  border: '1px solid var(--border-light)',
+                  borderRadius: 'var(--radius-lg)',
                   background: '#F8FAFC',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '0.75rem',
+                  gap: '1rem',
                 }}
               >
                 {/* Task Header & Controls */}
@@ -359,7 +345,7 @@ export default function PlanEditorPage() {
                   <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                     <button
                       type="button"
-                      className="btn-icon-close"
+                      className="icon-btn"
                       onClick={() => handleMoveTask(idx, -1)}
                       disabled={idx === 0}
                       title="Move Up"
@@ -368,7 +354,7 @@ export default function PlanEditorPage() {
                     </button>
                     <button
                       type="button"
-                      className="btn-icon-close"
+                      className="icon-btn"
                       onClick={() => handleMoveTask(idx, 1)}
                       disabled={idx === tasks.length - 1}
                       title="Move Down"
@@ -377,9 +363,8 @@ export default function PlanEditorPage() {
                     </button>
                     <button
                       type="button"
-                      className="btn-icon-close"
+                      className="icon-btn icon-btn-danger"
                       onClick={() => handleRemoveTask(idx)}
-                      style={{ color: '#DC2626' }}
                       title="Remove Task"
                     >
                       <Trash2 size={14} />
@@ -388,13 +373,12 @@ export default function PlanEditorPage() {
                 </div>
 
                 {/* Task Form Inputs */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '0.75rem' }}>
-                  <div className="form-group">
-                    <label className="form-label">Task Title *</label>
+                <div className="plan-task-fields-grid">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Task Title <span className="required-star">*</span></label>
                     <input
                       type="text"
-                      className="form-control-input"
-                      style={{ fontSize: '0.815rem' }}
+                      className="form-input"
                       placeholder="Task title..."
                       value={task.title}
                       onChange={(e) => handleTaskChange(idx, 'title', e.target.value)}
@@ -402,7 +386,7 @@ export default function PlanEditorPage() {
                     />
                   </div>
 
-                  <div className="form-group">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Activity Type</label>
                     <Select
                       variant="form"
@@ -412,74 +396,41 @@ export default function PlanEditorPage() {
                     />
                   </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Assignment Rule</label>
-                    <Select
-                      variant="form"
-                      value={task.assignmentRule}
-                      onChange={(e) => handleTaskChange(idx, 'assignmentRule', e.target.value)}
-                      options={[
-                        { value: ASSIGNMENT_RULES.EMPLOYEE, label: 'Employee (New Joiner)' },
-                        { value: ASSIGNMENT_RULES.MANAGER, label: 'Manager' },
-                        { value: ASSIGNMENT_RULES.HR, label: 'HR Representative' },
-                        { value: ASSIGNMENT_RULES.SPECIFIC_EMPLOYEE, label: 'Specific Employee' }
-                      ]}
-                    />
-                  </div>
-
-                  <div className="form-group">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Relative Offset (Days)</label>
                     <input
                       type="number"
-                      className="form-control-input"
-                      style={{ fontSize: '0.815rem' }}
+                      className="form-input"
                       placeholder="e.g. -5, 0, 7"
                       value={task.relativeOffsetDays}
                       onChange={(e) => handleTaskChange(idx, 'relativeOffsetDays', e.target.value)}
                     />
+                    <div className="relative-offset-help">
+                      <span><strong>0</strong> = Start date</span>
+                      <span><strong>+ value</strong> = After start date</span>
+                      <span><strong>− value</strong> = Before start date</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Specific Employee Picker if applicable */}
-                {task.assignmentRule === ASSIGNMENT_RULES.SPECIFIC_EMPLOYEE && (
-                  <div className="form-group" style={{ maxWidth: '300px' }}>
-                    <label className="form-label">Select Specific Assignee *</label>
-                    <Select
-                      variant="form"
-                      value={task.specificAssigneeId || ''}
-                      onChange={(e) => handleTaskChange(idx, 'specificAssigneeId', e.target.value)}
-                      options={[
-                        { value: '', label: '-- Choose Employee --' },
-                        ...employees.map((e) => ({
-                          value: e.id,
-                          label: `${e.fullName} (${e.employeeId})`
-                        }))
-                      ]}
-                    />
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div className="form-group" style={{ flex: 1, marginRight: '1rem' }}>
-                    <input
-                      type="text"
-                      className="form-control-input"
-                      style={{ fontSize: '0.785rem' }}
-                      placeholder="Task description / notes for assignee..."
-                      value={task.description}
-                      onChange={(e) => handleTaskChange(idx, 'description', e.target.value)}
-                    />
-                  </div>
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.815rem', whiteSpace: 'nowrap' }}>
-                    <input
-                      type="checkbox"
-                      checked={task.required}
-                      onChange={(e) => handleTaskChange(idx, 'required', e.target.checked)}
-                    />
-                    <span>Required Task</span>
-                  </label>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Task Description</label>
+                  <textarea
+                    className="form-textarea form-textarea-md"
+                    placeholder="Task description / notes..."
+                    value={task.description}
+                    onChange={(e) => handleTaskChange(idx, 'description', e.target.value)}
+                  />
                 </div>
+
+                <label className="styled-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={task.required}
+                    onChange={(e) => handleTaskChange(idx, 'required', e.target.checked)}
+                  />
+                  <span>Required Task</span>
+                </label>
               </div>
             ))}
           </div>

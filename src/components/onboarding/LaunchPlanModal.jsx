@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Play, AlertTriangle, User, Calendar, FileText } from 'lucide-react';
+import { X, Play, AlertTriangle, User, Calendar, FileText, Users, UsersRound, GraduationCap } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
 import { employeeService } from '../../services/employeeService.js';
 import Select from '../common/Select.jsx';
@@ -11,12 +11,12 @@ export default function LaunchPlanModal({
   preselectedEmployeeId = null,
   preselectedTemplateId = null,
 }) {
-  const [employees, setEmployees] = useState([]);
+  const [onboardingEmployees, setOnboardingEmployees] = useState([]);
   const [templates, setTemplates] = useState([]);
+  const [typeFilter, setTypeFilter] = useState('all'); // 'all' | 'Employee' | 'Intern' — same normalization as Onboarding Employees
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(preselectedEmployeeId || '');
   const [selectedTemplateId, setSelectedTemplateId] = useState(preselectedTemplateId || '');
   const [preview, setPreview] = useState(null);
-  const [manualOverrides, setManualOverrides] = useState({});
   const [loading, setLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -33,6 +33,18 @@ export default function LaunchPlanModal({
     if (preselectedEmployeeId) setSelectedEmployeeId(preselectedEmployeeId);
     if (preselectedTemplateId) setSelectedTemplateId(preselectedTemplateId);
   }, [preselectedEmployeeId, preselectedTemplateId]);
+
+  // If the currently selected employee no longer matches the newly chosen type filter,
+  // clear the selection so Launch can't proceed against a now-hidden person.
+  useEffect(() => {
+    if (!selectedEmployeeId) return;
+    const currentlySelected = onboardingEmployees.find((emp) => emp.id === selectedEmployeeId);
+    const stillEligible = currentlySelected && (typeFilter === 'all' || currentlySelected.directoryType === typeFilter);
+    if (!stillEligible) {
+      setSelectedEmployeeId('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeFilter]);
 
   useEffect(() => {
     if (selectedEmployeeId && selectedTemplateId) {
@@ -54,22 +66,19 @@ export default function LaunchPlanModal({
   const loadInitialOptions = async () => {
     try {
       const allEmps = await employeeService.getAll();
-      // Onboarding target population: Upcoming, Onboarding, or Active without active plan
-      const instances = await onboardingService.getAllInstances();
-      const activeEmpIdsWithPlan = new Set(
-        instances.filter((i) => i.derivedStatus !== 'Completed').map((i) => i.employeeId)
-      );
 
-      const candidateEmps = allEmps.filter((e) => {
-        if (e.status === 'Upcoming' || e.status === 'Onboarding') return true;
-        if (e.status === 'Active' && !activeEmpIdsWithPlan.has(e.id)) return true;
-        return false;
-      });
+      // Launch eligibility: only employee/intern records whose CURRENT lifecycle status is
+      // 'Onboarding' — the existing normalized employee.status field used throughout the
+      // app (directory, onboarding population helpers, etc.), not a new eligibility model.
+      // This intentionally reads from the Employees service boundary, not Upcoming
+      // candidates directly: by the time someone is selectable here they must already be a
+      // converted Employee record in Onboarding status.
+      const eligibleEmps = allEmps.filter((e) => e.status === 'Onboarding');
 
       const allTpls = await onboardingService.getAllTemplates();
       const activeTpls = allTpls.filter((t) => t.active !== false);
 
-      setEmployees(candidateEmps);
+      setOnboardingEmployees(eligibleEmps);
       setTemplates(activeTpls);
     } catch (err) {
       setError(err.message);
@@ -82,7 +91,6 @@ export default function LaunchPlanModal({
     try {
       const res = await onboardingService.previewPlanLaunch(empId, tplId);
       setPreview(res);
-      setManualOverrides({});
     } catch (err) {
       setError(err.message);
       setPreview(null);
@@ -94,17 +102,10 @@ export default function LaunchPlanModal({
   const resetState = () => {
     setSelectedEmployeeId(preselectedEmployeeId || '');
     setSelectedTemplateId(preselectedTemplateId || '');
+    setTypeFilter('all');
     setPreview(null);
-    setManualOverrides({});
     setError(null);
     setLoading(false);
-  };
-
-  const handleAssigneeChange = (planTaskId, newAssigneeId) => {
-    setManualOverrides((prev) => ({
-      ...prev,
-      [planTaskId]: newAssigneeId,
-    }));
   };
 
   const handleLaunch = async () => {
@@ -112,11 +113,7 @@ export default function LaunchPlanModal({
     setLoading(true);
     setError(null);
     try {
-      const newInst = await onboardingService.launchPlanInstance(
-        selectedEmployeeId,
-        selectedTemplateId,
-        manualOverrides
-      );
+      const newInst = await onboardingService.launchPlanInstance(selectedEmployeeId, selectedTemplateId);
       if (onSuccess) onSuccess(newInst);
       onClose();
     } catch (err) {
@@ -128,19 +125,26 @@ export default function LaunchPlanModal({
 
   if (!isOpen) return null;
 
-  // Check if launch can proceed
-  const canLaunch =
-    preview &&
-    !previewLoading &&
-    preview.taskPreviews.every((pt) => {
-      const currentAssignee = manualOverrides[pt.planTaskId] || pt.resolvedAssigneeId;
-      if (pt.required) return Boolean(currentAssignee);
-      return true;
-    });
+  // Launch is available whenever a valid employee + template combination has produced a
+  // preview — this modal only ever collects employee and template, nothing else.
+  const canLaunch = Boolean(preview) && !previewLoading;
+
+  // Lifecycle eligibility (status === 'Onboarding') is applied first in loadInitialOptions();
+  // this is the secondary All/Employees/Interns narrowing on top of that already-eligible set.
+  const filteredOnboardingEmployees = onboardingEmployees.filter(
+    (emp) => typeFilter === 'all' || emp.directoryType === typeFilter
+  );
+
+  const employeeEmptyStateMessage =
+    typeFilter === 'Employee'
+      ? 'No onboarding employees available'
+      : typeFilter === 'Intern'
+      ? 'No onboarding interns available'
+      : 'No employees currently awaiting onboarding';
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card xl-modal modal-scroll-shell" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-card xl-modal modal-launch-plan modal-scroll-shell" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
             <div className="modal-icon-badge">
@@ -168,18 +172,59 @@ export default function LaunchPlanModal({
           <div className="modal-field-grid-2">
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Select Onboarding Employee <span className="required-star">*</span></label>
-              <Select
-                variant="form"
-                value={selectedEmployeeId}
-                onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                options={[
-                  { value: '', label: '-- Choose Employee --' },
-                  ...employees.map((emp) => ({
-                    value: emp.id,
-                    label: `${emp.fullName} (${emp.employeeId}) — [${emp.status}]`
-                  }))
-                ]}
-              />
+
+              <div className="view-switcher-group" style={{ marginBottom: '0.6rem' }}>
+                <button
+                  type="button"
+                  className={`view-btn ${typeFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setTypeFilter('all')}
+                >
+                  <Users size={14} />
+                  <span>All</span>
+                </button>
+                <button
+                  type="button"
+                  className={`view-btn ${typeFilter === 'Employee' ? 'active' : ''}`}
+                  onClick={() => setTypeFilter('Employee')}
+                >
+                  <UsersRound size={14} />
+                  <span>Employees</span>
+                </button>
+                <button
+                  type="button"
+                  className={`view-btn ${typeFilter === 'Intern' ? 'active' : ''}`}
+                  onClick={() => setTypeFilter('Intern')}
+                >
+                  <GraduationCap size={14} />
+                  <span>Interns</span>
+                </button>
+              </div>
+
+              {filteredOnboardingEmployees.length === 0 ? (
+                <Select
+                  variant="form"
+                  value=""
+                  onChange={() => {}}
+                  disabled
+                  options={[{ value: '', label: employeeEmptyStateMessage }]}
+                />
+              ) : (
+                <Select
+                  variant="form"
+                  value={selectedEmployeeId}
+                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                  options={[
+                    { value: '', label: '-- Choose Employee --' },
+                    ...filteredOnboardingEmployees.map((emp) => ({
+                      value: emp.id,
+                      label: emp.directoryType === 'Intern'
+                        ? `${emp.fullName} (${emp.employeeId}) — Intern`
+                        : `${emp.fullName} (${emp.employeeId})`
+                    }))
+                  ]}
+                />
+              )}
+              <span className="form-hint">Only employees/interns currently in Onboarding status are eligible</span>
             </div>
 
             <div className="form-group" style={{ marginBottom: 0 }}>
@@ -202,7 +247,7 @@ export default function LaunchPlanModal({
           {/* Preview Details */}
           {previewLoading && (
             <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              Calculating plan preview, due dates, and assignee rules...
+              Calculating plan preview and due dates...
             </div>
           )}
 
@@ -228,80 +273,45 @@ export default function LaunchPlanModal({
                 </div>
               </div>
 
-              {preview.hasUnresolvedRequired && (
-                <div style={{ marginBottom: '1rem', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', padding: '0.75rem 1rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <AlertTriangle size={16} />
-                  <span style={{ fontSize: '0.815rem' }}>
-                    One or more required tasks are unassigned. Please select an assignee for required tasks before launching.
-                  </span>
-                </div>
-              )}
-
               {/* Task Preview Table */}
               <div style={{ overflowX: 'auto' }}>
                 <table className="presence-data-table" style={{ width: '100%', fontSize: '0.815rem' }}>
                   <thead>
                     <tr>
-                      <th style={{ width: '5%', textAlign: 'center' }}>#</th>
-                      <th style={{ width: '32%', textAlign: 'left' }}>Task Title</th>
-                      <th style={{ width: '15%', textAlign: 'center' }}>Relative Timing</th>
-                      <th style={{ width: '18%', textAlign: 'center' }}>Calculated Due Date</th>
-                      <th style={{ width: '22%', textAlign: 'left' }}>Resolved Assignee</th>
-                      <th style={{ width: '8%', textAlign: 'center' }}>Req</th>
+                      <th style={{ width: '6%', textAlign: 'center' }}>#</th>
+                      <th style={{ width: '44%', textAlign: 'left' }}>Task Title</th>
+                      <th style={{ width: '18%', textAlign: 'center' }}>Relative Timing</th>
+                      <th style={{ width: '22%', textAlign: 'center' }}>Calculated Due Date</th>
+                      <th style={{ width: '10%', textAlign: 'center' }}>Req</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.taskPreviews.map((pt) => {
-                      const currentAssignee = manualOverrides[pt.planTaskId] || pt.resolvedAssigneeId;
-                      const isUnassignedReq = pt.required && !currentAssignee;
-
-                      const candOptions = pt.allCandidates && pt.allCandidates.length > 0
-                        ? pt.allCandidates.map(cand => ({ value: cand.id, label: `${cand.fullName} (${cand.role})` }))
-                        : (pt.resolvedAssigneeId ? [{ value: pt.resolvedAssigneeId, label: pt.resolvedAssigneeName }] : []);
-
-                      const empOptions = employees.map(emp => ({ value: emp.id, label: emp.fullName }));
-                      const allOptions = [
-                        { value: '', label: '-- Select Assignee --' },
-                        ...candOptions,
-                        ...empOptions
-                      ];
-
-                      return (
-                        <tr key={pt.planTaskId} style={isUnassignedReq ? { backgroundColor: '#FEF2F2' } : undefined}>
-                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{pt.sequence}</td>
-                          <td>
-                            <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{pt.title}</div>
-                            {pt.description && (
-                              <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>{pt.description}</div>
-                            )}
-                          </td>
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.725rem', fontWeight: 600 }}>
-                              Day {pt.relativeOffsetDays >= 0 ? `+${pt.relativeOffsetDays}` : pt.relativeOffsetDays}
-                            </span>
-                          </td>
-                          <td style={{ textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                            {pt.calculatedDueDate}
-                          </td>
-                          <td>
-                            <Select
-                              variant="form"
-                              style={{ borderColor: isUnassignedReq ? '#EF4444' : undefined }}
-                              value={currentAssignee || ''}
-                              onChange={(e) => handleAssigneeChange(pt.planTaskId, e.target.value)}
-                              options={allOptions}
-                            />
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            {pt.required ? (
-                              <span style={{ color: '#DC2626', fontWeight: 700 }}>Yes</span>
-                            ) : (
-                              <span style={{ color: 'var(--text-muted)' }}>No</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {preview.taskPreviews.map((pt) => (
+                      <tr key={pt.planTaskId}>
+                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{pt.sequence}</td>
+                        <td>
+                          <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{pt.title}</div>
+                          {pt.description && (
+                            <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>{pt.description}</div>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.725rem', fontWeight: 600 }}>
+                            Day {pt.relativeOffsetDays >= 0 ? `+${pt.relativeOffsetDays}` : pt.relativeOffsetDays}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {pt.calculatedDueDate}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          {pt.required ? (
+                            <span style={{ color: '#DC2626', fontWeight: 700 }}>Yes</span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>No</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

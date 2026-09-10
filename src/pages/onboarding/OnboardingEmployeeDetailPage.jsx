@@ -242,15 +242,15 @@ export default function OnboardingEmployeeDetailPage() {
               </button>
             </div>
 
+            <div style={{ overflowX: 'auto' }}>
             <table className="presence-data-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
                   <th style={{ width: '5%', textAlign: 'center' }}>#</th>
-                  <th style={{ width: '32%', textAlign: 'left' }}>Task Title</th>
-                  <th style={{ width: '14%', textAlign: 'center' }}>Relative Timing</th>
-                  <th style={{ width: '16%', textAlign: 'center' }}>Due Date</th>
-                  <th style={{ width: '18%', textAlign: 'left' }}>Assignee</th>
-                  <th style={{ width: '15%', textAlign: 'center' }}>Action</th>
+                  <th style={{ width: '42%', textAlign: 'left' }}>Task Title</th>
+                  <th style={{ width: '15%', textAlign: 'center' }}>Relative Timing</th>
+                  <th style={{ width: '18%', textAlign: 'center' }}>Due Date</th>
+                  <th style={{ width: '20%', textAlign: 'center' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -277,16 +277,6 @@ export default function OnboardingEmployeeDetailPage() {
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 600 }}>
                         {task.currentDueDate}
                       </td>
-                      <td>
-                        <div style={{ fontSize: '0.815rem', fontWeight: 500 }}>
-                          {act && act.assigneeEmployee ? act.assigneeEmployee.fullName : 'Unassigned'}
-                        </div>
-                        {task.assignmentRule && (
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                            Rule: {task.assignmentRule}
-                          </div>
-                        )}
-                      </td>
                       <td style={{ textAlign: 'center' }}>
                         {act && (
                           <button
@@ -305,6 +295,7 @@ export default function OnboardingEmployeeDetailPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}

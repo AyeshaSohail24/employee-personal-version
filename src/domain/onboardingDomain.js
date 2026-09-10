@@ -232,11 +232,16 @@ export function generatePlanPreview({
 
 /**
  * Calculates plan execution progress percentage and task metrics based on linked activities.
+ * Task order is always the stable, ascending `sequence` field — never storage/insertion order.
+ * onboardingService prepends newly-added task instances into db.onboardingTaskInstances (both
+ * at plan launch and for manually-added employee-specific tasks), so relying on array order
+ * here would surface new tasks above earlier ones despite their higher sequence number.
  */
 export function calculatePlanProgress(taskInstances = [], activities = []) {
   const activityMap = new Map((activities || []).map((a) => [a.id, a]));
+  const orderedTaskInstances = [...(taskInstances || [])].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
 
-  const enrichedTasks = (taskInstances || []).map((ti) => {
+  const enrichedTasks = orderedTaskInstances.map((ti) => {
     const linkedActivity = activityMap.get(ti.activityId) || null;
     const isCompleted = linkedActivity ? Boolean(linkedActivity.completed) : false;
     const currentAssigneeId = linkedActivity ? linkedActivity.assigneeId : ti.originallyResolvedAssigneeId;

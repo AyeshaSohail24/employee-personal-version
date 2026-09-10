@@ -99,7 +99,10 @@ export const onboardingService = {
       activityTypeId: t.activityTypeId || 'act-type-1',
       title: t.title.trim(),
       description: (t.description || '').trim(),
-      assignmentRule: t.assignmentRule || 'employee',
+      // PlanEditor no longer collects an assignment rule — a falsy value is the existing
+      // neutral path resolveAssigneeForRule() already understands (resolves to Unassigned),
+      // not a newly invented default like 'employee'.
+      assignmentRule: t.assignmentRule || null,
       specificAssigneeId: t.specificAssigneeId || null,
       relativeOffsetDays: parseInt(t.relativeOffsetDays || 0, 10),
       required: Boolean(t.required),
@@ -161,7 +164,8 @@ export const onboardingService = {
         activityTypeId: t.activityTypeId || 'act-type-1',
         title: t.title.trim(),
         description: (t.description || '').trim(),
-        assignmentRule: t.assignmentRule || 'employee',
+        // Same neutral fallback as createTemplate() — see comment there.
+        assignmentRule: t.assignmentRule || null,
         specificAssigneeId: t.specificAssigneeId || null,
         relativeOffsetDays: parseInt(t.relativeOffsetDays || 0, 10),
         required: Boolean(t.required),
@@ -270,10 +274,10 @@ export const onboardingService = {
       throw new Error(`Employee ${employee.fullName} already has an active onboarding plan (In Progress / Needs Attention).`);
     }
 
+    // Assignment is no longer a concept in the onboarding UI (Launch Onboarding Plan only
+    // collects employee + template), so launching is never blocked on unresolved assignees —
+    // every previewed task is created below regardless of whether it resolved an assignee.
     const preview = await this.previewPlanLaunch(employeeId, templateId);
-    if (!preview.isValid && !manualOverrides.allowLaunch) {
-      throw new Error(`Cannot launch plan: Required tasks contain unresolved assignees.`);
-    }
 
     const nowIso = new Date().toISOString();
     const newInstId = `inst-${String(existingInstances.length + 1).padStart(3, '0')}`;
@@ -294,17 +298,11 @@ export const onboardingService = {
     const existingActivityCount = rawActivities.length;
 
     preview.taskPreviews.forEach((pt, index) => {
-      // Check manual override for assignee
+      // manualOverrides is always {} now that the Launch modal no longer collects per-task
+      // assignees; pt.resolvedAssigneeId naturally stays null for assignment-rule-free tasks
+      // and every task is still created — it simply renders with no assignee, exactly like
+      // the existing neutral/unassigned path already used by manually-added employee tasks.
       const resolvedAssigneeId = manualOverrides[pt.planTaskId] || pt.resolvedAssigneeId;
-
-      if (!resolvedAssigneeId && pt.required) {
-        throw new Error(`Validation failed: Required task "${pt.title}" has no assigned employee.`);
-      }
-
-      if (!resolvedAssigneeId && !pt.required) {
-        // Omit unassigned optional task
-        return;
-      }
 
       const newActId = `act-onb-gen-${String(existingActivityCount + index + 1).padStart(3, '0')}`;
       const newTiId = `ti-${newInstId}-${index + 1}`;

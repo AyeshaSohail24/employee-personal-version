@@ -57,7 +57,7 @@ export default function OnboardingPlansPage() {
         <div>
           <h1 className="page-title">Onboarding Plan Templates</h1>
           <p className="page-subtitle">
-            Configure reusable onboarding plan templates, relative task schedules, and assignment rules.
+            Configure reusable onboarding plan templates and relative task schedules.
           </p>
         </div>
         <Link to="/onboarding/plans/new" className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}>
@@ -85,7 +85,7 @@ export default function OnboardingPlansPage() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.25rem' }}>
           {templates.map((tpl) => (
-            <div key={tpl.id} className="table-container-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: '#FFF' }}>
+            <div key={tpl.id} className="table-container-card plan-template-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                   <span style={{ fontSize: '0.725rem', fontWeight: 700, padding: '0.15rem 0.45rem', borderRadius: '4px', background: tpl.department ? '#EFF6FF' : '#F1F5F9', color: tpl.department ? '#1D4ED8' : '#475569' }}>

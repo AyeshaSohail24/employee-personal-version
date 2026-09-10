@@ -176,7 +176,7 @@ export default function OnboardingEmployeesPage() {
           <div className="summary-card-value" style={{ color: '#DC2626' }}>
             {needsAttentionCount}
           </div>
-          <div className="summary-card-subtext">Overdue tasks or inactive assignees</div>
+          <div className="summary-card-subtext">Overdue or at-risk required tasks</div>
         </div>
 
         <div className="summary-card">
