@@ -16,6 +16,8 @@ import { seedOnboardingPlanInstances, seedOnboardingTaskInstances } from './seed
 import { seedOffboardingPlanTemplates, seedOffboardingPlanTasks } from './seedOffboardingTemplates.js';
 import { seedOffboardingPlanInstances, seedOffboardingTaskInstances } from './seedOffboardingInstances.js';
 import { seedDocumentTypes } from './seedDocumentTypes.js';
+import { seedUpcomingCandidates } from './seedUpcomingCandidates.js';
+import { seedEmailTemplates } from './seedEmailTemplates.js';
 
 const STORAGE_KEY = 'rizurf_hr_poc_v1';
 let inMemoryDb = null;
@@ -284,6 +286,9 @@ function getInitialState() {
     offboardingPlanInstances: seedOffboardingPlanInstances,
     offboardingTaskInstances: seedOffboardingTaskInstances,
     documentTypes: seedDocumentTypes,
+    upcomingCandidates: seedUpcomingCandidates,
+    emailTemplates: seedEmailTemplates,
+    candidateEmailLog: [],
   };
   const migrated = migrateEmployeeTagsIfNeeded(base);
   const cleanedAtt = cleanupAttendanceIfNeeded(migrated);
@@ -321,6 +326,9 @@ export function loadDatabase() {
     if (!parsed.offboardingPlanInstances) parsed.offboardingPlanInstances = seedOffboardingPlanInstances;
     if (!parsed.offboardingTaskInstances) parsed.offboardingTaskInstances = seedOffboardingTaskInstances;
     if (!parsed.documentTypes) parsed.documentTypes = seedDocumentTypes;
+    if (!parsed.upcomingCandidates) parsed.upcomingCandidates = seedUpcomingCandidates;
+    if (!parsed.emailTemplates) parsed.emailTemplates = seedEmailTemplates;
+    if (!parsed.candidateEmailLog) parsed.candidateEmailLog = [];
 
     const migrated = migrateEmployeeTagsIfNeeded(parsed);
     const cleanedAtt = cleanupAttendanceIfNeeded(migrated);

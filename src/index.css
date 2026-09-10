@@ -1163,6 +1163,41 @@ body {
   flex-wrap: wrap;
 }
 
+/* Base .btn-header-action sizing (unscoped) — reusable anywhere a header-action-sized
+   primary/secondary button is needed outside the page header itself, e.g. the bulk
+   "Send N Pending Emails" button, so it shares the exact same sizing/shape as the Send
+   Email button rather than approximating it with separate padding/font-size rules.
+   Identical in every property to the scoped variants below, which remain for safety. */
+.btn-header-action {
+  white-space: nowrap;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.815rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 36px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-header-action:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* .btn-primary/.btn-secondary each declare their own padding/font-size at equal (single-class)
+   specificity to the bare .btn-header-action rule above, so the winner would otherwise depend
+   on source order. Pin it explicitly via a combined-class selector so sizing is identical
+   wherever .btn-header-action is paired with either button style, regardless of file order. */
+.btn-primary.btn-header-action,
+.btn-secondary.btn-header-action {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.815rem;
+  height: 36px;
+}
+
 .employees-page-header .btn-header-action {
   white-space: nowrap;
   padding: 0.45rem 0.85rem;
@@ -1679,6 +1714,499 @@ body {
   .timeline-name-col {
     width: 150px;
   }
+}
+
+/* ==========================================================================
+   Upcoming — Candidate / Offer Workflow
+   ========================================================================== */
+
+.candidate-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+
+@media (max-width: 1100px) {
+  .candidate-summary-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .candidate-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.candidate-summary-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.candidate-summary-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.candidate-summary-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-navy-header);
+  line-height: 1.1;
+}
+
+.candidate-summary-label {
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 0.1rem;
+}
+
+.candidate-tab-switcher {
+  margin-bottom: 1.25rem;
+}
+
+.candidate-notification-btn {
+  position: relative;
+}
+
+.candidate-notification-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 0.3rem;
+  border-radius: var(--radius-full);
+  background-color: #EF4444;
+  color: #FFFFFF;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-left: 0.15rem;
+}
+
+.send-all-pending-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.candidate-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.candidate-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border-light);
+  background-color: var(--bg-card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.candidate-action-btn.accept {
+  color: #059669;
+}
+
+.candidate-action-btn.accept:hover {
+  background-color: #ECFDF5;
+  border-color: #A7F3D0;
+}
+
+.candidate-action-btn.reject {
+  color: #DC2626;
+}
+
+.candidate-action-btn.reject:hover {
+  background-color: #FEF2F2;
+  border-color: #FECACA;
+}
+
+.candidate-action-btn.restore {
+  color: var(--color-primary);
+}
+
+.candidate-action-btn.restore:hover {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
+}
+
+.candidate-action-btn.undo {
+  color: #D97706;
+}
+
+.candidate-action-btn.undo:hover {
+  background-color: #FFFBEB;
+  border-color: #FDE68A;
+}
+
+/* Reusable modal layout: fixed header/footer, only the body scrolls internally.
+   Additive to .modal-card — does not change the default (whole-card-scrolls) behavior
+   used by other modals that don't opt in. */
+.modal-scroll-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
+}
+
+.modal-scroll-shell > .modal-header,
+.modal-scroll-shell > form > .modal-header,
+.modal-scroll-shell > .modal-footer,
+.modal-scroll-shell > form > .modal-footer {
+  flex-shrink: 0;
+}
+
+.modal-scroll-shell > .modal-body,
+.modal-scroll-shell > form > .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.modal-scroll-shell > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+@media (max-width: 640px) {
+  .modal-scroll-shell {
+    max-height: 94vh;
+  }
+}
+
+/* Bulk Send Email modal: ONE primary scrollable content area for the candidate list, instead
+   of nested modal/list/email-body scrollbars. .bulk-modal-body itself becomes a non-scrolling
+   flex column (overriding the generic .modal-body auto-scroll above via a combined-class
+   selector, so specificity wins regardless of source order) containing a fixed Hiring
+   Employee Name/CC section and exactly one flex:1 scrollable candidate-review region. */
+.modal-scroll-shell > .modal-body.bulk-modal-body {
+  display: flex;
+  flex-direction: column;
+  overflow-y: hidden;
+}
+
+.bulk-fixed-fields {
+  flex-shrink: 0;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.bulk-main-scroll-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Reusable, scoped scrollbar treatment for content areas that must show an obviously
+   visible internal scrollbar (email draft bodies, the Candidate Replies list) — distinct
+   from the outer modal's own bounded scrolling. `overflow-y: scroll` (not `auto`) so the
+   scrollbar track stays visually present rather than only appearing on hover/overflow in
+   browsers/OS themes that otherwise hide it. Scoped to this single class so it never
+   affects any other scrollable element in the app. */
+.app-scroll-area {
+  overflow-y: scroll;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #94A3B8 #F1F5F9;
+}
+
+.app-scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-scroll-area::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 8px;
+}
+
+.app-scroll-area::-webkit-scrollbar-thumb {
+  background-color: #94A3B8;
+  border-radius: 8px;
+}
+
+.app-scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: #64748B;
+}
+
+/* Desktop table vs. mobile candidate cards */
+.candidate-table-desktop {
+  display: block;
+}
+
+.candidate-card-grid {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .candidate-table-desktop {
+    display: none;
+  }
+
+  .candidate-card-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+
+.candidate-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.candidate-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.candidate-card-body {
+  padding: 0.6rem 0;
+  border-top: 1px dashed var(--border-subtle);
+  border-bottom: 1px dashed var(--border-subtle);
+  margin-bottom: 0.75rem;
+}
+
+.candidate-card-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Email Drafts */
+.email-drafts-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .email-drafts-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.email-drafts-list-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-self: start;
+}
+
+.email-draft-list-item {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.email-draft-list-item:hover {
+  background-color: var(--bg-subtle);
+}
+
+.email-draft-list-item.active {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-active);
+}
+
+.email-draft-editor-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.25rem;
+}
+
+.email-body-textarea {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  max-height: 300px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.email-draft-placeholder-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.placeholder-token-chip {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-subtle);
+  color: var(--color-primary-active);
+  border: 1px solid var(--border-light);
+}
+
+.email-draft-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+/* Bulk send review — .bulk-candidate-list is a plain flex-column layout container; the
+   actual scrolling for the whole candidate list happens one level up, in the single
+   .bulk-main-scroll-area primary scroll region (see modal-scroll-shell rules above), so
+   this never becomes a second nested scrollbar. */
+.bulk-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bulk-candidate-row {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.bulk-candidate-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  background: var(--bg-card);
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.bulk-candidate-toggle:hover {
+  background-color: var(--bg-subtle);
+}
+
+.bulk-candidate-name {
+  flex: 1;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.bulk-candidate-chevron {
+  color: var(--text-muted);
+  display: flex;
+}
+
+.bulk-candidate-preview {
+  padding: 0.85rem;
+  background-color: var(--bg-subtle);
+  border-top: 1px solid var(--border-light);
+  font-size: 0.8rem;
+}
+
+.bulk-preview-field {
+  margin-bottom: 0.4rem;
+}
+
+.bulk-preview-body {
+  /* Deliberately no max-height/overflow here: the full email body grows naturally in
+     document flow so HR can read it completely without a cramped nested scrollbar — the
+     single .bulk-main-scroll-area handles all vertical scrolling for the candidate list. */
+  white-space: pre-wrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  margin: 0;
+}
+
+.bulk-send-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.bulk-result-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.bulk-result-error {
+  color: #DC2626;
+  font-size: 0.75rem;
+}
+
+/* Notification panel */
+.notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 360px;
+  padding-right: 0.5rem;
+}
+
+.notification-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+.notification-item.unread {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
 }
 
 /* Employee Card Grid */

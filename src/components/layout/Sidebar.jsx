@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
+  UserPlus2,
   UserCheck,
   UserX,
   CheckSquare,
@@ -78,7 +79,17 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         {/* PEOPLE Section */}
         <div style={{ marginTop: '1.25rem' }}>
           <div className="nav-section-title">PEOPLE</div>
-          
+
+          {/* Upcoming (shortlisted candidates / pre-hire offer workflow) */}
+          <NavLink
+            to="/upcoming"
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            onClick={closeMobile}
+          >
+            <UserPlus2 className="nav-icon" size={18} />
+            <span>Upcoming</span>
+          </NavLink>
+
           {/* Onboarding */}
           <div>
             <button
