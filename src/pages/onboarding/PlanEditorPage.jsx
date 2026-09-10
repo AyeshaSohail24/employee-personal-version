@@ -108,10 +108,13 @@ export default function PlanEditorPage() {
   const handleAddTask = () => {
     const newTask = {
       id: `temp-${Date.now()}`,
-      title: 'New Onboarding Task',
+      title: '',
       description: '',
       activityTypeId: activityTypes.length > 0 ? activityTypes[0].id : 'act-type-1',
       relativeOffsetDays: 0,
+      // Required Task is no longer a configurable, HR-facing concept — this stays as an
+      // internal compatibility field only (never rendered/edited in the UI). All tasks count
+      // equally toward onboarding progress regardless of this value; see calculatePlanProgress().
       required: true,
       sequence: tasks.length + 1,
     };
@@ -208,28 +211,14 @@ export default function PlanEditorPage() {
       </div>
 
       <form onSubmit={handleSave}>
-        {/* Header Title & Actions */}
-        <div className="page-header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* Header Title (no actions here — Cancel/Save Tasks live at the bottom of the page) */}
+        <div className="page-header-container">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="modal-icon-badge">{meta.icon}</div>
             <div>
               <h1 className="page-title">{meta.title}</h1>
               <p className="page-subtitle">{meta.subtitle}</p>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <Link to="/onboarding/plans" className="btn-secondary" style={{ textDecoration: 'none' }}>
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={saving}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-            >
-              <Save size={15} />
-              <span>{saving ? 'Saving...' : 'Save Tasks'}</span>
-            </button>
           </div>
         </div>
 
@@ -325,7 +314,7 @@ export default function PlanEditorPage() {
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="Task title..."
+                      placeholder="e.g. Set up email access"
                       value={task.title}
                       onChange={(e) => handleTaskChange(idx, 'title', e.target.value)}
                       required
@@ -368,15 +357,6 @@ export default function PlanEditorPage() {
                     onChange={(e) => handleTaskChange(idx, 'description', e.target.value)}
                   />
                 </div>
-
-                <label className="styled-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={task.required}
-                    onChange={(e) => handleTaskChange(idx, 'required', e.target.checked)}
-                  />
-                  <span>Required Task</span>
-                </label>
               </div>
             ))}
           </div>
@@ -392,6 +372,22 @@ export default function PlanEditorPage() {
               <span>Add Another Task</span>
             </button>
           </div>
+        </div>
+
+        {/* Bottom Save Actions — the only Cancel/Save Tasks controls on this page */}
+        <div className="plan-editor-bottom-actions">
+          <Link to="/onboarding/plans" className="btn-secondary" style={{ textDecoration: 'none' }}>
+            Cancel
+          </Link>
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={saving}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <Save size={15} />
+            <span>{saving ? 'Saving...' : 'Save Tasks'}</span>
+          </button>
         </div>
       </form>
     </div>

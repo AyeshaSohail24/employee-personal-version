@@ -2314,8 +2314,9 @@ export async function verifyStage18() {
       '394. Relative Offset (Days) uses the styled .form-input (type="number"), and the old single-line dot-separated helper text is gone'
     );
 
-    // 395. Required Task checkbox uses the shared styled-checkbox-label class
-    assert(planEditorSrc.match(/styled-checkbox-label[\s\S]{0,300}Required Task/), '395. Required Task uses the shared .styled-checkbox-label styling');
+    // 395. UPDATED — Required Task was later removed entirely from the scope editor (it is no
+    // longer a configurable, HR-facing concept — see the "Simplify Scope Task Editor" task).
+    assert(!planEditorSrc.match(/styled-checkbox-label[\s\S]{0,300}Required Task/), '395. UPDATED — The scope editor no longer has a Required Task checkbox at all (removed, not just restyled)');
 
     // 396. Move up/down/delete icon buttons use the real .icon-btn class (not the non-existent btn-icon-close), with a destructive variant for delete
     assert(
@@ -2553,10 +2554,10 @@ export async function verifyStage18() {
     // 431. Activity Type is preserved — only Assignment Rule was removed
     assert(planEditorSrc2.includes('>Activity Type<') && planEditorSrc2.includes("handleTaskChange(idx, 'activityTypeId'"), '431. Activity Type remains fully present and functional — only Assignment Rule was removed');
 
-    // 432. Task Description, Relative Offset, and Required Task all remain
+    // 432. UPDATED — Task Description and Relative Offset remain; Required Task was intentionally removed
     assert(
-      planEditorSrc2.includes('>Task Description<') && planEditorSrc2.includes('>Relative Offset (Days)<') && planEditorSrc2.includes('>Required Task<'),
-      '432. Task Description, Relative Offset (Days), and Required Task all remain present'
+      planEditorSrc2.includes('>Task Description<') && planEditorSrc2.includes('>Relative Offset (Days)<') && !planEditorSrc2.includes('>Required Task<'),
+      '432. UPDATED — Task Description and Relative Offset (Days) remain present; Required Task no longer appears anywhere in the editor'
     );
 
     // 433. New tasks created through Add Task / the initial new-template seed no longer carry an assignmentRule key at all (neither in the handler nor the default seed data)
@@ -2713,14 +2714,17 @@ export async function verifyStage18() {
       '450. Launch Onboarding Plan contains no assignment UI — no Resolved Assignee column, override Select, or unresolved-assignee warning banner'
     );
 
-    // 451. LaunchPlanModal's task preview table now has exactly # / Task Title / Relative Timing / Calculated Due Date / Req — no Assignee column
+    // 451. UPDATED — LaunchPlanModal's task preview table now has exactly # / Task Title / Relative
+    // Timing / Calculated Due Date — no Assignee column, and (per the later "Simplify Scope Task
+    // Editor" task) no Req column either, since Required is no longer a user-facing concept anywhere
+    // in onboarding setup/launch UI.
     {
       const launchHeaderMatch = launchPlanModalSrc7.match(/<thead>([\s\S]*?)<\/thead>/);
       const launchHeaderRow = launchHeaderMatch ? launchHeaderMatch[1] : '';
       const launchHeaderLabels = [...launchHeaderRow.matchAll(/<th[^>]*>([^<]+)<\/th>/g)].map((m) => m[1].trim());
       assert(
-        launchHeaderLabels.length === 5 && launchHeaderLabels[1] === 'Task Title' && launchHeaderLabels[4] === 'Req' && !launchHeaderLabels.includes('Resolved Assignee'),
-        `451. Launch Plan's task preview table has exactly 5 columns with no Assignee column (found: ${JSON.stringify(launchHeaderLabels)})`
+        launchHeaderLabels.length === 4 && launchHeaderLabels[1] === 'Task Title' && !launchHeaderLabels.includes('Req') && !launchHeaderLabels.includes('Resolved Assignee'),
+        `451. UPDATED — Launch Plan's task preview table has exactly 4 columns with no Assignee and no Req column (found: ${JSON.stringify(launchHeaderLabels)})`
       );
     }
 
@@ -2736,11 +2740,11 @@ export async function verifyStage18() {
     const addTaskModalCodeOnly2 = stripComments(addTaskModalSrc4);
     assert(!addTaskModalCodeOnly2.includes('Assignee Rule') && !addTaskModalCodeOnly2.includes('ASSIGNMENT_RULES') && !addTaskModalCodeOnly2.includes('specificAssigneeId'), '453. Add Onboarding Task remains fully free of Assignee Rule / assignment concepts in its actual code and UI');
 
-    // 454. Plan Editor (already assignment-free from a prior task) remains confirmed assignment-free, with the intended field set: Task Title / Activity Type / Relative Offset / Task Description / Required Task
+    // 454. UPDATED — Plan Editor remains assignment-free, with the simplified field set: Task Title / Activity Type / Relative Offset / Task Description (Required Task was intentionally removed)
     assert(
       !stripComments(planEditorSrc3).includes('Assignment Rule') && !stripComments(planEditorSrc3).includes('ASSIGNMENT_RULES') &&
-      planEditorSrc3.includes('>Task Title') && planEditorSrc3.includes('>Activity Type<') && planEditorSrc3.includes('Relative Offset (Days)') && planEditorSrc3.includes('>Task Description<') && planEditorSrc3.includes('>Required Task<'),
-      '454. Plan Template task configuration remains exactly Task Title / Activity Type / Relative Offset / Task Description / Required Task — Assignment Rule was not reintroduced'
+      planEditorSrc3.includes('>Task Title') && planEditorSrc3.includes('>Activity Type<') && planEditorSrc3.includes('Relative Offset (Days)') && planEditorSrc3.includes('>Task Description<') && !planEditorSrc3.includes('>Required Task<'),
+      '454. UPDATED — Plan Editor task configuration is Task Title / Activity Type / Relative Offset / Task Description — Assignment Rule was not reintroduced, and Required Task is now also gone'
     );
 
     // 455. Stale onboarding-facing copy that referenced assignment concepts has been reworded (Plans subtitle, task description placeholders, Needs Attention subtext)
@@ -3454,11 +3458,12 @@ export async function verifyStage18() {
         '542. Manage Tasks still navigates to the exact same 4 scope-editor routes as before this task'
       );
 
-      // 543. Counts displayed alongside the task list are unchanged in source/computation (still summary.<scope>.taskCount/requiredCount)
+      // 543. UPDATED — Task count display still reads from the same summary fields; the required-count
+      // display was later removed entirely from the Plans overview (see the "Simplify Scope Task Editor" task).
       assert(
-        onbPlansSrc5.includes('taskCount={summary.universal.taskCount}') && onbPlansSrc5.includes('requiredCount={summary.universal.requiredCount}') &&
-        onbPlansSrc5.includes('taskCount={row.taskCount}') && onbPlansSrc5.includes('requiredCount={row.requiredCount}'),
-        '543. Task count / required count displays still read from the exact same summary fields as before — unaffected by adding the task-list preview'
+        onbPlansSrc5.includes('taskCount={summary.universal.taskCount}') && onbPlansSrc5.includes('taskCount={row.taskCount}') &&
+        !onbPlansSrc5.includes('requiredCount={summary.universal.requiredCount}') && !onbPlansSrc5.includes('requiredCount={row.requiredCount}'),
+        '543. UPDATED — Task count displays still read from the same summary fields; required-count props were removed from every ScopeCard call site'
       );
 
       // 544. Task-list area has a bounded max-height with internal scrolling (app's existing scrollbar styling reused) — a scope with many tasks cannot stretch the whole page
@@ -3554,12 +3559,15 @@ export async function verifyStage18() {
           `555. task.required booleans and the scope's requiredCount summary remain fully intact (Employee requiredCount: ${summaryAfterRequiredRemoval.employee.requiredCount}, expected 6) — only the per-task visual badge was removed, not the underlying data`
         );
       }
-      assert(onbPlansSrc6.includes('requiredCount}</strong> required'), '555b. The scope footer\'s "N required" summary text is unchanged and still visible');
+      // 555b. UPDATED — The scope footer's "N required" summary text was later removed entirely
+      // from the Plans overview (see the "Simplify Scope Task Editor" task) — only "N tasks" remains.
+      assert(!onbPlansSrc6.includes('requiredCount}</strong> required') && onbPlansSrc6.includes('taskCount}</strong> task'), '555b. UPDATED — The scope footer no longer shows "N required" — only the plain task count remains');
 
-      // 556. The Required Task checkbox in the Manage Tasks editor (PlanEditorPage) is completely untouched by this overview-only change
+      // 556. UPDATED — The Required Task checkbox was later removed entirely from the Manage Tasks
+      // editor (see the "Simplify Scope Task Editor" task) — it is no longer a configurable concept at all.
       {
         const planEditorSrcForReqCheck = fs.readFileSync(path.resolve('./src/pages/onboarding/PlanEditorPage.jsx'), 'utf-8');
-        assert(planEditorSrcForReqCheck.match(/styled-checkbox-label[\s\S]{0,300}Required Task/), '556. PlanEditorPage\'s "Required Task" checkbox is unaffected — Required was only removed from the read-only Plans overview, not from the editor');
+        assert(!planEditorSrcForReqCheck.match(/styled-checkbox-label[\s\S]{0,300}Required Task/), '556. UPDATED — PlanEditorPage no longer has a Required Task checkbox anywhere');
       }
 
       // --- PART 3: SUBTITLE -> UNIVERSAL CARD SPACING ---
@@ -3625,6 +3633,239 @@ export async function verifyStage18() {
 
       // 566. No page-level horizontal overflow risk — the task description's overflow-wrap and the task list's own max-height/overflow-y are the only new overflow-related rules, and neither touches overflow-x anywhere on the page
       assert(!indexCssSrc11.match(/\.onboarding-scope[\s\S]{0,200}overflow-x:\s*(scroll|auto)/), '566. No new overflow-x rules were introduced anywhere in the onboarding scope card system — long descriptions wrap instead of scrolling horizontally');
+
+      resetDatabase();
+    }
+    // ==========================================================================
+    // Simplify Scope Task Editor — Remove Required Concept + Bottom Save
+    // Actions + Blank New Tasks
+    // ==========================================================================
+    {
+      const onbPlansSrc7 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingPlansPage.jsx'), 'utf-8');
+      const planEditorSrc4 = fs.readFileSync(path.resolve('./src/pages/onboarding/PlanEditorPage.jsx'), 'utf-8');
+      const launchPlanModalSrc9 = fs.readFileSync(path.resolve('./src/components/onboarding/LaunchPlanModal.jsx'), 'utf-8');
+      const employeeDetailSrc = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const indexCssSrc12 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const onboardingDomainSrc2 = fs.readFileSync(path.resolve('./src/domain/onboardingDomain.js'), 'utf-8');
+
+      // --- PLANS OVERVIEW: ONLY TASK COUNT SHOWN ---
+
+      // 567. No scope card (Universal/Employee/Intern/Department) passes or renders a requiredCount prop any more
+      assert(!onbPlansSrc7.includes('requiredCount'), '567. OnboardingPlansPage.jsx no longer references requiredCount anywhere — no scope card passes or renders a required count');
+
+      // 568. The footer shows only "N tasks" (no "· N required" separator/segment left dangling)
+      assert(
+        onbPlansSrc7.match(/taskCount\}<\/strong> task\{taskCount === 1 \? '' : 's'\}\s*\n\s*<\/div>/),
+        '568. The scope card footer renders only "N tasks" — no trailing " · N required" segment or dangling separator dot'
+      );
+
+      // 569. No "required" wording of any kind (case-insensitive) remains anywhere in the Plans overview page source (excluding comments)
+      assert(!stripComments(onbPlansSrc7).match(/required/i), '569. No "required" wording remains anywhere in OnboardingPlansPage.jsx\'s actual rendered code (comments excluded)');
+
+      // 570. FUNCTIONAL: getScopesSummary() still returns accurate task counts (untouched by this UI-only removal) — used to confirm 567-569 didn't accidentally break real counts
+      {
+        const summaryForCountCheck = await onboardingService.getScopesSummary();
+        assert(summaryForCountCheck.employee.taskCount === 7, `570. Task counts remain accurate after removing the required-count display (Employee taskCount: ${summaryForCountCheck.employee.taskCount}, expected 7)`);
+      }
+
+      // --- TASK EDITOR: REQUIRED CHECKBOX FULLY REMOVED ---
+
+      // 571. No Required Task checkbox, label, or its backing onChange handler call remains in the editor's actual UI code (an explanatory comment mentioning the removed concept by name is fine and is excluded via stripComments)
+      assert(
+        !stripComments(planEditorSrc4).includes('Required Task') && !planEditorSrc4.match(/handleTaskChange\(idx, 'required'/),
+        "571. PlanEditorPage has no Required Task checkbox, label, or onChange('required', ...) call anywhere in its actual UI code"
+      );
+
+      // 572. No leftover empty layout gap — Task Description is the LAST field inside each task card (immediately followed by the card's closing tags, not a removed checkbox's empty space)
+      assert(
+        planEditorSrc4.match(/onChange=\{\(e\) => handleTaskChange\(idx, 'description', e\.target\.value\)\}\s*\n\s*\/>\s*\n\s*<\/div>\s*\n\s*<\/div>\s*\n\s*\)\)\}/),
+        '572. Task Description is the last field in each task card — no empty leftover space where the Required Task checkbox used to sit'
+      );
+
+      // 573. Task Title, Activity Type, Relative Offset, and Task Description all remain fully functional
+      assert(
+        planEditorSrc4.includes('>Task Title') && planEditorSrc4.includes('>Activity Type<') && planEditorSrc4.includes('Relative Offset (Days)') && planEditorSrc4.includes('>Task Description<'),
+        '573. Task Title, Activity Type, Relative Offset (Days), and Task Description all remain present and functional'
+      );
+
+      // 574. Move Up / Move Down / Delete handlers all remain wired exactly as before
+      assert(
+        planEditorSrc4.includes('handleMoveTask(idx, -1)') && planEditorSrc4.includes('handleMoveTask(idx, 1)') && planEditorSrc4.includes('handleRemoveTask(idx)'),
+        '574. Move Up, Move Down, and Delete are all still wired to their existing handlers, unchanged by removing Required Task'
+      );
+
+      // --- NEW TASK DEFAULTS ---
+
+      // 575. Add Task / Add Another Task both create a task via the SAME handleAddTask() function, with title: '' (blank) — not the old prefilled "New Onboarding Task"
+      assert(
+        planEditorSrc4.match(/const handleAddTask = \(\) => \{\s*\n\s*const newTask = \{\s*\n\s*id: `temp-\$\{Date\.now\(\)\}`,\s*\n\s*title: '',/) &&
+        !planEditorSrc4.includes('New Onboarding Task'),
+        "575. handleAddTask() creates a new task with title: '' — the old prefilled \"New Onboarding Task\" value is completely gone"
+      );
+      {
+        const addTaskButtonCount = (planEditorSrc4.match(/onClick=\{handleAddTask\}/g) || []).length;
+        assert(addTaskButtonCount === 2, `576. Both "Add Task" and "Add Another Task" buttons call the exact same handleAddTask() (found ${addTaskButtonCount} call sites) — guaranteeing identical blank-task shape from either button`);
+      }
+
+      // 577. New task description also starts blank, with a non-prefilled placeholder
+      assert(planEditorSrc4.match(/description: '',/) && planEditorSrc4.includes('placeholder="Task description / notes..."'), '577. A new task\'s description starts as an empty string, with placeholder text only (never written into the actual value)');
+
+      // 578. Relative Offset still defaults to 0 for a new task
+      assert(planEditorSrc4.match(/relativeOffsetDays: 0,/), '578. A newly-created task\'s relativeOffsetDays still defaults to 0');
+
+      // 579. The Task Title field uses a non-prefilled example placeholder instead of writing content into the value
+      assert(planEditorSrc4.includes('placeholder="e.g. Set up email access"') && !planEditorSrc4.match(/value=\{task\.title\}[\s\S]{0,10}\|\|/), '579. Task Title shows an illustrative placeholder only — the actual `value` is never defaulted to example text');
+
+      // 580. Blank-title validation is preserved — Save Tasks still refuses to persist a task with an empty title
+      assert(
+        planEditorSrc4.match(/if \(!tasks\[i\]\.title\.trim\(\)\)\s*\{\s*\n\s*setError\(`Task #\$\{i \+ 1\} is missing a title\.`\);\s*\n\s*return;/),
+        '580. handleSave() still validates every task has a non-empty title before calling saveScopeTasks(), returning early with an error otherwise (no silent unnamed-task save)'
+      );
+
+      // --- SAVE ACTIONS MOVED TO BOTTOM ---
+
+      // 581. Cancel/Save Tasks are absent from the top page-header-container
+      {
+        const headerBlockMatch = planEditorSrc4.match(/<div className="page-header-container">([\s\S]*?)\n {8}<\/div>\n/);
+        const headerBlock = headerBlockMatch ? headerBlockMatch[1] : '';
+        assert(
+          headerBlock.length > 0 && !headerBlock.includes('Cancel') && !headerBlock.includes('Save Tasks'),
+          '581. The top page-header-container contains no Cancel or Save Tasks controls — only the icon, title, and subtitle'
+        );
+      }
+
+      // 582. Cancel and Save Tasks both appear inside the new .plan-editor-bottom-actions footer, and that footer comes AFTER the Task Builder card in source order
+      {
+        const bottomActionsIndex = planEditorSrc4.indexOf('plan-editor-bottom-actions');
+        const taskBuilderIndex = planEditorSrc4.indexOf('Add Another Task');
+        const bottomBlockMatch = planEditorSrc4.match(/plan-editor-bottom-actions">([\s\S]*?)<\/form>/);
+        const bottomBlock = bottomBlockMatch ? bottomBlockMatch[1] : '';
+        assert(
+          bottomActionsIndex > taskBuilderIndex && bottomBlock.includes('Cancel') && bottomBlock.includes('Save Tasks'),
+          '582. .plan-editor-bottom-actions appears AFTER the task list (past "Add Another Task") and contains both Cancel and Save Tasks'
+        );
+      }
+
+      // 583. The bottom action row has real spacing/separation styling (top border + top margin/padding) — not stuck to the task cards or the bottom edge
+      assert(
+        indexCssSrc12.match(/\.plan-editor-bottom-actions\s*\{[^}]*margin-top:\s*2rem[^}]*padding-top:\s*1\.5rem[^}]*border-top:\s*1px solid var\(--border-light\)/),
+        '583. .plan-editor-bottom-actions has a top border, top margin, and top padding — visually separated from the task cards above it, not glued to them'
+      );
+
+      // 584. The bottom actions render in normal document flow (not fixed/sticky) — no position: fixed/sticky was introduced
+      assert(!indexCssSrc12.match(/\.plan-editor-bottom-actions\s*\{[^}]*position:\s*(fixed|sticky)/), '584. The bottom Save actions use normal document flow (no position: fixed/sticky) — reachable only after scrolling past the task list, as specified');
+
+      // 585. Cancel still behaves as a plain navigation Link back to the Plans overview (unchanged logic, only position changed)
+      assert(planEditorSrc4.match(/plan-editor-bottom-actions">\s*\n\s*<Link to="\/onboarding\/plans" className="btn-secondary"/), '585. Cancel is still a plain <Link to="/onboarding/plans"> — identical navigation behavior, only its position on the page changed');
+
+      // 586. Save Tasks is still the form's real submit button, wired to the same handleSave()/saveScopeTasks() path
+      assert(planEditorSrc4.match(/type="submit"\s*\n\s*className="btn-primary"\s*\n\s*disabled=\{saving\}/) && planEditorSrc4.includes('await onboardingService.saveScopeTasks(scopeType, departmentId, tasks)'), '586. Save Tasks remains a real type="submit" button triggering the unchanged handleSave() -> saveScopeTasks() path — only its position changed');
+
+      // --- LAUNCH PREVIEW: NO REQUIRED WORDING ---
+
+      // 587. LaunchPlanModal's preview table no longer has a Req column, and no onboarding-task "required" wording appears anywhere in its source
+      // (the pre-existing "required-star" class marking mandatory FORM FIELDS like "Select Onboarding Employee *" is an unrelated, untouched UI convention — not the onboarding-task Required concept)
+      assert(
+        !launchPlanModalSrc9.includes('>Req<') && !stripComments(launchPlanModalSrc9).replace(/required-star/g, '').match(/required/i),
+        '587. LaunchPlanModal has no Req column and no onboarding-task "required" wording anywhere in its source (aside from the pre-existing, unrelated required-star mandatory-field marker)'
+      );
+
+      // 588. The scope composition breakdown (Universal/Type/Department/Total counts) remains — only the required breakdown was removed, not the useful total-by-scope summary
+      assert(
+        launchPlanModalSrc9.includes('Universal Tasks {preview.counts.universal}') && launchPlanModalSrc9.includes('Total {preview.counts.total}'),
+        '588. The Launch preview still shows Universal/Type/Department/Total task counts by scope — only the required breakdown was removed, not the useful total summary'
+      );
+
+      // --- EMPLOYEE DETAIL: NO "REQUIRED TASKS" WORDING ---
+
+      // 589. "Required Tasks:" wording is gone from the employee onboarding detail page
+      assert(!employeeDetailSrc.includes('Required Tasks:') && !employeeDetailSrc.includes('Total Tasks:'), '589. Neither "Required Tasks:" nor the duplicate "Total Tasks:" wording remains — replaced by one clean summary line');
+
+      // 590. A single clean "N of M tasks completed" summary line replaces the two previous competing metrics
+      assert(employeeDetailSrc.match(/\{planInstance\.progress\.completedTasksCount\} of \{planInstance\.progress\.totalTasks\}<\/strong> tasks completed/), '590. Employee detail now shows one clear "N of M tasks completed" line instead of two separate Required/Total lines');
+
+      // --- PROGRESS: ALL TASKS COUNT EQUALLY (CENTRAL DOMAIN FIX) ---
+
+      // 591. calculatePlanProgress() no longer filters by task.required — every task counts toward progress
+      assert(
+        onboardingDomainSrc2.includes('const requiredTasks = enrichedTasks;') && !onboardingDomainSrc2.match(/const requiredTasks = enrichedTasks\.filter\(\(t\) => t\.required\)/),
+        '591. calculatePlanProgress() computes progress against the full task set (const requiredTasks = enrichedTasks) instead of filtering by task.required — the fix is centralized in the domain layer, not hardcoded in any UI component'
+      );
+
+      // 592. FUNCTIONAL: a plan instance containing a LEGACY task with required: false still counts that task toward progress and completion (no silently-excluded "hidden optional" task)
+      {
+        const legacyMixedTaskInstances = [
+          { id: 'lti-1', planInstanceId: 'legacy-mixed-inst', activityId: 'lact-1', sequence: 1, required: true },
+          { id: 'lti-2', planInstanceId: 'legacy-mixed-inst', activityId: 'lact-2', sequence: 2, required: false }, // legacy optional task
+        ];
+        const legacyMixedActivities = [
+          { id: 'lact-1', completed: true },
+          { id: 'lact-2', completed: true },
+        ];
+        const { calculatePlanProgress: calcProgressForLegacyCheck } = await import('../domain/onboardingDomain.js');
+        const legacyProgress = calcProgressForLegacyCheck(legacyMixedTaskInstances, legacyMixedActivities);
+        assert(
+          legacyProgress.totalTasks === 2 && legacyProgress.completedTasksCount === 2 && legacyProgress.progressPercentage === 100,
+          `592. A legacy required:false task is NOT silently excluded from progress — both tasks count, and completing both yields 100% (found totalTasks:${legacyProgress.totalTasks}, completed:${legacyProgress.completedTasksCount}, pct:${legacyProgress.progressPercentage}%)`
+        );
+
+        // 593. Partial completion of a mix of legacy required:true/false tasks reflects the TRUE fraction of all tasks, not just the required subset
+        const legacyPartialActivities = [
+          { id: 'lact-1', completed: true },
+          { id: 'lact-2', completed: false },
+        ];
+        const legacyPartialProgress = calcProgressForLegacyCheck(legacyMixedTaskInstances, legacyPartialActivities);
+        assert(legacyPartialProgress.progressPercentage === 50, `593. With 1 of 2 tasks done (one legacy required:true, one legacy required:false), progress is 50% (1/2 of ALL tasks) — not 100% (which the old required-only formula would have shown, since the only required:true task was completed) (found ${legacyPartialProgress.progressPercentage}%)`);
+      }
+
+      // 594. FUNCTIONAL: composeOnboardingTasks() / launch composition is unaffected — same Employee+Software Engineering result as before this task
+      {
+        const scopeDefsAfterSimplify = await onboardingService.getScopeTaskDefinitions();
+        const compositionAfterSimplify = composeOnboardingTasks({ id: 'simplify-check-emp', directoryType: 'Employee', department: { id: 'dept-3', name: 'Software Engineering' } }, scopeDefsAfterSimplify, '2026-08-15');
+        assert(compositionAfterSimplify.counts.total === 11, `594. composeOnboardingTasks() still produces the same 11-task result for an Employee in Software Engineering — scope composition logic is unaffected by the Required-concept removal (found ${compositionAfterSimplify.counts.total})`);
+      }
+
+      // 595. FUNCTIONAL: a NEW task added through saveScopeTasks() (mirroring what the simplified editor sends) defaults to required: true internally, without any UI ever exposing that field
+      {
+        await onboardingService.saveScopeTasks('universal', null, [
+          { title: 'Stage18 Blank-Default Verification Task', description: '', activityTypeId: 'act-type-1', relativeOffsetDays: 0 },
+        ]);
+        const newlySavedTask = (await onboardingService.getScopeTasks('universal', null))[0];
+        assert(newlySavedTask.required === true, `595. A newly-saved scope task defaults to required: true internally (an invisible compatibility field), even though the UI never collects or shows it (found required: ${newlySavedTask.required})`);
+        resetDatabase();
+      }
+
+      // 596. FUNCTIONAL: existing legacy tasks with required: false are NOT rewritten/destroyed by this change — migration/storage remain non-destructive
+      {
+        const legacyEmployeeScopeTasks = await onboardingService.getScopeTasks('employee', null);
+        const stillHasLegacyOptional = legacyEmployeeScopeTasks.some((t) => t.required === false);
+        assert(stillHasLegacyOptional, '596. The legacy Employee-scope task that was originally required: false (from the pre-scopes migration) still exists with that exact stored value — nothing was destructively rewritten to remove the Required concept from storage');
+      }
+
+      // --- GENERAL ---
+
+      // 597. Task sequence/ordering remains intact and untouched by this task
+      {
+        const employeeScopeSeqCheck = await onboardingService.getScopeTasks('employee', null);
+        const seqs = employeeScopeSeqCheck.map((t) => t.sequence);
+        assert(seqs.every((s, idx) => idx === 0 || s > seqs[idx - 1]), `597. Employee scope task sequence remains correctly ascending after this task's changes (found ${JSON.stringify(seqs)})`);
+      }
+
+      // 598. Migration remains non-destructive and the app does not crash against old stored required fields (fresh reset + summary fetch)
+      {
+        resetDatabase();
+        const freshSummaryAfterSimplify = await onboardingService.getScopesSummary();
+        assert(typeof freshSummaryAfterSimplify.universal.taskCount === 'number', '598. getScopesSummary() resolves correctly immediately after a fresh reset — old stored required fields do not crash the app, and no destructive storage reset was added by this task');
+      }
+
+      // 599. No new overflow-x rules were introduced by the bottom action row or the editor changes
+      assert(!indexCssSrc12.match(/\.plan-editor-bottom-actions[\s\S]{0,200}overflow-x:\s*(scroll|auto)/), '599. No horizontal-scroll rules were introduced by the bottom action area — normal flow, no page-level horizontal overflow risk');
+
+      // 600. Done/Reopen functionality (activityService) is completely untouched by this task
+      {
+        const activityServiceSrcForCheck = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
+        assert(activityServiceSrcForCheck.includes('markComplete') && activityServiceSrcForCheck.includes('reopen'), '600. activityService.markComplete()/reopen() (backing Done/Reopen) remain present and untouched by this progress-simplification task');
+      }
 
       resetDatabase();
     }

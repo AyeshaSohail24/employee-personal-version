@@ -279,11 +279,10 @@ export default function LaunchPlanModal({
                   <table className="presence-data-table" style={{ width: '100%', fontSize: '0.815rem' }}>
                     <thead>
                       <tr>
-                        <th style={{ width: '6%', textAlign: 'center' }}>#</th>
-                        <th style={{ width: '44%', textAlign: 'left' }}>Task Title</th>
-                        <th style={{ width: '18%', textAlign: 'center' }}>Relative Timing</th>
-                        <th style={{ width: '22%', textAlign: 'center' }}>Calculated Due Date</th>
-                        <th style={{ width: '10%', textAlign: 'center' }}>Req</th>
+                        <th style={{ width: '7%', textAlign: 'center' }}>#</th>
+                        <th style={{ width: '48%', textAlign: 'left' }}>Task Title</th>
+                        <th style={{ width: '20%', textAlign: 'center' }}>Relative Timing</th>
+                        <th style={{ width: '25%', textAlign: 'center' }}>Calculated Due Date</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -303,13 +302,6 @@ export default function LaunchPlanModal({
                           </td>
                           <td style={{ textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap' }}>
                             {pt.calculatedDueDate}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            {pt.required ? (
-                              <span style={{ color: '#DC2626', fontWeight: 700 }}>Yes</span>
-                            ) : (
-                              <span style={{ color: 'var(--text-muted)' }}>No</span>
-                            )}
                           </td>
                         </tr>
                       ))}

@@ -317,7 +317,15 @@ export function calculatePlanProgress(taskInstances = [], activities = []) {
     };
   });
 
-  const requiredTasks = enrichedTasks.filter((t) => t.required);
+  // "Required Task" is no longer a configurable, HR-facing concept (the Manage Tasks editor
+  // dropped the checkbox) — every task in a launched instance now counts equally toward
+  // completion. Legacy task-instance records may still carry required: false from before this
+  // change; rather than silently excluding those from progress (which would look broken to
+  // HR — a task sitting there Done but never moving the percentage), progress is computed
+  // against the FULL task set unconditionally. requiredTasksCount/completedRequiredCount are
+  // kept as field names for backward shape-compatibility with existing callers/UI, but their
+  // values are now always equal to totalTasks/completedTasksCount.
+  const requiredTasks = enrichedTasks;
   const completedRequiredTasks = requiredTasks.filter((t) => t.isCompleted);
 
   const progressPercentage = requiredTasks.length > 0

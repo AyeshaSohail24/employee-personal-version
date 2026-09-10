@@ -37,7 +37,7 @@ function ScopeTaskList({ tasks, emptyStateMessage }) {
   );
 }
 
-function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCount, requiredCount, to, compact = false, emphasized = false }) {
+function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCount, to, compact = false, emphasized = false }) {
   const cardClassName = [
     'table-container-card',
     'onboarding-scope-card',
@@ -72,8 +72,6 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
       <div className="onboarding-scope-card-footer">
         <div className="onboarding-scope-card-counts">
           <strong className="onboarding-scope-card-count-main">{taskCount}</strong> task{taskCount === 1 ? '' : 's'}
-          {' · '}
-          <strong className="onboarding-scope-card-count-required">{requiredCount}</strong> required
         </div>
         <Link to={to} className="btn-secondary onboarding-scope-card-action">
           <Settings2 size={13} />
@@ -131,7 +129,6 @@ export default function OnboardingPlansPage() {
               tasks={summary.universal.tasks}
               emptyStateMessage="No universal tasks configured yet. Add tasks here to include them in every onboarding plan."
               taskCount={summary.universal.taskCount}
-              requiredCount={summary.universal.requiredCount}
               to="/onboarding/plans/universal"
             />
           </section>
@@ -147,7 +144,6 @@ export default function OnboardingPlansPage() {
                 tasks={summary.employee.tasks}
                 emptyStateMessage="No employee-specific tasks configured yet."
                 taskCount={summary.employee.taskCount}
-                requiredCount={summary.employee.requiredCount}
                 to="/onboarding/plans/employee"
               />
               <ScopeCard
@@ -157,7 +153,6 @@ export default function OnboardingPlansPage() {
                 tasks={summary.intern.tasks}
                 emptyStateMessage="No intern-specific tasks configured yet."
                 taskCount={summary.intern.taskCount}
-                requiredCount={summary.intern.requiredCount}
                 to="/onboarding/plans/intern"
               />
             </div>
@@ -182,7 +177,6 @@ export default function OnboardingPlansPage() {
                     tasks={row.tasks}
                     emptyStateMessage="No department-specific tasks configured. Universal and type-specific tasks will still apply."
                     taskCount={row.taskCount}
-                    requiredCount={row.requiredCount}
                     to={`/onboarding/plans/department/${row.department.id}`}
                   />
                 ))}

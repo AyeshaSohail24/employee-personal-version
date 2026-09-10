@@ -310,7 +310,11 @@ export const onboardingService = {
       assignmentRule: null,
       specificAssigneeId: null,
       relativeOffsetDays: parseInt(t.relativeOffsetDays || 0, 10),
-      required: Boolean(t.required),
+      // Required Task is no longer collected by the scope editor — this is an internal
+      // compatibility field only (all tasks now count equally toward progress; see
+      // calculatePlanProgress()). Defaults to true unless a caller explicitly passes false, so
+      // brand-new tasks are never silently marked required: false.
+      required: t.required !== false,
       sequence: index + 1,
       active: true,
     }));

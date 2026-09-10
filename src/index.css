@@ -3703,6 +3703,30 @@ input.form-control:focus {
   font-weight: 600;
 }
 
+/* Manage Tasks (scope editor) bottom Save actions — Cancel/Save Tasks moved out of the top
+   header and down here, after the task list, so the page reads as content-first. A top border
+   + generous top margin/padding keeps this row visually separate from the task cards above it
+   without looking stuck to the bottom edge (normal document flow, not fixed/sticky). */
+.plan-editor-bottom-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-light);
+}
+
+@media (max-width: 640px) {
+  .plan-editor-bottom-actions {
+    justify-content: stretch;
+  }
+  .plan-editor-bottom-actions > * {
+    flex: 1;
+    text-align: center;
+  }
+}
+
 @media (max-width: 1024px) {
   .plan-template-settings-grid {
     grid-template-columns: 1fr 1fr;
@@ -3944,10 +3968,6 @@ input.form-control:focus {
 
 .onboarding-scope-card-count-main {
   color: var(--text-main);
-}
-
-.onboarding-scope-card-count-required {
-  color: #DC2626;
 }
 
 .onboarding-scope-card-action {

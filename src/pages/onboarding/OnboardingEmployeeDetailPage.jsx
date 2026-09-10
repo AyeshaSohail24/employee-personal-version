@@ -215,13 +215,8 @@ export default function OnboardingEmployeeDetailPage() {
               />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.785rem', color: 'var(--text-muted)' }}>
-              <span>
-                Required Tasks: <strong>{planInstance.progress.completedRequiredCount} of {planInstance.progress.requiredTasksCount}</strong> completed
-              </span>
-              <span>
-                Total Tasks: <strong>{planInstance.progress.completedTasksCount} of {planInstance.progress.totalTasks}</strong> finished
-              </span>
+            <div style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>
+              <strong>{planInstance.progress.completedTasksCount} of {planInstance.progress.totalTasks}</strong> tasks completed
             </div>
           </div>
 
