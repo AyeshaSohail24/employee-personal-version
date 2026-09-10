@@ -117,3 +117,111 @@ export function calculateDurationProgress(startDate, contractEndDate, referenceD
   return { state: 'active', percent, label: `${daysLeft} day${daysLeft === 1 ? '' : 's'} left` };
 }
 
+/**
+ * Calculates the visible calendar range for a Timeline visualization from a set of
+ * employment periods. Derived entirely from actual data (earliest Start Date, latest
+ * End Date/today for ongoing records) — never a hardcoded year — with a small padding
+ * and snapping to whole calendar months for a clean, readable axis.
+ *
+ * @param {Array<{startDate: string, contractEndDate: string|null}>} periods
+ * @param {string} [referenceDate] 'YYYY-MM-DD', defaults to today (local)
+ * @returns {{ rangeStart: string, rangeEnd: string }|null} Padded 'YYYY-MM-DD' bounds, or null if no valid Start Dates exist
+ */
+export function calculateTimelineRange(periods = [], referenceDate = getTodayLocalDateString()) {
+  const validStarts = periods.map((p) => p && p.startDate).filter(Boolean);
+  if (validStarts.length === 0) return null;
+
+  const minStart = validStarts.reduce((min, d) => (d < min ? d : min), validStarts[0]);
+
+  let maxEnd = referenceDate;
+  periods.forEach((p) => {
+    if (!p || !p.startDate) return;
+    const effectiveEnd = p.contractEndDate || referenceDate;
+    if (effectiveEnd > maxEnd) maxEnd = effectiveEnd;
+  });
+
+  const paddedStart = addDaysToLocalDate(minStart, -14);
+  const paddedEnd = addDaysToLocalDate(maxEnd, 14);
+
+  const rangeStart = `${paddedStart.slice(0, 7)}-01`;
+  const [endYear, endMonth] = paddedEnd.slice(0, 7).split('-').map(Number);
+  const lastDayOfMonth = new Date(endYear, endMonth, 0).getDate();
+  const rangeEnd = `${paddedEnd.slice(0, 7)}-${String(lastDayOfMonth).padStart(2, '0')}`;
+
+  return { rangeStart, rangeEnd };
+}
+
+/**
+ * Generates month-boundary axis ticks (label + horizontal position ratio 0-1) across a
+ * Timeline date range. Includes the year in each label whenever the range spans more than
+ * one calendar year, so multi-year data is never visually ambiguous.
+ *
+ * @param {string} rangeStart 'YYYY-MM-DD'
+ * @param {string} rangeEnd 'YYYY-MM-DD'
+ * @returns {Array<{ label: string, ratio: number }>}
+ */
+export function generateTimelineMonthTicks(rangeStart, rangeEnd) {
+  if (!rangeStart || !rangeEnd) return [];
+  const totalDays = getDaysDifference(rangeEnd, rangeStart);
+  if (totalDays <= 0) return [];
+
+  const [startYear, startMonthNum] = rangeStart.slice(0, 7).split('-').map(Number);
+  const [endYear, endMonthNum] = rangeEnd.slice(0, 7).split('-').map(Number);
+  const spansMultipleYears = startYear !== endYear;
+
+  const ticks = [];
+  let year = startYear;
+  let month = startMonthNum;
+
+  while (year < endYear || (year === endYear && month <= endMonthNum)) {
+    const tickDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const dayOffset = getDaysDifference(tickDate, rangeStart);
+    const ratio = Math.min(1, Math.max(0, dayOffset / totalDays));
+    const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+
+    ticks.push({ label: spansMultipleYears ? `${monthLabel} ${year}` : monthLabel, ratio });
+
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+
+  return ticks;
+}
+
+/**
+ * Computes a Timeline bar's horizontal position/width as percentages of a visible range,
+ * clamped to that range, plus whether the underlying employment period is ongoing (no End
+ * Date — the bar visually extends through the reference date without ever fabricating or
+ * writing back a fake End Date).
+ *
+ * @param {string} startDate 'YYYY-MM-DD'
+ * @param {string|null} contractEndDate 'YYYY-MM-DD' or null
+ * @param {string} rangeStart 'YYYY-MM-DD'
+ * @param {string} rangeEnd 'YYYY-MM-DD'
+ * @param {string} [referenceDate] 'YYYY-MM-DD', defaults to today (local)
+ * @returns {{ leftPercent: number, widthPercent: number, isOngoing: boolean }|null}
+ */
+export function calculateTimelineBarPosition(startDate, contractEndDate, rangeStart, rangeEnd, referenceDate = getTodayLocalDateString()) {
+  if (!startDate || !rangeStart || !rangeEnd) return null;
+  const totalDays = getDaysDifference(rangeEnd, rangeStart);
+  if (totalDays <= 0) return null;
+
+  const isOngoing = !contractEndDate;
+  const effectiveEnd = contractEndDate || referenceDate;
+
+  const clampedStart = startDate < rangeStart ? rangeStart : startDate;
+  const clampedEnd = effectiveEnd > rangeEnd ? rangeEnd : effectiveEnd;
+
+  const startOffsetDays = getDaysDifference(clampedStart, rangeStart);
+  const endOffsetDays = getDaysDifference(clampedEnd, rangeStart);
+
+  const leftPercent = Math.min(100, Math.max(0, (startOffsetDays / totalDays) * 100));
+  const rightPercent = Math.min(100, Math.max(0, (endOffsetDays / totalDays) * 100));
+  const widthPercent = Math.max(0.6, rightPercent - leftPercent);
+
+  return { leftPercent, widthPercent, isOngoing };
+}
+

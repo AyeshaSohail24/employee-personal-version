@@ -9,6 +9,7 @@ import { locationService } from '../../services/locationService';
 import DirectoryToolbar from './DirectoryToolbar';
 import EmployeeListView from './EmployeeListView';
 import EmployeeCardView from './EmployeeCardView';
+import EmployeeTimelineView from './EmployeeTimelineView';
 import DirectoryEmptyState from './DirectoryEmptyState';
 import DirectorySkeleton from './DirectorySkeleton';
 import CreateEmployeeModal from './CreateEmployeeModal';
@@ -40,7 +41,7 @@ export default function DirectoryPageContainer({
   const [modeFilter, setModeFilter] = useState(urlMode);
   const [allowanceFilter, setAllowanceFilter] = useState(urlAllowance);
   const [sortBy, setSortBy] = useState('name-asc');
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'card'
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'card' | 'timeline'
 
   // Sync state if URL search parameters change externally
   useEffect(() => {
@@ -233,8 +234,10 @@ export default function DirectoryPageContainer({
           <DirectoryEmptyState onResetFilters={handleResetFilters} />
         ) : viewMode === 'list' ? (
           <EmployeeListView employees={employees} />
-        ) : (
+        ) : viewMode === 'card' ? (
           <EmployeeCardView employees={employees} />
+        ) : (
+          <EmployeeTimelineView employees={employees} />
         )}
       </div>
 

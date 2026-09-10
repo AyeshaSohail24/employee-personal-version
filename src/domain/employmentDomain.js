@@ -144,6 +144,25 @@ export function validateEmployeeCreation(data = {}, existingEmployees = []) {
 }
 
 /**
+ * Compares two employee display IDs (e.g. 'RZ-1017') by their meaningful numeric portion
+ * rather than unsafe raw lexicographic string comparison (which would incorrectly order
+ * 'RZ-1010' before 'RZ-1002' if a prefix length or digit count ever varied). Never mutates
+ * or generates IDs — sorting only. Centralized here so Sort By 'ID' options are computed
+ * once, in the query layer, rather than duplicated in JSX table code.
+ *
+ * @param {string} idA
+ * @param {string} idB
+ * @returns {number} Negative if idA < idB numerically, positive if idA > idB, 0 if equal
+ */
+export function compareEmployeeIdNumeric(idA, idB) {
+  const numA = parseInt((idA || '').replace(/\D/g, ''), 10);
+  const numB = parseInt((idB || '').replace(/\D/g, ''), 10);
+  const safeA = Number.isNaN(numA) ? 0 : numA;
+  const safeB = Number.isNaN(numB) ? 0 : numB;
+  return safeA - safeB;
+}
+
+/**
  * Resolves the active EmploymentRecord for an employee on a given reference date.
  * Effective-date aware:
  * - Must satisfy: effectiveFrom <= referenceDate AND (effectiveTo === null OR effectiveTo >= referenceDate)

@@ -4,6 +4,7 @@ import {
   validateEmployeeCreation,
   resolveEmployeeTypeIdForDirectoryType,
   generateNextEmployeeIdentifiers,
+  compareEmployeeIdNumeric,
 } from '../domain/employmentDomain.js';
 import { filterEmployeesByStatus } from '../domain/lifecycleDomain.js';
 
@@ -193,6 +194,12 @@ export const employeeService = {
       }
       if (sortBy === 'date-asc') {
         return (a.startDate || '').localeCompare(b.startDate || '');
+      }
+      if (sortBy === 'id-asc') {
+        return compareEmployeeIdNumeric(a.employeeId, b.employeeId);
+      }
+      if (sortBy === 'id-desc') {
+        return compareEmployeeIdNumeric(b.employeeId, a.employeeId);
       }
       // Default: 'name-asc'
       return (a.fullName || '').localeCompare(b.fullName || '');

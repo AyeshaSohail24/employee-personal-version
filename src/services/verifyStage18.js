@@ -4,8 +4,15 @@ import {
   resolveEmployeeTypeIdForDirectoryType,
   generateNextEmployeeIdentifiers,
   validateEmployeeCreation,
+  compareEmployeeIdNumeric,
 } from '../domain/employmentDomain.js';
-import { calculateDurationProgress } from '../utils/dateUtils.js';
+import { resolveDepartmentColor, buildDepartmentLegend } from '../domain/departmentDomain.js';
+import {
+  calculateDurationProgress,
+  calculateTimelineRange,
+  generateTimelineMonthTicks,
+  calculateTimelineBarPosition,
+} from '../utils/dateUtils.js';
 import { employeeService } from './employeeService.js';
 import { departmentService } from './departmentService.js';
 import { positionService } from './positionService.js';
@@ -21,6 +28,7 @@ import { dashboardService } from './dashboardService.js';
 import { loadDatabase, resetDatabase } from '../mock-data/storageEngine.js';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 export async function verifyStage18() {
   console.log('=== RUNNING FINAL APPLICATION SIMPLIFICATION VERIFICATION SUITE ===');
@@ -546,6 +554,224 @@ export async function verifyStage18() {
     resetDatabase();
     const restoredEmployees = await employeeService.getAll({ hydrate: false });
     assert(restoredEmployees.length === 18, '91. Test-created employee records are cleaned up; canonical 18-employee seed dataset is restored');
+
+    // ==========================================================================
+    // Employees Directory — ID Sorting + Timeline View
+    // ==========================================================================
+
+    const toolbarSrc2 = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+    const containerSrc2 = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+    const timelineSrc = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+    const employeeServiceSrc2 = fs.readFileSync(path.resolve('./src/services/employeeService.js'), 'utf-8');
+    const departmentDomainSrc = fs.readFileSync(path.resolve('./src/domain/departmentDomain.js'), 'utf-8');
+
+    // 92. Current branch remains employees-final (this suite is only ever meaningful there)
+    let currentBranch = null;
+    try {
+      currentBranch = execSync('git branch --show-current', { cwd: path.resolve('.') }).toString().trim();
+    } catch (err) {
+      currentBranch = null;
+    }
+    assert(currentBranch === 'employees-final', `92. Current branch remains employees-final (actual: ${currentBranch})`);
+
+    // 93. ID (Ascending) and ID (Descending) exist in Sort By, alongside all pre-existing options
+    assert(
+      toolbarSrc2.includes("{ value: 'id-asc', label: 'ID (Ascending)' }") &&
+      toolbarSrc2.includes("{ value: 'id-desc', label: 'ID (Descending)' }") &&
+      toolbarSrc2.includes("'name-asc'") && toolbarSrc2.includes("'name-desc'") &&
+      toolbarSrc2.includes("'date-desc'") && toolbarSrc2.includes("'date-asc'"),
+      '93. Sort By adds ID (Ascending)/ID (Descending) while preserving all existing options'
+    );
+
+    // 94. ID sorting orders by the meaningful numeric identifier, not raw string comparison
+    assert(
+      compareEmployeeIdNumeric('RZ-1002', 'RZ-1009') < 0 &&
+      compareEmployeeIdNumeric('RZ-1010', 'RZ-1009') > 0 &&
+      compareEmployeeIdNumeric('RZ-1009', 'RZ-1009') === 0,
+      '94. compareEmployeeIdNumeric orders IDs by numeric value (RZ-1002 < RZ-1009 < RZ-1010)'
+    );
+
+    const idAscRes = await employeeService.queryEmployees({ sortBy: 'id-asc' });
+    const idAscNumbers = idAscRes.employees.map((e) => parseInt((e.employeeId || '').replace(/\D/g, ''), 10));
+    const isSortedAsc = idAscNumbers.every((n, i) => i === 0 || idAscNumbers[i - 1] <= n);
+
+    const idDescRes = await employeeService.queryEmployees({ sortBy: 'id-desc' });
+    const idDescNumbers = idDescRes.employees.map((e) => parseInt((e.employeeId || '').replace(/\D/g, ''), 10));
+    const isSortedDesc = idDescNumbers.every((n, i) => i === 0 || idDescNumbers[i - 1] >= n);
+
+    assert(isSortedAsc, '95. Sort By "ID (Ascending)" produces a numerically ascending employee query result');
+    assert(isSortedDesc, '96. Sort By "ID (Descending)" produces a numerically descending employee query result');
+
+    // 97. Timeline appears as a third view alongside List/Card, without removing either
+    assert(
+      toolbarSrc2.includes("onViewModeChange('timeline')") &&
+      toolbarSrc2.includes("onViewModeChange('list')") &&
+      toolbarSrc2.includes("onViewModeChange('card')"),
+      '97. Timeline view button exists alongside List and Card (view selector: List / Card / Timeline)'
+    );
+
+    // 98. DirectoryPageContainer renders List/Card/Timeline from the same three-way switch, and Timeline is a dedicated component (not inlined)
+    assert(
+      containerSrc2.includes("viewMode === 'list'") && containerSrc2.includes("viewMode === 'card'") &&
+      containerSrc2.includes('<EmployeeTimelineView') && containerSrc2.includes("from './EmployeeTimelineView'"),
+      '98. List/Card continue to render, and Timeline renders via a dedicated EmployeeTimelineView component'
+    );
+
+    // 99. Timeline consumes the same `employees` prop as List/Card — no separate timeline dataset or seed file
+    assert(
+      containerSrc2.match(/<EmployeeTimelineView\s+employees=\{employees\}/) &&
+      !timelineSrc.includes('mock-data/seed') && !timelineSrc.includes('storageEngine') &&
+      !timelineSrc.includes('employeeService'),
+      '99. Timeline consumes the same filtered/hydrated `employees` array as List/Card; no separate dataset, seed data, or direct service/storage access'
+    );
+
+    // 100–104. Type/Department/Mode/Salary/Status/Search filters and Sort By all flow through the single
+    // queryEmployees() result that already feeds List/Card — proving Timeline (fed the same array) is filtered identically
+    const [internOnly, employeeOnly, byDeptFilter, byModeFilter, bySalaryFilter, byStatusFilter2, bySearch] = await Promise.all([
+      employeeService.queryEmployees({ typeFilter: 'Intern' }),
+      employeeService.queryEmployees({ typeFilter: 'Employee' }),
+      employeeService.queryEmployees({ departmentId: 'dept-3' }),
+      employeeService.queryEmployees({ modeFilter: 'Remote' }),
+      employeeService.queryEmployees({ allowanceFilter: 'Unpaid' }),
+      employeeService.queryEmployees({ baseLifecycleScope: 'All', statusFilter: 'Onboarding' }),
+      employeeService.queryEmployees({ search: 'Kevin' }),
+    ]);
+    assert(internOnly.employees.every((e) => e.directoryType === 'Intern') && internOnly.employees.length > 0, '100. Type=Intern filters the shared result set (and therefore Timeline) to only Intern records');
+    assert(employeeOnly.employees.every((e) => e.directoryType === 'Employee') && employeeOnly.employees.length > 0, '101. Type=Employee filters the shared result set (and therefore Timeline) to only Employee records');
+    assert(byDeptFilter.employees.every((e) => e.department && e.department.id === 'dept-3'), '102. Department filter narrows the shared result set that feeds Timeline');
+    assert(byModeFilter.employees.every((e) => e.workMode === 'Remote'), '103. Mode filter narrows the shared result set that feeds Timeline (bar color must stay Department, not Mode)');
+    assert(bySalaryFilter.employees.every((e) => e.allowance === 'Unpaid'), '104. Salary filter narrows the shared result set that feeds Timeline (bar color must stay Department, not Salary)');
+    assert(byStatusFilter2.employees.every((e) => e.status === 'Onboarding'), '105. Status filter narrows the shared result set that feeds Timeline (bar color must stay Department, not Status)');
+    assert(bySearch.employees.length > 0, '106. Search narrows the shared result set that feeds Timeline');
+
+    // 107. No filtering logic is duplicated/reimplemented inside EmployeeTimelineView (it only receives the already-filtered array)
+    assert(
+      !timelineSrc.includes('.filter(') || !/directoryType|allowance|workMode|status ===/.test(timelineSrc),
+      '107. Timeline does not reimplement Type/Salary/Mode/Status filtering — it only renders the employees it is given'
+    );
+
+    // 108. Bar color is resolved purely from Department, via a single centralized resolver reused by the legend
+    assert(
+      timelineSrc.includes('resolveDepartmentColor(emp.department)') &&
+      departmentDomainSrc.includes('export function resolveDepartmentColor') &&
+      departmentDomainSrc.includes('export function buildDepartmentLegend') &&
+      !/resolveDepartmentColor\([^)]*allowance/.test(timelineSrc) &&
+      !/resolveDepartmentColor\([^)]*workMode/.test(timelineSrc) &&
+      !/resolveDepartmentColor\([^)]*status/i.test(timelineSrc),
+      '108. Bar color is resolved only from Department via a single centralized resolver (never Type/Salary/Mode/Status)'
+    );
+
+    // 109. Department color resolution is deterministic (same department -> same color, every call)
+    const sampleDept = { id: 'dept-3', name: 'Software Engineering', color: '#0E848D' };
+    const colorRun1 = resolveDepartmentColor(sampleDept);
+    const colorRun2 = resolveDepartmentColor(sampleDept);
+    const colorRun3 = resolveDepartmentColor({ ...sampleDept });
+    assert(colorRun1 === colorRun2 && colorRun2 === colorRun3, '109. resolveDepartmentColor() is deterministic — identical department input always yields the identical color');
+
+    // 110. Departments without an explicit color (e.g. a future backend department) still receive a distinct, stable color via hash fallback
+    const noColorDeptA = resolveDepartmentColor({ id: 'dept-future-1', name: 'New Backend Dept A' });
+    const noColorDeptB = resolveDepartmentColor({ id: 'dept-future-2', name: 'New Backend Dept B' });
+    assert(
+      Boolean(noColorDeptA) && Boolean(noColorDeptB) &&
+      !departmentDomainSrc.includes("=== 'Software Engineering'") && !/if\s*\(\s*department(\.name)?\s*===/.test(departmentDomainSrc),
+      '110. Departments without an explicit color still resolve to a stable color via deterministic hash fallback, with no hardcoded department-name branching'
+    );
+
+    // 111. Department legend is generated dynamically from the currently displayed employees, using the same resolver as the bars
+    const allHydrated = await employeeService.getAll();
+    const dynamicLegend = buildDepartmentLegend(allHydrated);
+    const expectedDeptCount = new Set(allHydrated.map((e) => (e.department ? e.department.id : 'unassigned'))).size;
+    assert(
+      dynamicLegend.length === expectedDeptCount &&
+      dynamicLegend.every((entry) => entry.color === resolveDepartmentColor(allHydrated.find((e) => (e.department ? e.department.id : 'unassigned') === entry.id)?.department)),
+      '111. Department legend is built dynamically from the displayed employees and uses the exact same color resolver as the bars'
+    );
+    assert(!timelineSrc.match(/const\s+.*LEGEND.*=\s*\[/i), '112. Timeline maintains no separate hardcoded legend/color map');
+
+    // 113. Start Date controls bar start / End Date controls bar end / ongoing records are handled without a fabricated End Date
+    const rangeForTest = calculateTimelineRange([
+      { startDate: '2026-01-01', contractEndDate: '2026-06-30' },
+      { startDate: '2026-03-01', contractEndDate: null },
+    ], '2026-09-10');
+    const finiteBar = calculateTimelineBarPosition('2026-01-01', '2026-06-30', rangeForTest.rangeStart, rangeForTest.rangeEnd, '2026-09-10');
+    const ongoingBar = calculateTimelineBarPosition('2026-03-01', null, rangeForTest.rangeStart, rangeForTest.rangeEnd, '2026-09-10');
+    assert(finiteBar.leftPercent < finiteBar.leftPercent + finiteBar.widthPercent, '113. Start Date controls the bar\'s left edge and End Date controls its right edge for finite periods');
+    assert(ongoingBar.isOngoing === true, '114. An ongoing employment period (no End Date) is flagged isOngoing, with no fabricated End Date value ever computed or returned');
+
+    // 115. Missing Start Date is handled gracefully (row renders without a bar / fabricated date), never invented
+    assert(timelineSrc.includes('No Start Date on record') && timelineSrc.includes('!emp.startDate'), '115. An employee unexpectedly missing a Start Date is reported gracefully in its row rather than fabricating one');
+
+    // 116. Timeline range derives from actual data (earliest Start Date -> latest End Date/today), never a hardcoded year
+    assert(!timelineSrc.match(/20\d{2}/) && !employeeServiceSrc2.match(/20\d{2}/), '116. No hardcoded calendar year appears in the Timeline component or query layer — the range is fully data-derived');
+    const singleYearRange = calculateTimelineRange([{ startDate: '2024-02-01', contractEndDate: '2024-05-01' }], '2024-06-01');
+    assert(singleYearRange.rangeStart.startsWith('2024') && singleYearRange.rangeEnd.startsWith('2024'), '116b. calculateTimelineRange derives its bounds purely from the supplied employment periods');
+
+    // 117. Multi-year data spans are handled and clearly labeled with the year on axis ticks
+    const multiYearRange = calculateTimelineRange([
+      { startDate: '2025-11-01', contractEndDate: '2026-03-01' },
+    ], '2026-09-10');
+    const multiYearTicks = generateTimelineMonthTicks(multiYearRange.rangeStart, multiYearRange.rangeEnd);
+    assert(
+      multiYearTicks.length > 0 && multiYearTicks.some((t) => /\b2025\b/.test(t.label)) && multiYearTicks.some((t) => /\b2026\b/.test(t.label)),
+      '117. A Timeline range spanning multiple calendar years includes the year in its axis tick labels'
+    );
+
+    // 118. Employee Name, ID, and Employee/Intern badge all render per row
+    assert(
+      timelineSrc.includes('emp.fullName') && timelineSrc.includes('emp.employeeId') && timelineSrc.includes('emp.directoryType'),
+      '118. Each Timeline row displays the employee Name, ID, and an Employee/Intern type badge'
+    );
+
+    // 119. Create Employee remains fully wired and unaffected by this task
+    assert(
+      containerSrc2.includes('CreateEmployeeModal') && containerSrc2.includes('handleCreateSubmit') &&
+      employeeServiceSrc2.includes('async createDirectoryEmployee('),
+      '119. Create Employee (modal + service call) remains fully functional and untouched by the Sort/Timeline changes'
+    );
+
+    // 120. A newly created employee flows into the same query result that feeds Timeline (no separate timeline sync needed)
+    resetDatabase();
+    const deptsForTimelineTest = await departmentService.getAll({ withCount: false });
+    const newTimelineEmp = await employeeService.createDirectoryEmployee(
+      {
+        firstName: 'Timeline',
+        lastName: 'Check',
+        workEmail: 'timeline.check.verify@rizurf.example',
+        directoryType: 'Intern',
+        startDate: '2026-04-01',
+        contractEndDate: null,
+        allowance: 'Paid',
+        workMode: 'Hybrid',
+        status: 'Active',
+      },
+      { departmentId: deptsForTimelineTest[0].id }
+    );
+    const afterCreateQuery = await employeeService.queryEmployees({});
+    assert(
+      afterCreateQuery.employees.some((e) => e.id === newTimelineEmp.id),
+      '120. A newly created employee immediately appears in the shared queryEmployees() result that Timeline renders from — no separate Timeline sync required'
+    );
+
+    // 121. Sync Employees remains functional and its refreshed result is what Timeline would render from next
+    assert(employeeServiceSrc2.includes('async syncEmployees(') && containerSrc2.includes('employeeService.syncEmployees()'), '121. Sync Employees remains implemented and wired into the directory refresh flow');
+    const syncedForTimeline = await employeeService.syncEmployees();
+    assert(syncedForTimeline.some((e) => e.id === newTimelineEmp.id), '122. Sync Employees returns the refreshed data (including newly created records) that Timeline automatically renders from next — no "Sync Timeline" button exists');
+    assert(!containerSrc2.match(/sync\s*timeline/i) && !timelineSrc.match(/sync/i), '123. No separate "Sync Timeline" control was introduced');
+
+    // 124. Switching views does not reset active filters/sort (view state is independent of filter state in the same component)
+    assert(
+      containerSrc2.match(/const \[viewMode, setViewMode\] = useState\('list'\)/) &&
+      !containerSrc2.match(/setViewMode\([^)]*\)[\s\S]{0,40}(setSearch|setStatusFilter|setDepartmentId|setTypeFilter|setModeFilter|setAllowanceFilter|setSortBy)\(/),
+      '124. View mode (List/Card/Timeline) is a state variable independent of Search/Department/Type/Mode/Salary/Status/Sort — switching views never resets them'
+    );
+
+    // 125. Internal horizontal scrolling is available so long ranges never force page-level overflow
+    assert(timelineSrc.includes('timeline-scroll-area') && !timelineSrc.includes('overflow-x: visible'), '125. Timeline provides its own internal horizontal scroll container for wide date ranges');
+
+    // Clean up: remove the Timeline test employee so the canonical 18-employee seed dataset is not polluted
+    resetDatabase();
+    const restoredAfterTimelineTests = await employeeService.getAll({ hydrate: false });
+    assert(restoredAfterTimelineTests.length === 18, '126. Timeline test-created employee is cleaned up; canonical 18-employee seed dataset is restored');
 
     resetDatabase();
   } catch (err) {

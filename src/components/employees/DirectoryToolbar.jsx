@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, LayoutGrid, List, RotateCcw } from 'lucide-react';
+import { Search, LayoutGrid, List, GanttChartSquare, RotateCcw } from 'lucide-react';
 import { Select } from '../common/Select.jsx';
 
 export default function DirectoryToolbar({
@@ -58,6 +58,15 @@ export default function DirectoryToolbar({
           >
             <LayoutGrid size={18} />
             <span>Card</span>
+          </button>
+          <button
+            className={`view-btn ${viewMode === 'timeline' ? 'active' : ''}`}
+            onClick={() => onViewModeChange('timeline')}
+            title="Timeline View"
+            type="button"
+          >
+            <GanttChartSquare size={18} />
+            <span>Timeline</span>
           </button>
         </div>
       </div>
@@ -159,6 +168,8 @@ export default function DirectoryToolbar({
               options={[
                 { value: 'name-asc', label: 'Name (A–Z)' },
                 { value: 'name-desc', label: 'Name (Z–A)' },
+                { value: 'id-asc', label: 'ID (Ascending)' },
+                { value: 'id-desc', label: 'ID (Descending)' },
                 { value: 'date-desc', label: 'Start Date: Newest' },
                 { value: 'date-asc', label: 'Start Date: Oldest' },
               ]}
