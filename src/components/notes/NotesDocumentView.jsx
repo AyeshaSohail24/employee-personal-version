@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Pin, PinOff, Archive, RotateCcw, Trash2, ArrowLeft, NotebookPen, Save, X } from 'lucide-react';
+import { Plus, Pin, PinOff, Archive, RotateCcw, Trash2, ArrowLeft, NotebookPen, Save, X, Pencil } from 'lucide-react';
 import { notesService } from '../../services/notesService.js';
 import {
   NOTE_CATEGORIES,
@@ -65,6 +65,7 @@ export default function NotesDocumentView({
   const [categoryOptions, setCategoryOptions] = useState(NOTE_CATEGORIES);
 
   const [creatingNew, setCreatingNew] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(buildBlankDraft());
   const [baseline, setBaseline] = useState(buildBlankDraft());
   const [formErrors, setFormErrors] = useState({});
@@ -87,6 +88,8 @@ export default function NotesDocumentView({
       setBaseline(fresh);
       setFormErrors({});
       setSaveError(null);
+      // A newly-selected note always opens in READ state, never mid-edit.
+      setIsEditing(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
@@ -140,6 +143,7 @@ export default function NotesDocumentView({
   const handleCreateNewClick = () => {
     requestAction(() => {
       setCreatingNew(true);
+      setIsEditing(false);
       setDraft(buildBlankDraft());
       setBaseline(buildBlankDraft());
       setFormErrors({});
@@ -148,8 +152,24 @@ export default function NotesDocumentView({
     });
   };
 
-  // Explicit discard actions — bypass the unsaved-changes guard by design (Part 7/8).
-  const handleCancelChanges = () => setDraft(baseline);
+  // Switches the currently-selected (already-saved) note from read state into edit state — a
+  // local UI toggle only, never guarded (the draft is already clean/synced to baseline at this
+  // point, so there is nothing to lose by entering edit mode).
+  const handleStartEdit = () => {
+    setFormErrors({});
+    setSaveError(null);
+    setIsEditing(true);
+  };
+
+  // Explicit discard actions — bypass the unsaved-changes guard by design (Part 7/8). Both
+  // return the document to READ state regardless of whether anything had actually changed, so
+  // the user always has a reliable way out of edit mode.
+  const handleCancelChanges = () => {
+    setDraft(baseline);
+    setFormErrors({});
+    setSaveError(null);
+    setIsEditing(false);
+  };
   const handleCancelNewNote = () => {
     setCreatingNew(false);
     setFormErrors({});
@@ -190,6 +210,10 @@ export default function NotesDocumentView({
       const fresh = buildDraftFromNote(updated);
       setDraft(fresh);
       setBaseline(fresh);
+      // Draft now exactly matches the freshly-saved baseline (isDirty becomes false), and
+      // exiting edit mode returns the document to its read/view state — the user's clear
+      // visual confirmation that the save actually finished.
+      setIsEditing(false);
     } catch (err) {
       setSaveError(err.message);
     } finally {
@@ -214,7 +238,7 @@ export default function NotesDocumentView({
   };
 
   const categorySelectOptions = useMemo(
-    () => [...categoryOptions.map((c) => ({ value: c, label: c })), { value: CUSTOM_CATEGORY_OPTION, label: 'Other / Custom...' }],
+    () => [...categoryOptions.map((c) => ({ value: c, label: c })), { value: CUSTOM_CATEGORY_OPTION, label: 'Other / Custom' }],
     [categoryOptions]
   );
 
@@ -346,15 +370,32 @@ export default function NotesDocumentView({
               <button type="button" className="icon-btn icon-btn-danger" title="Delete" onClick={() => requestAction(() => onDeleteRequest(selectedNote))}>
                 <Trash2 size={15} />
               </button>
+              {!isArchivedReadOnly && !isEditing && (
+                <button type="button" className="icon-btn" title="Edit" onClick={handleStartEdit}>
+                  <Pencil size={15} />
+                </button>
+              )}
             </div>
 
             {saveError && <div className="modal-error-alert" style={{ marginBottom: '1rem' }}>{saveError}</div>}
 
-            {isArchivedReadOnly ? (
+            {isArchivedReadOnly || !isEditing ? (
+              // READ / VIEW state — a document, not a form: title, category/color/tags as
+              // static metadata, formatted content. Archived notes are always read-only (no
+              // Edit action is ever shown for them); non-archived notes reach this branch
+              // whenever isEditing is false (the default for every newly-selected note, and
+              // again immediately after Save Changes/Cancel Changes).
               <>
                 <h2 className="notes-document-title">{selectedNote.title}</h2>
                 <div className="notes-document-meta">
                   <span className="note-category-badge">{selectedNote.category}</span>
+                  {selectedNote.colorAccent && selectedNote.colorAccent !== 'default' && NOTE_ACCENTS[selectedNote.colorAccent] && (
+                    <span
+                      className="notes-document-color-indicator"
+                      title={NOTE_ACCENTS[selectedNote.colorAccent].label}
+                      style={{ backgroundColor: NOTE_ACCENTS[selectedNote.colorAccent].swatchColor }}
+                    />
+                  )}
                   {selectedNote.tags && selectedNote.tags.length > 0 && (
                     <div className="note-tags">
                       {selectedNote.tags.map((tag) => <span key={tag} className="note-tag">#{tag}</span>)}
@@ -364,6 +405,7 @@ export default function NotesDocumentView({
                 <div className="notes-document-content" dangerouslySetInnerHTML={{ __html: resolveNoteContentHtml(selectedNote) }} />
               </>
             ) : (
+              // EDIT state — real editable controls, only reachable via the Edit button above.
               <>
                 <input
                   type="text"
@@ -392,9 +434,9 @@ export default function NotesDocumentView({
 
             <div className="notes-document-updated">{formatNoteUpdatedLabel(selectedNote.updatedAt)}</div>
 
-            {!isArchivedReadOnly && (
+            {!isArchivedReadOnly && isEditing && (
               <div className="notes-document-save-row">
-                <button type="button" className="btn-secondary" onClick={handleCancelChanges} disabled={saving || !isDirty}>
+                <button type="button" className="btn-secondary" onClick={handleCancelChanges} disabled={saving}>
                   <X size={14} />
                   <span>Cancel Changes</span>
                 </button>

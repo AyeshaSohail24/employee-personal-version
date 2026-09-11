@@ -13,17 +13,23 @@ export default function UnsavedChangesModal({ isOpen, onDiscard, onKeepEditing }
 
   return (
     <div className="modal-backdrop" onClick={onKeepEditing}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-card wide-modal confirmation-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
-            <div className="modal-icon-badge" style={{ backgroundColor: '#FFFBEB', color: '#B45309' }}>
-              <AlertTriangle size={20} />
+            <div className="modal-icon-badge" style={{ backgroundColor: '#FFFBEB', color: '#B45309', width: '48px', height: '48px' }}>
+              <AlertTriangle size={22} />
             </div>
             <div>
-              <h3 className="modal-title">Unsaved Changes</h3>
+              <h3 className="modal-title" style={{ fontSize: '1.15rem' }}>Unsaved Changes</h3>
               <p className="modal-subtitle">You have unsaved changes in this note.</p>
             </div>
           </div>
+        </div>
+
+        <div className="modal-body">
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
+            Save your changes before switching, or discard them to continue without saving.
+          </p>
         </div>
 
         <div className="modal-footer">

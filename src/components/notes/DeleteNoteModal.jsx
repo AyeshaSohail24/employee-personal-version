@@ -37,8 +37,8 @@ export default function DeleteNoteModal({ isOpen, onClose, onSuccess, note }) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card wide-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header" style={{ padding: '1.5rem 1.75rem' }}>
+      <div className="modal-card wide-modal confirmation-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
           <div className="modal-title-group">
             <div className="modal-icon-badge" style={{ backgroundColor: '#FEF2F2', color: '#DC2626', width: '48px', height: '48px' }}>
               <Trash2 size={22} />
@@ -53,7 +53,7 @@ export default function DeleteNoteModal({ isOpen, onClose, onSuccess, note }) {
           </button>
         </div>
 
-        <div className="modal-body modal-body-spacious">
+        <div className="modal-body">
           {error && (
             <div className="modal-error-alert" style={{ marginBottom: '1.25rem' }}>
               <AlertTriangle size={16} />
@@ -65,7 +65,7 @@ export default function DeleteNoteModal({ isOpen, onClose, onSuccess, note }) {
           </p>
         </div>
 
-        <div className="modal-footer modal-footer-spacious">
+        <div className="modal-footer">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={deleting}>
             Cancel
           </button>

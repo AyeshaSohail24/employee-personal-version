@@ -4523,8 +4523,8 @@ export async function verifyStage18() {
       // 689. Save Changes persists via notesService.update() and refreshes the shared notes list
       assert(notesDocViewSrc2.includes('await notesService.update(selectedNoteId, buildPayload())') && notesDocViewSrc2.includes('await onNotesChanged()'), '689. handleSaveChanges() calls notesService.update() (the same function Card View\'s modal uses) and refreshes NotesPage\'s shared notes list afterward');
 
-      // 690. Cancel Changes restores the draft to the last persisted baseline, unconditionally (no confirmation needed for this explicit action)
-      assert(notesDocViewSrc2.match(/const handleCancelChanges = \(\) => setDraft\(baseline\);/), '690. Cancel Changes resets the draft straight back to the persisted baseline values — an explicit, unconditional discard');
+      // 690. UPDATED — Cancel Changes restores the draft to the last persisted baseline, unconditionally (no confirmation needed for this explicit action), and now also exits edit state back to the read view
+      assert(notesDocViewSrc2.includes('setDraft(baseline);') && /handleCancelChanges = \(\) => \{[\s\S]*?setDraft\(baseline\);[\s\S]*?setIsEditing\(false\);[\s\S]*?\};/.test(notesDocViewSrc2), '690. Cancel Changes resets the draft straight back to the persisted baseline values and exits edit state — an explicit, unconditional discard');
 
       // 691. FUNCTIONAL: editing an existing note through the inline Document View path and reloading shows the updated title (persists exactly like Card View's modal save)
       {
@@ -4741,6 +4741,223 @@ export async function verifyStage18() {
 
       // 725. No page-level horizontal-overflow rules were introduced by any of the new Document View editing/formatting CSS
       assert(!indexCssSrcForNotesV3.match(/\.notes-document[\s\S]{0,300}overflow-x:\s*(scroll|auto)/) && !indexCssSrcForNotesV3.match(/\.note-content-editor[\s\S]{0,200}overflow-x:\s*(scroll|auto)/), '725. No new overflow-x rules exist anywhere in the Document View or formatting-editor CSS — the page itself never scrolls horizontally');
+
+      resetDatabase();
+    }
+    // ==========================================================================
+    // Notes UX Refinement: Enlarged Modals, Swatch Spacing, Custom Label, Doc Read/Edit State
+    // ==========================================================================
+    {
+      const noteDomainSrc3 = fs.readFileSync(path.resolve('./src/domain/noteDomain.js'), 'utf-8');
+      const selectSrc2 = fs.readFileSync(path.resolve('./src/components/common/Select.jsx'), 'utf-8');
+      const deleteNoteModalSrc4 = fs.readFileSync(path.resolve('./src/components/notes/DeleteNoteModal.jsx'), 'utf-8');
+      const noteEditorModalSrc4 = fs.readFileSync(path.resolve('./src/components/notes/NoteEditorModal.jsx'), 'utf-8');
+      const notesDocViewSrc3 = fs.readFileSync(path.resolve('./src/components/notes/NotesDocumentView.jsx'), 'utf-8');
+      const unsavedChangesModalSrc2 = fs.readFileSync(path.resolve('./src/components/notes/UnsavedChangesModal.jsx'), 'utf-8');
+      const indexCssSrcForNotesV4 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // --- DELETE MODAL (1-7) ---
+
+      // 726. A reusable, scoped .modal-card.confirmation-modal size variant exists (not hardcoded per-modal) — flex-column Header/Body(flex:1)/Footer, with a real min-height/max-height gated to non-mobile widths
+      assert(
+        /\.modal-card\.confirmation-modal\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;/.test(indexCssSrcForNotesV4) &&
+        /@media \(min-width:\s*640px\)\s*\{\s*\.modal-card\.confirmation-modal\s*\{[^}]*min-height:\s*\d+px;[^}]*max-height:\s*\d+vh;/.test(indexCssSrcForNotesV4),
+        '726. .modal-card.confirmation-modal is a reusable scoped size variant (flex-column layout, min-height/max-height applied only at >=640px) rather than a hardcoded one-off size'
+      );
+
+      // 727. DeleteNoteModal uses the confirmation-modal variant (on top of its existing wide-modal width tier)
+      assert(deleteNoteModalSrc4.includes('modal-card wide-modal confirmation-modal'), '727. DeleteNoteModal applies the shared confirmation-modal class for its enlarged vertical layout');
+
+      // 728. The warning content stays top-aligned in the body (not vertically centered) — modal-body has no centering rule, and its content (title/subtitle text) renders as the first thing in the flex:1 body
+      assert(
+        !/\.modal-card\.confirmation-modal \.modal-body\s*\{[^}]*(justify-content|align-items):\s*center/.test(indexCssSrcForNotesV4),
+        '728. The confirmation-modal body has no vertical-centering rule — warning content stays anchored near the top rather than centering in the extra vertical space'
+      );
+
+      // 729. Delete modal body/footer no longer rely on the old inline style / *-spacious classes — spacing now comes entirely from the scoped confirmation-modal CSS
+      assert(
+        !deleteNoteModalSrc4.includes("style={{ padding: '1.5rem 1.75rem' }}") && !deleteNoteModalSrc4.includes('modal-body-spacious') && !deleteNoteModalSrc4.includes('modal-footer-spacious'),
+        '729. DeleteNoteModal no longer uses the old inline header padding / modal-body-spacious / modal-footer-spacious classes — sizing now comes from the single confirmation-modal variant'
+      );
+
+      // 730. Delete wording, note-title confirmation text, and the "cannot be undone" copy are all unchanged
+      assert(
+        deleteNoteModalSrc4.includes('Delete Note?') && deleteNoteModalSrc4.includes('This note will be permanently deleted.') && deleteNoteModalSrc4.includes('cannot be undone'),
+        '730. Delete Note modal wording is unchanged — only spacing/sizing was enlarged'
+      );
+
+      // 731. Delete behavior itself (Cancel/Delete buttons, deletePermanently call) is unchanged
+      assert(
+        deleteNoteModalSrc4.includes('notesService.deletePermanently') && deleteNoteModalSrc4.includes('btn-danger') && deleteNoteModalSrc4.includes('btn-secondary'),
+        '731. Delete confirmation behavior (Cancel/Delete buttons, notesService.deletePermanently call) is unchanged by the enlargement'
+      );
+
+      // 732. No fixed/hardcoded pixel min-height was added directly inline on DeleteNoteModal's own JSX (sizing comes from the shared CSS class, not a one-off inline style)
+      assert(!/style=\{\{[^}]*(minHeight|min-height)/.test(deleteNoteModalSrc4), '732. DeleteNoteModal does not hardcode min-height inline — it relies on the reusable confirmation-modal CSS class');
+
+      // --- UNSAVED CHANGES MODAL (8-11) ---
+
+      // 733. UnsavedChangesModal uses the exact same confirmation-modal treatment as DeleteNoteModal — both modals are visually consistent, not one enlarged and one left cramped
+      assert(unsavedChangesModalSrc2.includes('modal-card wide-modal confirmation-modal'), '733. UnsavedChangesModal applies the same wide-modal + confirmation-modal classes as DeleteNoteModal for consistent sizing');
+
+      // 734. UnsavedChangesModal now has real modal-body content (previously went straight from header to footer) — a body was actually added, not just an empty flex:1 gap
+      assert(/<div className="modal-body">[\s\S]{0,300}<\/div>/.test(unsavedChangesModalSrc2), '734. UnsavedChangesModal now has an actual .modal-body section with content, giving the new flex:1 body real substance to fill');
+
+      // 735. Unsaved Changes wording (title/subtitle/buttons) is unchanged
+      assert(
+        unsavedChangesModalSrc2.includes('Unsaved Changes') && unsavedChangesModalSrc2.includes('You have unsaved changes in this note.') && unsavedChangesModalSrc2.includes('Discard Changes') && unsavedChangesModalSrc2.includes('Keep Editing'),
+        '735. Unsaved Changes modal wording (title/subtitle/Discard Changes/Keep Editing) is unchanged — only spacing/sizing was enlarged'
+      );
+
+      // 736. onDiscard/onKeepEditing behavior is unchanged
+      assert(unsavedChangesModalSrc2.includes('onClick={onKeepEditing}') && unsavedChangesModalSrc2.includes('onClick={onDiscard}'), '736. Discard Changes/Keep Editing button behavior (onDiscard/onKeepEditing props) is unchanged');
+
+      // --- COLOR SWATCH / LABEL SPACING (12-16) ---
+
+      // 737. .select-swatch has a real horizontal gap to the label text, applied on the swatch itself so it works identically in the closed trigger and every open dropdown option row
+      assert(/\.select-swatch\s*\{[^}]*margin-right:\s*0(\.\d+)?(rem|px)/.test(indexCssSrcForNotesV4), '737. .select-swatch has explicit horizontal spacing (margin-right) to the label text that follows it');
+
+      // 738. Select.jsx renders the same OptionSwatch/select-swatch element in BOTH the closed trigger's selected value AND each open dropdown option row — one shared component guarantees the fix applies to both, not just the menu
+      {
+        const swatchUsageCount = (selectSrc2.match(/select-swatch/g) || []).length;
+        assert(swatchUsageCount >= 2 && selectSrc2.includes('custom-select-value') && selectSrc2.includes('custom-select-option'), `738. The select-swatch element is shared by the trigger's custom-select-value and each custom-select-option row (found ${swatchUsageCount} select-swatch references) — spacing fix applies to both`);
+      }
+
+      // 739. The selected checkmark still renders and is unaffected by the swatch spacing change
+      assert(selectSrc2.includes('custom-select-check'), '739. The selected-option checkmark (custom-select-check) still renders, unaffected by the swatch spacing change');
+
+      // 740. The Default/neutral swatch (no real color) still uses the bordered-outline treatment, not a colored fill
+      assert(selectSrc2.includes("swatchColor === 'none'") || selectSrc2.includes('select-swatch--neutral'), '740. The Default neutral swatch dot still renders as an outlined circle, not a colored fill');
+
+      // 741. The spacing only applies where swatchColor is present — Select.jsx normalizes swatchColor as optional per-option (undefined for every non-Notes consumer) and passes it straight into OptionSwatch, which renders nothing extra when it's absent
+      assert(selectSrc2.includes('swatchColor: opt.swatchColor') && selectSrc2.includes('color={selectedOption?.swatchColor}') && selectSrc2.includes('color={opt.swatchColor}'), '741. Swatch rendering (and therefore its spacing) stays conditional on a per-option swatchColor — other Select consumers that never pass swatchColor render no swatch and are unaffected');
+
+      // --- CATEGORY LABEL (17-20) ---
+
+      // 742. NoteEditorModal's custom-category option label is the exact string "Other / Custom" (no ellipsis)
+      assert(noteEditorModalSrc4.includes("label: 'Other / Custom'") && !noteEditorModalSrc4.includes('Other / Custom...'), '742. NoteEditorModal (Card View) shows the custom-category label as exactly "Other / Custom" — no ellipsis');
+
+      // 743. NotesDocumentView's inline custom-category option label is also exactly "Other / Custom" (no ellipsis) — the same fix was applied everywhere the label is shown, not only in Card View
+      assert(notesDocViewSrc3.includes("label: 'Other / Custom'") && !notesDocViewSrc3.includes('Other / Custom...'), '743. NotesDocumentView (inline editor) also shows the custom-category label as exactly "Other / Custom" — no ellipsis');
+
+      // 744. No remaining "Other / Custom..." string exists anywhere in the Notes module's component source
+      {
+        const allNotesComponentSrc = [noteEditorModalSrc4, notesDocViewSrc3, deleteNoteModalSrc4, unsavedChangesModalSrc2, noteDomainSrc3].join('\n');
+        assert(!allNotesComponentSrc.includes('Other / Custom...'), '744. No remaining "Other / Custom..." (with ellipsis) string exists anywhere in the Notes module source');
+      }
+
+      // 745. Selecting the custom-category option still reveals the Custom Category text field in both Card View and Document View — the label rename did not touch the underlying reveal behavior
+      assert(
+        noteEditorModalSrc4.includes("formData.category === CUSTOM_CATEGORY_OPTION") && notesDocViewSrc3.includes('draft.category === CUSTOM_CATEGORY_OPTION'),
+        '745. Selecting "Other / Custom" still conditionally reveals the Custom Category text field in both Card View and Document View'
+      );
+
+      // --- DOCUMENT VIEW READ/EDIT STATE (21-35) ---
+
+      // 746. NotesDocumentView tracks a dedicated isEditing boolean, layered on top of (not replacing) the existing draft/baseline/isDirty machinery
+      assert(notesDocViewSrc3.includes('const [isEditing, setIsEditing] = useState(false);') && notesDocViewSrc3.includes('const isDirty = JSON.stringify(draft) !== JSON.stringify(baseline);'), '746. A dedicated isEditing state toggle exists alongside the unchanged draft/baseline/isDirty dirty-tracking machinery');
+
+      // 747. A newly-selected (already-saved) note always opens in READ state, never mid-edit
+      assert(/setIsEditing\(false\);[\s\S]{0,20}\}\s*\/\/ eslint-disable-next-line react-hooks\/exhaustive-deps\s*\}, \[selectedNoteId\]\);/.test(notesDocViewSrc3) || (notesDocViewSrc3.includes('setIsEditing(false);') && notesDocViewSrc3.match(/\[selectedNoteId\]\);/)), '747. Selecting a different persisted note resets isEditing to false — every note opens in READ state, never mid-edit');
+
+      // 748. READ state hides Save Changes/Cancel Changes: that button row is gated on isEditing being true (not just !isArchivedReadOnly)
+      assert(notesDocViewSrc3.includes('{!isArchivedReadOnly && isEditing && (') && notesDocViewSrc3.includes('Save Changes') && notesDocViewSrc3.includes('Cancel Changes'), '748. The Save Changes/Cancel Changes button row only renders when isEditing is true — hidden in READ state');
+
+      // 749. READ state shows a dedicated Edit action, hidden once already editing
+      assert(notesDocViewSrc3.includes('{!isArchivedReadOnly && !isEditing && (') && notesDocViewSrc3.includes('title="Edit"') && notesDocViewSrc3.includes('onClick={handleStartEdit}'), '749. A dedicated Edit action button is shown in READ state (hidden once isEditing is true) and switches into edit state via handleStartEdit');
+
+      // 750. Clicking Edit switches the document into EDIT state locally — it does not open NoteEditorModal
+      assert(notesDocViewSrc3.includes('const handleStartEdit = () => {') && notesDocViewSrc3.includes('setIsEditing(true);') && !/handleStartEdit = \(\) => \{[^}]*NoteEditorModal/.test(notesDocViewSrc3), '750. handleStartEdit() sets isEditing to true directly (a local state toggle) — it never opens NoteEditorModal');
+
+      // 751. The read/edit render branch is keyed on isArchivedReadOnly OR !isEditing, so a non-archived note renders its editable fields (title input, DocumentMetaFields, NoteContentEditor) only while isEditing is true
+      assert(notesDocViewSrc3.includes('{isArchivedReadOnly || !isEditing ? (') && notesDocViewSrc3.includes('notes-document-title-input'), '751. The editable Title input / Category+Color Select fields / NoteContentEditor only render in the EDIT-state branch, not in READ state');
+
+      // 752. Save Changes persists via notesService.update(), refreshes the shared list, and updates draft+baseline to the freshly-saved values
+      assert(
+        /handleSaveChanges = async \(\) => \{[\s\S]*?await notesService\.update\(selectedNoteId, buildPayload\(\)\);[\s\S]*?await onNotesChanged\(\);[\s\S]*?setDraft\(fresh\);[\s\S]*?setBaseline\(fresh\);/.test(notesDocViewSrc3),
+        '752. handleSaveChanges() persists via notesService.update(), refreshes the shared notes list, and syncs both draft and baseline to the saved result'
+      );
+
+      // 753. Save Changes exits edit mode after a successful save — the user's explicit visual confirmation that editing finished
+      assert(/handleSaveChanges = async \(\) => \{[\s\S]*?setBaseline\(fresh\);[\s\S]*?setIsEditing\(false\);/.test(notesDocViewSrc3), '753. handleSaveChanges() sets isEditing back to false immediately after a successful save — the document returns to READ state automatically');
+
+      // 754. Because isEditing becomes false and draft now equals baseline (isDirty false), the Save/Cancel Changes row and the editable inputs both disappear on the very next render after a successful save
+      assert(notesDocViewSrc3.includes('{!isArchivedReadOnly && isEditing && (') && notesDocViewSrc3.includes('{isArchivedReadOnly || !isEditing ? ('), '754. Both the Save/Cancel Changes button row and the editable-field branch are driven by the same isEditing flag, so a successful save (which clears isEditing) hides them together on the same render');
+
+      // 755. Cancel Changes restores the last saved baseline AND exits edit state — returns to read state without persisting anything
+      assert(/handleCancelChanges = \(\) => \{[\s\S]*?setDraft\(baseline\);[\s\S]*?setIsEditing\(false\);[\s\S]*?\};/.test(notesDocViewSrc3), '755. handleCancelChanges() resets draft to baseline and sets isEditing to false — exits edit state and returns to read state without saving');
+
+      // 756. Cancel Changes is never gated by isDirty (disabled={saving} only) — a user who enters edit state and changes nothing can still exit via Cancel Changes instead of being trapped
+      assert(/Cancel Changes[\s\S]{0,10}<\/button>|onClick=\{handleCancelChanges\} disabled=\{saving\}>/.test(notesDocViewSrc3) && /onClick=\{handleCancelChanges\}\s+disabled=\{saving\}>/.test(notesDocViewSrc3), '756. The Cancel Changes button is disabled only while saving (disabled={saving}), never disabled by !isDirty — entering edit mode with zero changes still leaves a working way out');
+
+      // 757. Save Changes remains correctly gated by isDirty (no point persisting a no-op save)
+      assert(/onClick=\{handleSaveChanges\}\s+disabled=\{saving \|\| !isDirty\}>/.test(notesDocViewSrc3), '757. The Save Changes button remains disabled when there is nothing to save (disabled={saving || !isDirty})');
+
+      // 758. READ state's formatted content is rendered via dangerouslySetInnerHTML fed through resolveNoteContentHtml — sanitized, same rendering path as Card View
+      assert(/isArchivedReadOnly \|\| !isEditing[\s\S]{0,1500}dangerouslySetInnerHTML=\{\{ __html: resolveNoteContentHtml\(selectedNote\) \}\}/.test(notesDocViewSrc3), '758. READ state renders the saved note\'s formatted content via dangerouslySetInnerHTML fed through resolveNoteContentHtml (sanitized), not a disabled input');
+
+      // 759. READ state shows the note as a document (title/category badge/tags/content) rather than a form with disabled inputs — no disabled-input styling is used for the read view
+      assert(notesDocViewSrc3.includes('notes-document-title') && notesDocViewSrc3.includes('notes-document-meta') && !/isArchivedReadOnly \|\| !isEditing[\s\S]{0,800}disabled(?!ArchivedReadOnly)/.test(notesDocViewSrc3.slice(notesDocViewSrc3.indexOf('isArchivedReadOnly || !isEditing'), notesDocViewSrc3.indexOf('isArchivedReadOnly || !isEditing') + 800)), '759. READ state renders a title/category-badge/tags/content document layout — not disabled form inputs');
+
+      // 760. isDirty becomes false once Save Changes succeeds (draft now strictly equals the freshly-saved baseline) — no lingering unsaved state after a successful save
+      assert(notesDocViewSrc3.includes('const isDirty = JSON.stringify(draft) !== JSON.stringify(baseline);'), '760. isDirty is a live draft-vs-baseline comparison, so once handleSaveChanges syncs draft to the new baseline, isDirty is provably false on the next render');
+
+      // --- NEW DOCUMENT (36-41) ---
+
+      // 761. The sidebar "+" still creates a local, unsaved blank draft (creatingNew) — unaffected by the read/edit-state addition to existing notes
+      assert(notesDocViewSrc3.includes('const handleCreateNewClick = () => {') && notesDocViewSrc3.includes('setCreatingNew(true);') && notesDocViewSrc3.includes('setIsEditing(false);'), '761. handleCreateNewClick() still opens a local blank draft (creatingNew=true) and also resets isEditing — the new-note flow is unaffected by the read/edit split');
+
+      // 762. A brand-new draft is not persisted until Save Note is explicitly clicked
+      assert(notesDocViewSrc3.includes('const handleSaveNewNote = async () => {') && notesDocViewSrc3.match(/handleSaveNewNote = async \(\) => \{[\s\S]*?await notesService\.create\(buildPayload\(\)\);/), '762. The new blank draft is only persisted via notesService.create() inside handleSaveNewNote — never on "+" alone');
+
+      // 763. Save Note persists, exits creatingNew, refreshes the shared list, and selects the newly-created note
+      assert(/handleSaveNewNote = async \(\) => \{[\s\S]*?const created = await notesService\.create\(buildPayload\(\)\);[\s\S]*?setCreatingNew\(false\);[\s\S]*?await onNotesChanged\(\);[\s\S]*?onSelectNote\(created\.id\);/.test(notesDocViewSrc3), '763. handleSaveNewNote() persists via notesService.create(), exits creatingNew, refreshes the shared list, then selects the generated note by its real id');
+
+      // 764. After Save Note succeeds, the newly-selected note goes through the same note-switch effect that resets isEditing to false — so it renders in READ state, not still showing Save Note/Cancel
+      assert(notesDocViewSrc3.match(/\}, \[selectedNoteId\]\);/) && notesDocViewSrc3.includes('setIsEditing(false);'), '764. Selecting the newly-created note (via onSelectNote) re-triggers the note-switch effect, which resets isEditing to false — the new note opens in READ state with Save Note/Cancel hidden');
+
+      // 765. Cancel (for a brand-new draft) never calls notesService.create() — an unconditional, unguarded discard
+      assert(notesDocViewSrc3.includes('const handleCancelNewNote = () => {') && !/handleCancelNewNote = \(\) => \{[^}]*notesService\.create/.test(notesDocViewSrc3), '765. handleCancelNewNote() unconditionally discards the draft without ever calling notesService.create()');
+
+      // 766. Save Note/Cancel are only shown while creatingNew is true — they disappear once the new note is saved and creatingNew flips back to false
+      assert(notesDocViewSrc3.includes('creatingNew ?') || notesDocViewSrc3.includes('{creatingNew'), '766. The Save Note/Cancel (new-draft) UI branch is conditioned on creatingNew, so it disappears once creatingNew is cleared after a successful Save Note');
+
+      // --- GUARD BEHAVIOR (42-45) ---
+
+      // 767. Switching notes while dirty (unsaved edit state) is still routed through requestAction and still shows the Unsaved Changes guard
+      assert(notesDocViewSrc3.includes('const handleSelectSidebarItem = (id) => {') && notesDocViewSrc3.match(/handleSelectSidebarItem = \(id\) => \{\s*requestAction\(\(\) => \{/), '767. Sidebar note-switching remains routed through requestAction(), so switching while dirty still triggers the Unsaved Changes guard');
+
+      // 768. requestAction only intercepts when isDirty is true — after a successful save (isDirty false, isEditing false), switching notes proceeds immediately with no warning
+      assert(/const requestAction = \(actionFn\) => \{\s*if \(isDirty\) \{/.test(notesDocViewSrc3), '768. requestAction() only shows the Unsaved Changes guard when isDirty is true — once a save succeeds and isDirty becomes false, switching/archiving/deleting proceeds without any warning');
+
+      // 769. Archive/Delete while dirty remain guarded via the same requestAction wrapper — no separate, weaker path was introduced for them
+      {
+        const archiveDeleteHandlersRegion = notesDocViewSrc3.slice(notesDocViewSrc3.indexOf('const handleCreateNewClick'));
+        assert(archiveDeleteHandlersRegion.includes('onArchive') && archiveDeleteHandlersRegion.includes('onDeleteRequest') && archiveDeleteHandlersRegion.includes('requestAction('), '769. Archive and Delete actions in Document View remain wrapped by requestAction(), preserving the unsaved-changes guard while dirty');
+      }
+
+      // 770. Pin/Archive/Delete remain available from READ state — they are not hidden or newly conditioned on isEditing
+      assert(!/onArchive[\s\S]{0,60}isEditing/.test(notesDocViewSrc3) && !/onDeleteRequest[\s\S]{0,60}isEditing/.test(notesDocViewSrc3), '770. Pin/Archive/Delete action buttons are not gated on isEditing — they remain usable from READ state exactly as before');
+
+      // --- GENERAL / CARD VIEW REGRESSION (46-57) ---
+
+      // 771. Card View's NoteEditorModal is completely untouched structurally — only the one category-option label string changed
+      assert(noteEditorModalSrc4.includes('const handleSubmit = async (e) => {') && noteEditorModalSrc4.includes('isEditing ? await notesService.update(note.id, payload) : await notesService.create(payload)'.replace(/\s+/g, ' ')) === false && noteEditorModalSrc4.includes('await notesService.update(note.id, payload)') && noteEditorModalSrc4.includes('await notesService.create(payload)'), '771. NoteEditorModal (Card View) still calls notesService.update()/create() exactly as before — untouched aside from the category label string');
+
+      // 772. Card View's own local "isEditing" (Boolean(note), i.e. Edit vs New Note modal mode) is a completely separate concept from Document View's new isEditing state — no naming collision causes cross-behavior
+      assert(noteEditorModalSrc4.includes('const isEditing = Boolean(note);'), '772. NoteEditorModal\'s own isEditing (edit-vs-new modal mode) is defined locally and independently of Document View\'s isEditing state — no shared/leaking state between Card View and Document View');
+
+      // 773. B/I/U formatting in Card View's modal is untouched
+      assert(noteEditorModalSrc4.includes('<NoteContentEditor'), '773. NoteEditorModal still uses the shared NoteContentEditor (B/I/U) for its Content field, unaffected by this task');
+
+      // 774. notesService remains the sole data boundary — no direct localStorage writes were introduced by this task's changes
+      {
+        const thisTaskFiles = [deleteNoteModalSrc4, unsavedChangesModalSrc2, noteEditorModalSrc4, notesDocViewSrc3].join('\n');
+        assert(!thisTaskFiles.includes('localStorage.'), '774. None of this task\'s modified files (DeleteNoteModal/UnsavedChangesModal/NoteEditorModal/NotesDocumentView) write to localStorage directly — notesService remains the data boundary');
+      }
+
+      // 775. No horizontal-overflow rules were introduced by the confirmation-modal or select-swatch spacing CSS at desktop/1024/mobile widths
+      assert(!/\.modal-card\.confirmation-modal[\s\S]{0,300}overflow-x:\s*(scroll|auto)/.test(indexCssSrcForNotesV4) && !/\.select-swatch[\s\S]{0,150}overflow-x:\s*(scroll|auto)/.test(indexCssSrcForNotesV4), '775. No new overflow-x rules were introduced by the confirmation-modal or select-swatch CSS additions');
 
       resetDatabase();
     }

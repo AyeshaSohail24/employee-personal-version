@@ -582,6 +582,10 @@ body {
   height: 11px;
   border-radius: 50%;
   flex-shrink: 0;
+  /* Comfortable gap to the label text that follows — applied directly on the swatch itself
+     (rather than relying only on a parent flex `gap`) so it works identically in both the
+     closed trigger and each open dropdown option row. */
+  margin-right: 0.5rem;
 }
 
 .select-swatch--neutral {
@@ -3407,6 +3411,39 @@ body {
   }
 }
 
+/* Confirmation/warning modal size variant — used by DeleteNoteModal and UnsavedChangesModal so
+   both feel equally roomy rather than compressed, following the same "scoped min-height variant,
+   left off below 640px" pattern as .xl-modal.modal-launch-plan above. Header/Body(flex:1)/Footer
+   is a real flex column so the extra vertical space naturally pushes the footer down instead of
+   vertically centering the warning text — the body's content stays top-aligned by default. */
+.modal-card.confirmation-modal {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-card.confirmation-modal .modal-header {
+  padding: 1.75rem 1.75rem 1.25rem 1.75rem;
+  flex-shrink: 0;
+}
+
+.modal-card.confirmation-modal .modal-body {
+  flex: 1;
+  padding: 0.5rem 1.75rem 1.75rem 1.75rem;
+}
+
+.modal-card.confirmation-modal .modal-footer {
+  padding: 1.5rem 1.75rem 1.75rem 1.75rem;
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .modal-card.confirmation-modal {
+    min-height: 400px;
+    max-height: 88vh;
+  }
+}
+
 /* Spacious modal body variant — generous padding and field spacing, scoped to this class so
    the shared .form-group/.form-label spacing used across the rest of the app is untouched. */
 .modal-body-spacious {
@@ -5692,6 +5729,15 @@ input.form-control:focus {
   margin-bottom: 1.5rem;
   padding-bottom: 1.25rem;
   border-bottom: 1px solid var(--border-light);
+}
+
+/* Read-state color accent indicator — a small dot next to the category badge, mirroring the
+   note card's accent border but appropriate for a single-line metadata row. */
+.notes-document-color-indicator {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .notes-document-content {

@@ -104,7 +104,7 @@ export default function NoteEditorModal({ isOpen, onClose, onSuccess, note = nul
 
   const categorySelectOptions = [
     ...categoryOptions.map((c) => ({ value: c, label: c })),
-    { value: CUSTOM_CATEGORY_OPTION, label: 'Other / Custom...' },
+    { value: CUSTOM_CATEGORY_OPTION, label: 'Other / Custom' },
   ];
 
   return (
