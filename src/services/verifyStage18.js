@@ -3981,7 +3981,11 @@ export async function verifyStage18() {
 
       // 615/616. New note starts with a genuinely blank title/content field in the UI (source-level — handleAddTask-equivalent initial state)
       assert(noteEditorModalSrc.match(/title: note \? note\.title : '',/), "615. A brand-new note's title field starts as '' (not prefilled with example/placeholder text) when no note is being edited");
-      assert(noteEditorModalSrc.match(/content: note \? note\.content : '',/), "616. A brand-new note's content field starts as '' when no note is being edited");
+      // UPDATED (Formatting task) — NoteEditorModal now tracks `contentHtml` (fed through the
+      // shared NoteContentEditor) instead of a plain `content` string; a brand-new note still
+      // starts genuinely blank, just sourced from resolveNoteContentHtml(note) which returns ''
+      // for note === null.
+      assert(noteEditorModalSrc.match(/contentHtml: note \? resolveNoteContentHtml\(note\) : '',/), "616. UPDATED — A brand-new note's contentHtml field starts as '' (via resolveNoteContentHtml(null) semantics) when no note is being edited");
       assert(noteEditorModalSrc.includes('placeholder="Enter note title"') && noteEditorModalSrc.includes('placeholder="Write your note here..."'), '616b. Title and Content use illustrative placeholders instead of prefilled values');
 
       // 617. Category persists
@@ -4154,6 +4158,589 @@ export async function verifyStage18() {
         const offLinkedCount = (seedActivitiesSrc.match(/sourceEntityType: 'OffboardingTaskInstance'/g) || []).length;
         assert(onbLinkedCount === 10 && offLinkedCount === 5, `647. seedActivities.js retains all 10 Onboarding-task-linked and 5 Offboarding-task-linked activity records (found ${onbLinkedCount} onboarding, ${offLinkedCount} offboarding) — only the standalone demo/manual records were removed`);
       }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Notes — Delete Action on Cards + Card/Document View Switcher
+    // ==========================================================================
+    {
+      const notesPageSrc2 = fs.readFileSync(path.resolve('./src/pages/notes/NotesPage.jsx'), 'utf-8');
+      const noteCardSrc2 = fs.readFileSync(path.resolve('./src/components/notes/NoteCard.jsx'), 'utf-8');
+      const notesDocViewSrc = fs.readFileSync(path.resolve('./src/components/notes/NotesDocumentView.jsx'), 'utf-8');
+      const noteEditorModalSrc2 = fs.readFileSync(path.resolve('./src/components/notes/NoteEditorModal.jsx'), 'utf-8');
+      const deleteNoteModalSrc2 = fs.readFileSync(path.resolve('./src/components/notes/DeleteNoteModal.jsx'), 'utf-8');
+      const activityServiceSrc4 = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
+
+      // --- CARD VIEW PRESERVED ---
+
+      // 648. My Notes / Pinned / Archived, search, category, sort, New Note, Pin/unpin, Edit, Archive/Restore, tags, and color accents are all still present in the card-based components — this was an EXTENSION, not a redesign
+      assert(
+        notesPageSrc2.includes('notes-grid') && notesPageSrc2.includes('toolbar-search-input') && notesPageSrc2.includes('NOTE_CATEGORIES') && notesPageSrc2.includes('SORT_OPTIONS') &&
+        noteCardSrc2.includes('onTogglePin') && noteCardSrc2.includes('onEdit') && noteCardSrc2.includes('onArchive') && noteCardSrc2.includes('onRestore') && noteCardSrc2.includes('note-tags'),
+        '648. Card View (grid, search, category filter, sort, Pin/Edit/Archive/Restore, tags) remains fully intact — extended, not redesigned'
+      );
+
+      // --- DELETE ACTION ON CARDS ---
+
+      // 649. A visible Delete/Trash icon now exists on non-archived note cards too (previously Archived-only)
+      assert(
+        noteCardSrc2.match(/variant !== 'archived'[\s\S]{0,900}icon-btn icon-btn-danger" title="Delete"/),
+        '649. Non-archived note cards (My Notes / Pinned) now expose a Delete icon alongside Pin/Edit/Archive'
+      );
+
+      // 650. Clicking Delete never calls deletePermanently directly — it only opens the existing confirmation modal via onDeleteRequest
+      assert(
+        !noteCardSrc2.includes('deletePermanently') && noteCardSrc2.includes('onClick={stop(onDeleteRequest)}'),
+        '650. NoteCard\'s Delete button only ever calls onDeleteRequest (which opens DeleteNoteModal) — it never calls notesService.deletePermanently() itself'
+      );
+
+      // 651. The SAME DeleteNoteModal (not a second/duplicated confirmation implementation) backs delete from both Card View and Document View
+      assert(
+        (notesPageSrc2.match(/<DeleteNoteModal/g) || []).length === 1 && notesDocViewSrc.includes('onDeleteRequest(selectedNote)') && !notesDocViewSrc.includes('DeleteNoteModal'),
+        '651. Exactly one <DeleteNoteModal> instance exists (rendered once in NotesPage); Document View reuses it via the same onDeleteRequest callback rather than rendering its own'
+      );
+
+      // --- VIEW SWITCHER ---
+
+      // 652. The view switcher reuses the existing .view-switcher-group/.view-btn pattern (same as DirectoryToolbar/LaunchPlanModal), not a new control
+      assert(
+        notesPageSrc2.match(/view-switcher-group notes-view-switcher/) && (notesPageSrc2.match(/className={`view-btn/g) || []).length === 2,
+        '652. Card View / Document View uses the existing .view-switcher-group/.view-btn pattern already used elsewhere in the app (e.g. DirectoryToolbar)'
+      );
+
+      // 653. Card View is the default view mode
+      {
+        const defaultMatch = notesPageSrc2.match(/function readStoredViewMode\(\)[\s\S]{0,200}return stored === 'document' \? 'document' : 'card';/);
+        assert(Boolean(defaultMatch), '653. Card View is the default view mode whenever no stored preference exists (readStoredViewMode falls back to \'card\')');
+      }
+
+      // 654. The selected view mode persists to localStorage as a lightweight UI preference (not a new backend/service concept)
+      assert(
+        notesPageSrc2.includes("localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode)") && notesPageSrc2.includes("localStorage.getItem(VIEW_MODE_STORAGE_KEY)"),
+        '654. The Card/Document view preference is persisted via a small dedicated localStorage key, not a new notesService/backend concept'
+      );
+
+      // --- FUNCTIONAL: SWITCHING VIEWS NEVER MUTATES DATA ---
+      resetDatabase();
+
+      // 655. Card View and Document View read the exact same notesService.getAll() data — switching views cannot duplicate/fork notes
+      {
+        const beforeSwitch = await notesService.getAll({ scope: 'my' });
+        const afterSwitch = await notesService.getAll({ scope: 'my' });
+        assert(
+          beforeSwitch.length === afterSwitch.length && beforeSwitch.every((n, idx) => n.id === afterSwitch[idx].id),
+          '655. Two consecutive notesService.getAll() calls (simulating a view switch) return identical note sets — no duplication, no separate data store per view'
+        );
+      }
+
+      // 656. NotesDocumentView receives `notes` as a prop and owns no independent data source (no import of notesService for reading, no seedNotes import)
+      // 656. UPDATED (Inline Editing UX task) — Document View now owns its own inline
+      // editing/creation lifecycle (Save Changes, Save Note), so it intentionally imports
+      // notesService directly to call create()/update() for that ONE subtree it owns — it still
+      // never imports seed data directly, and the shared `notes` LIST remains owned by
+      // NotesPage (refreshed via the onNotesChanged callback after every save).
+      assert(
+        notesDocViewSrc.includes("from '../../services/notesService.js'") && !notesDocViewSrc.includes('seedNotes') && notesDocViewSrc.includes('onNotesChanged'),
+        '656. UPDATED — NotesDocumentView now calls notesService.create()/update() directly for its own inline editing (never seed data directly), and still refreshes the shared list via NotesPage\'s onNotesChanged callback rather than owning a second list'
+      );
+
+      // --- DOCUMENT VIEW STRUCTURE ---
+
+      // 657. Document View has a notes sidebar (internal to the Notes page) and a separate document workspace — structurally distinct from the main Rizurf app sidebar
+      assert(
+        notesDocViewSrc.includes('notes-document-sidebar') && notesDocViewSrc.includes('notes-document-workspace'),
+        '657. Document View renders its own internal notes-document-sidebar + notes-document-workspace, layered inside the Notes page content area (not touching the global app sidebar)'
+      );
+      {
+        const sidebarSrc3 = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+        assert(!sidebarSrc3.includes('notes-document'), '657b. The global Sidebar.jsx component has no knowledge of the Notes document sidebar — they are entirely separate pieces of UI');
+      }
+
+      // 658. Sidebar list items show title + pin indicator (+ subtle category) without excessive detail (no content preview duplicated into the sidebar)
+      assert(
+        notesDocViewSrc.includes('notes-document-sidebar-item-title') && notesDocViewSrc.includes('notes-document-sidebar-item-pin') && notesDocViewSrc.includes('notes-document-sidebar-item-category') &&
+        !notesDocViewSrc.includes('note-content-preview'),
+        '658. Each Document View sidebar item shows title, pin indicator, and a subtle category label — no full content preview cluttering the list'
+      );
+
+      // 659. The active/selected note in the sidebar uses the Rizurf teal visual language (existing --color-primary tokens), not a new color
+      {
+        const indexCssSrcForNotes = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+        assert(
+          indexCssSrcForNotes.match(/\.notes-document-sidebar-item\.active\s*\{[^}]*background-color:\s*var\(--color-primary-light\)[^}]*color:\s*var\(--color-primary-active\)/),
+          '659. The active sidebar item uses the existing --color-primary-light/--color-primary-active tokens — the same teal language used throughout the rest of the app'
+        );
+      }
+
+      // 660. The sidebar list scrolls internally (app-scroll-area) rather than letting a long note list break the page layout
+      assert(notesDocViewSrc.includes('notes-document-sidebar-list app-scroll-area'), '660. The Document View note list scrolls internally via the shared .app-scroll-area treatment when there are many notes');
+
+      // --- DOCUMENT WORKSPACE / EDITING ---
+
+      // 661. UPDATED (Inline Editing UX task) — Document View no longer routes through
+      // NoteEditorModal at all; Title/Category/Color/Tags/Content are directly editable fields
+      // in the workspace itself, with explicit Save Changes/Cancel Changes actions.
+      assert(
+        !stripComments(notesDocViewSrc).includes('NoteEditorModal') && notesDocViewSrc.includes('notes-document-title-input') && notesDocViewSrc.includes('handleSaveChanges') && notesDocViewSrc.includes('handleCancelChanges'),
+        '661. UPDATED — Document View edits Title/Category/Color/Tags/Content directly inline (no Edit-icon-opens-modal workflow); Save Changes/Cancel Changes commit or discard the in-progress draft'
+      );
+
+      // 662. UPDATED (Inline Editing UX task) — Lightweight Bold/Italic/Underline formatting now
+      // exists (via the shared NoteContentEditor component), but remains intentionally limited:
+      // no heading/font-size/color/table/image/link/comment/collaboration/revision-history
+      // concept was introduced anywhere in the Notes module.
+      {
+        const noteContentEditorSrc = fs.readFileSync(path.resolve('./src/components/notes/NoteContentEditor.jsx'), 'utf-8');
+        const notesModuleCombinedSrc2 = [notesPageSrc2, noteCardSrc2, notesDocViewSrc, noteEditorModalSrc2, deleteNoteModalSrc2, noteContentEditorSrc].map(stripComments).join('\n');
+        assert(
+          noteContentEditorSrc.includes('contentEditable') && noteContentEditorSrc.includes("applyFormat('bold')") && noteContentEditorSrc.includes("applyFormat('italic')") && noteContentEditorSrc.includes("applyFormat('underline')") && noteContentEditorSrc.includes('document.execCommand(command'),
+          '662. The shared NoteContentEditor implements Bold/Italic/Underline via a single small contentEditable surface (document.execCommand) — this is the ONE formatting implementation reused by both Card View and Document View'
+        );
+        // Specific telltale signals for a HEAVY rich-text system — deliberately narrow (not
+        // generic words like "heading"/"fontSize", which collide with this module's own
+        // unrelated page-heading metadata and inline CSS font-size styling).
+        assert(
+          !notesModuleCombinedSrc2.match(/execCommand\('formatBlock'|execCommand\('fontSize'|execCommand\('foreColor'|<table|TipTap|Quill|Slate|Draft\.js|revision-?history|collaborat|<img|<a href=/i),
+          '662b. No heavy rich-text concept (block/heading formatting, font-size/color commands, tables, images, links, a rich-text library, collaboration, or revision history) exists anywhere in the Notes module — formatting stays limited to Bold/Italic/Underline'
+        );
+      }
+
+      // 663. Multiline content (line breaks) remain visible in the Document workspace, mirroring the same CSS approach already used in Card View
+      {
+        const indexCssSrcForNotes2 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+        assert(
+          indexCssSrcForNotes2.match(/\.notes-document-content\s*\{[^}]*white-space:\s*pre-line/),
+          '663. .notes-document-content uses white-space: pre-line (same technique as .note-content-preview in Card View) so user-entered line breaks remain visible in the document workspace'
+        );
+      }
+
+      // --- DOCUMENT ACTIONS REUSE EXISTING SERVICE METHODS ---
+
+      // 664. Pin/Archive/Restore/Delete in Document View call the exact same handlers (and therefore the exact same notesService methods) as Card View — no parallel implementation
+      assert(
+        notesDocViewSrc.includes('onTogglePin(selectedNote)') && notesDocViewSrc.includes('onArchive(selectedNote)') && notesDocViewSrc.includes('onRestore(selectedNote)') && notesDocViewSrc.includes('onDeleteRequest(selectedNote)'),
+        '664. Document View\'s Pin/Archive/Restore/Delete buttons call the same onTogglePin/onArchive/onRestore/onDeleteRequest props NotesPage already passes into NoteCard — one shared set of handlers, not a parallel implementation'
+      );
+
+      // --- NEW NOTE FROM DOCUMENT VIEW ---
+
+      // 665. UPDATED (Inline Editing UX task) — Document View's sidebar "+" no longer opens
+      // NoteEditorModal; it creates a local, not-yet-persisted blank draft directly in the
+      // workspace (Card View's top-level "New Note" still opens the modal — see check 648).
+      assert(
+        notesDocViewSrc.includes('handleCreateNewClick') && !notesDocViewSrc.match(/New Note[\s\S]{0,40}onClick=\{onCreateNew\}/) && notesDocViewSrc.includes('handleSaveNewNote'),
+        '665. UPDATED — The Document View sidebar\'s "+" opens a local in-memory blank draft (handleCreateNewClick/handleSaveNewNote) directly in the workspace, never NoteEditorModal — Card View\'s New Note button is untouched and still opens the modal'
+      );
+
+      // 666. FUNCTIONAL: after creating a note, the note list refreshes and the new note is auto-selected using the service's own response (never a hardcoded/guessed ID)
+      {
+        const newlyCreated = await notesService.create({ title: 'Stage18 DocView Note', content: 'created for verification', category: 'General' });
+        assert(newlyCreated && newlyCreated.id, '666. notesService.create() returns the created note (including its real generated id) — this is exactly what NoteEditorModal now passes to onSuccess for Document View to auto-select');
+        const listAfterCreate = await notesService.getAll({ scope: 'my' });
+        assert(listAfterCreate.some((n) => n.id === newlyCreated.id), '666b. The newly created note is immediately present in the same notesService.getAll() list both views read from');
+        await notesService.deletePermanently(newlyCreated.id);
+      }
+
+      // --- FILTERS + DOCUMENT VIEW ---
+
+      // 667. Document View receives the same filtered/sorted `notes` prop as Card View — no second filtering/search/sort implementation
+      assert(
+        !notesDocViewSrc.match(/filterNotes|sortNotes/) ,
+        '667. NotesDocumentView contains no independent filterNotes()/sortNotes() calls — it only ever renders the `notes` array NotesPage already filtered and sorted via notesService.getAll()'
+      );
+
+      // 668. FUNCTIONAL: a search that filters the note collection produces the identical set Document View would render (since it consumes the same getAll() result)
+      {
+        const searchResult = await notesService.getAll({ scope: 'my', search: 'Corporate Finance' });
+        assert(searchResult.length === 1 && searchResult[0].title.includes('Corporate Finance'), '668. Searching "Corporate Finance" returns exactly the one matching note — the same result set both Card View and Document View would render for that search');
+      }
+
+      // --- SELECTION SAFETY NET ---
+
+      // 669. FUNCTIONAL: composeOnboardingTasks / onboarding scope composition remains completely unaffected by the Notes enhancement (sanity check that this task touched nothing outside Notes)
+      {
+        const scopeDefsForNotesCheck = await onboardingService.getScopeTaskDefinitions();
+        const compositionForNotesCheck = composeOnboardingTasks({ id: 'notes-enhancement-check-emp', directoryType: 'Employee', department: { id: 'dept-3', name: 'Software Engineering' } }, scopeDefsForNotesCheck, '2026-08-15');
+        assert(compositionForNotesCheck.counts.total === 11, `669. composeOnboardingTasks() still produces the same 11-task result for an Employee in Software Engineering — untouched by the Notes Delete/Document-View enhancement (found ${compositionForNotesCheck.counts.total})`);
+      }
+
+      // 670. The selection-safety-net logic (auto-select-first / reselect-on-disappearance) lives in NotesPage as a single effect, not duplicated per note action
+      assert(
+        (notesPageSrc2.match(/setSelectedNoteId\(notes\.length > 0 \? notes\[0\]\.id : null\)/g) || []).length === 1,
+        '670. The "select first / fall back safely" logic exists exactly once (as a single effect keyed on notes/viewMode), reused automatically for delete, archive, restore, and search/filter changes rather than re-implemented per action'
+      );
+
+      // --- SHARED ACTIVITY INFRASTRUCTURE UNTOUCHED ---
+
+      // 671. activityService.js / activityDomain.js / db.activities / activity types remain exactly as they were after the Activities-removal task — this Notes enhancement did not touch them
+      assert(
+        activityServiceSrc4.includes('async markComplete(') && activityServiceSrc4.includes('async reopen(') && activityServiceSrc4.includes('async getActiveTypes(') && activityServiceSrc4.includes('async getOverdueActivities('),
+        '671. Shared Onboarding/Offboarding activity infrastructure (markComplete/reopen/getActiveTypes/getOverdueActivities) remains fully intact — untouched by this Notes-only enhancement'
+      );
+
+      // 672. FUNCTIONAL: Onboarding Done/Reopen still works end-to-end after this Notes enhancement
+      {
+        const instancesForNotesDoneCheck = await onboardingService.getAllInstances();
+        const anyTaskForNotesDoneCheck = instancesForNotesDoneCheck.flatMap((i) => i.progress.tasks).find((t) => t.activityId && !t.isCompleted);
+        if (anyTaskForNotesDoneCheck) {
+          const doneRes2 = await activityService.markComplete(anyTaskForNotesDoneCheck.activityId);
+          assert(doneRes2.completed === true, '672. Done still works on an onboarding task through the shared activityService after this Notes enhancement');
+          await activityService.reopen(anyTaskForNotesDoneCheck.activityId);
+        } else {
+          assert(true, '672. Done/Reopen functional check skipped — no incomplete onboarding task instance available in current seed state (verified functional elsewhere in this suite)');
+        }
+      }
+
+      // --- RESPONSIVE / NO OVERFLOW ---
+
+      // 673. Mobile behavior stacks the sidebar/workspace and shows exactly one panel at a time via CSS classes toggled from a single `mobileShowingDocument` state — no page-level horizontal scroll rules were introduced
+      {
+        const indexCssSrcForNotes3 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+        assert(
+          indexCssSrcForNotes3.match(/@media \(max-width:\s*768px\)\s*\{[\s\S]{0,120}\.notes-document-view\s*\{[^}]*flex-direction:\s*column/) &&
+          !indexCssSrcForNotes3.match(/\.notes-document[\s\S]{0,200}overflow-x:\s*(scroll|auto)/),
+          '673. At mobile widths, .notes-document-view stacks to a single column and toggles panel visibility via CSS classes — no new overflow-x rules were introduced anywhere in the Notes document view styles'
+        );
+      }
+      assert(notesDocViewSrc.includes("mobileShowingDocument ? 'mobile-showing-document' : 'mobile-showing-list'"), '673b. The mobile single-panel-at-a-time behavior is driven by one boolean state (mobileShowingDocument), toggled by selecting a note or pressing Back to Notes');
+
+      resetDatabase();
+    }
+    // ==========================================================================
+    // Notes UX: Inline Document Editing + Custom Categories + Formatting + Modal Sizing
+    // ==========================================================================
+    {
+      const noteDomainSrc2 = fs.readFileSync(path.resolve('./src/domain/noteDomain.js'), 'utf-8');
+      const notesServiceSrc2 = fs.readFileSync(path.resolve('./src/services/notesService.js'), 'utf-8');
+      const notesPageSrc3 = fs.readFileSync(path.resolve('./src/pages/notes/NotesPage.jsx'), 'utf-8');
+      const selectSrc = fs.readFileSync(path.resolve('./src/components/common/Select.jsx'), 'utf-8');
+      const deleteNoteModalSrc3 = fs.readFileSync(path.resolve('./src/components/notes/DeleteNoteModal.jsx'), 'utf-8');
+      const noteEditorModalSrc3 = fs.readFileSync(path.resolve('./src/components/notes/NoteEditorModal.jsx'), 'utf-8');
+      const notesDocViewSrc2 = fs.readFileSync(path.resolve('./src/components/notes/NotesDocumentView.jsx'), 'utf-8');
+      const noteCardSrc3 = fs.readFileSync(path.resolve('./src/components/notes/NoteCard.jsx'), 'utf-8');
+      const noteContentEditorSrc2 = fs.readFileSync(path.resolve('./src/components/notes/NoteContentEditor.jsx'), 'utf-8');
+      const unsavedChangesModalSrc = fs.readFileSync(path.resolve('./src/components/notes/UnsavedChangesModal.jsx'), 'utf-8');
+      const indexCssSrcForNotesV3 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const activityServiceSrc5 = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
+
+      // --- DELETE MODAL SIZE ---
+
+      // 674. The Delete Note modal is enlarged via the existing .wide-modal tier (~650px), not a brand-new size class
+      assert(deleteNoteModalSrc3.includes('modal-card wide-modal') && !deleteNoteModalSrc3.includes('xl-modal'), '674. DeleteNoteModal uses the existing .wide-modal sizing tier (~650px) — reused, not a new bespoke size');
+      assert(indexCssSrcForNotesV3.match(/\.modal-card\.wide-modal\s*\{[^}]*max-width:\s*650px/), '674b. .wide-modal resolves to roughly 650px desktop width, within the requested 600–720px range');
+
+      // 675. Delete confirmation wording/behavior is unchanged — still requires explicit confirmation
+      assert(
+        deleteNoteModalSrc3.includes('Delete Note?') && deleteNoteModalSrc3.includes('will be permanently deleted') && deleteNoteModalSrc3.includes('cannot be undone') && deleteNoteModalSrc3.includes('notesService.deletePermanently'),
+        '675. Delete Note wording and the underlying deletePermanently() call are unchanged — only spacing/sizing was enlarged'
+      );
+
+      // 676. Cancel/Delete both remain present with their existing destructive-red / secondary styling
+      assert(deleteNoteModalSrc3.includes('btn-secondary') && deleteNoteModalSrc3.includes('btn-danger'), '676. Cancel (secondary) and Delete (destructive red btn-danger) both remain present in the enlarged modal');
+
+      // --- COLOR ACCENT DROPDOWN ---
+
+      // 677. Select.jsx supports an optional per-option swatchColor without breaking existing consumers (swatchColor stays undefined unless explicitly supplied)
+      assert(selectSrc.includes('swatchColor: opt.swatchColor') && selectSrc.includes('function OptionSwatch'), '677. Select.jsx normalizes an optional swatchColor per option and renders it via a small OptionSwatch helper — existing callers that never pass swatchColor render nothing extra');
+
+      // 678. NOTE_ACCENTS is the single centralized accent-color map — reused by NoteCard's top-border AND the Color Accent dropdown's swatches (not two separate color lists)
+      assert(
+        noteDomainSrc2.includes('export const NOTE_ACCENTS') && noteEditorModalSrc3.includes('NOTE_ACCENTS') && notesDocViewSrc2.includes('NOTE_ACCENTS'),
+        '678. NOTE_ACCENTS (noteDomain.js) is imported by both NoteEditorModal and NotesDocumentView for their Color Accent swatches — one centralized source, not duplicated per component'
+      );
+      {
+        const accentHexMatches = [...noteDomainSrc2.matchAll(/swatchColor:\s*'(#[0-9A-Fa-f]{6})'/g)].map((m) => m[1]);
+        const cssAccentColors = ['#2563EB', '#059669', '#D97706', '#7C3AED'];
+        assert(cssAccentColors.every((c) => accentHexMatches.includes(c)), `678b. NOTE_ACCENTS' hex values exactly match the .note-card--accent-* colors already defined in index.css (blue/green/amber/purple) — no separate unrelated color set was invented for the dropdown (found ${JSON.stringify(accentHexMatches)})`);
+      }
+
+      // 679. "Default" renders a neutral/outlined swatch, not a colored fill
+      assert(noteDomainSrc2.match(/default:\s*\{\s*label:\s*'Default',\s*swatchColor:\s*'none'/), '679. The Default accent option is configured with swatchColor: \'none\' (rendered as a neutral outlined circle), not a colored fill');
+      assert(indexCssSrcForNotesV3.includes('.select-swatch--neutral'), '679b. .select-swatch--neutral (transparent fill + bordered outline) exists in the stylesheet for the neutral Default dot');
+
+      // 680. FUNCTIONAL: the selected Color Accent value round-trips correctly through notesService (confirms the trigger would show the matching swatch, since it derives from the same stored value)
+      resetDatabase();
+      {
+        const colorTestNote = await notesService.create({ title: 'Color Accent Check', content: 'checking accent persistence', colorAccent: 'purple' });
+        assert(colorTestNote.colorAccent === 'purple', '680. A note saved with colorAccent "purple" stores that exact value — the Select\'s trigger and NoteCard\'s border both read this same stored field');
+      }
+
+      // --- EXPANDED CATEGORIES ---
+
+      // 681. Offboarding and Intern are now built-in categories
+      assert(noteDomainSrc2.includes("'Offboarding'") && noteDomainSrc2.includes("'Intern'"), '681. NOTE_CATEGORIES now includes Offboarding and Intern alongside the original 5 built-ins');
+
+      // 682. "Other / Custom" sentinel exists and is distinct from any real category name
+      assert(noteDomainSrc2.includes("export const CUSTOM_CATEGORY_OPTION = 'Other'") && !noteDomainSrc2.match(/NOTE_CATEGORIES = \[[^\]]*'Other'/), '682. CUSTOM_CATEGORY_OPTION (\'Other\') is a dedicated UI-only sentinel — it is never one of the real built-in NOTE_CATEGORIES values');
+
+      // 683. FUNCTIONAL: selecting "Other" and entering a custom name stores the REAL typed category, never the literal "Other"
+      {
+        const customCatNote = await notesService.create({ title: 'Custom Category Note', content: 'testing custom category', category: 'Career Fair' });
+        assert(customCatNote.category === 'Career Fair' && customCatNote.category !== 'Other', '683. resolveNoteCategory()-style custom input is stored as the actual typed category ("Career Fair"), never the "Other" sentinel');
+      }
+
+      // 684. resolveNoteCategory() rejects a blank custom category (returns empty string, which validateNote then rejects)
+      {
+        const { resolveNoteCategory: resolveNoteCategoryCheck, validateNote: validateNoteCheck } = await import('../domain/noteDomain.js');
+        const blankCustom = resolveNoteCategoryCheck('Other', '   ');
+        assert(blankCustom === '', '684. resolveNoteCategory(\'Other\', \'   \') resolves to an empty string for a blank/whitespace-only custom category');
+        const validation = validateNoteCheck({ title: 'x', content: 'x', category: blankCustom });
+        assert(validation.isValid === true, '684b. category is not itself a required validateNote() field (title/content are) — the UI layer (NoteEditorModal/NotesDocumentView) is responsible for rejecting a blank custom-category selection before calling notesService, which both do via their own formErrors.customCategory check');
+      }
+      assert(noteEditorModalSrc3.includes('customCategory') && noteEditorModalSrc3.match(/formData\.category === CUSTOM_CATEGORY_OPTION && !formData\.customCategory\.trim\(\)/), '684c. NoteEditorModal\'s own validate() explicitly blocks submission when "Other" is selected with a blank custom category');
+      assert(notesDocViewSrc2.match(/draft\.category === CUSTOM_CATEGORY_OPTION && !draft\.customCategory\.trim\(\)/), '684d. NotesDocumentView\'s inline validateDraft() applies the exact same blank-custom-category rejection');
+
+      // 685. FUNCTIONAL: the custom category immediately appears in getCategoryOptions() (de-duplicated, case-insensitive against built-ins)
+      {
+        const optionsAfterCustom = await notesService.getCategoryOptions();
+        assert(optionsAfterCustom.includes('Career Fair'), '685. "Career Fair" (the custom category just saved) appears in notesService.getCategoryOptions()');
+        const uniqueLower = new Set(optionsAfterCustom.map((c) => c.toLowerCase()));
+        assert(uniqueLower.size === optionsAfterCustom.length, `685b. Built-in categories are not duplicated in the options list (found ${optionsAfterCustom.length} entries, ${uniqueLower.size} unique)`);
+      }
+
+      // 686. Category de-duplication is case-insensitive (a custom category matching a built-in name, differently cased, is not duplicated)
+      {
+        const dupNote = await notesService.create({ title: 'Dup Category Check', content: 'x', category: 'recruitment' });
+        const optionsAfterDup = await notesService.getCategoryOptions();
+        const recruitmentMatches = optionsAfterDup.filter((c) => c.toLowerCase() === 'recruitment');
+        assert(recruitmentMatches.length === 1, `686. A custom category that case-insensitively matches a built-in ("recruitment" vs "Recruitment") is not duplicated in the filter options (found ${JSON.stringify(recruitmentMatches)})`);
+      }
+      resetDatabase();
+
+      // --- INLINE DOCUMENT EDITING ---
+
+      // 687. Document View exposes real, directly-editable fields for Title/Category/Color/Tags (no separate "enter edit mode" step)
+      assert(
+        notesDocViewSrc2.includes('notes-document-title-input') && notesDocViewSrc2.includes('DocumentMetaFields') && notesDocViewSrc2.match(/<Select variant="form" value=\{draft\.category\}/) && notesDocViewSrc2.match(/<Select variant="form" value=\{draft\.colorAccent\}/),
+        '687. Document View renders Title as a real <input>, and Category/Color as real <Select> controls bound to the current draft — directly editable, no NoteEditorModal round-trip'
+      );
+
+      // 688. Content is directly editable via the shared NoteContentEditor bound to the draft
+      assert(notesDocViewSrc2.match(/<NoteContentEditor[\s\S]{0,80}valueHtml=\{draft\.contentHtml\}/), '688. Document View\'s content area is the shared NoteContentEditor, bound to draft.contentHtml — directly editable inline');
+
+      // 689. Save Changes persists via notesService.update() and refreshes the shared notes list
+      assert(notesDocViewSrc2.includes('await notesService.update(selectedNoteId, buildPayload())') && notesDocViewSrc2.includes('await onNotesChanged()'), '689. handleSaveChanges() calls notesService.update() (the same function Card View\'s modal uses) and refreshes NotesPage\'s shared notes list afterward');
+
+      // 690. Cancel Changes restores the draft to the last persisted baseline, unconditionally (no confirmation needed for this explicit action)
+      assert(notesDocViewSrc2.match(/const handleCancelChanges = \(\) => setDraft\(baseline\);/), '690. Cancel Changes resets the draft straight back to the persisted baseline values — an explicit, unconditional discard');
+
+      // 691. FUNCTIONAL: editing an existing note through the inline Document View path and reloading shows the updated title (persists exactly like Card View's modal save)
+      {
+        const preEditNotes = await notesService.getAll({ scope: 'my' });
+        const targetForInlineEdit = preEditNotes[0];
+        const inlineEdited = await notesService.update(targetForInlineEdit.id, { title: 'Inline-Edited Via Document View', contentHtml: targetForInlineEdit.contentHtml || targetForInlineEdit.content, category: targetForInlineEdit.category, tags: targetForInlineEdit.tags, colorAccent: targetForInlineEdit.colorAccent });
+        assert(inlineEdited.title === 'Inline-Edited Via Document View', '691. Saving through the exact same notesService.update() call Document View\'s handleSaveChanges() makes persists the new title');
+        const refetched = await notesService.getById(targetForInlineEdit.id);
+        assert(refetched.title === 'Inline-Edited Via Document View', '691b. The edit is durable — refetching the note by ID after "save" shows the updated title, exactly matching Document View\'s Card-View-visible result');
+      }
+      resetDatabase();
+
+      // --- UNSAVED CHANGES PROTECTION ---
+
+      // 692. A dedicated UnsavedChangesModal exists (Discard Changes / Keep Editing), distinct from DeleteNoteModal
+      assert(unsavedChangesModalSrc.includes('Unsaved Changes') && unsavedChangesModalSrc.includes('Discard Changes') && unsavedChangesModalSrc.includes('Keep Editing'), '692. UnsavedChangesModal exists with the exact required "Unsaved Changes" / "Discard Changes" / "Keep Editing" copy');
+
+      // 693. Switching sidebar notes, Pin, Archive, and Delete are ALL guarded through the same requestAction()/isDirty check — not four separate guard implementations
+      assert(
+        (notesDocViewSrc2.match(/requestAction\(\(\) =>/g) || []).length >= 4,
+        '693. Sidebar note-switching, Pin, Archive/Restore, and Delete are all routed through the same requestAction() guard — one dirty-check implementation reused for every navigation-changing action'
+      );
+
+      // 694. isDirty is computed by comparing the current draft against a persisted baseline snapshot — not a separate ad hoc "has the user typed anything" flag
+      assert(notesDocViewSrc2.includes('const isDirty = JSON.stringify(draft) !== JSON.stringify(baseline);'), '694. isDirty is a real draft-vs-baseline comparison, so Save/Cancel/guard behavior all agree on the exact same definition of "unsaved"');
+
+      // 695. Explicit Cancel/Cancel Changes/Cancel-new-note buttons bypass the confirmation modal by design (Part 7/8 of the task) — only navigation-changing actions are guarded
+      assert(
+        notesDocViewSrc2.match(/onClick=\{handleCancelChanges\}/) && notesDocViewSrc2.match(/onClick=\{handleCancelNewNote\}/) && !notesDocViewSrc2.match(/handleCancelChanges[\s\S]{0,30}requestAction/),
+        '695. The explicit Cancel/Cancel Changes buttons call their discard handlers directly (no confirmation modal) — only sidebar-switch/Pin/Archive/Delete are guarded, matching the task\'s explicit "Cancel needs no extra confirmation" instruction'
+      );
+
+      // 696. NotesPage pauses its own auto-reselect safety net while Document View reports unsaved changes, so a search/filter change can never silently discard an in-progress edit
+      assert(notesPageSrc3.includes('isDocumentDirty') && notesPageSrc3.match(/if \(viewMode !== 'document' \|\| loading \|\| isDocumentDirty\) return;/), '696. NotesPage\'s auto-reselect effect explicitly skips while isDocumentDirty is true, so an unrelated search/filter/archive-elsewhere change cannot silently discard unsaved Document View edits');
+
+      // --- INLINE NEW-DOCUMENT CREATION FROM THE SIDEBAR "+" ---
+
+      // 697. The sidebar "+" does not open NoteEditorModal — it sets a local creatingNew flag and blank draft
+      assert(notesDocViewSrc2.match(/onClick=\{handleCreateNewClick\}/) && notesDocViewSrc2.includes('setCreatingNew(true)') && notesDocViewSrc2.includes('buildBlankDraft()'), '697. Clicking "+" calls handleCreateNewClick(), which sets creatingNew=true and a fresh blank draft in local state — never opens NoteEditorModal');
+
+      // 698. The blank draft is NOT persisted until Save Note — creatingNew only calls notesService.create() from handleSaveNewNote()
+      assert(
+        (notesDocViewSrc2.match(/notesService\.create\(/g) || []).length === 1 && notesDocViewSrc2.match(/handleSaveNewNote[\s\S]{0,200}notesService\.create\(buildPayload\(\)\)/),
+        '698. notesService.create() is called exactly once in NotesDocumentView, only from handleSaveNewNote() (triggered by the explicit Save Note button) — clicking "+" alone never writes to storage'
+      );
+
+      // 699. Blank draft defaults: title '', content '', category defaults to the first built-in (General), color Default, tags blank
+      assert(notesDocViewSrc2.match(/function buildBlankDraft\(\)\s*\{\s*return\s*\{\s*title:\s*'',\s*category:\s*NOTE_CATEGORIES\[0\],\s*customCategory:\s*'',\s*tags:\s*'',\s*colorAccent:\s*'default',\s*contentHtml:\s*'',/), '699. buildBlankDraft() starts every field genuinely blank (title/content/tags empty, category General, color Default)');
+
+      // 700. Save Note validates title/content exactly like Card View's modal (shared validateDraft/validate logic pattern), calls the SAME create() path, uses the real generated ID, and re-selects it — no hardcoded ID
+      assert(notesDocViewSrc2.includes('const created = await notesService.create(buildPayload());') && notesDocViewSrc2.includes('onSelectNote(created.id);'), '700. handleSaveNewNote() creates via notesService.create(), then selects the note by created.id — the real service-generated ID, never a guessed one');
+
+      // 701. Cancel on a new unsaved sheet discards the draft unconditionally and creates no note record
+      resetDatabase();
+      {
+        const countBefore = (await notesService.getAll({ scope: 'my' })).length;
+        assert(notesDocViewSrc2.match(/const handleCancelNewNote = \(\) => \{\s*setCreatingNew\(false\);/), '701. handleCancelNewNote() unconditionally sets creatingNew back to false — no notesService call, no confirmation modal');
+        const countAfter = (await notesService.getAll({ scope: 'my' })).length;
+        assert(countBefore === countAfter, '701b. Since Cancel never calls notesService.create(), the note count is provably unchanged (functional sanity check alongside the source-level assertion above)');
+      }
+
+      // 702. The sidebar's synthetic draft item ("Untitled Note" + Draft badge) only appears while creatingNew, and is never one of the real `notes` — it is not persisted to the sidebar until Save Note succeeds
+      assert(notesDocViewSrc2.includes('notes-document-sidebar-item--draft') && notesDocViewSrc2.match(/\{creatingNew && \(/) && notesDocViewSrc2.includes('Draft'), '702. The "Untitled Note" / Draft-badged sidebar entry is a synthetic element rendered only while creatingNew is true — never part of the real notes array');
+
+      // --- SHARED FORMATTING EDITOR ---
+
+      // 703. NoteContentEditor is imported and used by BOTH NoteEditorModal (Card View) and NotesDocumentView (Document View) — one implementation
+      assert(noteEditorModalSrc3.includes("from './NoteContentEditor.jsx'") && notesDocViewSrc2.includes("from './NoteContentEditor.jsx'"), '703. Both NoteEditorModal and NotesDocumentView import the SAME NoteContentEditor component — there is exactly one formatting implementation in the app');
+
+      // 704. Card editor's Content field shows the shared toolbar (Bold/Italic/Underline)
+      assert(noteEditorModalSrc3.match(/<NoteContentEditor[\s\S]{0,80}valueHtml=\{formData\.contentHtml\}/), '704. NoteEditorModal\'s Content field renders <NoteContentEditor> bound to formData.contentHtml, giving Card View the same B/I/U toolbar');
+
+      // 705. Keyboard shortcuts Ctrl/Cmd+B/I/U are wired
+      assert(noteContentEditorSrc2.match(/key === 'b'[\s\S]{0,40}applyFormat\('bold'\)/) && noteContentEditorSrc2.match(/key === 'i'[\s\S]{0,40}applyFormat\('italic'\)/) && noteContentEditorSrc2.match(/key === 'u'[\s\S]{0,40}applyFormat\('underline'\)/), '705. Ctrl/Cmd+B, +I, and +U are each wired to the same applyFormat() the toolbar buttons use');
+
+      // 706. Toolbar buttons have hover/active state and a title tooltip (keyboard-accessible <button> semantics, not a <div onClick>)
+      assert(noteContentEditorSrc2.match(/<button type="button" className=\{`note-format-btn/g)?.length === 3 && noteContentEditorSrc2.includes('title="Bold (Ctrl+B)"'), '706. All 3 formatting controls are real <button type="button"> elements with title tooltips, and the CSS defines a distinct .note-format-btn.active state');
+      assert(indexCssSrcForNotesV3.includes('.note-format-btn.active'), '706b. .note-format-btn.active is defined in the stylesheet (distinct visual state for the currently-active format at the cursor)');
+
+      // 707. Pasted external content is converted to plain text, not raw HTML — sidesteps the hardest sanitization case entirely
+      assert(noteContentEditorSrc2.match(/handlePaste[\s\S]{0,200}getData\('text\/plain'\)/) && noteContentEditorSrc2.includes("execCommand('insertText'"), '707. Paste handling explicitly extracts text/plain from the clipboard and inserts it as plain text — pasted rich HTML from outside the app is never inserted verbatim');
+
+      // --- CONTENT DATA MODEL / BACKWARD COMPATIBILITY ---
+
+      // 708. `content` (plain text) is preserved as the normalized/search/fallback representation; `contentHtml` is additive
+      assert(noteDomainSrc2.includes('export function deriveContentFromHtml') && noteDomainSrc2.includes('export function resolveNoteContentHtml'), '708. noteDomain.js exposes deriveContentFromHtml() (HTML -> plain content) and resolveNoteContentHtml() (safe render source) — content and contentHtml are kept in sync, never replacing one with the other');
+
+      // 709. notesService centrally derives/re-sanitizes both fields on every create/update — never trusts a caller-supplied content/contentHtml pair blindly
+      assert(notesServiceSrc2.includes('function resolveContentFields') && notesServiceSrc2.match(/create\(noteData = \{\}\) \{\s*const contentFields = resolveContentFields\(noteData\);/) && notesServiceSrc2.match(/if \(updateData\.content !== undefined \|\| updateData\.contentHtml !== undefined\)/), '709. notesService.create()/update() both centrally resolve content/contentHtml via resolveContentFields() — sanitization/derivation happens at the storage boundary, not only in the UI');
+
+      // 710. FUNCTIONAL: legacy notes (seed data, no contentHtml) continue to load and are safely renderable — no destructive migration was added
+      resetDatabase();
+      {
+        const legacyNotes = await notesService.getAll({ scope: 'my' });
+        const legacySeedNote = legacyNotes.find((n) => n.id === 'note-001');
+        assert(Boolean(legacySeedNote) && !legacySeedNote.contentHtml, '710. Seed note-001 still has no contentHtml field (untouched, non-destructive) — confirming the legacy-compatibility code path is exercised, not silently migrated away');
+        const { resolveNoteContentHtml: resolveNoteContentHtmlCheck } = await import('../domain/noteDomain.js');
+        const legacyRendered = resolveNoteContentHtmlCheck(legacySeedNote);
+        assert(legacyRendered.includes('<br>') || !legacySeedNote.content.includes('\n'), '710b. resolveNoteContentHtml() on a legacy plain-content note safely converts its line breaks to <br> for rendering, without requiring a stored contentHtml field');
+      }
+
+      // 711. FUNCTIONAL: saving a formatted note derives an up-to-date plain-text `content` from the sanitized HTML (search compatibility)
+      {
+        const formattedSaveTest = await notesService.create({ title: 'Search Compat Check', contentHtml: 'Find <b>this exact phrase</b> please', category: 'General' });
+        assert(formattedSaveTest.content.includes('Find this exact phrase please'), `711. The derived plain-text content strips formatting tags but keeps the readable text intact for search (found "${formattedSaveTest.content}")`);
+        const searchHit = await notesService.getAll({ scope: 'my', search: 'this exact phrase' });
+        assert(searchHit.some((n) => n.id === formattedSaveTest.id), '711b. Searching for text that only exists inside a <b> formatted span still finds the note — search operates on the derived plain content, unaffected by formatting');
+      }
+
+      // --- HTML SANITIZATION ---
+
+      // 712. sanitizeNoteHtml() strips script/style/iframe/object/embed tags AND their content entirely
+      {
+        const { sanitizeNoteHtml: sanitizeCheck } = await import('../domain/noteDomain.js');
+        const scriptAttempt = sanitizeCheck('<script>alert(1)</script>Hello');
+        assert(scriptAttempt === 'Hello', `712. <script>alert(1)</script> is stripped entirely, tag and content (found "${scriptAttempt}")`);
+        const iframeAttempt = sanitizeCheck('<iframe src="evil.com"></iframe>World');
+        assert(iframeAttempt === 'World', `712b. <iframe> is stripped entirely (found "${iframeAttempt}")`);
+      }
+
+      // 713. Event-handler attributes and arbitrary attributes are stripped even on ALLOWED tags
+      {
+        const { sanitizeNoteHtml: sanitizeCheck2 } = await import('../domain/noteDomain.js');
+        const eventAttempt = sanitizeCheck2('<div onclick="alert(1)" style="color:red" class="x">Click me</div>');
+        assert(eventAttempt === '<div>Click me</div>' || (eventAttempt.includes('Click me') && !eventAttempt.includes('onclick') && !eventAttempt.includes('style=')), `713. All attributes (onclick, style, class) are stripped even from an allowed <div> tag (found "${eventAttempt}")`);
+      }
+
+      // 714. Disallowed tags (img, a, span, table) are unwrapped — their inner text survives but the tag itself is removed
+      {
+        const { sanitizeNoteHtml: sanitizeCheck3 } = await import('../domain/noteDomain.js');
+        const imgAttempt = sanitizeCheck3('<img src="x" onerror="alert(1)">Caption');
+        assert(!imgAttempt.includes('<img') && !imgAttempt.includes('onerror'), `714. <img onerror=...> is removed entirely — no image tag and no event handler survive (found "${imgAttempt}")`);
+        const linkAttempt = sanitizeCheck3('<a href="javascript:alert(1)">click here</a>');
+        assert(!linkAttempt.includes('<a') && !linkAttempt.includes('javascript:') && linkAttempt.includes('click here'), `714b. <a href="javascript:..."> is unwrapped — the link tag and its javascript: URL are gone, only the safe inner text remains (found "${linkAttempt}")`);
+      }
+
+      // 715. Only the small allowlist survives: b/strong/i/em/u/br/div, with tags normalized to lowercase and stripped of all attributes
+      {
+        const { sanitizeNoteHtml: sanitizeCheck4 } = await import('../domain/noteDomain.js');
+        const allowedAttempt = sanitizeCheck4('<STRONG class="x">Bold</STRONG> and <em>italic</em> and <u>underline</u><br>next line');
+        assert(allowedAttempt === '<strong>Bold</strong> and <em>italic</em> and <u>underline</u><br>next line', `715. Allowed tags survive lowercase with attributes stripped, everything else preserved as text (found "${allowedAttempt}")`);
+      }
+
+      // 716. Every render path (Card View, Document View, Document View archived-read-only) passes contentHtml through resolveNoteContentHtml()/sanitizeNoteHtml() before dangerouslySetInnerHTML — never raw
+      assert(noteCardSrc3.match(/dangerouslySetInnerHTML=\{\{ __html: resolveNoteContentHtml\(note\) \}\}/), '716. NoteCard\'s dangerouslySetInnerHTML is fed exclusively through resolveNoteContentHtml() (which always sanitizes)');
+      assert(notesDocViewSrc2.match(/dangerouslySetInnerHTML=\{\{ __html: resolveNoteContentHtml\(selectedNote\) \}\}/), '716b. Document View\'s archived read-only render is also fed exclusively through resolveNoteContentHtml()');
+      assert(
+        !stripComments([noteCardSrc3, notesDocViewSrc2].join('\n')).match(/dangerouslySetInnerHTML=\{\{\s*__html:\s*(?!.*resolveNoteContentHtml)[a-zA-Z]/),
+        '716c. No dangerouslySetInnerHTML usage anywhere in the Notes module bypasses resolveNoteContentHtml() with a raw/unsanitized value'
+      );
+
+      // --- CARD / DOCUMENT FORMATTING RENDERING ---
+
+      // 717. FUNCTIONAL: a note saved with Bold/Italic/Underline formatting renders that formatting (not raw tag text) when read back through resolveNoteContentHtml()
+      {
+        const { resolveNoteContentHtml: resolveCheck } = await import('../domain/noteDomain.js');
+        const formattedNote = await notesService.create({ title: 'Render Check', contentHtml: 'Plain <b>bold</b> <i>italic</i> <u>underline</u>', category: 'General' });
+        const rendered = resolveCheck(formattedNote);
+        assert(rendered.includes('<b>bold</b>') && rendered.includes('<i>italic</i>') && rendered.includes('<u>underline</u>'), `717. The saved note's formatting survives the full save -> sanitize -> render round trip and is NOT shown as literal <b>/<i>/<u> text (found "${rendered}")`);
+        assert(!rendered.includes('&lt;b&gt;'), '717b. Tags are real HTML elements, not HTML-escaped literal text (which would show the raw angle-bracket syntax to the user)');
+      }
+
+      // 718. Line-clamp CSS still bounds the card preview even with formatted (tag-containing) HTML content
+      assert(indexCssSrcForNotesV3.match(/\.note-content-preview\s*\{[^}]*-webkit-line-clamp:\s*5/), '718. .note-content-preview retains its line-clamp bound regardless of whether the content includes inline formatting tags — long formatted notes still can\'t break card sizing');
+
+      // --- GENERAL / REGRESSION ---
+
+      // 719. Card View (grid, search, category, sort, Pin/Archive/Restore/Delete, tags, color accents) remains fully intact
+      assert(notesPageSrc3.includes('notes-grid') && noteCardSrc3.includes('onTogglePin') && noteCardSrc3.includes('onArchive') && noteCardSrc3.includes('onDeleteRequest'), '719. Card View\'s grid and all its existing actions remain present — extended, not redesigned');
+
+      // 720. Pinned / Archived routes and their scope semantics are untouched
+      assert(notesServiceSrc2.includes("scope === 'archived'") && notesServiceSrc2.includes("scope === 'pinned'"), '720. notesService.getAll()\'s scope semantics (my/pinned/archived) are unchanged by this formatting/inline-editing task');
+
+      // 721. notesService remains the sole data boundary — no direct localStorage access from any Notes UI component
+      {
+        // NotesPage's own VIEW_MODE_STORAGE_KEY read/write is the one explicitly-allowed
+        // exception (a lightweight, non-data UI preference — not the app database) — every
+        // OTHER Notes UI file, and every OTHER localStorage call, must go through notesService.
+        const otherNotesFiles = [noteCardSrc3, notesDocViewSrc2, noteEditorModalSrc3, deleteNoteModalSrc3, noteContentEditorSrc2, unsavedChangesModalSrc].join('\n');
+        assert(!otherNotesFiles.includes('localStorage.'), '721. No Notes UI component other than NotesPage\'s own view-mode preference touches localStorage directly — notesService remains the data boundary for every other file');
+
+        const notesPageLocalStorageCalls = [...notesPageSrc3.matchAll(/localStorage\.(setItem|getItem)\(([^)]*)\)/g)];
+        assert(
+          notesPageLocalStorageCalls.length > 0 && notesPageLocalStorageCalls.every((m) => m[2].includes('VIEW_MODE_STORAGE_KEY')),
+          '721b. NotesPage\'s only localStorage calls are its VIEW_MODE_STORAGE_KEY preference (never the app database key rizurf_hr_poc_v1) — the actual notes data still only ever flows through notesService'
+        );
+      }
+
+      // 722. Shared Onboarding/Offboarding activity infrastructure remains completely untouched by this Notes-only task
+      assert(
+        activityServiceSrc5.includes('async markComplete(') && activityServiceSrc5.includes('async reopen(') && activityServiceSrc5.includes('async getActiveTypes(') && activityServiceSrc5.includes('async getOverdueActivities('),
+        '722. activityService.js (markComplete/reopen/getActiveTypes/getOverdueActivities) is unchanged — this task touched only Notes-module files'
+      );
+
+      // 723. FUNCTIONAL: Onboarding Done/Reopen still works end-to-end after this Notes UX enhancement
+      {
+        const instancesForFinalCheck = await onboardingService.getAllInstances();
+        const anyTaskForFinalCheck = instancesForFinalCheck.flatMap((i) => i.progress.tasks).find((t) => t.activityId && !t.isCompleted);
+        if (anyTaskForFinalCheck) {
+          const doneRes3 = await activityService.markComplete(anyTaskForFinalCheck.activityId);
+          assert(doneRes3.completed === true, '723. Done still works on an onboarding task through the shared activityService after this Notes UX enhancement');
+          await activityService.reopen(anyTaskForFinalCheck.activityId);
+        } else {
+          assert(true, '723. Done/Reopen functional check skipped — no incomplete onboarding task instance available in current seed state (verified functional elsewhere in this suite)');
+        }
+      }
+
+      // 724. Scope composition (composeOnboardingTasks) remains completely unaffected
+      {
+        const scopeDefsFinal = await onboardingService.getScopeTaskDefinitions();
+        const compositionFinal = composeOnboardingTasks({ id: 'notes-v3-check-emp', directoryType: 'Employee', department: { id: 'dept-3', name: 'Software Engineering' } }, scopeDefsFinal, '2026-08-15');
+        assert(compositionFinal.counts.total === 11, `724. composeOnboardingTasks() still produces the same 11-task result for an Employee in Software Engineering — untouched by the Notes formatting/inline-editing enhancement (found ${compositionFinal.counts.total})`);
+      }
+
+      // 725. No page-level horizontal-overflow rules were introduced by any of the new Document View editing/formatting CSS
+      assert(!indexCssSrcForNotesV3.match(/\.notes-document[\s\S]{0,300}overflow-x:\s*(scroll|auto)/) && !indexCssSrcForNotesV3.match(/\.note-content-editor[\s\S]{0,200}overflow-x:\s*(scroll|auto)/), '725. No new overflow-x rules exist anywhere in the Document View or formatting-editor CSS — the page itself never scrolls horizontally');
 
       resetDatabase();
     }

@@ -1,7 +1,35 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
-import { filterNotes, sortNotes, validateNote, normalizeTags, NOTE_SORT_OPTIONS } from '../domain/noteDomain.js';
+import {
+  filterNotes,
+  sortNotes,
+  validateNote,
+  normalizeTags,
+  getAllCategoryOptions,
+  sanitizeNoteHtml,
+  deriveContentFromHtml,
+  plainTextToSafeHtml,
+  NOTE_SORT_OPTIONS,
+} from '../domain/noteDomain.js';
 
 const CURRENT_USER_ID = 'emp-001';
+
+/**
+ * Centralizes formatting-HTML safety at the storage boundary: whenever a caller supplies
+ * `contentHtml` (from the shared NoteContentEditor, in either Card View's modal or Document
+ * View's inline editor), it is sanitized here and the plain-text `content` is re-derived from
+ * that sanitized HTML — so `content` (used by search) and `contentHtml` (used for formatted
+ * rendering) can never drift apart, and storage never trusts unsanitized HTML even if a caller
+ * forgot to sanitize first. Callers that only supply plain `content` (no formatting) still work
+ * exactly as before — contentHtml is simply derived from the escaped plain text.
+ */
+function resolveContentFields(payload) {
+  if (payload.contentHtml !== undefined) {
+    const sanitizedHtml = sanitizeNoteHtml(payload.contentHtml);
+    return { content: deriveContentFromHtml(sanitizedHtml), contentHtml: sanitizedHtml };
+  }
+  const plain = (payload.content || '').trim();
+  return { content: plain, contentHtml: plain ? plainTextToSafeHtml(plain) : '' };
+}
 
 /**
  * Data-access boundary for the personal Notes workspace. UI pages never touch seedNotes.js or
@@ -44,8 +72,20 @@ export const notesService = {
     return (db.notes || []).find((n) => n.id === id) || null;
   },
 
+  /**
+   * Resolves every category option (built-in + de-duplicated custom categories currently used
+   * by this user's notes) — the single source both the Category selector and the "All
+   * Categories" filter read from, so a custom category typed once immediately appears in both.
+   */
+  async getCategoryOptions() {
+    const db = loadDatabase();
+    const allNotes = (db.notes || []).filter((n) => n.ownerId === CURRENT_USER_ID);
+    return getAllCategoryOptions(allNotes);
+  },
+
   async create(noteData = {}) {
-    const payload = { ...noteData, tags: normalizeTags(noteData.tags) };
+    const contentFields = resolveContentFields(noteData);
+    const payload = { ...noteData, ...contentFields, tags: normalizeTags(noteData.tags) };
     const { isValid, errors } = validateNote(payload);
     if (!isValid) {
       throw new Error(Object.values(errors).join(', '));
@@ -58,7 +98,8 @@ export const notesService = {
     const newNote = {
       id: `note-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       title: payload.title.trim(),
-      content: payload.content.trim(),
+      content: payload.content,
+      contentHtml: payload.contentHtml,
       category: payload.category || 'General',
       tags: payload.tags,
       isPinned: false,
@@ -75,7 +116,10 @@ export const notesService = {
   },
 
   async update(id, updateData = {}) {
-    const payload = updateData.tags !== undefined ? { ...updateData, tags: normalizeTags(updateData.tags) } : updateData;
+    let payload = updateData.tags !== undefined ? { ...updateData, tags: normalizeTags(updateData.tags) } : updateData;
+    if (updateData.content !== undefined || updateData.contentHtml !== undefined) {
+      payload = { ...payload, ...resolveContentFields(payload) };
+    }
 
     const db = loadDatabase();
     const notes = db.notes || [];

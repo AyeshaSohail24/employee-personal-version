@@ -572,6 +572,21 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+}
+
+/* Optional color dot for Select options that supply a swatchColor (e.g. Notes' Color Accent
+   picker) — every other Select consumer never passes swatchColor, so this never renders there. */
+.select-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.select-swatch--neutral {
+  background-color: transparent;
+  border: 1.5px solid var(--border-dark);
 }
 
 .custom-select-check {
@@ -5456,6 +5471,378 @@ input.form-control:focus {
   resize: vertical;
 }
 
+/* Shared NoteContentEditor (Bold/Italic/Underline) — used identically by NoteEditorModal's
+   Content field and NotesDocumentView's inline editor. */
+.note-content-editor {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: #FFFFFF;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.note-content-editor:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.15);
+}
+
+.note-content-toolbar {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+  background-color: var(--bg-subtle);
+}
+
+.note-format-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.note-format-btn:hover {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  border-color: var(--border-light);
+}
+
+.note-format-btn.active {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-active);
+  border-color: var(--color-primary-border);
+}
+
+.note-content-editable {
+  min-height: 240px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding: 0.85rem 1rem;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--text-main);
+  outline: none;
+  overflow-wrap: anywhere;
+}
+
+.note-content-editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-light, #94A3B8);
+  pointer-events: none;
+}
+
+/* Compact variant used inline inside the Document View workspace, where the surrounding page
+   already provides ample vertical room. */
+.notes-document-content-editor .note-content-editable {
+  min-height: 320px;
+  max-height: none;
+}
+
+/* View switcher (Card View / Document View) — reuses the existing .view-switcher-group/.view-btn
+   pattern from DirectoryToolbar/LaunchPlanModal rather than a new control. */
+.notes-view-switcher {
+  margin-left: auto;
+}
+
+/* ==========================================================================
+   Notes — Document View (Google-Docs-tabs-inspired notepad workspace)
+   ========================================================================== */
+
+.notes-document-view {
+  display: flex;
+  gap: 1.25rem;
+  align-items: stretch;
+  min-height: 560px;
+}
+
+.notes-document-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notes-document-sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.notes-document-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.notes-document-sidebar-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  background: none;
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  transition: background-color 0.12s ease;
+}
+
+.notes-document-sidebar-item:hover {
+  background-color: var(--bg-subtle);
+}
+
+.notes-document-sidebar-item.active {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-active);
+  font-weight: 600;
+}
+
+.notes-document-sidebar-item-pin {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.notes-document-sidebar-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-document-sidebar-item-category {
+  flex-shrink: 0;
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.notes-document-workspace {
+  flex: 1;
+  min-width: 0;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.75rem 2rem;
+  overflow-y: auto;
+}
+
+.notes-document-empty {
+  height: 100%;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.notes-document-back-btn {
+  display: none;
+}
+
+.notes-document-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+}
+
+.notes-document-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.notes-document-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.notes-document-content {
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--text-main);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  min-height: 280px;
+}
+
+.notes-document-updated {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-light);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Directly-editable document fields (title/category/color/tags/content) — Document View no
+   longer routes editing through NoteEditorModal, so these render as real inline form controls
+   rather than read-only text. */
+.notes-document-title-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: none;
+  padding: 0;
+  margin: 0 0 1rem 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-main);
+  font-family: inherit;
+}
+
+.notes-document-title-input::placeholder {
+  color: var(--text-light, #94A3B8);
+  font-weight: 700;
+}
+
+.notes-document-title-input:focus {
+  outline: none;
+}
+
+.notes-document-meta-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.notes-document-content-editor {
+  margin-bottom: 1rem;
+}
+
+.notes-document-save-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.notes-document-save-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Synthetic "Untitled Note" sidebar entry shown only while composing a brand-new, not-yet-saved
+   document — never a real notesService record. */
+.notes-document-sidebar-item--draft {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  font-style: italic;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-active);
+  font-weight: 600;
+}
+
+.notes-document-draft-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background-color: var(--color-primary);
+  color: #FFFFFF;
+  font-style: normal;
+}
+
+@media (max-width: 1024px) {
+  .notes-document-meta-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .notes-document-meta-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .notes-document-sidebar {
+    width: 220px;
+  }
+  .notes-document-workspace {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .notes-document-view {
+    flex-direction: column;
+    min-height: auto;
+  }
+  .notes-document-sidebar {
+    width: 100%;
+    max-height: 60vh;
+  }
+  .notes-document-view.mobile-showing-list .notes-document-workspace {
+    display: none;
+  }
+  .notes-document-view.mobile-showing-document .notes-document-sidebar {
+    display: none;
+  }
+  .notes-document-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0;
+    margin-bottom: 1rem;
+    cursor: pointer;
+  }
+}
 
 
 

@@ -1,6 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 
+/** Small color dot for options that supply a swatchColor. 'none' renders a neutral outlined
+ * circle (e.g. the "Default" accent); any real CSS color renders a filled dot in that color. */
+function OptionSwatch({ color }) {
+  if (!color) return null;
+  const isNeutral = color === 'none';
+  return (
+    <span
+      className={`select-swatch ${isNeutral ? 'select-swatch--neutral' : ''}`}
+      style={isNeutral ? undefined : { backgroundColor: color }}
+      aria-hidden="true"
+    />
+  );
+}
+
 /**
  * Reusable Design-System Custom Select Component for Rizurf Employees App PoC.
  * Replaces native <select> elements with fully styled closed trigger AND open menu dropdown.
@@ -23,7 +37,10 @@ export function Select({
   const containerRef = useRef(null);
   const listboxRef = useRef(null);
 
-  // Normalize options array into [{ value, label }]
+  // Normalize options array into [{ value, label, swatchColor }]. `swatchColor` is optional —
+  // when a caller's option objects include it (e.g. Notes' Color Accent picker), a small color
+  // dot renders before the label in both the trigger and the menu; every existing consumer that
+  // never passes swatchColor is completely unaffected (swatchColor stays undefined, no dot).
   const normalizedOptions = React.useMemo(() => {
     const list = [];
     if (placeholder) {
@@ -36,7 +53,7 @@ export function Select({
       } else if (typeof opt === 'object') {
         const val = opt.value !== undefined ? opt.value : opt.id !== undefined ? opt.id : opt.key;
         const lbl = opt.label !== undefined ? opt.label : opt.name !== undefined ? opt.name : opt.title || String(val);
-        list.push({ value: String(val), label: String(lbl) });
+        list.push({ value: String(val), label: String(lbl), swatchColor: opt.swatchColor });
       }
     });
     return list;
@@ -135,6 +152,7 @@ export function Select({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         onKeyDown={handleKeyDown}
       >
+        <OptionSwatch color={selectedOption?.swatchColor} />
         <span className="custom-select-value">{displayLabel}</span>
         <ChevronDown size={variant === 'role' ? 13 : 15} className={`custom-select-chevron ${isOpen ? 'chevron-up' : ''}`} />
       </button>
@@ -155,6 +173,7 @@ export function Select({
                 onClick={() => handleSelect(opt.value)}
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
+                <OptionSwatch color={opt.swatchColor} />
                 <span className="custom-select-option-label">{opt.label}</span>
                 {isSelected && <Check size={14} className="custom-select-check" />}
               </div>

@@ -1,33 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { X, NotebookPen, AlertTriangle } from 'lucide-react';
 import { notesService } from '../../services/notesService.js';
-import { NOTE_CATEGORIES, NOTE_COLOR_ACCENTS } from '../../domain/noteDomain.js';
+import { NOTE_CATEGORIES, NOTE_ACCENTS, CUSTOM_CATEGORY_OPTION, resolveNoteCategory, resolveNoteContentHtml, deriveContentFromHtml } from '../../domain/noteDomain.js';
 import Select from '../common/Select.jsx';
+import NoteContentEditor from './NoteContentEditor.jsx';
 
 const buildInitialFormState = (note) => ({
   title: note ? note.title : '',
   category: note ? note.category : NOTE_CATEGORIES[0],
-  content: note ? note.content : '',
+  customCategory: '',
+  contentHtml: note ? resolveNoteContentHtml(note) : '',
   tags: note ? (note.tags || []).join(', ') : '',
   colorAccent: note ? (note.colorAccent || 'default') : 'default',
 });
 
-const ACCENT_LABELS = {
-  default: 'Default',
-  teal: 'Teal',
-  blue: 'Blue',
-  green: 'Green',
-  amber: 'Amber',
-  purple: 'Purple',
-};
+const ACCENT_OPTIONS = Object.entries(NOTE_ACCENTS).map(([value, meta]) => ({
+  value,
+  label: meta.label,
+  swatchColor: meta.swatchColor,
+}));
 
 /**
- * Create/Edit modal for a single personal note. Content is a plain textarea — intentionally no
- * rich-text toolbar — this stays a lightweight notepad, not a document editor.
+ * Create/Edit modal for a single personal note. Content uses the shared NoteContentEditor
+ * (Bold/Italic/Underline only) — the same component Document View's inline editor uses, so
+ * there is exactly one formatting implementation.
  */
 export default function NoteEditorModal({ isOpen, onClose, onSuccess, note = null }) {
   const isEditing = Boolean(note);
   const [formData, setFormData] = useState(buildInitialFormState(note));
+  const [categoryOptions, setCategoryOptions] = useState(NOTE_CATEGORIES);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -38,6 +39,7 @@ export default function NoteEditorModal({ isOpen, onClose, onSuccess, note = nul
       setErrors({});
       setError(null);
       setSaving(false);
+      notesService.getCategoryOptions().then(setCategoryOptions).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, note]);
@@ -63,7 +65,10 @@ export default function NoteEditorModal({ isOpen, onClose, onSuccess, note = nul
   const validate = () => {
     const nextErrors = {};
     if (!formData.title.trim()) nextErrors.title = 'Title is required.';
-    if (!formData.content.trim()) nextErrors.content = 'Content is required.';
+    if (!deriveContentFromHtml(formData.contentHtml).trim()) nextErrors.content = 'Content is required.';
+    if (formData.category === CUSTOM_CATEGORY_OPTION && !formData.customCategory.trim()) {
+      nextErrors.customCategory = 'Enter a name for the custom category.';
+    }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -76,19 +81,19 @@ export default function NoteEditorModal({ isOpen, onClose, onSuccess, note = nul
     try {
       const payload = {
         title: formData.title,
-        category: formData.category,
-        content: formData.content,
+        category: resolveNoteCategory(formData.category, formData.customCategory),
+        contentHtml: formData.contentHtml,
         tags: formData.tags,
         colorAccent: formData.colorAccent,
       };
 
-      if (isEditing) {
-        await notesService.update(note.id, payload);
-      } else {
-        await notesService.create(payload);
-      }
+      const resultNote = isEditing
+        ? await notesService.update(note.id, payload)
+        : await notesService.create(payload);
 
-      if (onSuccess) onSuccess();
+      // Passes the created/updated note back to the caller — Document View uses this to
+      // auto-select a newly-created note without a second lookup/guessing an ID.
+      if (onSuccess) onSuccess(resultNote);
       onClose();
     } catch (err) {
       setError(err.message);
@@ -96,6 +101,11 @@ export default function NoteEditorModal({ isOpen, onClose, onSuccess, note = nul
       setSaving(false);
     }
   };
+
+  const categorySelectOptions = [
+    ...categoryOptions.map((c) => ({ value: c, label: c })),
+    { value: CUSTOM_CATEGORY_OPTION, label: 'Other / Custom...' },
+  ];
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -143,8 +153,21 @@ export default function NoteEditorModal({ isOpen, onClose, onSuccess, note = nul
                   variant="form"
                   value={formData.category}
                   onChange={(e) => handleChange('category', e.target.value)}
-                  options={NOTE_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                  options={categorySelectOptions}
                 />
+                {formData.category === CUSTOM_CATEGORY_OPTION && (
+                  <div style={{ marginTop: '0.6rem' }}>
+                    <label className="form-label">Custom Category</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Enter category name"
+                      value={formData.customCategory}
+                      onChange={(e) => handleChange('customCategory', e.target.value)}
+                    />
+                    {errors.customCategory && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.customCategory}</span>}
+                  </div>
+                )}
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
@@ -153,18 +176,17 @@ export default function NoteEditorModal({ isOpen, onClose, onSuccess, note = nul
                   variant="form"
                   value={formData.colorAccent}
                   onChange={(e) => handleChange('colorAccent', e.target.value)}
-                  options={NOTE_COLOR_ACCENTS.map((c) => ({ value: c, label: ACCENT_LABELS[c] || c }))}
+                  options={ACCENT_OPTIONS}
                 />
               </div>
             </div>
 
             <div className="form-group">
               <label className="form-label">Content <span className="required-star">*</span></label>
-              <textarea
-                className="form-textarea note-editor-content-area"
+              <NoteContentEditor
+                valueHtml={formData.contentHtml}
+                onChangeHtml={(html) => handleChange('contentHtml', html)}
                 placeholder="Write your note here..."
-                value={formData.content}
-                onChange={(e) => handleChange('content', e.target.value)}
               />
               {errors.content && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.content}</span>}
             </div>

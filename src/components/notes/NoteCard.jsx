@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pin, PinOff, Pencil, Archive, RotateCcw, Trash2 } from 'lucide-react';
-import { formatNoteUpdatedLabel } from '../../domain/noteDomain.js';
+import { formatNoteUpdatedLabel, resolveNoteContentHtml } from '../../domain/noteDomain.js';
 
 /**
  * Shared read/action card used identically across My Notes, Pinned, and Archived — the same
@@ -28,7 +28,11 @@ export default function NoteCard({ note, variant = 'my', onEdit, onTogglePin, on
 
       <span className="note-category-badge">{note.category}</span>
 
-      <p className="note-content-preview">{note.content}</p>
+      {/* Formatting (Bold/Italic/Underline) rendered safely — resolveNoteContentHtml() always
+          returns already-sanitized HTML (re-sanitized here defensively), so this is never fed
+          raw/untrusted markup. Legacy notes with no contentHtml fall back to their escaped
+          plain content with line breaks preserved. */}
+      <p className="note-content-preview" dangerouslySetInnerHTML={{ __html: resolveNoteContentHtml(note) }} />
 
       {note.tags && note.tags.length > 0 && (
         <div className="note-tags">
@@ -57,6 +61,9 @@ export default function NoteCard({ note, variant = 'my', onEdit, onTogglePin, on
               </button>
               <button type="button" className="icon-btn" title="Archive" onClick={stop(onArchive)}>
                 <Archive size={14} />
+              </button>
+              <button type="button" className="icon-btn icon-btn-danger" title="Delete" onClick={stop(onDeleteRequest)}>
+                <Trash2 size={14} />
               </button>
             </>
           )}

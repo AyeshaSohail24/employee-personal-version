@@ -1,11 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, NotebookPen } from 'lucide-react';
+import { Plus, Search, NotebookPen, LayoutGrid, FileStack } from 'lucide-react';
 import { notesService } from '../../services/notesService.js';
 import { NOTE_CATEGORIES, NOTE_SORT_OPTIONS } from '../../domain/noteDomain.js';
 import NoteCard from '../../components/notes/NoteCard.jsx';
+import NotesDocumentView from '../../components/notes/NotesDocumentView.jsx';
 import NoteEditorModal from '../../components/notes/NoteEditorModal.jsx';
 import DeleteNoteModal from '../../components/notes/DeleteNoteModal.jsx';
 import Select from '../../components/common/Select.jsx';
+
+const VIEW_MODE_STORAGE_KEY = 'rizurf_notes_view_mode';
+
+function readStoredViewMode() {
+  try {
+    const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return stored === 'document' ? 'document' : 'card';
+  } catch (err) {
+    return 'card';
+  }
+}
 
 const VARIANT_META = {
   my: {
@@ -47,12 +59,26 @@ export default function NotesPage({ variant = 'my' }) {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [categoryOptions, setCategoryOptions] = useState(NOTE_CATEGORIES);
+
+  // Presentation preference only — Card vs Document view never affects which notes exist or
+  // their pinned/archived state; both views read the exact same `notes` array below.
+  const [viewMode, setViewMode] = useState(readStoredViewMode);
+  const [selectedNoteId, setSelectedNoteId] = useState(null);
+  // Reported by NotesDocumentView whenever its inline editor has unsaved edits — used to pause
+  // the auto-reselect safety net below so a search/filter change can never silently discard
+  // in-progress edits (only the explicit Cancel/Discard actions inside the editor do that).
+  const [isDocumentDirty, setIsDocumentDirty] = useState(false);
 
   const loadNotes = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await notesService.getAll({ scope: variant, search, category, sortBy });
+      const [data, categories] = await Promise.all([
+        notesService.getAll({ scope: variant, search, category, sortBy }),
+        notesService.getCategoryOptions(),
+      ]);
       setNotes(data);
+      setCategoryOptions(categories);
     } catch (err) {
       console.error('Failed to load notes:', err);
     } finally {
@@ -69,7 +95,28 @@ export default function NotesPage({ variant = 'my' }) {
     setSearch('');
     setCategory('');
     setSortBy(NOTE_SORT_OPTIONS.UPDATED);
+    setSelectedNoteId(null);
   }, [variant]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch (err) {
+      // Non-fatal — the view just won't persist across reloads for this viewer.
+    }
+  }, [viewMode]);
+
+  // Document View selection safety net: if nothing is selected yet (first entry into Document
+  // View), or the previously-selected note disappeared (deleted, archived while on My Notes,
+  // restored while on Archived, or filtered out by search/category), fall back to the first
+  // still-visible note. If none remain, selectedNoteId becomes null and the empty state shows.
+  useEffect(() => {
+    if (viewMode !== 'document' || loading || isDocumentDirty) return;
+    const stillVisible = notes.some((n) => n.id === selectedNoteId);
+    if (!stillVisible) {
+      setSelectedNoteId(notes.length > 0 ? notes[0].id : null);
+    }
+  }, [viewMode, loading, notes, selectedNoteId, isDocumentDirty]);
 
   const handleOpenCreate = () => {
     setEditingNote(null);
@@ -79,6 +126,15 @@ export default function NotesPage({ variant = 'my' }) {
   const handleOpenEdit = (note) => {
     setEditingNote(note);
     setIsEditorOpen(true);
+  };
+
+  // Card View's New Note / Edit flow only — Document View now saves inline via notesService
+  // directly (see NotesDocumentView) rather than round-tripping through this modal.
+  const handleEditorSuccess = (resultNote) => {
+    loadNotes();
+    if (resultNote && !editingNote) {
+      setSelectedNoteId(resultNote.id);
+    }
   };
 
   const handleTogglePin = async (note) => {
@@ -141,7 +197,7 @@ export default function NotesPage({ variant = 'my' }) {
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           placeholder="All Categories"
-          options={NOTE_CATEGORIES.map((c) => ({ value: c, label: c }))}
+          options={categoryOptions.map((c) => ({ value: c, label: c }))}
         />
 
         <Select
@@ -150,12 +206,49 @@ export default function NotesPage({ variant = 'my' }) {
           onChange={(e) => setSortBy(e.target.value)}
           options={SORT_OPTIONS}
         />
+
+        <div className="view-switcher-group notes-view-switcher">
+          <button
+            type="button"
+            className={`view-btn ${viewMode === 'card' ? 'active' : ''}`}
+            onClick={() => setViewMode('card')}
+            title="Card View"
+          >
+            <LayoutGrid size={15} />
+            <span>Card View</span>
+          </button>
+          <button
+            type="button"
+            className={`view-btn ${viewMode === 'document' ? 'active' : ''}`}
+            onClick={() => setViewMode('document')}
+            title="Document View"
+          >
+            <FileStack size={15} />
+            <span>Document View</span>
+          </button>
+        </div>
       </div>
 
       {loading ? (
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           Loading notes...
         </div>
+      ) : viewMode === 'document' && !isSearchActive ? (
+        // Document View handles its own "no notes yet" empty state inline (with an inline
+        // Create Note flow instead of the modal), so it renders even when notes.length === 0 —
+        // only Card View (and an active search yielding zero results) use the shared empty card.
+        <NotesDocumentView
+          notes={notes}
+          selectedNoteId={selectedNoteId}
+          onSelectNote={setSelectedNoteId}
+          onTogglePin={handleTogglePin}
+          onArchive={handleArchive}
+          onRestore={handleRestore}
+          onDeleteRequest={setDeleteTarget}
+          onNotesChanged={loadNotes}
+          onDirtyChange={setIsDocumentDirty}
+          variant={variant}
+        />
       ) : notes.length === 0 ? (
         <div className="table-container-card notes-empty-state">
           <NotebookPen size={32} style={{ color: 'var(--border-dark)', marginBottom: '0.75rem' }} />
@@ -178,6 +271,19 @@ export default function NotesPage({ variant = 'my' }) {
             </>
           )}
         </div>
+      ) : viewMode === 'document' ? (
+        <NotesDocumentView
+          notes={notes}
+          selectedNoteId={selectedNoteId}
+          onSelectNote={setSelectedNoteId}
+          onTogglePin={handleTogglePin}
+          onArchive={handleArchive}
+          onRestore={handleRestore}
+          onDeleteRequest={setDeleteTarget}
+          onNotesChanged={loadNotes}
+          onDirtyChange={setIsDocumentDirty}
+          variant={variant}
+        />
       ) : (
         <div className="notes-grid">
           {notes.map((note) => (
@@ -199,7 +305,7 @@ export default function NotesPage({ variant = 'my' }) {
         isOpen={isEditorOpen}
         onClose={() => setIsEditorOpen(false)}
         note={editingNote}
-        onSuccess={loadNotes}
+        onSuccess={handleEditorSuccess}
       />
 
       <DeleteNoteModal

@@ -3,8 +3,10 @@ import { X, Trash2, AlertTriangle } from 'lucide-react';
 import { notesService } from '../../services/notesService.js';
 
 /**
- * Confirmation modal for permanently deleting a note (Archived page only). Permanent deletion
- * never happens without this explicit confirmation step.
+ * Confirmation modal for permanently deleting a note — reachable from note cards on any of
+ * My Notes / Pinned / Archived, and from the Document View workspace. Permanent deletion never
+ * happens without this explicit confirmation step; every Delete trigger only ever opens this
+ * modal, never calls notesService.deletePermanently() directly.
  */
 export default function DeleteNoteModal({ isOpen, onClose, onSuccess, note }) {
   const [deleting, setDeleting] = useState(false);
@@ -35,14 +37,14 @@ export default function DeleteNoteModal({ isOpen, onClose, onSuccess, note }) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
+      <div className="modal-card wide-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header" style={{ padding: '1.5rem 1.75rem' }}>
           <div className="modal-title-group">
-            <div className="modal-icon-badge" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
-              <Trash2 size={20} />
+            <div className="modal-icon-badge" style={{ backgroundColor: '#FEF2F2', color: '#DC2626', width: '48px', height: '48px' }}>
+              <Trash2 size={22} />
             </div>
             <div>
-              <h3 className="modal-title">Delete Note?</h3>
+              <h3 className="modal-title" style={{ fontSize: '1.15rem' }}>Delete Note?</h3>
               <p className="modal-subtitle">This note will be permanently deleted.</p>
             </div>
           </div>
@@ -51,19 +53,19 @@ export default function DeleteNoteModal({ isOpen, onClose, onSuccess, note }) {
           </button>
         </div>
 
-        <div className="modal-body">
+        <div className="modal-body modal-body-spacious">
           {error && (
-            <div className="modal-error-alert" style={{ marginBottom: '1rem' }}>
+            <div className="modal-error-alert" style={{ marginBottom: '1.25rem' }}>
               <AlertTriangle size={16} />
               <span>{error}</span>
             </div>
           )}
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
             "<strong style={{ color: 'var(--text-main)' }}>{note.title}</strong>" will be removed permanently. This action cannot be undone.
           </p>
         </div>
 
-        <div className="modal-footer">
+        <div className="modal-footer modal-footer-spacious">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={deleting}>
             Cancel
           </button>

@@ -342,7 +342,12 @@ function getInitialState() {
     upcomingCandidates: seedUpcomingCandidates,
     emailTemplates: seedEmailTemplates,
     candidateEmailLog: [],
-    notes: seedNotes,
+    // Shallow-copied (not aliased) — notesService.update()/archive()/etc. replace an array
+    // INDEX in place (`notes[index] = updatedNote; db.notes = notes;`); aliasing this straight
+    // to the imported seedNotes array would let that in-place write permanently corrupt the
+    // shared seed module singleton for the rest of the process, so a later resetDatabase()
+    // could never actually restore the original seed note again.
+    notes: [...seedNotes],
   };
   const migrated = migrateEmployeeTagsIfNeeded(base);
   const cleanedAtt = cleanupAttendanceIfNeeded(migrated);
@@ -384,7 +389,7 @@ export function loadDatabase() {
     if (!parsed.upcomingCandidates) parsed.upcomingCandidates = seedUpcomingCandidates;
     if (!parsed.emailTemplates) parsed.emailTemplates = seedEmailTemplates;
     if (!parsed.candidateEmailLog) parsed.candidateEmailLog = [];
-    if (!parsed.notes) parsed.notes = seedNotes;
+    if (!parsed.notes) parsed.notes = [...seedNotes];
 
     const migrated = migrateEmployeeTagsIfNeeded(parsed);
     const cleanedAtt = cleanupAttendanceIfNeeded(migrated);
