@@ -4961,6 +4961,72 @@ export async function verifyStage18() {
 
       resetDatabase();
     }
+    // ==========================================================================
+    // Notes: My Notes page Sorting Explanation helper line
+    // ==========================================================================
+    {
+      const notesPageSrc4 = fs.readFileSync(path.resolve('./src/pages/notes/NotesPage.jsx'), 'utf-8');
+      const indexCssSrcForSortingHelper = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const noteCardSrc4 = fs.readFileSync(path.resolve('./src/components/notes/NoteCard.jsx'), 'utf-8');
+      const notesDocViewSrc4 = fs.readFileSync(path.resolve('./src/components/notes/NotesDocumentView.jsx'), 'utf-8');
+      const noteEditorModalSrc5 = fs.readFileSync(path.resolve('./src/components/notes/NoteEditorModal.jsx'), 'utf-8');
+      const EXACT_SORTING_HELPER_TEXT = 'Newest/Oldest = creation date · Last Updated = latest edit · Title A–Z = alphabetical';
+
+      // 776. The exact required helper copy is present in NotesPage.jsx
+      assert(notesPageSrc4.includes(EXACT_SORTING_HELPER_TEXT), '776. The exact Sorting helper text ("Newest/Oldest = creation date · Last Updated = latest edit · Title A–Z = alphabetical") is present in NotesPage.jsx');
+
+      // 776b. "Sorting:" is rendered as its own emphasized label, not bolding the entire sentence
+      assert(/<span className="notes-sorting-helper-label">Sorting:<\/span>/.test(notesPageSrc4), '776b. Only the word "Sorting:" is wrapped for emphasis — the rest of the sentence renders as plain text, not a fully-bolded line');
+
+      // 777. The helper renders directly below the existing subtitle, inside the same shared page-header block (not a separate/duplicated header)
+      assert(/page-subtitle">\{meta\.subtitle\}<\/p>\s*\{variant === 'my' && \(\s*<p className="notes-sorting-helper">/.test(notesPageSrc4), '777. The Sorting helper <p> appears immediately after the existing <p className="page-subtitle"> in the same header markup, directly beneath it');
+
+      // 778. The helper appears above the toolbar in source order (header block closes before the toolbar div begins)
+      {
+        const helperIdx = notesPageSrc4.indexOf('notes-sorting-helper">');
+        const toolbarIdx = notesPageSrc4.indexOf('className="notes-toolbar"');
+        assert(helperIdx > -1 && toolbarIdx > -1 && helperIdx < toolbarIdx, '778. The Sorting helper is rendered above the Search/Category/Sort/View toolbar in document order');
+      }
+
+      // 779. The helper is scoped to the My Notes variant only — it is conditioned on variant === 'my', so Pinned/Archived (which share this exact same NotesPage component/header) do not render it
+      assert(/\{variant === 'my' && \([\s\S]{0,50}<p className="notes-sorting-helper">/.test(notesPageSrc4), '779. The Sorting helper is gated on variant === \'my\' — Pinned and Archived, which reuse the identical shared NotesPage header, do not show it');
+
+      // 780. No duplicate copy of the sorting-explanation text was added anywhere else in the Notes module (cards, Document View, Edit/New Note modal, sidebar)
+      {
+        const otherNotesSurfaces = [noteCardSrc4, notesDocViewSrc4, noteEditorModalSrc5].join('\n');
+        assert(!otherNotesSurfaces.includes(EXACT_SORTING_HELPER_TEXT) && !otherNotesSurfaces.includes('notes-sorting-helper'), '780. The Sorting helper text/class does not appear in NoteCard, NotesDocumentView, or NoteEditorModal — no duplicate copies outside the My Notes page header');
+      }
+
+      // 781. The helper uses its own dedicated CSS class rather than reusing/overloading .page-subtitle (which stays shared, unmodified, across many other pages)
+      assert(/\.notes-sorting-helper\s*\{[^}]*font-size:\s*0\.\d+rem;[^}]*color:\s*var\(--text-muted\);/.test(indexCssSrcForSortingHelper), '781. .notes-sorting-helper is a dedicated CSS class with its own smaller font-size and var(--text-muted) color — visually secondary to, and distinct from, .page-subtitle');
+
+      // 782. The helper is visually smaller than the subtitle (font-size strictly less than .onboarding-plans-header .page-subtitle's 0.9rem)
+      {
+        const helperFontMatch = indexCssSrcForSortingHelper.match(/\.notes-sorting-helper\s*\{[^}]*font-size:\s*(0\.\d+)rem;/);
+        assert(helperFontMatch && parseFloat(helperFontMatch[1]) < 0.9, `782. .notes-sorting-helper's font-size (${helperFontMatch ? helperFontMatch[1] : 'not found'}rem) is smaller than the subtitle's 0.9rem — visually secondary, not another subtitle`);
+      }
+
+      // 783. The helper has its own margin-top (a smaller, intentional gap below the subtitle) rather than an unstyled default paragraph margin
+      assert(/\.notes-sorting-helper\s*\{[^}]*margin:\s*0\.\d+rem 0 0 0;/.test(indexCssSrcForSortingHelper), '783. .notes-sorting-helper has an explicit small margin-top, giving an intentional (not default-browser) gap beneath the subtitle');
+
+      // 784. .onboarding-plans-header's existing margin-bottom (shared with the Plans page) is unchanged — this still provides the larger gap down to the toolbar, so no new/duplicate large-gap rule was introduced
+      assert(/\.onboarding-plans-header\s*\{\s*margin-bottom:\s*2rem;\s*\}/.test(indexCssSrcForSortingHelper), '784. .onboarding-plans-header still has its original margin-bottom: 2rem (shared with the Plans page, unmodified) — this is what now provides the larger gap between the Sorting helper and the toolbar');
+
+      // 785. NOTE_SORT_OPTIONS / sort dropdown options and their underlying sort behavior are completely untouched by this text-only change
+      {
+        const noteDomainSrcForSorting = fs.readFileSync(path.resolve('./src/domain/noteDomain.js'), 'utf-8');
+        assert(
+          notesPageSrc4.includes("{ value: NOTE_SORT_OPTIONS.UPDATED, label: 'Last Updated' }") &&
+          notesPageSrc4.includes("{ value: NOTE_SORT_OPTIONS.NEWEST, label: 'Newest' }") &&
+          notesPageSrc4.includes("{ value: NOTE_SORT_OPTIONS.OLDEST, label: 'Oldest' }") &&
+          notesPageSrc4.includes("{ value: NOTE_SORT_OPTIONS.TITLE, label: 'Title A–Z' }") &&
+          noteDomainSrcForSorting.includes('sortNotes'),
+          '785. The Sort By dropdown options and sortNotes() domain logic are unchanged — this task only added explanatory text, no sorting behavior was touched'
+        );
+      }
+
+      resetDatabase();
+    }
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);

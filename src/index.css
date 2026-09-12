@@ -3823,6 +3823,23 @@ input.form-control:focus {
   max-width: 720px;
 }
 
+/* My Notes page only — a small secondary line explaining what each Sort By option means.
+   Smaller than .page-subtitle and visually secondary (not another subtitle/heading); its own
+   margin-top creates the "smaller but clearly visible" gap under the subtitle, while the
+   larger gap down to the toolbar continues to come from .onboarding-plans-header's existing
+   margin-bottom below — no change needed there since it's shared with the Plans page. */
+.notes-sorting-helper {
+  margin: 0.4rem 0 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-width: 720px;
+}
+
+.notes-sorting-helper-label {
+  font-weight: 600;
+}
+
 /* Section-transition gap — deliberately larger than the 1.75rem gap BETWEEN scope sections
    below, so the page introduction reads as clearly separate from the scope content that
    follows it (not just another paragraph immediately above the Universal Tasks card). */
