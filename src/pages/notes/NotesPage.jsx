@@ -172,11 +172,9 @@ export default function NotesPage({ variant = 'my' }) {
         <div className="onboarding-plans-header">
           <h1 className="page-title">{meta.heading}</h1>
           <p className="page-subtitle">{meta.subtitle}</p>
-          {variant === 'my' && (
-            <p className="notes-sorting-helper">
-              <span className="notes-sorting-helper-label">Sorting:</span> Newest/Oldest = creation date · Last Updated = latest edit · Title A–Z = alphabetical
-            </p>
-          )}
+          <p className="notes-sorting-helper">
+            <span className="notes-sorting-helper-label">Sorting:</span> Newest/Oldest = creation date · Last Updated = latest edit · Title A–Z = alphabetical
+          </p>
         </div>
         <button type="button" className="btn-primary" onClick={handleOpenCreate} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
           <Plus size={16} />

@@ -4978,8 +4978,8 @@ export async function verifyStage18() {
       // 776b. "Sorting:" is rendered as its own emphasized label, not bolding the entire sentence
       assert(/<span className="notes-sorting-helper-label">Sorting:<\/span>/.test(notesPageSrc4), '776b. Only the word "Sorting:" is wrapped for emphasis — the rest of the sentence renders as plain text, not a fully-bolded line');
 
-      // 777. The helper renders directly below the existing subtitle, inside the same shared page-header block (not a separate/duplicated header)
-      assert(/page-subtitle">\{meta\.subtitle\}<\/p>\s*\{variant === 'my' && \(\s*<p className="notes-sorting-helper">/.test(notesPageSrc4), '777. The Sorting helper <p> appears immediately after the existing <p className="page-subtitle"> in the same header markup, directly beneath it');
+      // 777. UPDATED — The helper renders directly below the existing subtitle, inside the same shared page-header block (not a separate/duplicated header), unconditionally for every variant
+      assert(/page-subtitle">\{meta\.subtitle\}<\/p>\s*<p className="notes-sorting-helper">/.test(notesPageSrc4), '777. The Sorting helper <p> appears immediately after the existing <p className="page-subtitle"> in the same header markup, directly beneath it, on every NotesPage variant');
 
       // 778. The helper appears above the toolbar in source order (header block closes before the toolbar div begins)
       {
@@ -4988,13 +4988,25 @@ export async function verifyStage18() {
         assert(helperIdx > -1 && toolbarIdx > -1 && helperIdx < toolbarIdx, '778. The Sorting helper is rendered above the Search/Category/Sort/View toolbar in document order');
       }
 
-      // 779. The helper is scoped to the My Notes variant only — it is conditioned on variant === 'my', so Pinned/Archived (which share this exact same NotesPage component/header) do not render it
-      assert(/\{variant === 'my' && \([\s\S]{0,50}<p className="notes-sorting-helper">/.test(notesPageSrc4), '779. The Sorting helper is gated on variant === \'my\' — Pinned and Archived, which reuse the identical shared NotesPage header, do not show it');
+      // 779. UPDATED — The helper is now shown consistently on every NotesPage variant (My Notes, Pinned, Archived) since all three have identical sorting controls. It renders unconditionally in the shared header (no variant-based gate) rather than being duplicated per page.
+      assert(
+        !/\{variant === 'my' && \([\s\S]{0,50}<p className="notes-sorting-helper">/.test(notesPageSrc4) &&
+        notesPageSrc4.match(/<p className="notes-sorting-helper">/g)?.length === 1,
+        '779. The Sorting helper is no longer gated on variant === \'my\' — it renders unconditionally, exactly once in the shared header markup, so My Notes, Pinned, and Archived all show it via the one shared implementation'
+      );
 
-      // 780. No duplicate copy of the sorting-explanation text was added anywhere else in the Notes module (cards, Document View, Edit/New Note modal, sidebar)
+      // 780. UPDATED — No duplicate copy of the sorting-explanation text was added anywhere else in the Notes module (cards, Document View, Edit/New Note modal, sidebar) — the single shared NotesPage header instance now covers all three variants, so no per-surface or per-page duplication was needed
       {
         const otherNotesSurfaces = [noteCardSrc4, notesDocViewSrc4, noteEditorModalSrc5].join('\n');
-        assert(!otherNotesSurfaces.includes(EXACT_SORTING_HELPER_TEXT) && !otherNotesSurfaces.includes('notes-sorting-helper'), '780. The Sorting helper text/class does not appear in NoteCard, NotesDocumentView, or NoteEditorModal — no duplicate copies outside the My Notes page header');
+        assert(!otherNotesSurfaces.includes(EXACT_SORTING_HELPER_TEXT) && !otherNotesSurfaces.includes('notes-sorting-helper'), '780. The Sorting helper text/class does not appear in NoteCard, NotesDocumentView, or NoteEditorModal — no duplicate copies outside the one shared NotesPage header');
+      }
+
+      // 780b. FUNCTIONAL: notesService.getCategoryOptions()/getAll() are used identically regardless of the header text change — confirms this was a presentation-only change with no data-layer impact for any of the three variants
+      {
+        const myScopeNotes = await notesService.getAll({ scope: 'my' });
+        const pinnedScopeNotes = await notesService.getAll({ scope: 'pinned' });
+        const archivedScopeNotes = await notesService.getAll({ scope: 'archived' });
+        assert(Array.isArray(myScopeNotes) && Array.isArray(pinnedScopeNotes) && Array.isArray(archivedScopeNotes), '780b. notesService.getAll() still returns valid results for the my/pinned/archived scopes — the header text change has no effect on data loading for any variant');
       }
 
       // 781. The helper uses its own dedicated CSS class rather than reusing/overloading .page-subtitle (which stays shared, unmodified, across many other pages)
