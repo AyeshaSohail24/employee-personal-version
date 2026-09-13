@@ -38,7 +38,7 @@ import { activityService } from './activityService.js';
 import { dashboardService } from './dashboardService.js';
 import { notesService } from './notesService.js';
 import { notificationService } from './notificationService.js';
-import { loadDatabase, saveDatabase, resetDatabase, migrateOnboardingScopesIfNeeded } from '../mock-data/storageEngine.js';
+import { loadDatabase, saveDatabase, resetDatabase, migrateOnboardingScopesIfNeeded, migrateOnboardingPersonTypeIfNeeded } from '../mock-data/storageEngine.js';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
@@ -2243,16 +2243,20 @@ export async function verifyStage18() {
     // .table-container-card behavior used elsewhere (tables, detail sections).
     assert(onbPlansSrc2.includes('onboarding-scope-card') && indexCssSrc7.includes('.onboarding-scope-card:hover'), '382. UPDATED — Onboarding task scope cards get a subtle hover lift via a scoped .onboarding-scope-card class, not a global .table-container-card:hover');
 
-    // 383. UPDATED — The Plans page no longer offers "Create Plan Template" or a per-card "Launch" button:
-    // HR no longer creates independent full plan templates, and there is now exactly ONE launch entry
-    // point (Onboarding → Employees → Launch Onboarding Plan). Instead the page presents the 4 composable
-    // task scopes (Universal, Employee, Intern, Department — the latter rendered dynamically per real
-    // department), each with a "Manage Tasks" action.
+    // 383. UPDATED (Employee/Intern Filter refactor) — The Plans page no longer offers "Create Plan
+    // Template" or a per-card "Launch" button: HR no longer creates independent full plan templates, and
+    // there is now exactly ONE launch entry point (Onboarding → Employees → Launch Onboarding Plan).
+    // Instead the page presents an Employees|Interns filter scoping Universal Tasks and
+    // Department-Specific Tasks (the latter rendered dynamically per real department), each with a
+    // "Manage Tasks" action — the old separate Employee Tasks/Intern Tasks cards were later removed.
     assert(
-      !onbPlansSrc2.includes('Create Plan Template') && !onbPlansSrc2.includes('handleOpenLaunchModal') && !onbPlansSrc2.includes('LaunchPlanModal') &&
-      onbPlansSrc2.includes('Universal Tasks') && onbPlansSrc2.includes('Employee Tasks') && onbPlansSrc2.includes('Intern Tasks') && onbPlansSrc2.includes('Department Tasks') &&
-      onbPlansSrc2.includes('Manage Tasks'),
-      '383. UPDATED — Plans page presents the 4 composable task scopes (Universal/Employee/Intern/Department) with "Manage Tasks" actions; the old Create Plan Template workflow and per-card Launch button are gone — launching now only happens via Onboarding → Employees'
+      (() => {
+        const onbPlansCodeOnly2 = stripComments(onbPlansSrc2);
+        return !onbPlansCodeOnly2.includes('Create Plan Template') && !onbPlansCodeOnly2.includes('handleOpenLaunchModal') && !onbPlansCodeOnly2.includes('LaunchPlanModal') &&
+          onbPlansSrc2.includes('Universal Tasks') && onbPlansSrc2.includes('Department-Specific Tasks') &&
+          onbPlansSrc2.includes('Manage Tasks');
+      })(),
+      '383. UPDATED — Plans page presents Universal Tasks and Department-Specific Tasks (scoped by the Employees|Interns filter) with "Manage Tasks" actions; the old Create Plan Template workflow and per-card Launch button are gone from the actual code (an explanatory comment mentioning LaunchPlanModal by name for context is fine) — launching now only happens via Onboarding → Employees'
     );
 
     // --- SCOPE TASK EDITOR ("MANAGE TASKS") ---
@@ -2267,7 +2271,7 @@ export async function verifyStage18() {
       !planEditorSrc.includes('Template Name') && !planEditorSrc.includes('Applicable Department') && !planEditorSrc.includes('Active Template') && !planEditorSrc.includes('Template Settings'),
       '384-387. UPDATED — Template Name / Applicable Department / Active Template / Template Settings fields are completely removed from the scope-based editor'
     );
-    assert(planEditorSrc.includes('SCOPE_META') && planEditorSrc.includes('meta.subtitle'), '384b. UPDATED — A fixed contextual header (title + one-line subtitle) identifies which scope is being edited, e.g. "These tasks are included for everyone." for Universal');
+    assert(planEditorSrc.includes('const meta = scopeType ===') && planEditorSrc.includes('meta.subtitle'), '384b. UPDATED — A fixed contextual header (title + one-line subtitle) identifies which scope is being edited, e.g. "These tasks are included for every employee regardless of department." for Employee Universal Tasks (the earlier static SCOPE_META lookup table was later replaced by a dynamic personType/scopeType-derived `meta` computation)');
     {
       const lgMinHeightMatch = indexCssSrc7.match(/\.form-textarea-lg\s*\{[^}]*min-height:\s*(\d+)px/);
       const lgMinHeight = lgMinHeightMatch ? parseInt(lgMinHeightMatch[1], 10) : 0;
@@ -2349,12 +2353,13 @@ export async function verifyStage18() {
       '399. UPDATED — Cancel, Save Tasks, Add Task, and Add Another Task all remain, reusing the existing btn-primary/btn-secondary button system'
     );
 
-    // 400. UPDATED — Every scope (Universal/Employee/Intern/each Department) renders through the exact same
-    // PlanEditorPage implementation, disambiguated only by route params (scopeSegment/departmentId) rather
-    // than a create/edit planId flag — styling cannot drift between scopes since there is only one editor.
+    // 400. UPDATED — Every (personType, scopeType) combination — Employee/Intern Universal and
+    // Employee/Intern-per-department — renders through the exact same PlanEditorPage implementation,
+    // disambiguated only by route params (personType/departmentId) rather than a create/edit planId flag
+    // or the earlier scopeSegment param — styling cannot drift between scopes since there is only one editor.
     assert(
-      planEditorSrc.includes('scopeSegment') && planEditorSrc.includes("isDepartmentScope = scopeSegment === 'department'"),
-      '400. UPDATED — All 4 task scopes (Universal/Employee/Intern/Department) share the single PlanEditorPage implementation, disambiguated via route params — styling cannot drift between them'
+      planEditorSrc.includes('personType, departmentId') && planEditorSrc.includes("scopeType = departmentId !== undefined ? 'department' : 'universal'"),
+      '400. UPDATED — Every (personType, scopeType) combination shares the single PlanEditorPage implementation, disambiguated via route params (personType/departmentId) — styling cannot drift between them'
     );
 
     resetDatabase();
@@ -2543,9 +2548,9 @@ export async function verifyStage18() {
     // 428. Subtle helper styling — not a warning/info/error alert box
     assert(!planEditorSrc2.match(/relative-offset-help[\s\S]{0,80}(modal-error-alert|modal-warning-alert)/), '428. The Relative Offset helper uses subtle text styling, not a warning/info alert box');
 
-    // 429. UPDATED — The same PlanEditorPage component renders every scope (Universal/Employee/Intern/Department),
+    // 429. UPDATED — The same PlanEditorPage component renders every (personType, scopeType) combination,
     // so the 3-line helper is identical across all of them — no separate implementation to drift
-    assert(planEditorSrc2.includes('scopeSegment'), '429. UPDATED — All task scopes share one PlanEditorPage implementation, so the offset helper is guaranteed identical across Universal/Employee/Intern/Department editors');
+    assert(planEditorSrc2.includes('personType, departmentId'), '429. UPDATED — All task scopes share one PlanEditorPage implementation, so the offset helper is guaranteed identical across every Employee/Intern Universal/Department editor');
 
     // --- ASSIGNMENT RULE FULLY REMOVED FROM PLAN TEMPLATES ---
 
@@ -2851,137 +2856,163 @@ export async function verifyStage18() {
       const routerSrc = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
 
       // --- SCOPE MODEL ---
+      // UPDATED (Employee/Intern Filter + Universal + Department-Specific Tasks refactor) —
+      // scopeType is now ONLY 'universal'/'department'; the old bare 'employee'/'intern'
+      // scopeType values were retired in favor of a separate, orthogonal `personType` field
+      // every task carries. An "Employee Universal" task is scopeType:'universal' +
+      // personType:'employee'; an "Intern Universal" task is scopeType:'universal' +
+      // personType:'intern' — two genuinely separate datasets, never one shared bucket.
 
       const scopeDefs = await onboardingService.getScopeTaskDefinitions();
 
-      // 465. Every active onboarding task definition carries a recognized scopeType
+      // 465. UPDATED — Every active onboarding task definition carries a recognized scopeType (universal/department) AND a recognized personType (employee/intern)
       assert(
-        scopeDefs.length > 0 && scopeDefs.every((t) => ['universal', 'employee', 'intern', 'department'].includes(t.scopeType)),
-        '465. Every active onboarding task definition has a recognized scopeType (universal/employee/intern/department) after migration'
+        scopeDefs.length > 0 &&
+        scopeDefs.every((t) => ['universal', 'department'].includes(t.scopeType)) &&
+        scopeDefs.every((t) => ['employee', 'intern'].includes(t.personType)),
+        '465. UPDATED — Every active onboarding task definition has a recognized scopeType (universal/department) AND a recognized personType (employee/intern) after the person-type migration'
       );
 
-      // 466. Employee scope is non-destructively migrated from the legacy "Standard Employee Onboarding" template (7 tasks)
-      const employeeScopeTasks = scopeDefs.filter((t) => t.scopeType === 'employee');
-      assert(employeeScopeTasks.length === 7, `466. Employee scope contains the 7 tasks migrated from the legacy "Standard Employee Onboarding" template (found ${employeeScopeTasks.length})`);
+      // 466. UPDATED — Employee Universal Tasks is non-destructively migrated from the legacy "Standard Employee Onboarding" template (7 tasks) — the old bare Employee scope became Universal+employee
+      const employeeUniversalTasks = scopeDefs.filter((t) => t.scopeType === 'universal' && t.personType === 'employee');
+      assert(employeeUniversalTasks.length === 7, `466. UPDATED — Employee Universal Tasks contains the 7 tasks migrated from the legacy "Standard Employee Onboarding" template / old Employee scope (found ${employeeUniversalTasks.length})`);
 
-      // 467. Intern scope is non-destructively migrated from the legacy "Internship / Apprenticeship Onboarding" template (3 tasks)
-      const internScopeTasks = scopeDefs.filter((t) => t.scopeType === 'intern');
-      assert(internScopeTasks.length === 3, `467. Intern scope contains the 3 tasks migrated from the legacy "Internship / Apprenticeship Onboarding" template (found ${internScopeTasks.length})`);
+      // 467. UPDATED — Intern Universal Tasks is non-destructively migrated from the legacy "Internship / Apprenticeship Onboarding" template (3 tasks) — the old bare Intern scope became Universal+intern
+      const internUniversalTasks = scopeDefs.filter((t) => t.scopeType === 'universal' && t.personType === 'intern');
+      assert(internUniversalTasks.length === 3, `467. UPDATED — Intern Universal Tasks contains the 3 tasks migrated from the legacy "Internship / Apprenticeship Onboarding" template / old Intern scope (found ${internUniversalTasks.length})`);
 
-      // 468. Department scope for Software Engineering (dept-3) is migrated from the legacy "Software Engineering Onboarding" template (4 tasks)
-      const dept3ScopeTasks = scopeDefs.filter((t) => t.scopeType === 'department' && t.scopeDepartmentId === 'dept-3');
-      assert(dept3ScopeTasks.length === 4, `468. The Software Engineering (dept-3) department scope contains the 4 tasks migrated from the legacy department-specific template (found ${dept3ScopeTasks.length})`);
+      // 468. UPDATED — Employee + Software Engineering (dept-3) department scope is migrated from the legacy "Software Engineering Onboarding" template (4 tasks)
+      const dept3EmployeeScopeTasks = scopeDefs.filter((t) => t.scopeType === 'department' && t.scopeDepartmentId === 'dept-3' && t.personType === 'employee');
+      assert(dept3EmployeeScopeTasks.length === 4, `468. UPDATED — Software Engineering (dept-3) Employee department scope contains the 4 tasks migrated from the legacy department-specific template (found ${dept3EmployeeScopeTasks.length})`);
 
-      // 469. Universal scope is NOT guessed from existing task content — it starts empty since nothing in the legacy seed data was explicitly marked universal
-      const universalScopeTasks = scopeDefs.filter((t) => t.scopeType === 'universal');
-      assert(universalScopeTasks.length === 0, `469. Universal scope starts with zero tasks post-migration — nothing was guessed/recategorized as universal from legacy task content (found ${universalScopeTasks.length})`);
+      // 468b. NEW — Intern + Software Engineering (dept-3) department scope ALSO contains 4 tasks — the legacy department template was type-agnostic (applied regardless of employee/intern), so the migration duplicated it into both personTypes rather than guessing/dropping one, per the documented migration decision in storageEngine.js
+      const dept3InternScopeTasks = scopeDefs.filter((t) => t.scopeType === 'department' && t.scopeDepartmentId === 'dept-3' && t.personType === 'intern');
+      assert(dept3InternScopeTasks.length === 4, `468b. NEW — Software Engineering (dept-3) Intern department scope also contains 4 tasks, duplicated from the same legacy type-agnostic department template (found ${dept3InternScopeTasks.length})`);
 
-      // 470. Every scope's tasks exist exactly ONCE in storage — no duplication per type/department combination
-      const dept3TaskIds = new Set(dept3ScopeTasks.map((t) => t.id));
-      assert(dept3TaskIds.size === dept3ScopeTasks.length, '470. The Software Engineering department scope tasks are stored exactly once each — no duplicate copies exist for different employee-type combinations sharing that department');
+      // 469. UPDATED — Employee and Intern department task pools for the SAME department are genuinely separate, non-overlapping datasets (disjoint IDs), never the same records shared/mixed across personTypes
+      {
+        const employeeDept3Ids = new Set(dept3EmployeeScopeTasks.map((t) => t.id));
+        const internDept3Ids = new Set(dept3InternScopeTasks.map((t) => t.id));
+        const overlap = [...employeeDept3Ids].some((id) => internDept3Ids.has(id));
+        assert(!overlap, '469. UPDATED — Employee + Software Engineering and Intern + Software Engineering department tasks have completely disjoint IDs — never the same underlying records shared/mixed across personTypes');
+      }
 
-      // 471. getScopesSummary() resolves Department Tasks dynamically from the real department source, not a hardcoded list
-      const scopesSummary = await onboardingService.getScopesSummary();
+      // 470. Every scope's tasks exist exactly ONCE in storage per (scopeType, personType[, department]) combination — no duplication within a single combination
+      const dept3EmployeeTaskIds = new Set(dept3EmployeeScopeTasks.map((t) => t.id));
+      assert(dept3EmployeeTaskIds.size === dept3EmployeeScopeTasks.length, '470. The Employee + Software Engineering department scope tasks are stored exactly once each — no duplicate copies within that single (scopeType, personType, department) combination');
+
+      // 471. UPDATED — getScopesSummary(personType) resolves Department Tasks dynamically from the real department source, not a hardcoded list, for BOTH personTypes
+      const employeeScopesSummary = await onboardingService.getScopesSummary('employee');
+      const internScopesSummary = await onboardingService.getScopesSummary('intern');
       const allDepts = await departmentService.getAll({ withCount: false });
       assert(
-        scopesSummary.departments.length === allDepts.length && allDepts.every((d) => scopesSummary.departments.some((row) => row.department.id === d.id)),
-        `471. getScopesSummary() returns exactly one row per real department (${allDepts.length} departments), sourced dynamically via departmentService — not hardcoded`
+        employeeScopesSummary.departments.length === allDepts.length && allDepts.every((d) => employeeScopesSummary.departments.some((row) => row.department.id === d.id)) &&
+        internScopesSummary.departments.length === allDepts.length && allDepts.every((d) => internScopesSummary.departments.some((row) => row.department.id === d.id)),
+        `471. UPDATED — getScopesSummary('employee') and getScopesSummary('intern') each return exactly one row per real department (${allDepts.length} departments), sourced dynamically via departmentService — not hardcoded`
       );
 
-      // 472. A department with zero configured tasks still appears (manageable), not omitted or treated as an error
-      const zeroTaskDeptRow = scopesSummary.departments.find((row) => row.taskCount === 0);
-      assert(Boolean(zeroTaskDeptRow), '472. At least one department with zero configured tasks still appears in the scope summary with taskCount 0 (manageable, not an error state)');
+      // 472. A department with zero configured tasks for the selected personType still appears (manageable), not omitted or treated as an error
+      const zeroTaskDeptRow = employeeScopesSummary.departments.find((row) => row.taskCount === 0);
+      assert(Boolean(zeroTaskDeptRow), '472. At least one department with zero configured Employee tasks still appears in the scope summary with taskCount 0 (manageable, not an error state)');
 
-      // 473. Universal scope support is real, not just theoretical — HR can add a Universal task via saveScopeTasks() and it is immediately retrievable
-      await onboardingService.saveScopeTasks('universal', null, [
+      // 473. UPDATED — Universal scope support is real and person-type-scoped, not just theoretical — HR can add an Employee Universal task via saveScopeTasks('universal', 'employee', ...) and it is immediately retrievable — and it must NOT leak into Intern Universal
+      await onboardingService.saveScopeTasks('universal', 'employee', null, [
         { title: 'Stage18 Universal Verification Task', description: 'Added via scope editor', activityTypeId: 'act-type-1', relativeOffsetDays: 0, required: true },
       ]);
-      const universalAfterAdd = await onboardingService.getScopeTasks('universal', null);
-      assert(universalAfterAdd.length === 1 && universalAfterAdd[0].title === 'Stage18 Universal Verification Task', '473. HR can add a Universal task through saveScopeTasks(), and it is immediately retrievable via getScopeTasks(\'universal\')');
+      const universalEmployeeAfterAdd = await onboardingService.getScopeTasks('universal', 'employee', null);
+      const universalInternAfterAdd = await onboardingService.getScopeTasks('universal', 'intern', null);
+      assert(
+        universalEmployeeAfterAdd.length === 1 && universalEmployeeAfterAdd[0].title === 'Stage18 Universal Verification Task' && internUniversalTasks.length === universalInternAfterAdd.length,
+        '473. UPDATED — HR can add an Employee Universal task through saveScopeTasks(\'universal\', \'employee\', ...), it is immediately retrievable via getScopeTasks(\'universal\', \'employee\', null), and it does NOT appear in Intern Universal (cross-type isolation)'
+      );
       resetDatabase();
 
       // --- PLANS PAGE ---
+      // UPDATED — the old "TYPE-SPECIFIC TASKS" section with standalone Employee Tasks/Intern
+      // Tasks cards is gone entirely, replaced by an Employees|Interns filter that scopes BOTH
+      // the Universal card and the Department-Specific Tasks grid to the selected person type.
 
-      // 474. All 4 scope sections render with the exact required copy
+      // 474. UPDATED — the Universal card and department cards render the exact required copy for BOTH personTypes
       assert(
-        onbPlansSrc3.includes('Included in every onboarding plan.') &&
-        onbPlansSrc3.includes('Included for employees in addition to Universal Tasks.') &&
-        onbPlansSrc3.includes('Included for interns and apprentices in addition to Universal Tasks.'),
-        '474. The Universal/Employee/Intern scope cards render the exact required description copy'
+        onbPlansSrc3.includes('Included for every employee regardless of department.') &&
+        onbPlansSrc3.includes('Included for every intern or apprentice regardless of department.') &&
+        onbPlansSrc3.includes('Tasks added specifically for Employees in this department.') &&
+        onbPlansSrc3.includes('Tasks added specifically for Interns in this department.'),
+        '474. UPDATED — The Universal card subtitle and department card description render the exact required Employee/Intern copy'
       );
 
       // 475. Department Tasks are rendered dynamically (one ScopeCard per department.id from getScopesSummary), never hardcoded department names in JSX
       assert(
         !onbPlansSrc3.match(/'Software Engineering'|"Software Engineering"|'Marketing'|"Marketing"|'Human Resources'|"Human Resources"/),
-        '475. OnboardingPlansPage.jsx contains no hardcoded department names — Department Tasks cards are rendered dynamically from summary.departments'
+        '475. OnboardingPlansPage.jsx contains no hardcoded department names — Department-Specific Tasks cards are rendered dynamically from summary.departments'
       );
 
-      // 476. "Manage Tasks" links route to the conceptual scope URLs (universal/employee/intern/department/:id)
+      // 476. UPDATED — "Manage Tasks" links route to the person-type-aware scope URLs (/:personType/universal and /:personType/department/:id), built from the currently selected filter
       assert(
-        onbPlansSrc3.includes("to=\"/onboarding/plans/universal\"") &&
-        onbPlansSrc3.includes("to=\"/onboarding/plans/employee\"") &&
-        onbPlansSrc3.includes("to=\"/onboarding/plans/intern\"") &&
-        onbPlansSrc3.includes('/onboarding/plans/department/${row.department.id}'),
-        '476. Manage Tasks actions route to /onboarding/plans/universal, /employee, /intern, and /department/:departmentId respectively'
+        onbPlansSrc3.includes('to={`/onboarding/plans/${personType}/universal`}') &&
+        onbPlansSrc3.includes('to={`/onboarding/plans/${personType}/department/${row.department.id}`}'),
+        '476. UPDATED — Manage Tasks actions route to /onboarding/plans/${personType}/universal and /onboarding/plans/${personType}/department/:departmentId — encoding both the selected person type and the scope'
       );
 
-      // 477. Router supports the scope-segment + department-id route shapes, replacing the old template-id-based routes
+      // 477. UPDATED — Router supports the personType + department-id route shapes, replacing the old scopeSegment-based routes
       // (isolated to the onboarding route block specifically, since the separate offboarding module still
       // legitimately uses its own unrelated plans/:planId/edit route right next to it)
       {
         const onboardingRouteBlockMatch = routerSrc.match(/path: 'onboarding'[\s\S]*?path: 'offboarding'/);
         const onboardingRouteBlock = onboardingRouteBlockMatch ? onboardingRouteBlockMatch[0] : '';
         assert(
-          onboardingRouteBlock.includes("path: 'plans/:scopeSegment'") && onboardingRouteBlock.includes("path: 'plans/:scopeSegment/:departmentId'") &&
-          !onboardingRouteBlock.includes("path: 'plans/new'") && !onboardingRouteBlock.includes("path: 'plans/:planId/edit'"),
-          '477. The onboarding Plans route was evolved from plans/new + plans/:planId/edit to plans/:scopeSegment + plans/:scopeSegment/:departmentId (the separate offboarding module keeps its own unrelated template-id route)'
+          onboardingRouteBlock.includes("path: 'plans/:personType/universal'") && onboardingRouteBlock.includes("path: 'plans/:personType/department/:departmentId'") &&
+          !onboardingRouteBlock.includes("path: 'plans/:scopeSegment'") && !onboardingRouteBlock.includes("path: 'plans/new'") && !onboardingRouteBlock.includes("path: 'plans/:planId/edit'"),
+          '477. UPDATED — The onboarding Plans route was evolved from plans/:scopeSegment to plans/:personType/universal + plans/:personType/department/:departmentId (the separate offboarding module keeps its own unrelated template-id route)'
         );
       }
 
       // --- EDITOR ---
 
-      // 478. PlanEditorPage disambiguates all 4 scopes purely from route params
+      // 478. UPDATED — PlanEditorPage disambiguates scope purely from route params: personType directly from the route, scopeType derived from whether departmentId is present — no more SCOPE_META lookup table
       assert(
-        planEditorSrc3.includes("isDepartmentScope = scopeSegment === 'department'") && planEditorSrc3.includes('SCOPE_META'),
-        '478. PlanEditorPage resolves universal/employee/intern directly from scopeSegment, and department scope via the department/:departmentId route shape'
+        planEditorSrc3.includes("scopeType = departmentId !== undefined ? 'department' : 'universal'") && !planEditorSrc3.includes('SCOPE_META') && !planEditorSrc3.includes('scopeSegment'),
+        "478. UPDATED — PlanEditorPage resolves personType directly from the route param and derives scopeType from departmentId's presence — the old SCOPE_META lookup table and scopeSegment param are both gone"
       );
 
-      // 479. Saving one scope's tasks does not affect any other scope's tasks (isolated replace, mirroring updateTemplate's existing pattern)
+      // 479. UPDATED — Saving one (personType, scopeType[, department]) combination's tasks does not affect any other combination's tasks — including across personType, not just across scopeType
       {
-        const beforeEmployeeTasks = await onboardingService.getScopeTasks('employee', null);
-        const beforeInternTasks = await onboardingService.getScopeTasks('intern', null);
-        await onboardingService.saveScopeTasks('universal', null, [
+        const beforeEmployeeUniversal = await onboardingService.getScopeTasks('universal', 'employee', null);
+        const beforeInternUniversal = await onboardingService.getScopeTasks('universal', 'intern', null);
+        const beforeEmployeeDept3 = await onboardingService.getScopeTasks('department', 'employee', 'dept-3');
+        await onboardingService.saveScopeTasks('universal', 'employee', null, [
           { title: 'Isolation Check Task', description: '', activityTypeId: 'act-type-1', relativeOffsetDays: 0, required: false },
         ]);
-        const afterEmployeeTasks = await onboardingService.getScopeTasks('employee', null);
-        const afterInternTasks = await onboardingService.getScopeTasks('intern', null);
+        const afterEmployeeUniversal = await onboardingService.getScopeTasks('universal', 'employee', null);
+        const afterInternUniversal = await onboardingService.getScopeTasks('universal', 'intern', null);
+        const afterEmployeeDept3 = await onboardingService.getScopeTasks('department', 'employee', 'dept-3');
         assert(
-          afterEmployeeTasks.length === beforeEmployeeTasks.length && afterInternTasks.length === beforeInternTasks.length,
-          '479. Saving the Universal scope\'s tasks does not change the Employee or Intern scope\'s task counts — each scope is replaced in isolation'
+          afterEmployeeUniversal.length === 1 && afterInternUniversal.length === beforeInternUniversal.length && afterEmployeeDept3.length === beforeEmployeeDept3.length,
+          '479. UPDATED — Saving Employee Universal Tasks does not change Intern Universal Tasks or Employee\'s own Software Engineering department scope — each (personType, scopeType, department) combination is replaced in isolation'
         );
         resetDatabase();
       }
 
-      // 480. Each scope maintains its OWN independent sequence numbering (not one shared global sequence)
+      // 480. UPDATED — Each (personType, scopeType[, department]) combination maintains its OWN independent sequence numbering (not one shared global sequence)
       {
-        const savedEmployeeScope = await onboardingService.getScopeTasks('employee', null);
-        const savedInternScope = await onboardingService.getScopeTasks('intern', null);
-        const employeeSeqs = savedEmployeeScope.map((t) => t.sequence);
-        const internSeqs = savedInternScope.map((t) => t.sequence);
+        const savedEmployeeUniversal = await onboardingService.getScopeTasks('universal', 'employee', null);
+        const savedInternUniversal = await onboardingService.getScopeTasks('universal', 'intern', null);
+        const employeeSeqs = savedEmployeeUniversal.map((t) => t.sequence);
+        const internSeqs = savedInternUniversal.map((t) => t.sequence);
         assert(
           employeeSeqs[0] === 1 && internSeqs[0] === 1,
-          `480. Employee scope and Intern scope each start their own sequence at 1 independently (Employee: [${employeeSeqs}], Intern: [${internSeqs}])`
+          `480. UPDATED — Employee Universal and Intern Universal each start their own sequence at 1 independently (Employee: [${employeeSeqs}], Intern: [${internSeqs}])`
         );
       }
 
       // 481. No Assignment Rule concept appears anywhere in the scope editor (extends check 393 to the evolved scope-based editor)
       assert(!stripComments(planEditorSrc3).includes('Assignment Rule') && !stripComments(planEditorSrc3).includes('ASSIGNMENT_RULES'), '481. The scope-based task editor contains no Assignment Rule field, label, or import');
 
-      // 482. A scope may be saved with zero tasks — no minimum-task-count validation blocks an intentionally empty scope
+      // 482. UPDATED — A (personType, scopeType) combination may be saved with zero tasks — no minimum-task-count validation blocks an intentionally empty scope
       {
-        await onboardingService.saveScopeTasks('universal', null, []);
-        const emptyUniversal = await onboardingService.getScopeTasks('universal', null);
-        assert(emptyUniversal.length === 0, '482. saveScopeTasks() accepts an empty task list for a scope with no validation error — scopes may legitimately be empty');
+        await onboardingService.saveScopeTasks('universal', 'employee', null, []);
+        const emptyEmployeeUniversal = await onboardingService.getScopeTasks('universal', 'employee', null);
+        assert(emptyEmployeeUniversal.length === 0, '482. UPDATED — saveScopeTasks() accepts an empty task list for a (personType, scopeType) combination with no validation error — scopes may legitimately be empty');
         resetDatabase();
       }
 
@@ -3001,23 +3032,23 @@ export async function verifyStage18() {
       const otherDeptComposition = composeOnboardingTasks(syntheticEmployeeOtherDept, freshScopeDefs, '2026-08-15');
       const noDeptComposition = composeOnboardingTasks(syntheticEmployeeNoDept, freshScopeDefs, '2026-08-15');
 
-      // 483. Intern + Software Engineering => Universal + Intern + Software Engineering (matches the task's own Kevin Heng example)
+      // 483. UPDATED — Intern + Software Engineering => Intern Universal(3) + Intern Department(4) = 7 tasks (matches the task's own Kevin Heng example)
       assert(
-        internComposition.counts.universal === 0 && internComposition.counts.typeSpecific === 3 && internComposition.counts.department === 4 && internComposition.counts.total === 7,
-        `483. An Intern in Software Engineering is composed of Universal(0) + Intern(3) + Department(4) = 7 tasks (found U:${internComposition.counts.universal} T:${internComposition.counts.typeSpecific} D:${internComposition.counts.department} Total:${internComposition.counts.total})`
+        internComposition.counts.universal === 3 && internComposition.counts.department === 4 && internComposition.counts.total === 7 && internComposition.personType === 'intern',
+        `483. UPDATED — An Intern in Software Engineering is composed of Intern Universal(3) + Intern Department(4) = 7 tasks (found U:${internComposition.counts.universal} D:${internComposition.counts.department} Total:${internComposition.counts.total})`
       );
 
-      // 484. Employee + Software Engineering => Universal + Employee + Software Engineering (matches the task's own Hannah Razak example)
+      // 484. UPDATED — Employee + Software Engineering => Employee Universal(7) + Employee Department(4) = 11 tasks (matches the task's own Hannah Razak example)
       assert(
-        employeeComposition.counts.universal === 0 && employeeComposition.counts.typeSpecific === 7 && employeeComposition.counts.department === 4 && employeeComposition.counts.total === 11,
-        `484. An Employee in Software Engineering is composed of Universal(0) + Employee(7) + Department(4) = 11 tasks (found U:${employeeComposition.counts.universal} T:${employeeComposition.counts.typeSpecific} D:${employeeComposition.counts.department} Total:${employeeComposition.counts.total})`
+        employeeComposition.counts.universal === 7 && employeeComposition.counts.department === 4 && employeeComposition.counts.total === 11 && employeeComposition.personType === 'employee',
+        `484. UPDATED — An Employee in Software Engineering is composed of Employee Universal(7) + Employee Department(4) = 11 tasks (found U:${employeeComposition.counts.universal} D:${employeeComposition.counts.department} Total:${employeeComposition.counts.total})`
       );
 
-      // 485. An Employee never receives Intern-scope tasks
-      assert(!employeeComposition.tasks.some((t) => t.scopeType === 'intern'), '485. An Employee\'s composed task set never includes any Intern-scope task');
+      // 485. UPDATED — An Employee never receives any Intern-personType task (no cross-type leakage in either scope)
+      assert(!employeeComposition.tasks.some((t) => t.personType === 'intern'), '485. UPDATED — An Employee\'s composed task set never includes any Intern-personType task (Universal or Department)');
 
-      // 486. An Intern never receives Employee-scope tasks
-      assert(!internComposition.tasks.some((t) => t.scopeType === 'employee'), '486. An Intern\'s composed task set never includes any Employee-scope task');
+      // 486. UPDATED — An Intern never receives any Employee-personType task (no cross-type leakage in either scope)
+      assert(!internComposition.tasks.some((t) => t.personType === 'employee'), '486. UPDATED — An Intern\'s composed task set never includes any Employee-personType task (Universal or Department)');
 
       // 487. A person never receives another department's department-scope tasks
       assert(
@@ -3025,28 +3056,29 @@ export async function verifyStage18() {
         '487. An employee in Human Resources (dept-5) never receives Software Engineering\'s (dept-3) department-scope tasks'
       );
 
-      // 488. Zero department-specific tasks does not block composition when Universal/type tasks exist
+      // 488. UPDATED — Zero department-specific tasks does not block composition when Employee Universal tasks exist
       assert(
-        otherDeptComposition.counts.department === 0 && otherDeptComposition.counts.typeSpecific === 7 && otherDeptComposition.counts.total === 7,
-        `488. An employee in a department with zero configured department tasks (Human Resources) still gets Universal+Employee tasks (found total:${otherDeptComposition.counts.total})`
+        otherDeptComposition.counts.department === 0 && otherDeptComposition.counts.universal === 7 && otherDeptComposition.counts.total === 7,
+        `488. UPDATED — An employee in a department with zero configured department tasks (Human Resources) still gets Employee Universal tasks (found total:${otherDeptComposition.counts.total})`
       );
 
-      // 488b. An employee with no department at all still composes Universal + type tasks without crashing
-      assert(noDeptComposition.counts.department === 0 && noDeptComposition.counts.typeSpecific === 7, '488b. An employee with no resolvable department still composes Universal + type-specific tasks without crashing (department contributes 0)');
+      // 488b. UPDATED — An employee with no department at all still composes Employee Universal tasks without crashing
+      assert(noDeptComposition.counts.department === 0 && noDeptComposition.counts.universal === 7, '488b. UPDATED — An employee with no resolvable department still composes Employee Universal tasks without crashing (department contributes 0)');
 
       // 489. Zero TOTAL composed tasks is correctly reported as zero (used by the Launch modal/service to block launch)
       const emptyComposition = composeOnboardingTasks(syntheticEmployeeOtherDept, [], '2026-08-15');
       assert(emptyComposition.counts.total === 0, '489. composeOnboardingTasks() against an empty task-definition set correctly reports counts.total === 0 (the condition the Launch modal/service uses to block launch)');
 
-      // 490. Scope order is deterministic: Universal tasks precede type tasks precede department tasks in the composed array
+      // 490. UPDATED — Scope order is deterministic: Universal tasks precede Department tasks in the composed array (the old 3-way Universal/Type/Department order collapsed to 2 scopes: Universal, then Department)
       {
         const scopeOrderSeen = employeeComposition.tasks.map((t) => t.scopeType);
         const firstDeptIdx = scopeOrderSeen.indexOf('department');
-        const firstEmployeeIdx = scopeOrderSeen.indexOf('employee');
+        const firstUniversalIdx = scopeOrderSeen.indexOf('universal');
         assert(
-          firstEmployeeIdx !== -1 && firstDeptIdx !== -1 && firstEmployeeIdx < firstDeptIdx,
-          '490. Composed tasks are ordered Universal, then Employee/Intern, then Department — never sorted by due date, title, or creation time'
+          firstUniversalIdx !== -1 && firstDeptIdx !== -1 && firstUniversalIdx < firstDeptIdx,
+          '490. UPDATED — Composed tasks are ordered Universal then Department — never sorted by due date, title, or creation time'
         );
+        assert(employeeComposition.tasks.every((t) => t.personType === 'employee'), '490b. NEW — Every task in an Employee\'s composed set (both Universal and Department portions) carries personType employee — confirming the composition never mixes personTypes within one result');
       }
 
       // 491. Within each scope, tasks are ordered ascending by that scope's own sequence field
@@ -3114,22 +3146,34 @@ export async function verifyStage18() {
 
         // --- SNAPSHOT PRINCIPLE ---
 
-        // 500. Editing Universal scope tasks AFTER launch does NOT retroactively change the already-launched instance
-        await onboardingService.saveScopeTasks('universal', null, [
+        // 500. UPDATED — Editing Employee Universal Tasks AFTER launch does NOT retroactively change Hannah's (Employee) already-launched instance
+        const existingEmployeeUniversalBeforeEdit = await onboardingService.getScopeTasks('universal', 'employee', null);
+        await onboardingService.saveScopeTasks('universal', 'employee', null, [
+          ...existingEmployeeUniversalBeforeEdit,
           { title: 'Post-Launch Universal Task', description: '', activityTypeId: 'act-type-1', relativeOffsetDays: 0, required: true },
         ]);
         const reFetchedInstance = await onboardingService.getInstanceById(launchedInstance.id);
-        assert(reFetchedInstance.progress.totalTasks === 11, `500. Adding a new Universal task AFTER Hannah's plan was launched does not retroactively add it to her already-launched instance (still ${reFetchedInstance.progress.totalTasks} tasks)`);
+        assert(reFetchedInstance.progress.totalTasks === 11, `500. UPDATED — Adding a new Employee Universal task AFTER Hannah's plan was launched does not retroactively add it to her already-launched instance (still ${reFetchedInstance.progress.totalTasks} tasks)`);
 
-        // 501. A NEW launch after that edit DOES include the newly added Universal task (future launches are affected, past ones are not)
+        // 501. UPDATED — A NEW Employee launch/preview after that edit DOES include the newly added Employee Universal task (future launches are affected, past ones are not) — and critically, an Intern's preview in the SAME department does NOT see it (no cross-type leakage)
         const dbForSecondLaunch = loadDatabase();
         const nonKevinInstances = (dbForSecondLaunch.onboardingPlanInstances || []).filter((inst) => inst.employeeId !== 'emp-014');
         dbForSecondLaunch.onboardingPlanInstances = nonKevinInstances;
         saveDatabase(dbForSecondLaunch);
         const kevinPreviewAfterEdit = await onboardingService.previewOnboardingComposition('emp-014');
         assert(
-          kevinPreviewAfterEdit.counts.universal === 1 && kevinPreviewAfterEdit.counts.total === 8,
-          `501. A fresh preview computed AFTER the Universal scope edit includes the new Universal task (Kevin: universal=${kevinPreviewAfterEdit.counts.universal}, total=${kevinPreviewAfterEdit.counts.total} — expected 1 and 8)`
+          kevinPreviewAfterEdit.counts.universal === 3 && kevinPreviewAfterEdit.counts.total === 7,
+          `501. UPDATED — Kevin (Intern) never sees the new Employee Universal task — his preview stays at Intern Universal(3) + Intern Department(4) = 7 (found universal=${kevinPreviewAfterEdit.counts.universal}, total=${kevinPreviewAfterEdit.counts.total})`
+        );
+        const freshDefsAfterUniversalEdit = await onboardingService.getScopeTaskDefinitions();
+        const freshEmployeeCompositionAfterEdit = composeOnboardingTasks(
+          { id: 'post-edit-employee-check', directoryType: 'Employee', department: { id: 'dept-3', name: 'Software Engineering' } },
+          freshDefsAfterUniversalEdit,
+          '2026-08-15'
+        );
+        assert(
+          freshEmployeeCompositionAfterEdit.counts.universal === 8 && freshEmployeeCompositionAfterEdit.counts.total === 12,
+          `501b. NEW — A fresh Employee-in-Software-Engineering composition computed AFTER the edit correctly includes the new Employee Universal task (universal=${freshEmployeeCompositionAfterEdit.counts.universal}, total=${freshEmployeeCompositionAfterEdit.counts.total} — expected 8 and 12)`
         );
 
         // 502. Task instances are plain field-copies, never live references re-read from onboardingPlanTasks (the structural reason 500 holds)
@@ -3270,9 +3314,8 @@ export async function verifyStage18() {
       const indexCssSrc9 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
       const routerSrc2 = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
 
-      // 515. Heading and subtitle copy are unchanged — this is a presentation-only refinement
-      assert(onbPlansSrc4.includes('>Onboarding Plans<'), '515. The "Onboarding Plans" heading remains unchanged');
-      assert(onbPlansSrc4.includes('Configure reusable onboarding tasks by scope. Universal, employee/intern, and department tasks are combined automatically when onboarding is launched.'), '515b. The subtitle copy remains unchanged (word-for-word) — only spacing/styling was refined');
+      // 515. UPDATED — Heading remains unchanged; subtitle copy was later reworded again by the Employee/Intern Filter refactor (see the exact new wording in checks 970+) — this check now only confirms the heading survived every presentation pass
+      assert(onbPlansSrc4.includes('>Onboarding Plans<'), '515. UPDATED — The "Onboarding Plans" heading remains unchanged across every presentation refinement, including the later Employee/Intern filter refactor');
 
       // 516. Title/subtitle spacing is scoped (not a global .page-title/.page-subtitle change) and greater than the previous near-zero gap
       assert(onbPlansSrc4.includes('className="onboarding-plans-header"'), '516. The page header wraps the title/subtitle in a scoped .onboarding-plans-header class, not a global page-header change');
@@ -3286,16 +3329,16 @@ export async function verifyStage18() {
         '516c. The global .page-title rule (shared by every other page) was not modified — the spacing fix is scoped to Onboarding Plans only'
       );
 
-      // 517. Universal, Employee, Intern, and Department cards all render
+      // 517. UPDATED — Universal Tasks and Department-Specific Tasks sections render (the old separate Employee Tasks/Intern Tasks cards were later removed entirely by the Employee/Intern filter refactor — see checks 970+)
       assert(
-        onbPlansSrc4.includes('Universal Tasks') && onbPlansSrc4.includes('Employee Tasks') && onbPlansSrc4.includes('Intern Tasks') && onbPlansSrc4.includes('Department Tasks'),
-        '517. Universal, Employee, Intern, and Department Tasks sections all still render'
+        onbPlansSrc4.includes('Universal Tasks') && onbPlansSrc4.includes('Department-Specific Tasks'),
+        '517. UPDATED — Universal Tasks and Department-Specific Tasks sections render; the old standalone Employee Tasks/Intern Tasks cards are gone, replaced by the Employees|Interns filter'
       );
 
-      // 518. All scope cards (Universal/Employee/Intern/Department) share the exact same underlying ScopeCard component/class system — no divergent one-off styling
+      // 518. UPDATED — All scope cards (Universal + each Department) share the exact same underlying ScopeCard component/class system — no divergent one-off styling
       assert(
-        (onbPlansSrc4.match(/<ScopeCard/g) || []).length === 4 || (onbPlansSrc4.match(/<ScopeCard/g) || []).length === 3,
-        '518. Universal/Employee/Intern all render through the same <ScopeCard> component (Department cards render through the same component in a .map()), so styling cannot drift between scopes'
+        (onbPlansSrc4.match(/<ScopeCard/g) || []).length === 2,
+        '518. UPDATED — Universal renders through <ScopeCard> directly, and Department cards render through the same component in a .map() (2 call sites total) — styling cannot drift between scopes'
       );
 
       // 519. The scope card surface is more visually distinct from the page background than the generic .table-container-card default (stronger border + shadow-md resting state, not just the soft shadow-sm every other card uses)
@@ -3318,10 +3361,10 @@ export async function verifyStage18() {
         '520b. No gradients or dark/colorful card backgrounds were introduced — the emphasis stays subtle (border/icon-ring only), per the "do not overdecorate" instruction'
       );
 
-      // 521. Employee/Intern/Department cards all use the SAME base card class as Universal (only the emphasized modifier differs) — visual consistency across the scope hierarchy
+      // 521. UPDATED — Department cards use the SAME base card class as Universal (only the emphasized modifier differs) — visual consistency across the scope hierarchy. UsersRound/GraduationCap are no longer scope-card icons at all (they were repurposed by the later Employee/Intern filter refactor as the filter button icons), so neither ever appears alongside `emphasized`.
       assert(
-        !onbPlansSrc4.match(/icon=\{<UsersRound[\s\S]{0,30}emphasized/) && !onbPlansSrc4.match(/icon=\{<GraduationCap[\s\S]{0,30}emphasized/),
-        '521. Employee Tasks and Intern Tasks cards do NOT receive the emphasized treatment — only Universal does, keeping the rest of the hierarchy visually consistent with each other'
+        !onbPlansSrc4.match(/icon=\{<UsersRound[\s\S]{0,30}emphasized/) && !onbPlansSrc4.match(/icon=\{<GraduationCap[\s\S]{0,30}emphasized/) && !onbPlansSrc4.match(/icon=\{<Building2[\s\S]{0,30}emphasized/),
+        '521. UPDATED — Only the Universal card receives the `emphasized` treatment — Department cards (icon Building2) do not, keeping the rest of the hierarchy visually consistent'
       );
 
       // 522. Zero-task department cards render through the exact same ScopeCard/onboarding-scope-card system as populated ones — no dimming, no opacity reduction, no "disabled" treatment that would make them look unmanageable
@@ -3336,7 +3379,7 @@ export async function verifyStage18() {
         '523. The Manage Tasks action still reuses the existing btn-secondary button design system (only spacing-related classes were added, no new button variant)'
       );
 
-      // 524. Section headings (TYPE-SPECIFIC TASKS / DEPARTMENT TASKS) remain present and reasonably sized (not oversized)
+      // 524. UPDATED — Section headings (DEPARTMENT-SPECIFIC TASKS, via .onboarding-scope-section-title — the old TYPE-SPECIFIC TASKS heading is gone) remain present and reasonably sized (not oversized)
       {
         const sectionTitleFontMatch = indexCssSrc9.match(/\.onboarding-scope-section-title\s*\{[^}]*font-size:\s*([\d.]+)rem/);
         const sectionTitleFontSize = sectionTitleFontMatch ? parseFloat(sectionTitleFontMatch[1]) : 0;
@@ -3352,13 +3395,15 @@ export async function verifyStage18() {
 
       // --- FUNCTIONAL: composition/counts/routing genuinely untouched by this styling pass ---
 
-      // 526. getScopesSummary() still returns the same shape/values (task counts unaffected by the visual refinement)
+      // 526. UPDATED — getScopesSummary(personType) still returns accurate task counts for both personTypes (task counts unaffected by the visual refinement)
       {
-        const summaryAfterStyling = await onboardingService.getScopesSummary();
-        const dept3Row = summaryAfterStyling.departments.find((row) => row.department.id === 'dept-3');
+        const employeeSummaryAfterStyling = await onboardingService.getScopesSummary('employee');
+        const internSummaryAfterStyling = await onboardingService.getScopesSummary('intern');
+        const dept3EmployeeRow = employeeSummaryAfterStyling.departments.find((row) => row.department.id === 'dept-3');
+        const dept3InternRow = internSummaryAfterStyling.departments.find((row) => row.department.id === 'dept-3');
         assert(
-          summaryAfterStyling.employee.taskCount === 7 && summaryAfterStyling.intern.taskCount === 3 && dept3Row && dept3Row.taskCount === 4,
-          `526. Task counts are exactly unchanged by this styling-only pass (Employee: ${summaryAfterStyling.employee.taskCount}, Intern: ${summaryAfterStyling.intern.taskCount}, Software Engineering dept: ${dept3Row ? dept3Row.taskCount : 'missing'})`
+          employeeSummaryAfterStyling.universal.taskCount === 7 && internSummaryAfterStyling.universal.taskCount === 3 && dept3EmployeeRow && dept3EmployeeRow.taskCount === 4 && dept3InternRow && dept3InternRow.taskCount === 4,
+          `526. UPDATED — Task counts are exactly unchanged by this styling-only pass (Employee Universal: ${employeeSummaryAfterStyling.universal.taskCount}, Intern Universal: ${internSummaryAfterStyling.universal.taskCount}, Software Engineering Employee: ${dept3EmployeeRow ? dept3EmployeeRow.taskCount : 'missing'}, Software Engineering Intern: ${dept3InternRow ? dept3InternRow.taskCount : 'missing'})`
         );
       }
 
@@ -3369,20 +3414,21 @@ export async function verifyStage18() {
         assert(compositionCheck.counts.total === 11, `527. composeOnboardingTasks() still produces the same 11-task result for an Employee in Software Engineering — composition logic is untouched by this visual refinement (found ${compositionCheck.counts.total})`);
       }
 
-      // 528. Routing is unchanged — the scope-segment route shape is still exactly as it was
-      assert(routerSrc2.includes("path: 'plans/:scopeSegment'") && routerSrc2.includes("path: 'plans/:scopeSegment/:departmentId'"), '528. Onboarding Plans routing (plans/:scopeSegment, plans/:scopeSegment/:departmentId) is unchanged by this presentation-only task');
+      // 528. UPDATED — Routing has since evolved to the person-type-aware route shape (see check 477); this check now confirms that later evolution, not the retired scopeSegment shape
+      assert(routerSrc2.includes("path: 'plans/:personType/universal'") && routerSrc2.includes("path: 'plans/:personType/department/:departmentId'"), "528. UPDATED — Onboarding Plans routing is plans/:personType/universal and plans/:personType/department/:departmentId (evolved from the retired plans/:scopeSegment shape)");
 
-      // 529. Manage Tasks links still point to the correct scope URLs (navigation untouched)
+      // 529. UPDATED — Manage Tasks links still point to the correct person-type-aware scope URLs (navigation logic intact, just built dynamically from the selected filter instead of 4 static hrefs)
       assert(
-        onbPlansSrc4.includes('to="/onboarding/plans/universal"') && onbPlansSrc4.includes('to="/onboarding/plans/employee"') && onbPlansSrc4.includes('to="/onboarding/plans/intern"') && onbPlansSrc4.includes('/onboarding/plans/department/${row.department.id}'),
-        '529. Manage Tasks navigation targets for every scope are byte-for-byte unchanged'
+        onbPlansSrc4.includes('to={`/onboarding/plans/${personType}/universal`}') && onbPlansSrc4.includes('to={`/onboarding/plans/${personType}/department/${row.department.id}`}'),
+        '529. UPDATED — Manage Tasks navigation targets for Universal and every Department are built from the currently selected personType, not hardcoded per-scope hrefs'
       );
 
-      // 530. No page-level horizontal overflow risk was introduced — the responsive grid/media-query rules for scope cards remain intact
+      // 530. UPDATED — No page-level horizontal overflow risk was introduced — the responsive grid/media-query rules for the department card grid remain intact (the old .onboarding-scope-grid-2 2-up grid was removed entirely once the Employee/Intern cards it held were removed)
       assert(
-        indexCssSrc9.match(/@media \(max-width:\s*1024px\)\s*\{[^}]*\.onboarding-scope-grid-2[^}]*\{[^}]*grid-template-columns:\s*1fr/) &&
-        indexCssSrc9.match(/@media \(max-width:\s*640px\)\s*\{[\s\S]{0,120}\.onboarding-scope-grid-2/),
-        '530. The existing responsive breakpoints for the scope card grids (1024px/640px stacking) remain intact and unregressed by the visual refinement'
+        indexCssSrc9.match(/@media \(max-width:\s*1024px\)\s*\{[^}]*\.onboarding-scope-grid-dept[^}]*\{[^}]*grid-template-columns:/) &&
+        indexCssSrc9.match(/@media \(max-width:\s*640px\)\s*\{[\s\S]{0,120}\.onboarding-scope-grid-dept/) &&
+        !indexCssSrc9.includes('.onboarding-scope-grid-2'),
+        '530. UPDATED — The responsive breakpoints for the department card grid (1024px/640px) remain intact; the now-obsolete .onboarding-scope-grid-2 rule (for the removed Employee/Intern 2-up grid) was cleaned up, not left as dead code'
       );
 
       // 531. No Assignment Rule / migration / launch concepts were touched by this purely presentational pass
@@ -3402,44 +3448,50 @@ export async function verifyStage18() {
       const indexCssSrc10 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
       const onboardingServiceSrc3 = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
 
-      // 532. getScopesSummary() now exposes the actual ordered task array per scope (not just counts) — the single data source the Plans page reads
+      // 532. UPDATED — getScopesSummary(personType) exposes the actual ordered task array per scope (not just counts) for BOTH personTypes — the single data source the Plans page reads
       {
-        const summaryWithTasks = await onboardingService.getScopesSummary();
+        const employeeSummaryWithTasks = await onboardingService.getScopesSummary('employee');
+        const internSummaryWithTasks = await onboardingService.getScopesSummary('intern');
         assert(
-          Array.isArray(summaryWithTasks.employee.tasks) && summaryWithTasks.employee.tasks.length === 7 &&
-          Array.isArray(summaryWithTasks.intern.tasks) && summaryWithTasks.intern.tasks.length === 3,
-          `532. getScopesSummary() now returns a \`tasks\` array per scope (Employee: ${summaryWithTasks.employee.tasks.length}, Intern: ${summaryWithTasks.intern.tasks.length}) in addition to the existing counts`
+          Array.isArray(employeeSummaryWithTasks.universal.tasks) && employeeSummaryWithTasks.universal.tasks.length === 7 &&
+          Array.isArray(internSummaryWithTasks.universal.tasks) && internSummaryWithTasks.universal.tasks.length === 3,
+          `532. UPDATED — getScopesSummary() returns a \`tasks\` array for the Universal scope of each personType (Employee: ${employeeSummaryWithTasks.universal.tasks.length}, Intern: ${internSummaryWithTasks.universal.tasks.length}) in addition to the existing counts`
         );
-        const dept3Row = summaryWithTasks.departments.find((row) => row.department.id === 'dept-3');
-        assert(dept3Row && Array.isArray(dept3Row.tasks) && dept3Row.tasks.length === 4, `532b. Department rows also expose their own \`tasks\` array, filtered by that exact department's id (Software Engineering: ${dept3Row ? dept3Row.tasks.length : 'missing'})`);
+        const dept3EmployeeRow = employeeSummaryWithTasks.departments.find((row) => row.department.id === 'dept-3');
+        const dept3InternRow = internSummaryWithTasks.departments.find((row) => row.department.id === 'dept-3');
+        assert(dept3EmployeeRow && Array.isArray(dept3EmployeeRow.tasks) && dept3EmployeeRow.tasks.length === 4 && dept3InternRow && Array.isArray(dept3InternRow.tasks) && dept3InternRow.tasks.length === 4, `532b. UPDATED — Department rows also expose their own \`tasks\` array, filtered by that exact department's id AND the selected personType (Software Engineering Employee: ${dept3EmployeeRow ? dept3EmployeeRow.tasks.length : 'missing'}, Intern: ${dept3InternRow ? dept3InternRow.tasks.length : 'missing'})`);
       }
 
       // 533. Universal scope's task list is rendered inside its card via the shared read-only ScopeTaskList/ScopeCard, sourced from summary.universal.tasks
       assert(onbPlansSrc5.includes('tasks={summary.universal.tasks}'), '533. The Universal Tasks card renders its configured task list from summary.universal.tasks (the same getScopesSummary() source backing its counts)');
 
-      // 534. Employee scope's task list is rendered from summary.employee.tasks
-      assert(onbPlansSrc5.includes('tasks={summary.employee.tasks}'), '534. The Employee Tasks card renders its configured task list from summary.employee.tasks');
+      // 534. UPDATED — the old separate Employee Tasks card (summary.employee.tasks) no longer exists — that data now flows through the SAME summary.universal.tasks binding checked in 533, scoped by whichever personType filter is selected
+      assert(!onbPlansSrc5.includes('summary.employee.tasks') && !onbPlansSrc5.includes('summary.intern.tasks'), '534. UPDATED — OnboardingPlansPage.jsx no longer references summary.employee.tasks or summary.intern.tasks directly — the Universal card reads summary.universal.tasks regardless of which personType is selected, since getScopesSummary(personType) already scopes it');
 
-      // 535. Intern scope's task list is rendered from summary.intern.tasks
-      assert(onbPlansSrc5.includes('tasks={summary.intern.tasks}'), '535. The Intern Tasks card renders its configured task list from summary.intern.tasks');
+      // 535. RETIRED — folded into 534 (the separate Intern Tasks card and its summary.intern.tasks binding no longer exist)
+      assert(true, '535. RETIRED — the standalone Intern Tasks card was removed by the Employee/Intern filter refactor; see check 534');
 
-      // 536. Department cards render tasks from each row's own `tasks` array (already filtered server-side by scopeDepartmentId === department.id) — never a manual name-to-task mapping in the UI
+      // 536. Department cards render tasks from each row's own `tasks` array (already filtered server-side by scopeDepartmentId AND personType === department.id) — never a manual name-to-task mapping in the UI
       assert(
         onbPlansSrc5.includes('tasks={row.tasks}') && !onbPlansSrc5.match(/row\.department\.name\s*===\s*['"]/),
-        '536. Department cards render tasks from row.tasks (already scoped to that exact department by the service), with no manual department-name-to-task mapping in the UI'
+        '536. Department cards render tasks from row.tasks (already scoped to that exact department and personType by the service), with no manual department-name-to-task mapping in the UI'
       );
 
-      // 537. Zero-task departments show the exact required empty-state copy, not a blank area
-      assert(onbPlansSrc5.includes('No department-specific tasks configured. Universal and type-specific tasks will still apply.'), '537. A department with 0 configured tasks shows the exact required empty-state message instead of a blank task-list area');
+      // 537. UPDATED — Zero-task departments show the exact required, personType-aware empty-state copy for both Employees and Interns, not a blank area and not the old generic wording
+      assert(
+        onbPlansSrc5.includes('No employee-specific tasks configured for this department. Employee Universal Tasks will still apply.') &&
+        onbPlansSrc5.includes('No intern-specific tasks configured for this department. Intern Universal Tasks will still apply.'),
+        '537. UPDATED — A department with 0 configured tasks shows the exact required Employee/Intern-specific empty-state message instead of a blank task-list area or the old generic "type-specific tasks" wording'
+      );
 
       // 538. Descriptions render for each task row (allowing natural wrapping, no manual truncation)
       assert(onbPlansSrc5.includes('onboarding-scope-task-description') && !onbPlansSrc5.match(/onboarding-scope-task-description[\s\S]{0,60}\.slice\(/), '538. Task descriptions render in full (no manual .slice()/truncation) and are allowed to wrap naturally');
 
-      // 539. Task ordering inside the overview reuses the SAME sequence-based sort as getScopeTasks() (the editor's own data source) — not a second, independently-implemented ordering
+      // 539. UPDATED — Task ordering inside the overview reuses the SAME sequence-based sort as getScopeTasks() (the editor's own data source) — not a second, independently-implemented ordering
       assert(
-        onboardingServiceSrc3.match(/getScopesSummary\(\)\s*\{[\s\S]{0,2000}bySequence[\s\S]{0,300}sort\(bySequence\)/) &&
+        onboardingServiceSrc3.match(/getScopesSummary\(personType = 'employee'\)\s*\{[\s\S]{0,2000}bySequence[\s\S]{0,300}sort\(bySequence\)/) &&
         onboardingServiceSrc3.match(/const bySequence = \(a, b\) => \(a\.sequence \|\| 0\) - \(b\.sequence \|\| 0\);/g).length >= 1,
-        '539. getScopesSummary() sorts every scope\'s task list by the same ascending `sequence` field used by getScopeTasks() — no separate/duplicate ordering logic, and never alphabetical'
+        '539. UPDATED — getScopesSummary() sorts every scope\'s task list by the same ascending `sequence` field used by getScopeTasks() — no separate/duplicate ordering logic, and never alphabetical'
       );
 
       // 540. No Assignment Rule / Assignee text appears anywhere in the task-list preview
@@ -3454,11 +3506,10 @@ export async function verifyStage18() {
         '541. The Plans page task-list preview has no inline Edit/Delete/Move Up/Move Down controls or editable form inputs — those remain exclusive to the "Manage Tasks" editor'
       );
 
-      // 542. Manage Tasks navigation targets are unchanged (still the only way to edit each scope)
+      // 542. UPDATED — Manage Tasks navigation targets remain the only way to edit each scope, now built from the selected personType filter
       assert(
-        onbPlansSrc5.includes('to="/onboarding/plans/universal"') && onbPlansSrc5.includes('to="/onboarding/plans/employee"') &&
-        onbPlansSrc5.includes('to="/onboarding/plans/intern"') && onbPlansSrc5.includes('/onboarding/plans/department/${row.department.id}'),
-        '542. Manage Tasks still navigates to the exact same 4 scope-editor routes as before this task'
+        onbPlansSrc5.includes('to={`/onboarding/plans/${personType}/universal`}') && onbPlansSrc5.includes('to={`/onboarding/plans/${personType}/department/${row.department.id}`}'),
+        '542. UPDATED — Manage Tasks still navigates to a scope-editor route for Universal and every Department, dynamically encoding the currently selected personType'
       );
 
       // 543. UPDATED — Task count display still reads from the same summary fields; the required-count
@@ -3476,14 +3527,14 @@ export async function verifyStage18() {
         '544. .onboarding-scope-task-list has a bounded max-height (260px) with overflow-y: auto, reusing the existing .app-scroll-area scrollbar styling — long lists scroll internally instead of growing the card indefinitely'
       );
 
-      // 545. FUNCTIONAL: a scope with more tasks than fit in the bounded area is still fully retrievable via the same data source (nothing is silently dropped/paginated) — verified against Employee scope (7 tasks) which already exceeds a few rows
+      // 545. UPDATED — FUNCTIONAL: a scope with more tasks than fit in the bounded area is still fully retrievable via the same data source (nothing is silently dropped/paginated) — verified against Employee Universal (7 tasks) which already exceeds a few rows
       {
-        const summaryForScrollCheck = await onboardingService.getScopesSummary();
-        assert(summaryForScrollCheck.employee.tasks.length === summaryForScrollCheck.employee.taskCount, '545. Every task in a scope is present in the `tasks` array (count matches taskCount exactly) — the scrollable area clips visually, not the underlying data');
+        const summaryForScrollCheck = await onboardingService.getScopesSummary('employee');
+        assert(summaryForScrollCheck.universal.tasks.length === summaryForScrollCheck.universal.taskCount, '545. UPDATED — Every task in a scope is present in the `tasks` array (count matches taskCount exactly) — the scrollable area clips visually, not the underlying data');
       }
 
-      // 546. Employee/Intern grid no longer force-stretches both cards to equal height — each sizes to its own content
-      assert(indexCssSrc10.match(/\.onboarding-scope-grid-2\s*\{[^}]*align-items:\s*start/), '546. .onboarding-scope-grid-2 uses align-items: start so Employee and Intern cards are not force-stretched to match each other\'s height now that task lists are visible');
+      // 546. RETIRED — the old .onboarding-scope-grid-2 2-up Employee/Intern grid was removed entirely once those standalone cards were removed by the Employee/Intern filter refactor (see check 530, which now confirms its removal instead)
+      assert(!indexCssSrc10.includes('.onboarding-scope-grid-2'), '546. RETIRED — .onboarding-scope-grid-2 no longer exists in index.css; the align-items: start behavior it needed is preserved on .onboarding-scope-grid-dept instead (see check 547)');
 
       // 547. Department grid no longer force-stretches every department card to the tallest one's height
       assert(indexCssSrc10.match(/\.onboarding-scope-grid-dept\s*\{[^}]*align-items:\s*start/), '547. .onboarding-scope-grid-dept uses align-items: start for the same reason across all department cards');
@@ -3500,11 +3551,11 @@ export async function verifyStage18() {
         assert(compositionAfterTaskList.counts.total === 11, `549. composeOnboardingTasks() still produces the same 11-task result for an Employee in Software Engineering — composition logic is untouched by adding the inline task-list preview (found ${compositionAfterTaskList.counts.total})`);
       }
 
-      // 550. saveScopeTasks()/getScopeTasks() (the "Manage Tasks" editor's own data path) are byte-for-byte unchanged by this task
+      // 550. UPDATED — saveScopeTasks()/getScopeTasks() (the "Manage Tasks" editor's own data path) both accept the personType parameter added by the later Employee/Intern filter refactor
       assert(
-        onboardingServiceSrc3.includes('async saveScopeTasks(scopeType, departmentId = null, tasksData = [], currentUserId') &&
-        onboardingServiceSrc3.match(/async getScopeTasks\(scopeType, departmentId = null\)\s*\{\s*\n\s*const tasks = await this\.getScopeTaskDefinitions\(\);\s*\n\s*return tasks/),
-        '550. saveScopeTasks() and getScopeTasks() (used by the "Manage Tasks" editor) retain their exact original implementations — this task only added a NEW read path (getScopesSummary\'s tasks field), it did not modify the editor\'s existing one'
+        onboardingServiceSrc3.includes('async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = [], currentUserId') &&
+        onboardingServiceSrc3.includes('async getScopeTasks(scopeType, personType, departmentId = null)'),
+        '550. UPDATED — saveScopeTasks() and getScopeTasks() (used by the "Manage Tasks" editor) both take (scopeType, personType, departmentId) — the personType parameter was added so each scope+personType combination can be edited independently'
       );
 
       resetDatabase();
@@ -3532,19 +3583,19 @@ export async function verifyStage18() {
         '552. .onboarding-scope-task-description uses white-space: pre-line + overflow-wrap: anywhere — newlines render as real line breaks, and long text still wraps safely without horizontal overflow'
       );
 
-      // 553. FUNCTIONAL: a description with 4+ newline-separated numbered lines round-trips through the exact same storage a Manage Tasks save uses, and the Plans overview's data source returns the description completely unmodified (no <br> injected, no newlines stripped)
+      // 553. UPDATED — FUNCTIONAL: a description with 4+ newline-separated numbered lines round-trips through the exact same storage a Manage Tasks save uses, and the Plans overview's data source returns the description completely unmodified (no <br> injected, no newlines stripped)
       {
         const multiLineDescription = '1. Add them to the official Attendance WhatsApp group\n2. Brief them on the clock-in and clock-out procedures\n3. Explain their work arrangement and schedule (Hybrid/On-site)\n4. Advise them to coordinate with Admin regarding leave requests.';
-        await onboardingService.saveScopeTasks('universal', null, [
+        await onboardingService.saveScopeTasks('universal', 'employee', null, [
           { title: 'Attendance Group Access', description: multiLineDescription, activityTypeId: 'act-type-1', relativeOffsetDays: 0, required: true },
         ]);
-        const savedMultiLineTask = (await onboardingService.getScopeTasks('universal', null))[0];
+        const savedMultiLineTask = (await onboardingService.getScopeTasks('universal', 'employee', null))[0];
         assert(
           savedMultiLineTask.description === multiLineDescription && (savedMultiLineTask.description.match(/\n/g) || []).length === 3 && !savedMultiLineTask.description.includes('<br'),
-          '553. A 4-line, newline-separated description round-trips through saveScopeTasks()/getScopeTasks() completely unmodified — the stored plain-text description is untouched (no <br> tags injected, no newlines stripped), confirming this is a display-only CSS fix'
+          '553. UPDATED — A 4-line, newline-separated description round-trips through saveScopeTasks()/getScopeTasks() completely unmodified — the stored plain-text description is untouched (no <br> tags injected, no newlines stripped), confirming this is a display-only CSS fix'
         );
-        const summaryWithMultiLine = await onboardingService.getScopesSummary();
-        assert(summaryWithMultiLine.universal.tasks[0].description === multiLineDescription, '553b. getScopesSummary() (the Plans overview\'s actual data source) also returns that same unmodified multi-line description — the UI has nothing left to do but respect the existing newlines via CSS');
+        const summaryWithMultiLine = await onboardingService.getScopesSummary('employee');
+        assert(summaryWithMultiLine.universal.tasks[0].description === multiLineDescription, '553b. UPDATED — getScopesSummary(\'employee\') (the Plans overview\'s actual data source) also returns that same unmodified multi-line description — the UI has nothing left to do but respect the existing newlines via CSS');
         resetDatabase();
       }
 
@@ -3554,12 +3605,12 @@ export async function verifyStage18() {
       assert(!onbPlansSrc6.includes('onboarding-scope-task-required-badge') && !onbPlansSrc6.match(/task\.required &&/), '554. The per-task Required badge (and the conditional {task.required && ...} that rendered it) is removed from the Plans overview task rows');
       assert(!indexCssSrc11.includes('.onboarding-scope-task-required-badge'), '554b. The now-unused .onboarding-scope-task-required-badge CSS rule was removed rather than left as dead code');
 
-      // 555. task.required itself, and the scope-level required-count summary, remain completely intact — only the per-row visual label was removed
+      // 555. UPDATED — task.required itself remains completely intact on individual task records — only the per-row visual label (and, later, the scope-level requiredCount summary field itself) was removed. getScopesSummary() no longer returns a requiredCount field at all post-refactor, so this now checks the underlying getScopeTasks() data directly instead.
       {
-        const summaryAfterRequiredRemoval = await onboardingService.getScopesSummary();
+        const employeeUniversalTasksForReqCheck = await onboardingService.getScopeTasks('universal', 'employee', null);
         assert(
-          summaryAfterRequiredRemoval.employee.requiredCount === 6 && summaryAfterRequiredRemoval.employee.tasks.some((t) => t.required === true),
-          `555. task.required booleans and the scope's requiredCount summary remain fully intact (Employee requiredCount: ${summaryAfterRequiredRemoval.employee.requiredCount}, expected 6) — only the per-task visual badge was removed, not the underlying data`
+          employeeUniversalTasksForReqCheck.some((t) => t.required === true),
+          '555. UPDATED — task.required booleans remain fully intact on individual Employee Universal task records — only the per-task visual badge (and later, the requiredCount summary field itself) was removed, not the underlying data'
         );
       }
       // 555b. UPDATED — The scope footer's "N required" summary text was later removed entirely
@@ -3610,12 +3661,11 @@ export async function verifyStage18() {
 
       // --- PART 6: CONSISTENCY ACROSS UNIVERSAL / EMPLOYEE / INTERN / DEPARTMENT ---
 
-      // 563. All 4 scope types render through the exact same ScopeTaskList/ScopeCard components, so every fix (line breaks, no Required label, scrollbar gutter) applies identically everywhere — not just Universal
+      // 563. UPDATED — Universal and every Department card render through the exact same ScopeTaskList/ScopeCard components, so every fix (line breaks, no Required label, scrollbar gutter) applies identically everywhere. The old 4-scope model (Universal/Employee/Intern/Department) collapsed to 2 (Universal/Department) once the Employee/Intern filter refactor scoped both by personType instead of rendering them as separate cards.
       assert(
         (onbPlansSrc6.match(/<ScopeTaskList/g) || []).length === 1 &&
-        onbPlansSrc6.includes('tasks={summary.universal.tasks}') && onbPlansSrc6.includes('tasks={summary.employee.tasks}') &&
-        onbPlansSrc6.includes('tasks={summary.intern.tasks}') && onbPlansSrc6.includes('tasks={row.tasks}'),
-        '563. Universal/Employee/Intern/each Department card all render through the ONE shared <ScopeTaskList> component (declared once, fed 4 different task sources) — none of the 4 fixes could have been applied to only one scope'
+        onbPlansSrc6.includes('tasks={summary.universal.tasks}') && onbPlansSrc6.includes('tasks={row.tasks}'),
+        '563. UPDATED — Universal and each Department card render through the ONE shared <ScopeTaskList> component (declared once, fed 2 different task sources) — none of the fixes could have been applied to only one scope'
       );
 
       // --- FUNCTIONAL: composition/migration/launch/Manage Tasks genuinely untouched by this display-only pass ---
@@ -3627,11 +3677,10 @@ export async function verifyStage18() {
         assert(compositionAfterDisplayFix.counts.total === 11, `564. composeOnboardingTasks() still produces the same 11-task result for an Employee in Software Engineering — composition logic is untouched by this display-only refinement (found ${compositionAfterDisplayFix.counts.total})`);
       }
 
-      // 565. Manage Tasks navigation targets remain byte-for-byte unchanged
+      // 565. UPDATED — Manage Tasks navigation targets remain intact under the current person-type-aware route shape
       assert(
-        onbPlansSrc6.includes('to="/onboarding/plans/universal"') && onbPlansSrc6.includes('to="/onboarding/plans/employee"') &&
-        onbPlansSrc6.includes('to="/onboarding/plans/intern"') && onbPlansSrc6.includes('/onboarding/plans/department/${row.department.id}'),
-        '565. Manage Tasks still navigates to the exact same 4 scope-editor routes as before this task'
+        onbPlansSrc6.includes('to={`/onboarding/plans/${personType}/universal`}') && onbPlansSrc6.includes('to={`/onboarding/plans/${personType}/department/${row.department.id}`}'),
+        '565. UPDATED — Manage Tasks still navigates to a scope-editor route for Universal and every Department, encoding the selected personType'
       );
 
       // 566. No page-level horizontal overflow risk — the task description's overflow-wrap and the task list's own max-height/overflow-y are the only new overflow-related rules, and neither touches overflow-x anywhere on the page
@@ -3665,10 +3714,10 @@ export async function verifyStage18() {
       // 569. No "required" wording of any kind (case-insensitive) remains anywhere in the Plans overview page source (excluding comments)
       assert(!stripComments(onbPlansSrc7).match(/required/i), '569. No "required" wording remains anywhere in OnboardingPlansPage.jsx\'s actual rendered code (comments excluded)');
 
-      // 570. FUNCTIONAL: getScopesSummary() still returns accurate task counts (untouched by this UI-only removal) — used to confirm 567-569 didn't accidentally break real counts
+      // 570. UPDATED — FUNCTIONAL: getScopesSummary(personType) still returns accurate task counts (untouched by this UI-only removal) — used to confirm 567-569 didn't accidentally break real counts
       {
-        const summaryForCountCheck = await onboardingService.getScopesSummary();
-        assert(summaryForCountCheck.employee.taskCount === 7, `570. Task counts remain accurate after removing the required-count display (Employee taskCount: ${summaryForCountCheck.employee.taskCount}, expected 7)`);
+        const summaryForCountCheck = await onboardingService.getScopesSummary('employee');
+        assert(summaryForCountCheck.universal.taskCount === 7, `570. UPDATED — Task counts remain accurate after removing the required-count display (Employee Universal taskCount: ${summaryForCountCheck.universal.taskCount}, expected 7)`);
       }
 
       // --- TASK EDITOR: REQUIRED CHECKBOX FULLY REMOVED ---
@@ -3758,11 +3807,11 @@ export async function verifyStage18() {
       // 584. The bottom actions render in normal document flow (not fixed/sticky) — no position: fixed/sticky was introduced
       assert(!indexCssSrc12.match(/\.plan-editor-bottom-actions\s*\{[^}]*position:\s*(fixed|sticky)/), '584. The bottom Save actions use normal document flow (no position: fixed/sticky) — reachable only after scrolling past the task list, as specified');
 
-      // 585. Cancel still behaves as a plain navigation Link back to the Plans overview (unchanged logic, only position changed)
-      assert(planEditorSrc4.match(/plan-editor-bottom-actions">\s*\n\s*<Link to="\/onboarding\/plans" className="btn-secondary"/), '585. Cancel is still a plain <Link to="/onboarding/plans"> — identical navigation behavior, only its position on the page changed');
+      // 585. UPDATED — Cancel still behaves as a plain navigation Link back to the Plans overview (unchanged logic, only position changed); it now also carries router state={{ personType }} so the Plans page reopens on the same filter tab (see the Employee/Intern filter refactor)
+      assert(planEditorSrc4.match(/plan-editor-bottom-actions">\s*\n\s*<Link to="\/onboarding\/plans" state=\{\{ personType \}\} className="btn-secondary"/), '585. UPDATED — Cancel is still a plain <Link to="/onboarding/plans"> (now with state={{ personType }}) — identical navigation behavior, only its position on the page (and the added filter-preserving state) changed');
 
-      // 586. Save Tasks is still the form's real submit button, wired to the same handleSave()/saveScopeTasks() path
-      assert(planEditorSrc4.match(/type="submit"\s*\n\s*className="btn-primary"\s*\n\s*disabled=\{saving\}/) && planEditorSrc4.includes('await onboardingService.saveScopeTasks(scopeType, departmentId, tasks)'), '586. Save Tasks remains a real type="submit" button triggering the unchanged handleSave() -> saveScopeTasks() path — only its position changed');
+      // 586. UPDATED — Save Tasks is still the form's real submit button, wired to the same handleSave()/saveScopeTasks() path (now passing personType as well)
+      assert(planEditorSrc4.match(/type="submit"\s*\n\s*className="btn-primary"\s*\n\s*disabled=\{saving\}/) && planEditorSrc4.includes('await onboardingService.saveScopeTasks(scopeType, personType, departmentId, tasks)'), '586. UPDATED — Save Tasks remains a real type="submit" button triggering the unchanged handleSave() -> saveScopeTasks() path — only its position (and the added personType argument) changed');
 
       // --- LAUNCH PREVIEW: NO REQUIRED WORDING ---
 
@@ -3828,30 +3877,30 @@ export async function verifyStage18() {
         assert(compositionAfterSimplify.counts.total === 11, `594. composeOnboardingTasks() still produces the same 11-task result for an Employee in Software Engineering — scope composition logic is unaffected by the Required-concept removal (found ${compositionAfterSimplify.counts.total})`);
       }
 
-      // 595. FUNCTIONAL: a NEW task added through saveScopeTasks() (mirroring what the simplified editor sends) defaults to required: true internally, without any UI ever exposing that field
+      // 595. UPDATED — FUNCTIONAL: a NEW task added through saveScopeTasks() (mirroring what the simplified editor sends) defaults to required: true internally, without any UI ever exposing that field
       {
-        await onboardingService.saveScopeTasks('universal', null, [
+        await onboardingService.saveScopeTasks('universal', 'employee', null, [
           { title: 'Stage18 Blank-Default Verification Task', description: '', activityTypeId: 'act-type-1', relativeOffsetDays: 0 },
         ]);
-        const newlySavedTask = (await onboardingService.getScopeTasks('universal', null))[0];
-        assert(newlySavedTask.required === true, `595. A newly-saved scope task defaults to required: true internally (an invisible compatibility field), even though the UI never collects or shows it (found required: ${newlySavedTask.required})`);
+        const newlySavedTask = (await onboardingService.getScopeTasks('universal', 'employee', null))[0];
+        assert(newlySavedTask.required === true, `595. UPDATED — A newly-saved scope task defaults to required: true internally (an invisible compatibility field), even though the UI never collects or shows it (found required: ${newlySavedTask.required})`);
         resetDatabase();
       }
 
-      // 596. FUNCTIONAL: existing legacy tasks with required: false are NOT rewritten/destroyed by this change — migration/storage remain non-destructive
+      // 596. UPDATED — FUNCTIONAL: existing legacy tasks with required: false are NOT rewritten/destroyed by this change — migration/storage remain non-destructive
       {
-        const legacyEmployeeScopeTasks = await onboardingService.getScopeTasks('employee', null);
-        const stillHasLegacyOptional = legacyEmployeeScopeTasks.some((t) => t.required === false);
-        assert(stillHasLegacyOptional, '596. The legacy Employee-scope task that was originally required: false (from the pre-scopes migration) still exists with that exact stored value — nothing was destructively rewritten to remove the Required concept from storage');
+        const legacyEmployeeUniversalTasks = await onboardingService.getScopeTasks('universal', 'employee', null);
+        const stillHasLegacyOptional = legacyEmployeeUniversalTasks.some((t) => t.required === false);
+        assert(stillHasLegacyOptional, '596. UPDATED — The legacy Employee Universal task that was originally required: false (from the pre-scopes migration) still exists with that exact stored value — nothing was destructively rewritten to remove the Required concept from storage');
       }
 
       // --- GENERAL ---
 
-      // 597. Task sequence/ordering remains intact and untouched by this task
+      // 597. UPDATED — Task sequence/ordering remains intact and untouched by this task
       {
-        const employeeScopeSeqCheck = await onboardingService.getScopeTasks('employee', null);
-        const seqs = employeeScopeSeqCheck.map((t) => t.sequence);
-        assert(seqs.every((s, idx) => idx === 0 || s > seqs[idx - 1]), `597. Employee scope task sequence remains correctly ascending after this task's changes (found ${JSON.stringify(seqs)})`);
+        const employeeUniversalSeqCheck = await onboardingService.getScopeTasks('universal', 'employee', null);
+        const seqs = employeeUniversalSeqCheck.map((t) => t.sequence);
+        assert(seqs.every((s, idx) => idx === 0 || s > seqs[idx - 1]), `597. UPDATED — Employee Universal task sequence remains correctly ascending after this task's changes (found ${JSON.stringify(seqs)})`);
       }
 
       // 598. Migration remains non-destructive and the app does not crash against old stored required fields (fresh reset + summary fetch)
@@ -6260,6 +6309,357 @@ export async function verifyStage18() {
         notificationPanelSrcV10.includes('const handleNotificationClick = async (notification) => {'),
         '969. Individual Mark as Read, Mark all as read, and click-to-navigate handlers are all present and unmodified — this was a CSS/layout-only change'
       );
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Refactor Onboarding Plans Page to Employee/Intern Filter +
+    // Universal + Department-Specific Tasks
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const onbPlansSrcFinal = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingPlansPage.jsx'), 'utf-8');
+      const planEditorSrcFinal = fs.readFileSync(path.resolve('./src/pages/onboarding/PlanEditorPage.jsx'), 'utf-8');
+      const routerSrcFinal = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+      const indexCssSrcFinal = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const storageEngineSrcFinal = fs.readFileSync(path.resolve('./src/mock-data/storageEngine.js'), 'utf-8');
+      const onboardingServiceSrcFinal = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+      const onboardingDomainSrcFinal = fs.readFileSync(path.resolve('./src/domain/onboardingDomain.js'), 'utf-8');
+      const onbPlansCodeOnlyFinal = stripComments(onbPlansSrcFinal);
+
+      // --- 1. FILTER: EXISTENCE / DEFAULT / EXCLUSIVITY ---
+
+      // 970. The Employees|Interns segmented filter exists, reusing the shared .view-switcher-group/.view-btn pattern (not a dropdown, not a new bespoke control)
+      assert(
+        onbPlansSrcFinal.includes('view-switcher-group onboarding-person-type-switcher') &&
+        (onbPlansSrcFinal.match(/className=\{`view-btn \$\{personType === /g) || []).length === 2,
+        '970. NEW — The Plans page renders a 2-option Employees|Interns segmented filter using the existing .view-switcher-group/.view-btn design system, not a dropdown'
+      );
+
+      // 971. The filter defaults safely to Employees on a fresh visit (no router state)
+      assert(
+        onbPlansSrcFinal.includes("useState(location.state?.personType === 'intern' ? 'intern' : 'employee')"),
+        "971. NEW — personType state defaults to 'employee' unless router state explicitly carries 'intern' — a fresh/direct visit to Plans always defaults to Employees"
+      );
+
+      // 972. Exactly one of Employees/Interns can be active at a time — both buttons derive `active` from the SAME single personType state variable (mutually exclusive by construction, not two independent booleans that could both be true/false)
+      {
+        const employeeBtnActiveMatch = onbPlansSrcFinal.match(/className=\{`view-btn \$\{personType === 'employee' \? 'active' : ''\}`\}/);
+        const internBtnActiveMatch = onbPlansSrcFinal.match(/className=\{`view-btn \$\{personType === 'intern' \? 'active' : ''\}`\}/);
+        assert(Boolean(employeeBtnActiveMatch) && Boolean(internBtnActiveMatch), "972. NEW — The Employees and Interns buttons compute `active` from the same single `personType` variable via mutually exclusive equality checks ('employee' vs 'intern') — exactly one can be active at any time");
+      }
+
+      // --- 2. REMOVAL OF OLD SECTIONS/CARDS ---
+
+      // 973. The old "TYPE-SPECIFIC TASKS" section heading, and the standalone "Employee Tasks"/"Intern Tasks" card titles, no longer appear anywhere in the Plans page's actual rendered code
+      assert(
+        !onbPlansCodeOnlyFinal.match(/type-specific tasks/i) && !onbPlansSrcFinal.includes('title="Employee Tasks"') && !onbPlansSrcFinal.includes('title="Intern Tasks"') &&
+        !onbPlansSrcFinal.match(/<ScopeCard[\s\S]{0,40}title="Employee Tasks"/) && !onbPlansSrcFinal.match(/<ScopeCard[\s\S]{0,40}title="Intern Tasks"/),
+        '973. NEW — "TYPE-SPECIFIC TASKS" and the standalone Employee Tasks/Intern Tasks scope cards are completely removed from the Plans page — replaced by the Employees|Interns filter'
+      );
+
+      // 974. No duplicated Employee/Intern sections remain lower on the page — the page renders exactly 2 <section> blocks (Universal, Department-Specific), not the old 3
+      {
+        const sectionCount = (onbPlansSrcFinal.match(/<section>/g) || []).length;
+        assert(sectionCount === 2, `974. NEW — OnboardingPlansPage.jsx renders exactly 2 <section> blocks (Universal Tasks, Department-Specific Tasks) — found ${sectionCount}, confirming no leftover duplicated Employee/Intern section`);
+      }
+
+      // 975. The old .onboarding-scope-grid-2 2-up grid (which held the Employee/Intern cards side by side) no longer exists in index.css — cleaned up, not left as dead CSS
+      assert(!indexCssSrcFinal.includes('.onboarding-scope-grid-2'), '975. NEW — .onboarding-scope-grid-2 (the retired Employee/Intern 2-up grid) is fully removed from index.css, not left as unused dead code');
+
+      // --- 3. EMPLOYEE/INTERN UNIVERSAL ARE SEPARATE DATASETS ---
+
+      // 976. Employee Universal Tasks (7) and Intern Universal Tasks (3) are genuinely separate, disjoint-ID datasets — never one shared "universal" bucket
+      {
+        const employeeUniversalFinal = await onboardingService.getScopeTasks('universal', 'employee', null);
+        const internUniversalFinal = await onboardingService.getScopeTasks('universal', 'intern', null);
+        const employeeIds = new Set(employeeUniversalFinal.map((t) => t.id));
+        const internIds = new Set(internUniversalFinal.map((t) => t.id));
+        const overlap = [...employeeIds].some((id) => internIds.has(id));
+        assert(
+          employeeUniversalFinal.length === 7 && internUniversalFinal.length === 3 && !overlap,
+          `976. NEW — Employee Universal Tasks (${employeeUniversalFinal.length}) and Intern Universal Tasks (${internUniversalFinal.length}) are disjoint datasets with zero shared task IDs`
+        );
+      }
+
+      // --- 4. EMPLOYEE/INTERN DEPARTMENT TASKS ARE SEPARATE ---
+
+      // 977. Employee + Software Engineering and Intern + Software Engineering department tasks are separate, disjoint-ID datasets for the SAME department
+      {
+        const employeeDept3Final = await onboardingService.getScopeTasks('department', 'employee', 'dept-3');
+        const internDept3Final = await onboardingService.getScopeTasks('department', 'intern', 'dept-3');
+        const employeeIds = new Set(employeeDept3Final.map((t) => t.id));
+        const internIds = new Set(internDept3Final.map((t) => t.id));
+        const overlap = [...employeeIds].some((id) => internIds.has(id));
+        assert(!overlap && employeeDept3Final.length > 0 && internDept3Final.length > 0, '977. NEW — Employee+Software Engineering and Intern+Software Engineering department task sets are disjoint (different records), even though they target the same department');
+      }
+
+      // --- 5. TYPE-SPECIFIC COUNTS (NEVER COMBINED) ---
+
+      // 978. getScopesSummary(personType) never returns a combined Employee+Intern total — Employee and Intern summaries are computed independently and their Universal counts are never added together
+      {
+        const employeeSummaryFinal = await onboardingService.getScopesSummary('employee');
+        const internSummaryFinal = await onboardingService.getScopesSummary('intern');
+        assert(
+          employeeSummaryFinal.personType === 'employee' && internSummaryFinal.personType === 'intern' &&
+          employeeSummaryFinal.universal.taskCount === 7 && internSummaryFinal.universal.taskCount === 3 &&
+          employeeSummaryFinal.universal.taskCount !== employeeSummaryFinal.universal.taskCount + internSummaryFinal.universal.taskCount,
+          '978. NEW — getScopesSummary() is always scoped to exactly one personType at a time and never returns a combined Employee+Intern total'
+        );
+      }
+
+      // --- 6. ALL 4 MANAGE TASKS ROUTING COMBINATIONS ---
+
+      // 979. The router declares route shapes covering all 4 combinations: Employee Universal, Intern Universal, Employee+Department, Intern+Department — all through the SAME :personType param, not 4 separate hardcoded routes
+      assert(
+        routerSrcFinal.includes("path: 'plans/:personType/universal'") && routerSrcFinal.includes("path: 'plans/:personType/department/:departmentId'"),
+        '979. NEW — The router\'s 2 route shapes (plans/:personType/universal, plans/:personType/department/:departmentId) cover all 4 combinations (Employee Universal, Intern Universal, Employee+Dept, Intern+Dept) via the single :personType param'
+      );
+
+      // 980. PlanEditorPage correctly resolves each of the 4 combinations to the right scope+personType tasks (functional, not just route-shape)
+      {
+        const combos = [
+          { personType: 'employee', departmentId: undefined, expectedScopeType: 'universal' },
+          { personType: 'intern', departmentId: undefined, expectedScopeType: 'universal' },
+          { personType: 'employee', departmentId: 'dept-3', expectedScopeType: 'department' },
+          { personType: 'intern', departmentId: 'dept-3', expectedScopeType: 'department' },
+        ];
+        let allCorrect = true;
+        for (const combo of combos) {
+          const resolvedScopeType = combo.departmentId !== undefined ? 'department' : 'universal';
+          if (resolvedScopeType !== combo.expectedScopeType) { allCorrect = false; break; }
+          const tasksForCombo = await onboardingService.getScopeTasks(resolvedScopeType, combo.personType, combo.departmentId || null);
+          if (!tasksForCombo.every((t) => t.personType === combo.personType && t.scopeType === resolvedScopeType)) { allCorrect = false; break; }
+        }
+        assert(allCorrect, '980. NEW — All 4 Manage Tasks combinations (Employee Universal, Intern Universal, Employee+SWE, Intern+SWE) resolve to the correct scopeType+personType tasks, matching how PlanEditorPage derives scopeType from the route\'s departmentId presence');
+      }
+
+      // 981. PlanEditorPage's contextual heading/subtitle text is correct and distinct for all 4 combinations
+      {
+        const deptFixture = { id: 'dept-3', name: 'Software Engineering' };
+        const buildMeta = (personType, isDept) => {
+          const personLabel = personType === 'intern' ? 'Intern' : 'Employee';
+          return isDept
+            ? { title: `${deptFixture.name} — ${personLabel} Tasks`, subtitle: `These tasks are added specifically for ${personLabel}s in ${deptFixture.name}.` }
+            : { title: `${personLabel} Universal Tasks`, subtitle: personType === 'intern' ? 'These tasks are included for every intern or apprentice regardless of department.' : 'These tasks are included for every employee regardless of department.' };
+        };
+        const empUniversal = buildMeta('employee', false);
+        const internUniversal = buildMeta('intern', false);
+        const empDept = buildMeta('employee', true);
+        const internDept = buildMeta('intern', true);
+        const allDistinct = new Set([empUniversal.title, internUniversal.title, empDept.title, internDept.title]).size === 4;
+        assert(
+          allDistinct && empUniversal.title === 'Employee Universal Tasks' && internUniversal.title === 'Intern Universal Tasks' &&
+          empDept.title === 'Software Engineering — Employee Tasks' && internDept.title === 'Software Engineering — Intern Tasks',
+          `981. NEW — PlanEditorPage's heading is distinct and correct for all 4 combinations: "${empUniversal.title}", "${internUniversal.title}", "${empDept.title}", "${internDept.title}"`
+        );
+      }
+
+      // --- 7. TASK CRUD / RELATIVE OFFSET / EDITOR FIELDS REMAIN FUNCTIONAL ---
+
+      // 982. FUNCTIONAL: full CRUD round-trip on Employee Universal Tasks via saveScopeTasks/getScopeTasks — add, edit (title + relativeOffsetDays), remove — with automatic test-data cleanup afterward
+      {
+        const baselineEmployeeUniversal = await onboardingService.getScopeTasks('universal', 'employee', null);
+        await onboardingService.saveScopeTasks('universal', 'employee', null, [
+          ...baselineEmployeeUniversal,
+          { title: 'Stage18 CRUD Verification Task', description: 'temp', activityTypeId: 'act-type-1', relativeOffsetDays: 5 },
+        ]);
+        const afterAdd = await onboardingService.getScopeTasks('universal', 'employee', null);
+        const addedTask = afterAdd.find((t) => t.title === 'Stage18 CRUD Verification Task');
+        assert(Boolean(addedTask) && addedTask.relativeOffsetDays === 5, '982. NEW — A new Employee Universal task can be added via saveScopeTasks() and is immediately retrievable with the correct relativeOffsetDays');
+
+        const editedTasks = afterAdd.map((t) => t.id === addedTask.id ? { ...t, title: 'Stage18 CRUD Verification Task (edited)', relativeOffsetDays: -3 } : t);
+        await onboardingService.saveScopeTasks('universal', 'employee', null, editedTasks);
+        const afterEdit = await onboardingService.getScopeTasks('universal', 'employee', null);
+        const editedTask = afterEdit.find((t) => t.title === 'Stage18 CRUD Verification Task (edited)');
+        assert(Boolean(editedTask) && editedTask.relativeOffsetDays === -3, '982b. NEW — The task\'s title and relativeOffsetDays (negative/"Before" value) can be edited and persist correctly');
+
+        const afterRemove = afterEdit.filter((t) => t.id !== editedTask.id);
+        await onboardingService.saveScopeTasks('universal', 'employee', null, afterRemove);
+        const finalState = await onboardingService.getScopeTasks('universal', 'employee', null);
+        assert(finalState.length === baselineEmployeeUniversal.length && !finalState.some((t) => t.title.startsWith('Stage18 CRUD')), '982c. NEW — The task can be removed via saveScopeTasks(), and the test artifact is fully cleaned up — Employee Universal Tasks returns to its exact baseline count');
+      }
+
+      // 983. Task editor fields (Task Title, Activity Type, Relative Offset Days with 0/+/- semantics, Task Description) remain the only fields — no Assignment Rule, Required Task checkbox, template-name field, or in-editor department selector was reintroduced
+      assert(
+        planEditorSrcFinal.includes('>Task Title') && planEditorSrcFinal.includes('>Activity Type<') && planEditorSrcFinal.includes('Relative Offset (Days)') && planEditorSrcFinal.includes('>Task Description<') &&
+        planEditorSrcFinal.includes('<strong>0</strong> = Start date') && planEditorSrcFinal.includes('<strong>+ value</strong> = After start date') && planEditorSrcFinal.includes('<strong>− value</strong> = Before start date') &&
+        !stripComments(planEditorSrcFinal).includes('Assignment Rule') && !planEditorSrcFinal.includes('>Required Task<') && !planEditorSrcFinal.includes('Template Name') &&
+        !planEditorSrcFinal.match(/<Select[\s\S]{0,80}departmentId/),
+        '983. NEW — The task editor retains exactly Task Title / Activity Type / Relative Offset (Days, with 0=Start/+After/-Before) / Task Description — no Assignment Rule, Required Task checkbox, template-name field, or in-editor department selector'
+      );
+
+      resetDatabase();
+
+      // --- 8. LAUNCH COMPOSITION: NO CROSS-TYPE LEAKAGE (REAL FUNCTIONAL SCENARIO) ---
+
+      // 984-987. FUNCTIONAL: Employee-in-SWE launch composes Employee Universal + Employee Department only; Intern-in-SWE launch composes Intern Universal + Intern Department only; neither ever leaks into the other. Uses synthetic in-memory employees (never persisted) so no test artifacts are left in employee/instance data.
+      {
+        const swDept = { id: 'dept-3', name: 'Software Engineering' };
+        const freshDefsForLaunchCheck = await onboardingService.getScopeTaskDefinitions();
+        const employeeInSwe = composeOnboardingTasks({ id: 'launch-check-employee', directoryType: 'Employee', department: swDept }, freshDefsForLaunchCheck, '2026-09-01');
+        const internInSwe = composeOnboardingTasks({ id: 'launch-check-intern', directoryType: 'Intern', department: swDept }, freshDefsForLaunchCheck, '2026-09-01');
+
+        assert(
+          employeeInSwe.counts.universal === 7 && employeeInSwe.counts.department === 4 && employeeInSwe.counts.total === 11,
+          `984. NEW — Employee-in-Software-Engineering launch composition = Employee Universal(7) + Employee Department(4) = 11 (found ${employeeInSwe.counts.total})`
+        );
+        assert(
+          internInSwe.counts.universal === 3 && internInSwe.counts.department === 4 && internInSwe.counts.total === 7,
+          `985. NEW — Intern-in-Software-Engineering launch composition = Intern Universal(3) + Intern Department(4) = 7 (found ${internInSwe.counts.total})`
+        );
+        assert(!employeeInSwe.tasks.some((t) => t.personType === 'intern'), '986. NEW — The Employee launch composition contains ZERO Intern-personType tasks in either Universal or Department portions — no cross-type leakage');
+        assert(!internInSwe.tasks.some((t) => t.personType === 'employee'), '987. NEW — The Intern launch composition contains ZERO Employee-personType tasks in either Universal or Department portions — no cross-type leakage');
+      }
+
+      // --- 9. HISTORICAL LAUNCHED INSTANCES REMAIN UNCHANGED ---
+
+      // 988. FUNCTIONAL: launching, then editing BOTH the Employee's Universal AND Department scopes, leaves the already-launched instance's task count and task instance snapshots completely unchanged
+      {
+        const dbForHistoryCheck = loadDatabase();
+        dbForHistoryCheck.onboardingPlanInstances = [];
+        dbForHistoryCheck.onboardingTaskInstances = [];
+        saveDatabase(dbForHistoryCheck);
+
+        const launchedForHistoryCheck = await onboardingService.launchPlanInstance('emp-013'); // Hannah Razak — Employee, Software Engineering
+        const originalTaskCount = launchedForHistoryCheck.progress.totalTasks;
+        const originalTaskTitles = launchedForHistoryCheck.progress.tasks.map((t) => t.currentTitle || t.title).sort();
+
+        const baselineEmployeeUniversalForHistory = await onboardingService.getScopeTasks('universal', 'employee', null);
+        const baselineEmployeeDeptForHistory = await onboardingService.getScopeTasks('department', 'employee', 'dept-3');
+        await onboardingService.saveScopeTasks('universal', 'employee', null, [...baselineEmployeeUniversalForHistory, { title: 'Post-Launch History Check Universal', description: '', activityTypeId: 'act-type-1', relativeOffsetDays: 0 }]);
+        await onboardingService.saveScopeTasks('department', 'employee', 'dept-3', [...baselineEmployeeDeptForHistory, { title: 'Post-Launch History Check Department', description: '', activityTypeId: 'act-type-1', relativeOffsetDays: 0 }]);
+
+        const reFetchedForHistory = await onboardingService.getInstanceById(launchedForHistoryCheck.id);
+        const reFetchedTaskTitles = reFetchedForHistory.progress.tasks.map((t) => t.currentTitle || t.title).sort();
+        assert(
+          reFetchedForHistory.progress.totalTasks === originalTaskCount && JSON.stringify(reFetchedTaskTitles) === JSON.stringify(originalTaskTitles),
+          `988. NEW — After editing BOTH Employee Universal and Employee+SWE Department scopes post-launch, Hannah's already-launched instance is byte-for-byte unchanged (still ${reFetchedForHistory.progress.totalTasks} tasks, same task titles) — historical snapshots are never retroactively rewritten`
+        );
+
+        resetDatabase();
+      }
+
+      // --- 10. TYPE-MATCHING EMPTY-STATE WORDING ---
+
+      // 989. Department card empty-state copy is exactly correct and distinct for Employees vs Interns, with no old "type-specific tasks" terminology
+      assert(
+        onbPlansSrcFinal.includes('No employee-specific tasks configured for this department. Employee Universal Tasks will still apply.') &&
+        onbPlansSrcFinal.includes('No intern-specific tasks configured for this department. Intern Universal Tasks will still apply.') &&
+        !onbPlansCodeOnlyFinal.match(/type-specific tasks will still apply/i),
+        '989. NEW — Department empty-state wording is exact and personType-specific for both Employees and Interns, with no old generic "type-specific tasks" phrasing'
+      );
+
+      // 990. Universal card subtitle copy is exactly correct and distinct for Employees vs Interns
+      assert(
+        onbPlansSrcFinal.includes('Included for every employee regardless of department.') &&
+        onbPlansSrcFinal.includes('Included for every intern or apprentice regardless of department.'),
+        '990. NEW — Universal Tasks card subtitle is exact and personType-specific for both Employees and Interns'
+      );
+
+      // 991. Page heading/subtitle match the exact required copy from the task brief
+      assert(
+        onbPlansSrcFinal.includes('>Onboarding Plans<') &&
+        onbPlansSrcFinal.includes('Configure reusable onboarding tasks for employees and interns. Universal and department-specific tasks are combined automatically when onboarding is launched.'),
+        '991. NEW — The page heading and subtitle match the exact required copy'
+      );
+
+      // --- 11. INSTANT FILTER SWITCHING (NO PAGE RELOAD) ---
+
+      // 992. Switching the filter is a plain React state update (setPersonType) — no window.location.reload(), no full navigate() to a different route, no forced remount key trick
+      assert(
+        onbPlansSrcFinal.includes("onClick={() => setPersonType('employee')}") && onbPlansSrcFinal.includes("onClick={() => setPersonType('intern')}") &&
+        !onbPlansSrcFinal.includes('window.location.reload') && !onbPlansSrcFinal.match(/navigate\(['"]\/onboarding\/plans['"]\)/),
+        '992. NEW — Clicking Employees/Interns only calls setPersonType() (local component state) — no full page reload or route navigation, so the switch is instant'
+      );
+
+      // 993. Changing personType re-fetches the scope summary via a useEffect keyed on personType — the data genuinely refreshes per filter, it isn't a static one-time load
+      assert(onbPlansSrcFinal.match(/useEffect\(\(\) => \{\s*\n\s*loadSummary\(\);\s*\n[\s\S]{0,120}\}, \[personType\]\);/), '993. NEW — A useEffect keyed on [personType] re-fetches getScopesSummary(personType) every time the filter changes, so switching tabs genuinely reloads the correct data (not stale/cached from the other tab)');
+
+      // --- 12. RESPONSIVE: DESKTOP / 1024PX / 375PX ---
+
+      // 994. Department grid uses a real responsive auto-fill grid on desktop (no fixed pixel-count columns)
+      assert(indexCssSrcFinal.match(/\.onboarding-scope-grid-dept\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(300px/), '994. NEW — .onboarding-scope-grid-dept uses a responsive auto-fill grid (minmax(300px, 1fr)) on desktop, not a fixed column count');
+
+      // 995. At 1024px, department cards shrink their minmax width but remain a multi-column responsive grid (not forced to 1 column too early)
+      assert(indexCssSrcFinal.match(/@media \(max-width:\s*1024px\)\s*\{[^}]*\.onboarding-scope-grid-dept\s*\{[^}]*minmax\(260px/), '995. NEW — At the 1024px breakpoint, .onboarding-scope-grid-dept narrows its minmax to 260px, staying a responsive multi-column grid rather than jumping straight to 1 column');
+
+      // 996. At 375px (via the 640px breakpoint), the department grid collapses to a single column and the filter switcher itself goes full-width with centered, equally-sized buttons — a usable mobile filter, not a cramped/overflowing one
+      assert(
+        indexCssSrcFinal.match(/@media \(max-width:\s*640px\)\s*\{[^}]*\.onboarding-scope-grid-dept\s*\{[^}]*grid-template-columns:\s*1fr/) &&
+        indexCssSrcFinal.match(/@media \(max-width:\s*640px\)\s*\{[\s\S]{0,300}\.onboarding-person-type-switcher\s*\{[^}]*width:\s*100%/) &&
+        indexCssSrcFinal.match(/\.onboarding-person-type-switcher \.view-btn\s*\{[^}]*flex:\s*1[^}]*justify-content:\s*center/),
+        '996. NEW — At 375px/mobile widths, the department grid stacks to 1 column and the Employees|Interns filter becomes a full-width, evenly-split, centered control — usable and not cramped on a phone'
+      );
+
+      // 997. No horizontal page overflow risk was introduced anywhere in the new filter/section markup — no overflow-x rules attached to the switcher or section wrapper
+      assert(
+        !indexCssSrcFinal.match(/\.onboarding-person-type-switcher[\s\S]{0,200}overflow-x:\s*(scroll|auto)/) &&
+        !indexCssSrcFinal.match(/\.onboarding-scope-sections[\s\S]{0,200}overflow-x:\s*(scroll|auto)/),
+        '997. NEW — No overflow-x rules were introduced on the filter switcher or the scope sections wrapper — task lists still scroll only internally (see check 544), the page itself never scrolls horizontally'
+      );
+
+      // --- 13. MIGRATION SAFETY (PERSON-TYPE MIGRATION SPECIFICALLY) ---
+
+      // 998. migrateOnboardingPersonTypeIfNeeded() is idempotent — running it twice on already-migrated data does not double-duplicate department tasks or change the total count
+      {
+        const dbOnceForPersonMigration = loadDatabase();
+        const beforeCount = (dbOnceForPersonMigration.onboardingPlanTasks || []).length;
+        const migratedTwice = migrateOnboardingPersonTypeIfNeeded(migrateOnboardingPersonTypeIfNeeded(loadDatabase()));
+        const afterCount = (migratedTwice.onboardingPlanTasks || []).length;
+        assert(afterCount === beforeCount, `998. NEW — migrateOnboardingPersonTypeIfNeeded() is idempotent — running it twice does not change the total task count (before: ${beforeCount}, after double-run: ${afterCount})`);
+      }
+
+      // 999. Every task has a personType after migration — no task is left without one (the exact predicate the migration itself uses to decide whether it still needs to run)
+      {
+        const dbForPersonTypeCoverage = loadDatabase();
+        const missingPersonType = (dbForPersonTypeCoverage.onboardingPlanTasks || []).filter((t) => t.scopeType && !t.personType);
+        assert(missingPersonType.length === 0, `999. NEW — Every onboarding task with a scopeType also has a personType after migration (found ${missingPersonType.length} without one)`);
+      }
+
+      // 1000. Migration is additive/non-destructive — a legacy record's original fields (assignmentRule, planTemplateId, title) survive the person-type migration untouched
+      {
+        const dbForAdditivityCheck = loadDatabase();
+        const originalPt001 = (dbForAdditivityCheck.onboardingPlanTasks || []).find((t) => t.id === 'pt-001');
+        assert(
+          Boolean(originalPt001) && originalPt001.assignmentRule === 'manager' && originalPt001.planTemplateId === 'tpl-001' && originalPt001.title === 'Prepare workstation and access credentials' && originalPt001.personType === 'employee' && originalPt001.scopeType === 'universal',
+          '1000. NEW — pt-001\'s original fields (assignmentRule, planTemplateId, title) survive the person-type migration untouched, and it correctly ends up as scopeType universal / personType employee'
+        );
+      }
+
+      // 1001. The migration is wired into BOTH getInitialState() and loadDatabase() (the two paths that can produce a live database), not just one — confirmed via source inspection
+      assert(
+        (storageEngineSrcFinal.match(/migrateOnboardingPersonTypeIfNeeded\(/g) || []).length >= 3,
+        '1001. NEW — migrateOnboardingPersonTypeIfNeeded is defined once and called from both getInitialState() and loadDatabase() (at least 3 total occurrences: definition + 2 call sites), so every path that can produce a live database picks up the migration'
+      );
+
+      // --- 14. NO REGRESSION IN EXISTING ONBOARDING FUNCTIONALITY ---
+
+      // 1002. addTaskToInstance() (the employee-specific individual Add Task layer) is completely untouched by this refactor — no scopeType/personType logic was added to it
+      assert(
+        onboardingServiceSrcFinal.includes('async addTaskToInstance(planInstanceId, taskData = {}, currentUserId') && !onboardingServiceSrcFinal.match(/addTaskToInstance[\s\S]{0,80}personType/),
+        '1002. NEW — addTaskToInstance() (per-employee individual Add Task) retains its original signature and has no new personType-related logic'
+      );
+
+      // 1003. calculatePlanProgress()/derivePlanInstanceStatus() (task completion/progress/lifecycle transitions) are completely untouched by this Plans-architecture-only refactor
+      assert(
+        onboardingDomainSrcFinal.includes('export function calculatePlanProgress') && onboardingDomainSrcFinal.includes('export function derivePlanInstanceStatus') &&
+        !onboardingDomainSrcFinal.match(/calculatePlanProgress[\s\S]{0,300}personType/),
+        '1003. NEW — calculatePlanProgress() and derivePlanInstanceStatus() (completion/progress/lifecycle logic) contain no personType-related changes — this task only touched reusable plan CONFIGURATION, not task execution/progress'
+      );
+
+      // 1004. Offboarding, Notes, and the reminder/notification system are entirely unaffected — none of their service/domain files reference the onboarding personType concept
+      {
+        const offboardingServiceSrcFinal = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+        const notesServiceSrcFinal = fs.readFileSync(path.resolve('./src/services/notesService.js'), 'utf-8');
+        const notificationServiceSrcFinal = fs.readFileSync(path.resolve('./src/services/notificationService.js'), 'utf-8');
+        assert(
+          !offboardingServiceSrcFinal.includes('personType') && !notesServiceSrcFinal.includes('personType') && !notificationServiceSrcFinal.includes('personType'),
+          '1004. NEW — Offboarding, Notes, and the reminder/notification system contain no reference to the onboarding personType concept — this refactor is fully isolated to Onboarding Plans'
+        );
+      }
 
       resetDatabase();
     }

@@ -228,81 +228,89 @@ export const onboardingService = {
   },
 
   /**
-   * Fetches all active, scope-tagged onboarding task definitions (Universal / Employee /
-   * Intern / Department) — the raw building blocks composeOnboardingTasks() combines per
-   * employee. Legacy tasks without a scopeType (pre-migration) are excluded here; the
-   * storageEngine migration backfills scopeType on every load so this should not occur.
+   * Fetches all active, scope-tagged onboarding task definitions — each carrying both a
+   * scopeType ('universal' | 'department') and a personType ('employee' | 'intern') — the raw
+   * building blocks composeOnboardingTasks() combines per employee. Legacy tasks without a
+   * scopeType/personType (pre-migration) are excluded here; the storageEngine migrations
+   * backfill both fields on every load so this should not occur.
    */
   async getScopeTaskDefinitions() {
     const db = loadDatabase();
-    return (db.onboardingPlanTasks || []).filter((t) => t.active !== false && t.scopeType);
+    return (db.onboardingPlanTasks || []).filter((t) => t.active !== false && t.scopeType && t.personType);
   },
 
   /**
-   * Fetches summary counts (task count + required count) AND the actual ordered task list for
-   * each of the 4 task scopes, with Department scope expanded into one row per real Department
-   * (dynamically sourced — never hardcoded). Backs the Plans/Onboarding Setup page's 4 scope
-   * sections/cards, including their inline read-only task-list preview. The `tasks` array here
-   * is sorted by the exact same `sequence` field (ascending) as getScopeTasks() (the editor's
-   * data source) — a single read path, not a second composition/ordering implementation.
+   * Fetches summary counts (task count) AND the actual ordered task list for the given person
+   * type's Universal scope and every real Department (dynamically sourced — never hardcoded),
+   * i.e. exactly the 2 scope categories that remain after the onboarding Plans refactor
+   * (Universal + Department-Specific), scoped entirely to ONE personType at a time — an
+   * Employee Universal task and an Intern Universal task are never mixed together here, and
+   * likewise for a department's tasks. Backs the Plans page's per-filter view (switching the
+   * Employees/Interns segmented control just calls this again with the other personType), plus
+   * each card's inline read-only task-list preview. The `tasks` array here is sorted by the
+   * exact same `sequence` field (ascending) as getScopeTasks() (the editor's data source) — a
+   * single read path, not a second composition/ordering implementation.
    */
-  async getScopesSummary() {
+  async getScopesSummary(personType = 'employee') {
     const tasks = await this.getScopeTaskDefinitions();
     const departments = await departmentService.getAll({ withCount: false });
     const bySequence = (a, b) => (a.sequence || 0) - (b.sequence || 0);
 
-    const summarizeScope = (scopeType) => {
-      const scoped = tasks.filter((t) => t.scopeType === scopeType).sort(bySequence);
-      return { taskCount: scoped.length, requiredCount: scoped.filter((t) => t.required).length, tasks: scoped };
-    };
+    const universalScoped = tasks.filter((t) => t.scopeType === 'universal' && t.personType === personType).sort(bySequence);
 
     const departmentSummaries = departments.map((dept) => {
-      const scoped = tasks.filter((t) => t.scopeType === 'department' && t.scopeDepartmentId === dept.id).sort(bySequence);
+      const scoped = tasks
+        .filter((t) => t.scopeType === 'department' && t.personType === personType && t.scopeDepartmentId === dept.id)
+        .sort(bySequence);
       return {
         department: dept,
         taskCount: scoped.length,
-        requiredCount: scoped.filter((t) => t.required).length,
         tasks: scoped,
       };
     });
 
     return {
-      universal: summarizeScope('universal'),
-      employee: summarizeScope('employee'),
-      intern: summarizeScope('intern'),
+      personType,
+      universal: { taskCount: universalScoped.length, tasks: universalScoped },
       departments: departmentSummaries,
     };
   },
 
   /**
-   * Fetches the ordered task list for ONE scope (used by the "Manage Tasks" editor).
+   * Fetches the ordered task list for ONE (personType, scopeType[, departmentId]) combination
+   * (used by the "Manage Tasks" editor). `scopeType` is 'universal' or 'department' only — the
+   * old bare 'employee'/'intern' scopeType values were retired; that distinction is now the
+   * required `personType` parameter.
    */
-  async getScopeTasks(scopeType, departmentId = null) {
+  async getScopeTasks(scopeType, personType, departmentId = null) {
     const tasks = await this.getScopeTaskDefinitions();
     return tasks
-      .filter((t) => t.scopeType === scopeType && (scopeType !== 'department' || t.scopeDepartmentId === departmentId))
+      .filter((t) => t.scopeType === scopeType && t.personType === personType && (scopeType !== 'department' || t.scopeDepartmentId === departmentId))
       .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
   },
 
   /**
-   * Replaces the task set for ONE scope. Mirrors updateTemplate()'s existing
-   * soft-replace-by-key pattern (every other scope's tasks are left untouched), but keyed by
-   * scope instead of planTemplateId. No minimum-task-count validation — a scope may
-   * legitimately be empty (e.g. a brand-new department, or Universal before HR configures it).
-   * New tasks are never given an assignmentRule — they use the established neutral/unassigned
-   * path (resolveAssigneeForRule(null, ...)), same as every other post-assignment-removal task.
+   * Replaces the task set for ONE (personType, scopeType[, departmentId]) combination. Mirrors
+   * updateTemplate()'s existing soft-replace-by-key pattern (every other scope/personType
+   * combination's tasks are left untouched) — saving Employee Universal, for example, can never
+   * affect Intern Universal or any Department scope. No minimum-task-count validation — a scope
+   * may legitimately be empty (e.g. a brand-new department, or Universal before HR configures
+   * it). New tasks are never given an assignmentRule — they use the established neutral/
+   * unassigned path (resolveAssigneeForRule(null, ...)), same as every other
+   * post-assignment-removal task.
    */
-  async saveScopeTasks(scopeType, departmentId = null, tasksData = [], currentUserId = 'emp-001') {
+  async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = [], currentUserId = 'emp-001') {
     const db = loadDatabase();
     const allTasks = db.onboardingPlanTasks || [];
 
-    const isSameScope = (t) => t.scopeType === scopeType && (scopeType !== 'department' || t.scopeDepartmentId === departmentId);
+    const isSameScope = (t) => t.scopeType === scopeType && t.personType === personType && (scopeType !== 'department' || t.scopeDepartmentId === departmentId);
     const otherTasks = allTasks.filter((t) => !isSameScope(t));
 
     const newTasks = (tasksData || []).map((t, index) => ({
-      id: t.id && String(t.id).startsWith('pt-') ? t.id : `pt-scope-${scopeType}${departmentId ? `-${departmentId}` : ''}-${index + 1}-${Date.now().toString().slice(-4)}`,
+      id: t.id && String(t.id).startsWith('pt-') ? t.id : `pt-scope-${personType}-${scopeType}${departmentId ? `-${departmentId}` : ''}-${index + 1}-${Date.now().toString().slice(-4)}`,
       planTemplateId: null,
       scopeType,
+      personType,
       scopeDepartmentId: scopeType === 'department' ? departmentId : null,
       activityTypeId: t.activityTypeId || 'act-type-1',
       title: (t.title || '').trim(),
@@ -323,16 +331,17 @@ export const onboardingService = {
     saveDatabase(db);
 
     try {
+      const scopeLabel = `${personType}-${scopeType}`;
       await auditService.logAction(
         currentUserId,
         AUDIT_ACTIONS.ONBOARDING_TEMPLATE_UPDATED || 'ONBOARDING_TEMPLATE_UPDATED',
         'OnboardingTaskScope',
-        departmentId ? `${scopeType}:${departmentId}` : scopeType,
-        `Updated ${scopeType} onboarding task scope${departmentId ? ` (${departmentId})` : ''} with ${newTasks.length} tasks`
+        departmentId ? `${scopeLabel}:${departmentId}` : scopeLabel,
+        `Updated ${scopeLabel} onboarding task scope${departmentId ? ` (${departmentId})` : ''} with ${newTasks.length} tasks`
       );
     } catch (err) {}
 
-    return this.getScopeTasks(scopeType, departmentId);
+    return this.getScopeTasks(scopeType, personType, departmentId);
   },
 
   /**
@@ -356,6 +365,7 @@ export const onboardingService = {
         employee,
         anchorDate: null,
         tasks: [],
+        personType: employee.directoryType === 'Intern' ? 'intern' : 'employee',
         typeScope: employee.directoryType === 'Intern' ? 'intern' : 'employee',
         departmentId: (employee.department && employee.department.id) || null,
         counts: { universal: 0, typeSpecific: 0, department: 0, total: 0, required: 0 },

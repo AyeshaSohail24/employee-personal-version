@@ -4031,16 +4031,17 @@ input.form-control:focus {
   letter-spacing: 0.03em;
 }
 
-/* align-items: start — now that cards show their own task list, Employee/Intern (and each
-   Department card) should size to their own content instead of CSS Grid's default row-stretch
-   forcing a shorter scope's card up to match a longer neighbor's height. */
-.onboarding-scope-grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
-  align-items: start;
+/* Employees / Interns filter — sits directly under the page header, above the Universal Tasks
+   card. Reuses .view-switcher-group as-is; this class only adds the vertical gap down to the
+   scope sections below (the shared page-header margin-bottom already handles the gap above). */
+.onboarding-person-type-switcher {
+  margin-bottom: 1.75rem;
+  width: fit-content;
 }
 
+/* align-items: start — now that cards show their own task list, each Department card should
+   size to its own content instead of CSS Grid's default row-stretch forcing a shorter scope's
+   card up to match a longer neighbor's height. */
 .onboarding-scope-grid-dept {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -4219,18 +4220,21 @@ input.form-control:focus {
 }
 
 @media (max-width: 1024px) {
-  .onboarding-scope-grid-2 {
-    grid-template-columns: 1fr;
-  }
   .onboarding-scope-grid-dept {
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   }
 }
 
 @media (max-width: 640px) {
-  .onboarding-scope-grid-2,
   .onboarding-scope-grid-dept {
     grid-template-columns: 1fr;
+  }
+  .onboarding-person-type-switcher {
+    width: 100%;
+  }
+  .onboarding-person-type-switcher .view-btn {
+    flex: 1;
+    justify-content: center;
   }
 }
 

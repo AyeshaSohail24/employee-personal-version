@@ -168,6 +168,84 @@ export function migrateOnboardingScopesIfNeeded(db) {
   return db;
 }
 
+/**
+ * Migrates the (now legacy) 4-bucket onboarding scope model — Universal / Employee / Intern /
+ * Department — into a person-type-aware 2-axis model: every task now carries an explicit
+ * `personType` ('employee' | 'intern') alongside a `scopeType` that is only ever 'universal' or
+ * 'department' (the old 'employee'/'intern' scopeType values are retired as a SCOPE concept —
+ * that distinction now lives entirely in `personType`). Additive and non-destructive: runs once
+ * (whenever any task is missing `personType`), and NEVER drops a task.
+ *
+ * Mapping decisions (each one derived directly from the OLD scope this task already carried by
+ * the prior migration above — never guessed from task titles/content):
+ *
+ *  - old scopeType 'employee'   -> new scopeType 'universal', personType 'employee'
+ *    (this bucket was already 100% employee-only; it becomes "Employee Universal".)
+ *  - old scopeType 'intern'     -> new scopeType 'universal', personType 'intern'
+ *    (likewise, becomes "Intern Universal".)
+ *  - old scopeType 'universal'  -> DUPLICATED into personType 'employee' AND 'intern' (two
+ *    records, same content, new unique ids). Reason: the old Universal bucket, by definition,
+ *    applied to every employee AND every intern with no type filtering at all — collapsing it
+ *    into just one person type would silently remove it from the other type's onboarding for
+ *    all FUTURE launches. Duplicating is the only additive choice that preserves this bucket's
+ *    original "applies to everyone" intent for both types now that Universal itself must be
+ *    type-scoped.
+ *  - old scopeType 'department' -> DUPLICATED into personType 'employee' AND 'intern' (two
+ *    records per original task, same scopeDepartmentId, new unique ids). Reason: department
+ *    scope was previously type-agnostic too — composeOnboardingTasks() applied a department's
+ *    tasks to any employee OR intern in that department. This is the exact "Software
+ *    Engineering legacy department scope" case called out in the task brief: since the source
+ *    data gives no way to unambiguously say these 4 tasks were "for employees only" vs "for
+ *    interns only", duplicating (not guessing) is the safe, documented, additive choice —
+ *    preserving the identical applicability every existing person in that department already
+ *    had, for both types going forward.
+ *
+ * A brand-new task created directly with `personType` already set (not possible pre-migration,
+ * but defensive) is left completely untouched.
+ */
+export function migrateOnboardingPersonTypeIfNeeded(db) {
+  if (!db || !Array.isArray(db.onboardingPlanTasks)) return db;
+
+  const needsMigration = db.onboardingPlanTasks.some((t) => t && t.scopeType && !t.personType);
+  if (!needsMigration) return db;
+
+  const migrated = [];
+  let dupSuffix = 0;
+
+  db.onboardingPlanTasks.forEach((t) => {
+    if (!t || !t.scopeType || t.personType) {
+      migrated.push(t);
+      return;
+    }
+
+    if (t.scopeType === 'employee') {
+      migrated.push({ ...t, scopeType: 'universal', personType: 'employee' });
+    } else if (t.scopeType === 'intern') {
+      migrated.push({ ...t, scopeType: 'universal', personType: 'intern' });
+    } else if (t.scopeType === 'universal' || t.scopeType === 'department') {
+      dupSuffix += 1;
+      migrated.push({ ...t, personType: 'employee' });
+      migrated.push({ ...t, id: `${t.id}-intern-dup-${dupSuffix}`, personType: 'intern' });
+    } else {
+      // Unrecognized legacy scopeType — preserved as-is rather than silently dropped.
+      migrated.push(t);
+    }
+  });
+
+  db.onboardingPlanTasks = migrated;
+
+  inMemoryDb = db;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    } catch (err) {
+      console.error('StorageEngine: failed to save onboarding person-type migration to localStorage.', err);
+    }
+  }
+
+  return db;
+}
+
 export function cleanupAttendanceIfNeeded(db) {
   if (!db) return db;
   if ('attendance' in db) {
@@ -357,7 +435,8 @@ function getInitialState() {
   const cleanedDept = cleanupParentDepartmentIfNeeded(cleanedAtt);
   const cleanedLoc = cleanupPenangLocationIfNeeded(cleanedDept);
   const cleanedTech = cleanupTechnologyDepartmentIfNeeded(cleanedLoc);
-  return migrateOnboardingScopesIfNeeded(cleanedTech);
+  const scopedOnboarding = migrateOnboardingScopesIfNeeded(cleanedTech);
+  return migrateOnboardingPersonTypeIfNeeded(scopedOnboarding);
 }
 
 export function loadDatabase() {
@@ -400,7 +479,8 @@ export function loadDatabase() {
     const cleanedDept = cleanupParentDepartmentIfNeeded(cleanedAtt);
     const cleanedLoc = cleanupPenangLocationIfNeeded(cleanedDept);
     const cleanedTech = cleanupTechnologyDepartmentIfNeeded(cleanedLoc);
-    return migrateOnboardingScopesIfNeeded(cleanedTech);
+    const scopedOnboarding = migrateOnboardingScopesIfNeeded(cleanedTech);
+    return migrateOnboardingPersonTypeIfNeeded(scopedOnboarding);
   } catch (err) {
     if (!inMemoryDb) {
       inMemoryDb = getInitialState();

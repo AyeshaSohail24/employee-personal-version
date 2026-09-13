@@ -9,8 +9,6 @@ import {
   ArrowDown,
   AlertTriangle,
   Globe2,
-  UsersRound,
-  GraduationCap,
   Building2,
 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
@@ -18,33 +16,17 @@ import { departmentService } from '../../services/departmentService.js';
 import { activityService } from '../../services/activityService.js';
 import Select from '../../components/common/Select.jsx';
 
-const SCOPE_META = {
-  universal: {
-    title: 'Universal Tasks',
-    subtitle: 'These tasks are included for everyone.',
-    icon: <Globe2 size={20} />,
-  },
-  employee: {
-    title: 'Employee Tasks',
-    subtitle: 'These tasks are added for employees.',
-    icon: <UsersRound size={20} />,
-  },
-  intern: {
-    title: 'Intern Tasks',
-    subtitle: 'These tasks are added for interns and apprentices.',
-    icon: <GraduationCap size={20} />,
-  },
+const PERSON_TYPE_LABEL = {
+  employee: 'Employee',
+  intern: 'Intern',
 };
 
 export default function PlanEditorPage() {
-  const { scopeSegment, departmentId: departmentIdParam } = useParams();
+  // '/onboarding/plans/:personType/universal' -> scopeType 'universal'
+  // '/onboarding/plans/:personType/department/:departmentId' -> scopeType 'department'
+  const { personType, departmentId } = useParams();
   const navigate = useNavigate();
-
-  // '/onboarding/plans/department/:departmentId' -> scopeType 'department'
-  // '/onboarding/plans/universal|employee|intern' -> scopeType is the segment itself
-  const isDepartmentScope = scopeSegment === 'department';
-  const scopeType = isDepartmentScope ? 'department' : scopeSegment;
-  const departmentId = isDepartmentScope ? departmentIdParam : null;
+  const scopeType = departmentId !== undefined ? 'department' : 'universal';
 
   const [activityTypes, setActivityTypes] = useState([]);
   const [department, setDepartment] = useState(null);
@@ -58,15 +40,16 @@ export default function PlanEditorPage() {
   useEffect(() => {
     loadEditor();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeSegment, departmentIdParam]);
+  }, [personType, scopeType, departmentId]);
 
   const loadEditor = async () => {
     setLoading(true);
     setError(null);
     setNotFound(false);
 
-    const validScope = scopeType === 'universal' || scopeType === 'employee' || scopeType === 'intern' || (scopeType === 'department' && departmentId);
-    if (!validScope) {
+    const validPersonType = personType === 'employee' || personType === 'intern';
+    const validScope = scopeType === 'universal' || (scopeType === 'department' && departmentId);
+    if (!validPersonType || !validScope) {
       setNotFound(true);
       setLoading(false);
       return;
@@ -86,7 +69,7 @@ export default function PlanEditorPage() {
         setDepartment(dept);
       }
 
-      const scopeTasks = await onboardingService.getScopeTasks(scopeType, departmentId);
+      const scopeTasks = await onboardingService.getScopeTasks(scopeType, personType, departmentId);
       setTasks(
         scopeTasks.map((t, idx) => ({
           id: t.id,
@@ -161,8 +144,8 @@ export default function PlanEditorPage() {
 
     setSaving(true);
     try {
-      await onboardingService.saveScopeTasks(scopeType, departmentId, tasks);
-      navigate('/onboarding/plans');
+      await onboardingService.saveScopeTasks(scopeType, personType, departmentId, tasks);
+      navigate('/onboarding/plans', { state: { personType } });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -193,19 +176,28 @@ export default function PlanEditorPage() {
     );
   }
 
+  const personLabel = PERSON_TYPE_LABEL[personType];
   const meta = scopeType === 'department'
     ? {
-        title: `${department.name} Tasks`,
-        subtitle: `These tasks are added for people in ${department.name}.`,
+        title: `${department.name} — ${personLabel} Tasks`,
+        subtitle: `These tasks are added specifically for ${personLabel}s in ${department.name}.`,
         icon: <Building2 size={20} />,
       }
-    : SCOPE_META[scopeType];
+    : {
+        title: `${personLabel} Universal Tasks`,
+        subtitle: personType === 'intern'
+          ? 'These tasks are included for every intern or apprentice regardless of department.'
+          : 'These tasks are included for every employee regardless of department.',
+        icon: <Globe2 size={20} />,
+      };
 
   return (
     <div className="page-layout-container">
-      {/* Back link */}
+      {/* Back link — carries the personType back via router state so the Plans page reopens on
+          the same Employees/Interns filter the user was just editing, rather than resetting to
+          the default. */}
       <div style={{ marginBottom: '1rem' }}>
-        <Link to="/onboarding/plans" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
+        <Link to="/onboarding/plans" state={{ personType }} style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
           <ArrowLeft size={14} /> Back to Onboarding Plans
         </Link>
       </div>
@@ -376,7 +368,7 @@ export default function PlanEditorPage() {
 
         {/* Bottom Save Actions — the only Cancel/Save Tasks controls on this page */}
         <div className="plan-editor-bottom-actions">
-          <Link to="/onboarding/plans" className="btn-secondary" style={{ textDecoration: 'none' }}>
+          <Link to="/onboarding/plans" state={{ personType }} className="btn-secondary" style={{ textDecoration: 'none' }}>
             Cancel
           </Link>
           <button

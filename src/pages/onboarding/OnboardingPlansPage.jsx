@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Globe2, UsersRound, GraduationCap, Building2, Settings2 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
 
@@ -82,18 +82,50 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
   );
 }
 
+// Single source of truth for every piece of copy that depends on which person type is
+// currently selected — the Universal card's subtitle/empty-state and each Department card's
+// description/empty-state all read from here, so Employees vs Interns wording can never drift
+// between the two card types.
+const PERSON_TYPE_META = {
+  employee: {
+    label: 'Employees',
+    icon: <UsersRound size={15} />,
+    universalSubtitle: 'Included for every employee regardless of department.',
+    universalEmptyState: "No universal tasks configured yet. Add tasks here to include them in every employee's onboarding plan.",
+    departmentCardDescription: 'Tasks added specifically for Employees in this department.',
+    departmentEmptyState: 'No employee-specific tasks configured for this department. Employee Universal Tasks will still apply.',
+  },
+  intern: {
+    label: 'Interns',
+    icon: <GraduationCap size={15} />,
+    universalSubtitle: 'Included for every intern or apprentice regardless of department.',
+    universalEmptyState: "No universal tasks configured yet. Add tasks here to include them in every intern's onboarding plan.",
+    departmentCardDescription: 'Tasks added specifically for Interns in this department.',
+    departmentEmptyState: 'No intern-specific tasks configured for this department. Intern Universal Tasks will still apply.',
+  },
+};
+
 export default function OnboardingPlansPage() {
+  const location = useLocation();
+
+  // The selected filter is local component state only (per design — not over-engineered into
+  // a persisted preference). It does default sensibly though: arriving back here from the
+  // "Manage Tasks" editor (via its Cancel/Back link or after Save Tasks) carries the personType
+  // that was just being edited via router state, so the filter doesn't silently reset to
+  // Employees mid-workflow. A normal/fresh visit (no state) defaults to Employees.
+  const [personType, setPersonType] = useState(location.state?.personType === 'intern' ? 'intern' : 'employee');
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadSummary();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personType]);
 
   const loadSummary = async () => {
     setLoading(true);
     try {
-      const data = await onboardingService.getScopesSummary();
+      const data = await onboardingService.getScopesSummary(personType);
       setSummary(data);
     } catch (err) {
       console.error('Failed to load onboarding task scope summary:', err);
@@ -102,15 +134,44 @@ export default function OnboardingPlansPage() {
     }
   };
 
+  const meta = PERSON_TYPE_META[personType];
+
   return (
     <div className="page-layout-container">
       <div className="page-header-container">
         <div className="onboarding-plans-header">
           <h1 className="page-title">Onboarding Plans</h1>
           <p className="page-subtitle">
-            Configure reusable onboarding tasks by scope. Universal, employee/intern, and department tasks are combined automatically when onboarding is launched.
+            Configure reusable onboarding tasks for employees and interns. Universal and department-specific tasks are combined automatically when onboarding is launched.
           </p>
         </div>
+      </div>
+
+      {/* Employees / Interns filter — represents the PERSON TYPE whose onboarding
+          configuration is being viewed below. Reuses the existing .view-switcher-group/
+          .view-btn segmented-control pattern (already used for Notes' Card/Document View and
+          inside LaunchPlanModal) rather than introducing a new control or a dropdown. */}
+      <div className="view-switcher-group onboarding-person-type-switcher" role="tablist" aria-label="Onboarding plan person type">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={personType === 'employee'}
+          className={`view-btn ${personType === 'employee' ? 'active' : ''}`}
+          onClick={() => setPersonType('employee')}
+        >
+          <UsersRound size={15} />
+          <span>Employees</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={personType === 'intern'}
+          className={`view-btn ${personType === 'intern' ? 'active' : ''}`}
+          onClick={() => setPersonType('intern')}
+        >
+          <GraduationCap size={15} />
+          <span>Interns</span>
+        </button>
       </div>
 
       {loading || !summary ? (
@@ -119,48 +180,28 @@ export default function OnboardingPlansPage() {
         </div>
       ) : (
         <div className="onboarding-scope-sections">
-          {/* Universal Tasks — full width */}
+          {/* Universal Tasks — full width. Content depends entirely on the selected filter:
+              Employee Universal and Intern Universal are two separate, non-overlapping task
+              sets, even though the card title itself stays the generic "Universal Tasks" (the
+              active filter already provides the person-type context). */}
           <section>
             <ScopeCard
               emphasized
               icon={<Globe2 size={20} />}
               title="Universal Tasks"
-              description="Included in every onboarding plan."
+              description={meta.universalSubtitle}
               tasks={summary.universal.tasks}
-              emptyStateMessage="No universal tasks configured yet. Add tasks here to include them in every onboarding plan."
+              emptyStateMessage={meta.universalEmptyState}
               taskCount={summary.universal.taskCount}
-              to="/onboarding/plans/universal"
+              to={`/onboarding/plans/${personType}/universal`}
             />
           </section>
 
-          {/* Employee / Intern — side by side */}
+          {/* Department-Specific Tasks — compact scalable grid, rendered dynamically. Each
+              card means "tasks added specifically for the selected person type in this
+              department" — never a mix of Employee and Intern tasks for the same department. */}
           <section>
-            <h2 className="onboarding-scope-section-title">Type-Specific Tasks</h2>
-            <div className="onboarding-scope-grid-2">
-              <ScopeCard
-                icon={<UsersRound size={20} />}
-                title="Employee Tasks"
-                description="Included for employees in addition to Universal Tasks."
-                tasks={summary.employee.tasks}
-                emptyStateMessage="No employee-specific tasks configured yet."
-                taskCount={summary.employee.taskCount}
-                to="/onboarding/plans/employee"
-              />
-              <ScopeCard
-                icon={<GraduationCap size={20} />}
-                title="Intern Tasks"
-                description="Included for interns and apprentices in addition to Universal Tasks."
-                tasks={summary.intern.tasks}
-                emptyStateMessage="No intern-specific tasks configured yet."
-                taskCount={summary.intern.taskCount}
-                to="/onboarding/plans/intern"
-              />
-            </div>
-          </section>
-
-          {/* Department Tasks — compact scalable grid, rendered dynamically */}
-          <section>
-            <h2 className="onboarding-scope-section-title">Department Tasks</h2>
+            <h2 className="onboarding-scope-section-title">Department-Specific Tasks</h2>
             {summary.departments.length === 0 ? (
               <div className="table-container-card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 No departments configured yet.
@@ -173,11 +214,11 @@ export default function OnboardingPlansPage() {
                     compact
                     icon={<Building2 size={16} />}
                     title={row.department.name}
-                    description="Configure department-specific onboarding tasks."
+                    description={meta.departmentCardDescription}
                     tasks={row.tasks}
-                    emptyStateMessage="No department-specific tasks configured. Universal and type-specific tasks will still apply."
+                    emptyStateMessage={meta.departmentEmptyState}
                     taskCount={row.taskCount}
-                    to={`/onboarding/plans/department/${row.department.id}`}
+                    to={`/onboarding/plans/${personType}/department/${row.department.id}`}
                   />
                 ))}
               </div>

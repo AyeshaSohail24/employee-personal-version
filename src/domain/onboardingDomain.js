@@ -230,46 +230,55 @@ export function generatePlanPreview({
   };
 }
 
+// scopeType now has only 2 members — the old 'employee'/'intern' scopeType values were retired
+// as a SCOPE concept; that distinction now lives entirely in the separate `personType` field
+// every task carries (see migrateOnboardingPersonTypeIfNeeded in storageEngine.js). Kept as
+// PERSON_TYPES alongside for the same reason ONBOARDING_TASK_SCOPES exists — a single source of
+// truth for the string literals, not magic strings scattered across the app.
 export const ONBOARDING_TASK_SCOPES = {
   UNIVERSAL: 'universal',
-  EMPLOYEE: 'employee',
-  INTERN: 'intern',
   DEPARTMENT: 'department',
 };
 
+export const ONBOARDING_PERSON_TYPES = {
+  EMPLOYEE: 'employee',
+  INTERN: 'intern',
+};
+
 /**
- * Composes an employee's full set of applicable onboarding tasks from reusable scope-based
- * task definitions: Universal + (Employee OR Intern, by directoryType) + Department (by the
- * employee's own department ID). Each scope is sorted independently by its own `sequence`
- * field, then concatenated in that fixed order, and re-numbered into one clean ascending
- * sequence for the resulting plan instance. This is the SINGLE source of composition truth —
- * both the Launch modal's preview and the actual launch transaction call this same function
- * with the same inputs, so a previewed count can never drift from what actually gets launched.
+ * Composes an employee's full set of applicable onboarding tasks from reusable, person-type-
+ * aware scope-based task definitions: (Employee OR Intern) Universal + (Employee OR Intern)
+ * Department (by the employee's own department ID), where the person type is resolved once
+ * from `employee.directoryType` and applied consistently to BOTH the Universal and Department
+ * lookups — an Employee Universal task and an Intern Universal task are two entirely separate,
+ * non-overlapping task sets, and likewise for Department. Each scope is sorted independently by
+ * its own `sequence` field, then concatenated in that fixed order, and re-numbered into one
+ * clean ascending sequence for the resulting plan instance. This is the SINGLE source of
+ * composition truth — the Plans page's own per-type summary, the Launch modal's preview, and
+ * the actual launch transaction all call this same function (or the service methods built
+ * directly on it) with the same inputs, so a previewed count can never drift from what actually
+ * gets launched.
  */
 export function composeOnboardingTasks(employee, taskDefinitions = [], anchorDate = null) {
-  const typeScope = employee && employee.directoryType === 'Intern'
-    ? ONBOARDING_TASK_SCOPES.INTERN
-    : ONBOARDING_TASK_SCOPES.EMPLOYEE;
+  const personType = employee && employee.directoryType === 'Intern'
+    ? ONBOARDING_PERSON_TYPES.INTERN
+    : ONBOARDING_PERSON_TYPES.EMPLOYEE;
   const departmentId = (employee && employee.department && employee.department.id) || null;
 
   const bySequence = (a, b) => (a.sequence || 0) - (b.sequence || 0);
   const activeDefs = (taskDefinitions || []).filter((t) => t && t.active !== false);
 
   const universalTasks = activeDefs
-    .filter((t) => t.scopeType === ONBOARDING_TASK_SCOPES.UNIVERSAL)
-    .sort(bySequence);
-
-  const typeTasks = activeDefs
-    .filter((t) => t.scopeType === typeScope)
+    .filter((t) => t.scopeType === ONBOARDING_TASK_SCOPES.UNIVERSAL && t.personType === personType)
     .sort(bySequence);
 
   const departmentTasks = departmentId
     ? activeDefs
-        .filter((t) => t.scopeType === ONBOARDING_TASK_SCOPES.DEPARTMENT && t.scopeDepartmentId === departmentId)
+        .filter((t) => t.scopeType === ONBOARDING_TASK_SCOPES.DEPARTMENT && t.personType === personType && t.scopeDepartmentId === departmentId)
         .sort(bySequence)
     : [];
 
-  const composed = [...universalTasks, ...typeTasks, ...departmentTasks];
+  const composed = [...universalTasks, ...departmentTasks];
 
   const tasks = composed.map((t, idx) => ({
     ...t,
@@ -280,13 +289,21 @@ export function composeOnboardingTasks(employee, taskDefinitions = [], anchorDat
 
   const counts = {
     universal: universalTasks.length,
-    typeSpecific: typeTasks.length,
     department: departmentTasks.length,
+    // DEPRECATED alias — under the retired 3-way (Universal/Type/Department) model this counted
+    // the separate Employee-or-Intern scope bucket. That bucket no longer exists as its own
+    // scope: it was migrated INTO the now-person-type-aware `universal` count above, so for any
+    // post-migration data this is always numerically identical to `universal`. Kept only so
+    // existing callers (e.g. LaunchPlanModal's preview breakdown) that still read
+    // `counts.typeSpecific` continue to show the correct number without needing changes.
+    typeSpecific: universalTasks.length,
     total: tasks.length,
     required: tasks.filter((t) => t.required).length,
   };
 
-  return { tasks, typeScope, departmentId, counts };
+  // `typeScope` is a DEPRECATED alias for `personType`, kept for the same backward-compatibility
+  // reason as `counts.typeSpecific` above.
+  return { tasks, personType, typeScope: personType, departmentId, counts };
 }
 
 /**

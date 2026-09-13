@@ -52,8 +52,8 @@ export const router = createBrowserRouter([
           { path: 'employees', element: <OnboardingEmployeesPage /> },
           { path: 'employees/:employeeId', element: <OnboardingEmployeeDetailPage /> },
           { path: 'plans', element: <OnboardingPlansPage /> },
-          { path: 'plans/:scopeSegment', element: <PlanEditorPage /> },
-          { path: 'plans/:scopeSegment/:departmentId', element: <PlanEditorPage /> },
+          { path: 'plans/:personType/universal', element: <PlanEditorPage /> },
+          { path: 'plans/:personType/department/:departmentId', element: <PlanEditorPage /> },
         ],
       },
 
