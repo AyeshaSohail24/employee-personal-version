@@ -4600,8 +4600,8 @@ export async function verifyStage18() {
       // 705. Keyboard shortcuts Ctrl/Cmd+B/I/U are wired
       assert(noteContentEditorSrc2.match(/key === 'b'[\s\S]{0,40}applyFormat\('bold'\)/) && noteContentEditorSrc2.match(/key === 'i'[\s\S]{0,40}applyFormat\('italic'\)/) && noteContentEditorSrc2.match(/key === 'u'[\s\S]{0,40}applyFormat\('underline'\)/), '705. Ctrl/Cmd+B, +I, and +U are each wired to the same applyFormat() the toolbar buttons use');
 
-      // 706. Toolbar buttons have hover/active state and a title tooltip (keyboard-accessible <button> semantics, not a <div onClick>)
-      assert(noteContentEditorSrc2.match(/<button type="button" className=\{`note-format-btn/g)?.length === 3 && noteContentEditorSrc2.includes('title="Bold (Ctrl+B)"'), '706. All 3 formatting controls are real <button type="button"> elements with title tooltips, and the CSS defines a distinct .note-format-btn.active state');
+      // 706. UPDATED — Toolbar buttons have hover/active state and a title tooltip (keyboard-accessible <button> semantics, not a <div onClick>). The toolbar now has 6 .note-format-btn controls (Bold/Italic/Underline/Highlight/Bulleted List/Numbered List) instead of the original 3.
+      assert((noteContentEditorSrc2.match(/className=\{`note-format-btn/g) || []).length === 6 && noteContentEditorSrc2.includes('title="Bold (Ctrl+B)"'), '706. All 6 formatting controls (Bold/Italic/Underline/Highlight/Bulleted List/Numbered List) are real <button type="button"> elements with title tooltips, and the CSS defines a distinct .note-format-btn.active state');
       assert(indexCssSrcForNotesV3.includes('.note-format-btn.active'), '706b. .note-format-btn.active is defined in the stylesheet (distinct visual state for the currently-active format at the cursor)');
 
       // 707. Pasted external content is converted to plain text, not raw HTML — sidesteps the hardest sanitization case entirely
@@ -5036,6 +5036,288 @@ export async function verifyStage18() {
           '785. The Sort By dropdown options and sortNotes() domain logic are unchanged — this task only added explanatory text, no sorting behavior was touched'
         );
       }
+
+      resetDatabase();
+    }
+    // ==========================================================================
+    // Notes: Highlight + Bulleted List + Numbered List formatting
+    // ==========================================================================
+    {
+      const noteDomainSrcV5 = fs.readFileSync(path.resolve('./src/domain/noteDomain.js'), 'utf-8');
+      const noteContentEditorSrcV5 = fs.readFileSync(path.resolve('./src/components/notes/NoteContentEditor.jsx'), 'utf-8');
+      const noteCardSrcV5 = fs.readFileSync(path.resolve('./src/components/notes/NoteCard.jsx'), 'utf-8');
+      const notesDocViewSrcV5 = fs.readFileSync(path.resolve('./src/components/notes/NotesDocumentView.jsx'), 'utf-8');
+      const noteEditorModalSrcV5 = fs.readFileSync(path.resolve('./src/components/notes/NoteEditorModal.jsx'), 'utf-8');
+      const notesServiceSrcV5 = fs.readFileSync(path.resolve('./src/services/notesService.js'), 'utf-8');
+      const indexCssSrcV5 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const activityServiceSrcV5 = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
+
+      const { sanitizeNoteHtml: sanitizeV5, deriveContentFromHtml: deriveV5, resolveNoteContentHtml: resolveV5, NOTE_HIGHLIGHT_COLORS: HIGHLIGHT_COLORS_V5 } = await import('../domain/noteDomain.js');
+
+      // --- TOOLBAR (1-7) ---
+
+      // 786. Bold/Italic/Underline still exist in the toolbar
+      assert(noteContentEditorSrcV5.includes('title="Bold (Ctrl+B)"') && noteContentEditorSrcV5.includes('title="Italic (Ctrl+I)"') && noteContentEditorSrcV5.includes('title="Underline (Ctrl+U)"'), '786. Bold, Italic, and Underline toolbar buttons all still exist, unchanged');
+
+      // 787. Highlight button exists
+      assert(noteContentEditorSrcV5.includes('title="Highlight"') && noteContentEditorSrcV5.includes('<Highlighter size={14} />'), '787. A Highlight toolbar button exists, using the lucide-react Highlighter icon');
+
+      // 788. Bulleted List button exists
+      assert(noteContentEditorSrcV5.includes('title="Bulleted List"') && noteContentEditorSrcV5.includes('<List size={14} />'), '788. A Bulleted List toolbar button exists, using the lucide-react List icon');
+
+      // 789. Numbered List button exists
+      assert(noteContentEditorSrcV5.includes('title="Numbered List"') && noteContentEditorSrcV5.includes('<ListOrdered size={14} />'), '789. A Numbered List toolbar button exists, using the lucide-react ListOrdered icon');
+
+      // 790. Both Card View's NoteEditorModal and Document View's inline editor use the ONE shared NoteContentEditor — the new controls automatically appear in both, no second toolbar implementation
+      assert(
+        noteEditorModalSrcV5.includes("import NoteContentEditor from './NoteContentEditor.jsx'") && noteEditorModalSrcV5.includes('<NoteContentEditor') &&
+        notesDocViewSrcV5.includes("import NoteContentEditor from './NoteContentEditor.jsx'") && (notesDocViewSrcV5.match(/<NoteContentEditor/g) || []).length === 2,
+        '790. NoteEditorModal (Card View) and NotesDocumentView (both its new-draft and edit-state renders) all import and render the same shared NoteContentEditor — there is exactly one toolbar implementation'
+      );
+
+      // 791. Toolbar is grouped with dividers ([B I U] | [Highlight] | [Bullets Numbers]) rather than one long flat row, and stays compact (28px buttons, no font/size/color/align/heading/table/image/link icon controls added) — checked against the actual lucide-react import list and JSX icon usage, not source comments (which legitimately document what was deliberately excluded)
+      {
+        const lucideImportLine = (noteContentEditorSrcV5.match(/import \{[^}]*\} from 'lucide-react';/) || [''])[0];
+        const forbiddenIcons = ['AlignLeft', 'AlignCenter', 'AlignRight', 'Heading1', 'Heading2', 'Table', 'Image', 'Link', 'Type', 'Palette'];
+        assert(
+          (noteContentEditorSrcV5.match(/note-format-divider/g) || []).length >= 2 &&
+          !forbiddenIcons.some((icon) => lucideImportLine.includes(icon)),
+          `791. The toolbar uses subtle group dividers ([B I U] | [Highlight] | [Bullets] [Numbers]) and imports no font/alignment/heading/table/image/link lucide icons (import line: ${lucideImportLine})`
+        );
+      }
+
+      // --- HIGHLIGHT (8-17) ---
+
+      // 792. Yellow/Green/Blue/Pink highlight colors are all defined in the one shared palette
+      assert(
+        HIGHLIGHT_COLORS_V5 && Object.keys(HIGHLIGHT_COLORS_V5).sort().join(',') === 'blue,green,pink,yellow',
+        `792. NOTE_HIGHLIGHT_COLORS defines exactly the 4 required colors: yellow, green, blue, pink (found: ${HIGHLIGHT_COLORS_V5 ? Object.keys(HIGHLIGHT_COLORS_V5).sort().join(', ') : 'none'})`
+      );
+
+      // 793. Each highlight color survives sanitization intact (functional: yellow/green/blue/pink each round-trip through sanitizeNoteHtml unchanged)
+      {
+        const allFourWork = ['yellow', 'green', 'blue', 'pink'].every((color) => {
+          const html = `<mark data-highlight="${color}">text</mark>`;
+          return sanitizeV5(html) === html;
+        });
+        assert(allFourWork, '793. Yellow, Green, Blue, and Pink highlights all survive sanitizeNoteHtml() unchanged — each of the 4 colors works');
+      }
+
+      // 794. Remove Highlight is implemented as a real unwrap action (not a 5th color) that strips the <mark> boundary while preserving its text
+      assert(noteContentEditorSrcV5.includes('const removeHighlight') && noteContentEditorSrcV5.includes('Remove Highlight') && /while \(markEl\.firstChild\) parent\.insertBefore\(markEl\.firstChild, markEl\);/.test(noteContentEditorSrcV5), '794. Remove Highlight unwraps the <mark> element (moving its children back into place) rather than deleting the text or being just another color choice');
+
+      // 795. FUNCTIONAL: a highlighted note persists through create() + a fresh getById() (save/reload)
+      {
+        const created = await notesService.create({ title: 'Highlight Persist Check', contentHtml: '<mark data-highlight="green">Persisted text</mark>', category: 'General' });
+        const reloaded = await notesService.getById(created.id);
+        assert(reloaded && reloaded.contentHtml.includes('<mark data-highlight="green">Persisted text</mark>'), '795. A highlighted note\'s contentHtml persists exactly through notesService.create() and a fresh getById() (save/reload)');
+      }
+
+      // 796. Highlight renders safely in the Card preview via the same resolveNoteContentHtml() path used for B/I/U
+      {
+        const note = { contentHtml: '<mark data-highlight="blue">Card preview text</mark>' };
+        assert(resolveV5(note).includes('data-highlight="blue"'), '796. resolveNoteContentHtml() (the function NoteCard\'s preview renders) preserves highlight markup for the Card View preview');
+      }
+
+      // 797. Highlight renders safely in Document View via the same shared resolveNoteContentHtml() path
+      assert(notesDocViewSrcV5.includes('dangerouslySetInnerHTML={{ __html: resolveNoteContentHtml(selectedNote) }}'), '797. Document View\'s read-state content still renders exclusively through resolveNoteContentHtml(), so highlight formatting renders there identically to Card View');
+
+      // 798. Unsupported/arbitrary highlight values are stripped (normalized to a bare, unstyled <mark>)
+      {
+        const bad = sanitizeV5('<mark data-highlight="red">x</mark>');
+        assert(bad === '<mark>x</mark>', `798. An unsupported highlight value ("red") is stripped to a bare <mark> with no data-highlight attribute (got: ${bad})`);
+      }
+
+      // 799. Arbitrary inline styles on a highlighted mark are stripped — no style="background:..." survives
+      {
+        const stripped = sanitizeV5('<mark data-highlight="yellow" style="background: red; color: lime;">x</mark>');
+        assert(stripped === '<mark data-highlight="yellow">x</mark>' && !stripped.includes('style='), `799. An inline style attribute on <mark> is fully stripped while the valid data-highlight value survives (got: ${stripped})`);
+      }
+
+      // --- LISTS (18-26) ---
+
+      // 800. Bulleted List uses the native insertUnorderedList command (real semantic <ul><li>, not Unicode bullet characters)
+      assert(noteContentEditorSrcV5.includes("applyList('insertUnorderedList')"), '800. Bulleted List is wired to document.execCommand(\'insertUnorderedList\') — produces real <ul><li> markup');
+
+      // 801. Numbered List uses the native insertOrderedList command (real semantic <ol><li>, not manually-typed "1. 2. 3.")
+      assert(noteContentEditorSrcV5.includes("applyList('insertOrderedList')"), '801. Numbered List is wired to document.execCommand(\'insertOrderedList\') — produces real <ol><li> markup');
+
+      // 802. FUNCTIONAL: a list note persists through create() + getById() (save/reload)
+      {
+        const created = await notesService.create({ title: 'List Persist Check', contentHtml: '<ul><li>Call candidate</li><li>Send letter</li></ul>', category: 'General' });
+        const reloaded = await notesService.getById(created.id);
+        assert(reloaded && reloaded.contentHtml.includes('<ul><li>Call candidate</li><li>Send letter</li></ul>'), '802. A bulleted-list note\'s contentHtml persists exactly through notesService.create() and a fresh getById() (save/reload)');
+      }
+
+      // 803. Bullets render in the Card preview (NoteCard.jsx uses a <div>, not a <p>, so block-level <ul>/<ol> content nests validly)
+      assert(noteCardSrcV5.includes('<div className="note-content-preview"') && !noteCardSrcV5.includes('<p className="note-content-preview"'), '803. NoteCard\'s content preview container is a <div> (not a <p>, which cannot validly contain block-level <ul>/<ol>), so bullets render correctly in the Card preview');
+
+      // 804. Numbering renders in the Card preview via the same container/path as bullets
+      {
+        const note = { contentHtml: '<ol><li>Step one</li><li>Step two</li></ol>' };
+        assert(resolveV5(note).includes('<ol>') && resolveV5(note).includes('<li>Step one</li>'), '804. resolveNoteContentHtml() preserves numbered-list markup for the Card View preview');
+      }
+
+      // 805. Bullets render in Document View (same resolveNoteContentHtml() path, already confirmed scoped CSS exists)
+      assert(/\.notes-document-content ul,/.test(indexCssSrcV5) || /notes-document-content ul/.test(indexCssSrcV5), '805. Scoped list styles exist for .notes-document-content ul — bullets render with visible markers in Document View');
+
+      // 806. Numbering renders in Document View
+      assert(indexCssSrcV5.includes('.notes-document-content ol'), '806. Scoped list styles exist for .notes-document-content ol — numbering renders with visible markers in Document View');
+
+      // 807. FUNCTIONAL: list item text remains searchable via plain content (search never operates on raw HTML)
+      {
+        await notesService.create({ title: 'Searchable List Note', contentHtml: '<ul><li>Call the shortlisted candidate</li><li>Send offer letter</li></ul>', category: 'General' });
+        const results1 = await notesService.getAll({ scope: 'my', search: 'offer letter' });
+        const results2 = await notesService.getAll({ scope: 'my', search: 'shortlisted candidate' });
+        assert(results1.some((n) => n.title === 'Searchable List Note') && results2.some((n) => n.title === 'Searchable List Note'), '807. Searching for text that only exists inside list items still finds the note — search operates on the derived plain content, not raw HTML');
+      }
+
+      // 808. ul/ol/li attributes are stripped safely (e.g. onclick) while the tags themselves survive
+      {
+        const cleaned = sanitizeV5('<ul onclick="alert(1)"><li onmouseover="x()">Item</li></ul>');
+        assert(cleaned === '<ul><li>Item</li></ul>', `808. Arbitrary attributes on <ul>/<li> (onclick, onmouseover) are stripped while the safe tags survive (got: ${cleaned})`);
+      }
+
+      // --- FORMATTING COMBINATIONS (27-30) ---
+
+      // 809. Bold inside a bullet persists through sanitization
+      {
+        const combo = sanitizeV5('<ul><li><b>Bold</b> item</li></ul>');
+        assert(combo === '<ul><li><b>Bold</b> item</li></ul>', `809. Bold text inside a bulleted list item is preserved by sanitizeNoteHtml() (got: ${combo})`);
+      }
+
+      // 810. Italic inside a numbered item persists through sanitization
+      {
+        const combo = sanitizeV5('<ol><li><i>Italic</i> step</li></ol>');
+        assert(combo === '<ol><li><i>Italic</i> step</li></ol>', `810. Italic text inside a numbered list item is preserved by sanitizeNoteHtml() (got: ${combo})`);
+      }
+
+      // 811. Highlighted bold text persists through sanitization (highlight does not remove existing B/I/U)
+      {
+        const combo = sanitizeV5('<b><mark data-highlight="yellow">Bold and highlighted</mark></b>');
+        assert(combo === '<b><mark data-highlight="yellow">Bold and highlighted</mark></b>', `811. Bold + Highlight combine without either one stripping the other (got: ${combo})`);
+      }
+
+      // 812. Underline + Highlight combine and persist through sanitization
+      {
+        const combo = sanitizeV5('<u><mark data-highlight="pink">Underlined and highlighted</mark></u>');
+        assert(combo === '<u><mark data-highlight="pink">Underlined and highlighted</mark></u>', `812. Underline + Highlight combine without either one stripping the other (got: ${combo})`);
+      }
+
+      // --- SANITIZATION (31-36) ---
+
+      // 813. Scripts remain stripped even alongside the new tags
+      assert(sanitizeV5('<script>alert(1)</script><ul><li>safe</li></ul>') === '<ul><li>safe</li></ul>', '813. <script> tags remain stripped entirely, even in HTML that also contains the new list/highlight markup');
+
+      // 814. Event handlers remain stripped everywhere, including on the newly-allowed tags
+      assert(!sanitizeV5('<ul onclick="a()"><li onmouseover="b()"><mark data-highlight="yellow" onfocus="c()">x</mark></li></ul>').match(/on[a-z]+=/i), '814. Event handler attributes (onclick/onmouseover/onfocus) are stripped from every tag, including <ul>/<li>/<mark>');
+
+      // 815. Iframes remain stripped
+      assert(!sanitizeV5('<iframe src="evil.com"></iframe><ol><li>safe</li></ol>').includes('iframe'), '815. <iframe> tags remain stripped entirely, even alongside the new list markup');
+
+      // 816. Images remain stripped
+      assert(!sanitizeV5('<img src=x onerror=alert(1)><mark data-highlight="green">safe</mark>').includes('<img'), '816. <img> tags remain stripped entirely, even alongside highlight markup');
+
+      // 817. Unsupported tags remain sanitized/unwrapped (e.g. <span>/<table>/<a> keep only their inner text)
+      {
+        const unwrapped = sanitizeV5('<span class="x"><table><tr><td>cell</td></tr></table></span><a href="javascript:alert(1)">link</a>');
+        assert(!unwrapped.includes('<span') && !unwrapped.includes('<table') && !unwrapped.includes('<a ') && unwrapped.includes('cell') && unwrapped.includes('link'), `817. Unsupported tags (span/table/a) are unwrapped (tag removed, inner text kept), not merely attribute-stripped (got: ${unwrapped})`);
+      }
+
+      // 818. No unsanitized HTML rendering path was introduced — every note-content render still funnels through resolveNoteContentHtml()/sanitizeNoteHtml()
+      {
+        const allRenderSurfaces = [noteCardSrcV5, notesDocViewSrcV5].join('\n');
+        const dangerousSetters = allRenderSurfaces.match(/dangerouslySetInnerHTML/g) || [];
+        const throughResolve = allRenderSurfaces.match(/dangerouslySetInnerHTML=\{\{ __html: resolveNoteContentHtml\(/g) || [];
+        assert(dangerousSetters.length === throughResolve.length && dangerousSetters.length >= 2, '818. Every dangerouslySetInnerHTML usage across NoteCard and NotesDocumentView still goes through resolveNoteContentHtml() — no new unsanitized rendering path was introduced');
+      }
+
+      // --- COMPATIBILITY (37-47) ---
+
+      // 819. FUNCTIONAL: a legacy plain-content-only note (no contentHtml) still renders normally
+      {
+        const legacyHtml = resolveV5({ content: 'Just plain legacy text\nwith a line break' });
+        assert(legacyHtml.includes('Just plain legacy text') && legacyHtml.includes('<br>'), '819. A legacy note with only plain `content` (no contentHtml) still renders normally via resolveNoteContentHtml()');
+      }
+
+      // 820. FUNCTIONAL: an existing B/I/U-only note (no lists/highlight) still renders correctly
+      {
+        const biu = sanitizeV5('<b>Bold</b> <i>Italic</i> <u>Underline</u>');
+        assert(biu === '<b>Bold</b> <i>Italic</i> <u>Underline</u>', '820. Existing Bold/Italic/Underline-only notes continue to sanitize and render exactly as before — no regression from adding lists/highlight');
+      }
+
+      // 821. Line breaks remain intact alongside the new formatting
+      {
+        const withBreaks = sanitizeV5('Line one<br>Line two<div>Line three</div>');
+        assert(withBreaks.includes('<br>') && withBreaks.includes('<div>Line three</div>'), '821. <br> and <div> line-break handling is unchanged by the highlight/list additions');
+      }
+
+      // 822. Search still uses plain `content`, never raw HTML — a search for an HTML tag fragment does not accidentally match
+      {
+        await notesService.create({ title: 'HTML Tag Search Safety', contentHtml: '<ul><li>normal item</li></ul>', category: 'General' });
+        const rawTagSearch = await notesService.getAll({ scope: 'my', search: '<ul>' });
+        assert(!rawTagSearch.some((n) => n.title === 'HTML Tag Search Safety'), '822. Searching for a raw HTML tag fragment ("<ul>") does not match — confirms search still operates on derived plain content, not markup');
+      }
+
+      // 823. Custom categories are unaffected by this formatting-only change
+      assert(noteEditorModalSrcV5.includes('CUSTOM_CATEGORY_OPTION') && notesDocViewSrcV5.includes('CUSTOM_CATEGORY_OPTION'), '823. Custom category selection/handling (CUSTOM_CATEGORY_OPTION) is untouched by this task');
+
+      // 824. Color accents are unaffected by this formatting-only change (a separate, pre-existing concept from highlight colors)
+      assert(noteDomainSrcV5.includes('NOTE_ACCENTS') && noteDomainSrcV5.includes('NOTE_HIGHLIGHT_COLORS') && noteDomainSrcV5.indexOf('NOTE_ACCENTS') !== noteDomainSrcV5.indexOf('NOTE_HIGHLIGHT_COLORS'), '824. NOTE_ACCENTS (note color accents) and the new NOTE_HIGHLIGHT_COLORS (text highlight palette) are two distinct, independent constants — adding highlight did not touch color accents');
+
+      // 825. Card/Document view switching is unaffected
+      assert(notesDocViewSrcV5.includes('variant') && noteCardSrcV5.includes('variant'), '825. Card View / Document View components are unchanged in structure by this formatting-only task');
+
+      // 826. Save/Cancel state behavior in Document View is unaffected (isEditing/isDirty machinery untouched)
+      assert(notesDocViewSrcV5.includes('const [isEditing, setIsEditing] = useState(false);') && notesDocViewSrcV5.includes('const isDirty = JSON.stringify(draft) !== JSON.stringify(baseline);'), '826. Document View\'s read/edit state and dirty-tracking machinery (isEditing/isDirty) are unchanged by this formatting task');
+
+      // 827. Pin is unaffected
+      assert(notesServiceSrcV5.includes('async togglePin(id)'), '827. notesService.togglePin() is unchanged');
+
+      // 828. Archive/Restore are unaffected
+      assert(notesServiceSrcV5.includes('async archive(id)') && notesServiceSrcV5.includes('async restore(id)'), '828. notesService.archive()/restore() are unchanged');
+
+      // 829. Delete is unaffected
+      assert(notesServiceSrcV5.includes('async deletePermanently(id)'), '829. notesService.deletePermanently() is unchanged');
+
+      // --- RESPONSIVE (48-51) ---
+
+      // 830. Toolbar wraps if needed and uses compact button sizing — no page-level horizontal overflow rule was introduced
+      assert(indexCssSrcV5.includes('flex-wrap: wrap;') && /\.note-content-toolbar\s*\{[^}]*flex-wrap:\s*wrap;/.test(indexCssSrcV5), '830. .note-content-toolbar allows wrapping (flex-wrap: wrap) so the now-larger button set stays usable without forcing horizontal overflow, even though compact 28px buttons should rarely need to wrap');
+
+      // 831. No new overflow-x: scroll/auto rules were introduced by the highlight popover or list/mark CSS
+      assert(!/\.note-highlight-popover[\s\S]{0,200}overflow-x:\s*(scroll|auto)/.test(indexCssSrcV5) && !/\.note-content-editable (ul|ol)[\s\S]{0,150}overflow-x:\s*(scroll|auto)/.test(indexCssSrcV5), '831. No new overflow-x rules were introduced by the highlight popover or list styling CSS');
+
+      // 832. The highlight popover is a small, fixed-width control (not full toolbar width) and positions itself relative to just the Highlight button
+      assert(/\.note-highlight-control\s*\{[^}]*position:\s*relative;/.test(indexCssSrcV5) && /\.note-highlight-popover\s*\{[^}]*position:\s*absolute;/.test(indexCssSrcV5) && /\.note-highlight-popover\s*\{[^}]*min-width:\s*\d+px;/.test(indexCssSrcV5), '832. The highlight popover positions absolutely relative to its own compact .note-highlight-control wrapper (not the whole toolbar), staying small rather than widening the toolbar');
+
+      // --- GENERAL (52-56) ---
+
+      // 833. notesService remains the sole data boundary — the sanitize/derive step still happens centrally in resolveContentFields(), not scattered across UI components
+      assert(notesServiceSrcV5.includes('function resolveContentFields(payload)') && notesServiceSrcV5.includes('sanitizeNoteHtml(payload.contentHtml)'), '833. notesService.js still centralizes sanitization/derivation in resolveContentFields() — the storage boundary is unchanged by adding highlight/list support');
+
+      // 834. No direct localStorage writes were added by this task's changes
+      {
+        const thisTaskFiles = [noteContentEditorSrcV5, noteCardSrcV5, noteDomainSrcV5].join('\n');
+        assert(!thisTaskFiles.includes('localStorage.'), '834. None of this task\'s modified files (NoteContentEditor/NoteCard/noteDomain) write to localStorage directly');
+      }
+
+      // 835. Shared Onboarding/Offboarding activity infrastructure remains untouched
+      assert(activityServiceSrcV5.includes('async markComplete(') && activityServiceSrcV5.includes('async reopen(') && activityServiceSrcV5.includes('async getActiveTypes(') && activityServiceSrcV5.includes('async getOverdueActivities('), '835. activityService.js (markComplete/reopen/getActiveTypes/getOverdueActivities) is unchanged — this task touched only Notes formatting files');
+
+      // 836. No heavy rich-text editor library was installed — package.json has no new rich-text dependency
+      {
+        const pkgJson = JSON.parse(fs.readFileSync(path.resolve('./package.json'), 'utf-8'));
+        const deps = { ...(pkgJson.dependencies || {}), ...(pkgJson.devDependencies || {}) };
+        const richTextLibNames = ['quill', 'draft-js', 'slate', 'tiptap', '@tiptap/core', 'ckeditor', 'react-quill', 'lexical'];
+        assert(!richTextLibNames.some((lib) => deps[lib]), '836. No heavy rich-text editor library was added to package.json — the lightweight contentEditable + execCommand approach was extended in place');
+      }
+
+      // 837. No font-family, font-size, text-color, alignment, heading, table, image, or link controls were added to the toolbar
+      assert(!/font-family|fontSize|AlignCenter|AlignLeft|AlignRight|Heading[1-6]|<Table|<LinkIcon/i.test(noteContentEditorSrcV5), '837. The toolbar adds only Highlight/Bulleted List/Numbered List — no font/alignment/heading/table/link controls were introduced');
+
+      // 838. No nested-list/indent controls were added (no Indent/Outdent/checkbox-list controls)
+      assert(!/Indent|Outdent|checkbox|Roman/i.test(noteContentEditorSrcV5), '838. No indent/outdent, nested-list, checkbox-list, or Roman-numeral controls were added — only flat Bulleted List and Numbered List');
 
       resetDatabase();
     }

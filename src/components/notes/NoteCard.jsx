@@ -28,11 +28,13 @@ export default function NoteCard({ note, variant = 'my', onEdit, onTogglePin, on
 
       <span className="note-category-badge">{note.category}</span>
 
-      {/* Formatting (Bold/Italic/Underline) rendered safely — resolveNoteContentHtml() always
-          returns already-sanitized HTML (re-sanitized here defensively), so this is never fed
-          raw/untrusted markup. Legacy notes with no contentHtml fall back to their escaped
-          plain content with line breaks preserved. */}
-      <p className="note-content-preview" dangerouslySetInnerHTML={{ __html: resolveNoteContentHtml(note) }} />
+      {/* Formatting (Bold/Italic/Underline/Highlight/Lists) rendered safely —
+          resolveNoteContentHtml() always returns already-sanitized HTML (re-sanitized here
+          defensively), so this is never fed raw/untrusted markup. Legacy notes with no
+          contentHtml fall back to their escaped plain content with line breaks preserved. A
+          <div> (not <p>) is required here since sanitized content can now legitimately include
+          block-level <ul>/<ol> lists. */}
+      <div className="note-content-preview" dangerouslySetInnerHTML={{ __html: resolveNoteContentHtml(note) }} />
 
       {note.tags && note.tags.length > 0 && (
         <div className="note-tags">

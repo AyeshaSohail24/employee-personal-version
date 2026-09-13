@@ -29,6 +29,20 @@ export const NOTE_ACCENTS = {
 
 export const NOTE_COLOR_ACCENTS = Object.keys(NOTE_ACCENTS);
 
+// Small fixed palette for the Highlight toolbar control — intentionally NOT arbitrary color
+// picking. Soft pastel backgrounds only, readable with the app's dark text. This is the single
+// source of truth for both the toolbar's swatch dots (NoteContentEditor) AND the sanitizer's
+// data-highlight whitelist below — the two can never drift out of sync. The hex values here are
+// cosmetic only; index.css's `mark[data-highlight="..."]` rules are what actually paints the
+// highlight in editors/previews/documents and must stay visually consistent with these if either
+// changes (mirroring the existing NOTE_ACCENTS/.note-card--accent-* sync-by-comment convention).
+export const NOTE_HIGHLIGHT_COLORS = {
+  yellow: { label: 'Yellow', swatchColor: '#FEF9C3' },
+  green: { label: 'Green', swatchColor: '#DCFCE7' },
+  blue: { label: 'Blue', swatchColor: '#DBEAFE' },
+  pink: { label: 'Pink', swatchColor: '#FCE7F3' },
+};
+
 export const NOTE_SORT_OPTIONS = {
   UPDATED: 'updated',
   NEWEST: 'newest',
@@ -103,15 +117,22 @@ export function resolveNoteCategory(selectedCategory, customCategoryInput = '') 
 // operate on plain strings/regex rather than requiring a real DOM.
 // --------------------------------------------------------------------------
 
-const ALLOWED_FORMATTING_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'BR', 'DIV']);
+const ALLOWED_FORMATTING_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'BR', 'DIV', 'UL', 'OL', 'LI', 'MARK']);
+
+// The ONLY attribute permitted to survive sanitization, and ONLY on <mark>, and ONLY with one of
+// these exact values — derived from NOTE_HIGHLIGHT_COLORS so the toolbar palette and the
+// sanitizer whitelist can never drift apart. Every other attribute on every tag (including any
+// other attribute on <mark> itself, e.g. style/class/onclick) is still stripped unconditionally.
+const ALLOWED_HIGHLIGHT_VALUES = new Set(Object.keys(NOTE_HIGHLIGHT_COLORS));
 
 /**
- * Whitelist-sanitizes note formatting HTML: strips every tag except the small B/I/U/line-break
- * allowlist, and strips ALL attributes even on allowed tags (bold/italic/underline/line-breaks
- * never need one, so this also removes event handlers, style, class, href, src, etc. outright).
- * Dangerous elements (script/style/iframe/object/embed/link/meta) are removed tag AND content;
- * every other disallowed tag (img, a, span, table, ...) is unwrapped, keeping only its inner
- * text. Never render contentHtml via dangerouslySetInnerHTML without passing it through this.
+ * Whitelist-sanitizes note formatting HTML: strips every tag except the small
+ * B/I/U/line-break/list/highlight allowlist, and strips ALL attributes on every tag EXCEPT the
+ * one narrow exception below (<mark data-highlight="yellow|green|blue|pink">) — this also
+ * removes event handlers, style, class, href, src, etc. outright everywhere else. Dangerous
+ * elements (script/style/iframe/object/embed/link/meta) are removed tag AND content; every other
+ * disallowed tag (img, a, span, table, ...) is unwrapped, keeping only its inner text. Never
+ * render contentHtml via dangerouslySetInnerHTML without passing it through this.
  */
 export function sanitizeNoteHtml(rawHtml) {
   if (!rawHtml || typeof rawHtml !== 'string') return '';
@@ -125,13 +146,28 @@ export function sanitizeNoteHtml(rawHtml) {
   // Strip HTML comments (can hide conditional/legacy script vectors in old IE-style markup)
   html = html.replace(/<!--[\s\S]*?-->/g, '');
 
-  // Whitelist every remaining tag; strip all attributes unconditionally, drop disallowed tags
-  // (keeping their inner text, which the subsequent regex pass over will still visit safely).
-  html = html.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g, (match, tagName) => {
+  // Whitelist every remaining tag; strip all attributes unconditionally (except the single
+  // <mark data-highlight="..."> exception below), drop disallowed tags (keeping their inner
+  // text, which the subsequent regex pass over will still visit safely).
+  html = html.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g, (match, closingSlash, tagName, attrs) => {
     const upper = tagName.toUpperCase();
     if (!ALLOWED_FORMATTING_TAGS.has(upper)) return '';
-    const isClosing = match.startsWith('</');
+    const isClosing = closingSlash === '/';
     if (upper === 'BR') return '<br>';
+
+    if (upper === 'MARK' && !isClosing) {
+      // Extract ONLY data-highlight, validate its value against the fixed palette, and rebuild
+      // the tag from scratch using the validated value — every other attribute (style, class,
+      // onclick, a malicious data-highlight like "javascript:...", ...) is discarded by
+      // construction since we never copy `attrs` through verbatim. An unrecognized/missing value
+      // normalizes to a bare, unstyled <mark> (index.css treats an attribute-less <mark> as
+      // transparent) rather than surviving with an unsafe or made-up highlight color.
+      const attrMatch = attrs.match(/data-highlight\s*=\s*"([^"]*)"|data-highlight\s*=\s*'([^']*)'/i);
+      const rawValue = attrMatch ? (attrMatch[1] !== undefined ? attrMatch[1] : attrMatch[2]) : '';
+      const normalizedValue = (rawValue || '').trim().toLowerCase();
+      return ALLOWED_HIGHLIGHT_VALUES.has(normalizedValue) ? `<mark data-highlight="${normalizedValue}">` : '<mark>';
+    }
+
     return isClosing ? `</${upper.toLowerCase()}>` : `<${upper.toLowerCase()}>`;
   });
 
@@ -159,13 +195,17 @@ export function plainTextToSafeHtml(text) {
 /**
  * Derives the normalized plain-text representation from sanitized formatting HTML — this is
  * what gets stored as `content` (search/fallback/compatibility) whenever a note is saved with
- * formatting. Line breaks (<br>, closing <div>) become '\n'; all other tags are stripped.
+ * formatting. Line breaks (<br>, closing <div>) become '\n'; list items (<li>) each become their
+ * own line too, so bulleted/numbered content remains fully readable and searchable as plain
+ * text — no HTML tags and no fake "•"/"1." bullet characters are ever written into `content`.
+ * All other tags (including <mark>, which contributes no separator of its own — a highlighted
+ * word behaves exactly like plain text here) are stripped.
  */
 export function deriveContentFromHtml(sanitizedHtml) {
   if (!sanitizedHtml) return '';
   let text = sanitizedHtml
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/(div|li)>/gi, '\n')
     .replace(/<[^>]+>/g, '');
 
   text = text
