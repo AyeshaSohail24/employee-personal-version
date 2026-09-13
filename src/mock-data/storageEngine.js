@@ -348,6 +348,9 @@ function getInitialState() {
     // shared seed module singleton for the rest of the process, so a later resetDatabase()
     // could never actually restore the original seed note again.
     notes: [...seedNotes],
+    // In-app notification records (currently only 'note_reminder' type). Starts empty — the
+    // app opens with real current persisted data only, never fake/demo notifications.
+    notifications: [],
   };
   const migrated = migrateEmployeeTagsIfNeeded(base);
   const cleanedAtt = cleanupAttendanceIfNeeded(migrated);
@@ -390,6 +393,7 @@ export function loadDatabase() {
     if (!parsed.emailTemplates) parsed.emailTemplates = seedEmailTemplates;
     if (!parsed.candidateEmailLog) parsed.candidateEmailLog = [];
     if (!parsed.notes) parsed.notes = [...seedNotes];
+    if (!parsed.notifications) parsed.notifications = [];
 
     const migrated = migrateEmployeeTagsIfNeeded(parsed);
     const cleanedAtt = cleanupAttendanceIfNeeded(migrated);

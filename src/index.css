@@ -671,6 +671,175 @@ body {
   border: 2px solid #FFFFFF;
 }
 
+/* Top header notification dropdown — the in-app notification center. Anchored to its own
+   wrapper (not the whole header) so it stays right beside the bell; width is capped relative
+   to the viewport so it can never overflow horizontally even on narrow screens. */
+.notification-bell-wrapper {
+  position: relative;
+}
+
+.notification-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 480px;
+  max-width: calc(100vw - 2rem);
+  max-height: 460px;
+  display: flex;
+  flex-direction: column;
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  overflow: hidden;
+}
+
+.notification-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--border-light);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  flex-shrink: 0;
+}
+
+.notification-mark-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  color: var(--color-primary-active);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm, 6px);
+  flex-shrink: 0;
+}
+
+.notification-mark-all-btn:hover {
+  background-color: var(--color-primary-light);
+}
+
+.notification-panel-list {
+  overflow-y: auto;
+  padding: 0.5rem 0;
+  /* Explicit flex `gap` (not sibling margins) for the space BETWEEN cards — margins on
+     .header-notification-item were collapsing against each other under this plain block
+     container (adjacent margins take the max, not the sum), which is why two cards previously
+     ended up with only ~2px of visible separation instead of the intended gap. `gap` never
+     collapses and, unlike margin, never adds space before the first or after the last card. */
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.notification-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 2.75rem 1.5rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.notification-empty-state p {
+  margin: 0;
+}
+
+/* Header notification dropdown rows — deliberately namespaced "header-notification-item"
+   rather than the shorter "notification-item" name: that name was already in use by the
+   unrelated Upcoming/Overdue-Tasks notification list (src/components/upcoming/
+   NotificationsPanel.jsx, src/components/onboarding/OverdueTasksModal.jsx — see their own
+   .notification-item/.notification-list rules elsewhere in this file), and reusing it here was
+   silently letting those rules' padding/gap/border win the cascade over this panel's own
+   spacing, which is what made this panel look cramped in the first place. */
+.header-notification-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  width: calc(100% - 1rem);
+  padding: 1rem 2.5rem 1rem 1.5rem;
+  /* Horizontal inset only — vertical separation between cards now comes from the parent
+     .notification-panel-list's `gap`, not from a margin here (see that rule's comment). */
+  margin: 0 0.5rem;
+  border-radius: var(--radius-md);
+  background: none;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.header-notification-item:hover {
+  background-color: var(--bg-subtle);
+}
+
+.header-notification-item.unread {
+  background-color: var(--color-primary-light);
+}
+
+.header-notification-item.unread:hover {
+  background-color: var(--color-primary-light);
+  filter: brightness(0.98);
+}
+
+.header-notification-item-icon {
+  color: var(--color-primary-active);
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+}
+
+.header-notification-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.header-notification-item-type {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-primary-active);
+}
+
+.header-notification-item-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.header-notification-item-message {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.header-notification-item-time {
+  font-size: 0.74rem;
+  color: var(--text-light);
+  margin-top: 0.1rem;
+}
+
+/* Individual "Mark as read" — a small secondary icon action pinned to the top-right of the
+   row (reuses .icon-btn's existing circular/hover treatment for visual consistency with every
+   other icon action in the app; only size/position are overridden here). */
+.notification-mark-read-btn {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  padding: 0.35rem;
+}
+
 /* Page Layout Container */
 .page-container {
   padding: 1.75rem 2rem;
@@ -5504,6 +5673,75 @@ input.form-control:focus {
   display: flex;
   gap: 0.3rem;
   flex-shrink: 0;
+}
+
+/* Reminder — subtle metadata line shown ONLY when a note actually has one (never "Reminder:
+   None"). Muted text + an accent-tinted bell icon, deliberately not styled like a
+   warning/error — a normal upcoming reminder should not look alarming. */
+.note-reminder-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.note-reminder-badge svg {
+  color: var(--color-primary-active, var(--color-primary));
+  flex-shrink: 0;
+}
+
+/* Clear-but-tasteful persistent "active" state for the Reminder bell once a note has one — a
+   filled teal-tinted circular container at rest (not just a color change that only shows up on
+   hover), so "this note has a reminder" reads at a glance. Uses the existing brand tokens
+   (Primary Teal / Teal Light Tint / Teal Border) — the same three-part combo already used for
+   .note-format-btn.active — deliberately NOT a red/warning/error treatment: a reminder is a
+   normal, calm piece of metadata, not something overdue or urgent. */
+.icon-btn-reminder-active {
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
+  /* An inset box-shadow reads as a subtle border without adding to the button's box size —
+     keeps this icon perfectly aligned with its border-less Pin/Edit/Archive/Delete siblings. */
+  box-shadow: inset 0 0 0 1px var(--color-primary-border);
+}
+
+.icon-btn-reminder-active:hover {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-active);
+  box-shadow: inset 0 0 0 1px var(--color-primary-border);
+}
+
+.reminder-current-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0 0 1rem 0;
+}
+
+/* Set/Edit Reminder modal footer — the shared .modal-footer has NO padding of its own (many
+   other modals rely on .modal-footer-spacious or .confirmation-modal for that instead), which
+   left this modal's Remove Reminder/Cancel/Save Changes buttons sitting flush against the card's
+   edges. Scoped fix (not a change to the globally-shared .modal-footer, which many unrelated
+   modals also use) mirroring the same padding-only treatment already used for the Delete/
+   Unsaved-Changes confirmation modals, so this modal "feels" consistent with them without
+   growing to their larger min-height — this one stays compact. */
+.modal-card.reminder-modal .modal-footer {
+  padding: 1.5rem 1.75rem 1.75rem 1.75rem;
+  margin-top: 0;
+}
+
+/* At narrow widths, the Edit Reminder footer's 3 buttons (Remove Reminder / Cancel / Save
+   Changes) have just enough combined label width to wrap awkwardly mid-button rather than
+   between buttons. Stacking to one full-width button per row keeps every label on a single
+   line and each button comfortably tappable, instead of relying on in-button text wrapping. */
+@media (max-width: 480px) {
+  .modal-card.reminder-modal .modal-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .modal-card.reminder-modal .modal-footer button {
+    width: 100%;
+    margin-right: 0 !important;
+  }
 }
 
 /* Note Editor Modal */

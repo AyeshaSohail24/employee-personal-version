@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, Search, Bell, ChevronRight, User } from 'lucide-react';
 import { useRole } from '../../state/RoleContext';
+import { useNotifications } from '../../state/NotificationContext';
+import NotificationPanel from './NotificationPanel';
 
 export default function Header({ toggleMobileSidebar }) {
   const location = useLocation();
   const { currentRole } = useRole();
+  const { unreadCount } = useNotifications();
+  const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
 
   // Helper to construct dynamic breadcrumbs from URL pathname
   const pathSegments = location.pathname.split('/').filter(Boolean);
@@ -66,11 +70,23 @@ export default function Header({ toggleMobileSidebar }) {
           />
         </div>
 
-        {/* Notification Indicator */}
-        <button className="icon-btn" aria-label="Notifications">
-          <Bell size={20} />
-          <span className="notification-dot" />
-        </button>
+        {/* Notification Bell — the in-app notification center. Currently surfaces Note
+            Reminder notifications only; the unread dot is only rendered while there is at
+            least one unread notification, never a permanent/fake indicator. */}
+        <div className="notification-bell-wrapper">
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Notifications"
+            aria-haspopup="menu"
+            aria-expanded={isNotificationPanelOpen}
+            onClick={() => setIsNotificationPanelOpen((open) => !open)}
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && <span className="notification-dot" />}
+          </button>
+          <NotificationPanel isOpen={isNotificationPanelOpen} onClose={() => setIsNotificationPanelOpen(false)} />
+        </div>
 
         {/* Profile Avatar Menu */}
         <div className="user-profile-badge">

@@ -8,8 +8,10 @@ import {
   sanitizeNoteHtml,
   deriveContentFromHtml,
   plainTextToSafeHtml,
+  validateReminder,
   NOTE_SORT_OPTIONS,
 } from '../domain/noteDomain.js';
+import { notificationService } from './notificationService.js';
 
 const CURRENT_USER_ID = 'emp-001';
 
@@ -108,6 +110,10 @@ export const notesService = {
       ownerId: CURRENT_USER_ID,
       createdAt: nowIso,
       updatedAt: nowIso,
+      // Reminders are entirely optional and off by default — a new note never has one unless
+      // the user explicitly sets it afterward via setReminder().
+      reminderAt: null,
+      reminderNotificationGeneratedFor: null,
     };
 
     db.notes = [newNote, ...notes];
@@ -203,6 +209,56 @@ export const notesService = {
 
     db.notes = filtered;
     saveDatabase(db);
+    // The note (and any reminder it had) is gone, so it can never trigger a future reminder —
+    // also clean up any already-generated in-app notifications that pointed at it, so clicking
+    // one can never crash trying to look up a note that no longer exists.
+    await notificationService.deleteForNote(id);
     return true;
+  },
+
+  /**
+   * Sets or changes a note's reminder. `reminderAtIso` must be a validated future ISO
+   * timestamp (see noteDomain.validateReminder) — Card View and Document View share this one
+   * method via the shared ReminderModal, so there is exactly one reminder-writing code path.
+   * Explicitly resets reminderNotificationGeneratedFor to null: even though
+   * notificationService's own due-check already treats any DIFFERENT reminderAt as a fresh,
+   * not-yet-notified occurrence, clearing it here keeps the two fields from ever looking
+   * inconsistent to a future reader.
+   */
+  async setReminder(id, reminderAtIso) {
+    const { isValid, error } = validateReminder(reminderAtIso);
+    if (!isValid) {
+      throw new Error(error);
+    }
+
+    const db = loadDatabase();
+    const notes = db.notes || [];
+    const index = notes.findIndex((n) => n.id === id);
+    if (index === -1) {
+      throw new Error(`Note with ID "${id}" not found.`);
+    }
+
+    notes[index] = { ...notes[index], reminderAt: reminderAtIso, reminderNotificationGeneratedFor: null, updatedAt: new Date().toISOString() };
+    db.notes = notes;
+    saveDatabase(db);
+    return notes[index];
+  },
+
+  /**
+   * Removes ONLY a note's reminder — title/content/category/tags/colorAccent/pin/archive state
+   * are all left completely untouched.
+   */
+  async removeReminder(id) {
+    const db = loadDatabase();
+    const notes = db.notes || [];
+    const index = notes.findIndex((n) => n.id === id);
+    if (index === -1) {
+      throw new Error(`Note with ID "${id}" not found.`);
+    }
+
+    notes[index] = { ...notes[index], reminderAt: null, reminderNotificationGeneratedFor: null, updatedAt: new Date().toISOString() };
+    db.notes = notes;
+    saveDatabase(db);
+    return notes[index];
   },
 };

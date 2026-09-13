@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Search, NotebookPen, LayoutGrid, FileStack } from 'lucide-react';
 import { notesService } from '../../services/notesService.js';
 import { NOTE_CATEGORIES, NOTE_SORT_OPTIONS } from '../../domain/noteDomain.js';
@@ -6,6 +7,7 @@ import NoteCard from '../../components/notes/NoteCard.jsx';
 import NotesDocumentView from '../../components/notes/NotesDocumentView.jsx';
 import NoteEditorModal from '../../components/notes/NoteEditorModal.jsx';
 import DeleteNoteModal from '../../components/notes/DeleteNoteModal.jsx';
+import ReminderModal from '../../components/notes/ReminderModal.jsx';
 import Select from '../../components/common/Select.jsx';
 
 const VIEW_MODE_STORAGE_KEY = 'rizurf_notes_view_mode';
@@ -49,6 +51,8 @@ const SORT_OPTIONS = [
 
 export default function NotesPage({ variant = 'my' }) {
   const meta = VARIANT_META[variant];
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +63,7 @@ export default function NotesPage({ variant = 'my' }) {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [reminderTarget, setReminderTarget] = useState(null);
   const [categoryOptions, setCategoryOptions] = useState(NOTE_CATEGORIES);
 
   // Presentation preference only — Card vs Document view never affects which notes exist or
@@ -105,6 +110,22 @@ export default function NotesPage({ variant = 'my' }) {
       // Non-fatal — the view just won't persist across reloads for this viewer.
     }
   }, [viewMode]);
+
+  // Arriving here from a clicked Note Reminder notification (see Header's NotificationPanel):
+  // navigation carries the target note's id via router state. Clear any leftover search/
+  // category filter that could hide it, switch to Document View (the reliable way to open one
+  // specific note), and select it — then clear the state so this doesn't re-fire on a later
+  // re-render or if the user navigates back to this exact history entry.
+  useEffect(() => {
+    const targetNoteId = location.state?.openNoteId;
+    if (!targetNoteId) return;
+    setSearch('');
+    setCategory('');
+    setViewMode('document');
+    setSelectedNoteId(targetNoteId);
+    navigate(location.pathname, { replace: true, state: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   // Document View selection safety net: if nothing is selected yet (first entry into Document
   // View), or the previously-selected note disappeared (deleted, archived while on My Notes,
@@ -248,6 +269,7 @@ export default function NotesPage({ variant = 'my' }) {
           onArchive={handleArchive}
           onRestore={handleRestore}
           onDeleteRequest={setDeleteTarget}
+          onReminderRequest={setReminderTarget}
           onNotesChanged={loadNotes}
           onDirtyChange={setIsDocumentDirty}
           variant={variant}
@@ -283,6 +305,7 @@ export default function NotesPage({ variant = 'my' }) {
           onArchive={handleArchive}
           onRestore={handleRestore}
           onDeleteRequest={setDeleteTarget}
+          onReminderRequest={setReminderTarget}
           onNotesChanged={loadNotes}
           onDirtyChange={setIsDocumentDirty}
           variant={variant}
@@ -299,6 +322,7 @@ export default function NotesPage({ variant = 'my' }) {
               onArchive={handleArchive}
               onRestore={handleRestore}
               onDeleteRequest={setDeleteTarget}
+              onReminderRequest={setReminderTarget}
             />
           ))}
         </div>
@@ -316,6 +340,13 @@ export default function NotesPage({ variant = 'my' }) {
         onClose={() => setDeleteTarget(null)}
         note={deleteTarget}
         onSuccess={loadNotes}
+      />
+
+      <ReminderModal
+        isOpen={Boolean(reminderTarget)}
+        note={reminderTarget}
+        onClose={() => setReminderTarget(null)}
+        onSaved={loadNotes}
       />
     </div>
   );

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Pin, PinOff, Archive, RotateCcw, Trash2, ArrowLeft, NotebookPen, Save, X, Pencil } from 'lucide-react';
+import { Plus, Pin, PinOff, Archive, RotateCcw, Trash2, ArrowLeft, NotebookPen, Save, X, Pencil, Bell } from 'lucide-react';
 import { notesService } from '../../services/notesService.js';
 import {
   NOTE_CATEGORIES,
   NOTE_ACCENTS,
   CUSTOM_CATEGORY_OPTION,
   formatNoteUpdatedLabel,
+  formatReminderLabel,
+  getReminderAttentionState,
   resolveNoteCategory,
   resolveNoteContentHtml,
   deriveContentFromHtml,
@@ -13,6 +15,7 @@ import {
 import Select from '../common/Select.jsx';
 import NoteContentEditor from './NoteContentEditor.jsx';
 import UnsavedChangesModal from './UnsavedChangesModal.jsx';
+import { useNotifications } from '../../state/NotificationContext';
 
 const ACCENT_OPTIONS = Object.entries(NOTE_ACCENTS).map(([value, meta]) => ({
   value,
@@ -57,6 +60,7 @@ export default function NotesDocumentView({
   onArchive,
   onRestore,
   onDeleteRequest,
+  onReminderRequest,
   onNotesChanged,
   onDirtyChange,
   variant = 'my',
@@ -75,6 +79,11 @@ export default function NotesDocumentView({
 
   const selectedNote = notes.find((n) => n.id === selectedNoteId) || null;
   const isDirty = JSON.stringify(draft) !== JSON.stringify(baseline);
+
+  // Same shared rule as NoteCard — "needs attention" (future, or due+unread), not merely
+  // "reminderAt exists" — so Card View and Document View can never disagree.
+  const { notifications } = useNotifications();
+  const isReminderActive = getReminderAttentionState(selectedNote, notifications);
 
   // Rebuild the draft whenever a DIFFERENT persisted note becomes selected (not on every
   // `notes` refresh — Pin/Archive don't touch any field this editor tracks, so an in-progress
@@ -358,6 +367,18 @@ export default function NotesDocumentView({
               >
                 {selectedNote.isPinned ? <PinOff size={15} /> : <Pin size={15} />}
               </button>
+              {/* Reminder is independent of the unsaved-changes draft/guard system — it never
+                  touches draft/isDirty and never navigates away, so (unlike Pin/Archive/Delete)
+                  it is deliberately NOT wrapped in requestAction(): opening it while editing can
+                  never discard in-progress content. */}
+              <button
+                type="button"
+                className={`icon-btn ${isReminderActive ? 'icon-btn-reminder-active' : ''}`}
+                title={selectedNote.reminderAt ? 'Edit reminder' : 'Set reminder'}
+                onClick={() => onReminderRequest(selectedNote)}
+              >
+                <Bell size={15} />
+              </button>
               {!isArchivedReadOnly ? (
                 <button type="button" className="icon-btn" title="Archive" onClick={() => requestAction(() => onArchive(selectedNote))}>
                   <Archive size={15} />
@@ -402,6 +423,16 @@ export default function NotesDocumentView({
                     </div>
                   )}
                 </div>
+                {/* Shown only while the reminder is "active" (future, or due and still
+                    unread) — same getReminderAttentionState() result as the Bell, so Card View
+                    and Document View can never disagree. reminderAt itself is untouched by
+                    reading the notification, so this reappears automatically on reschedule. */}
+                {isReminderActive && (
+                  <span className="note-reminder-badge" style={{ marginBottom: '0.75rem' }}>
+                    <Bell size={12} />
+                    <span>Reminder: {formatReminderLabel(selectedNote.reminderAt)}</span>
+                  </span>
+                )}
                 <div className="notes-document-content" dangerouslySetInnerHTML={{ __html: resolveNoteContentHtml(selectedNote) }} />
               </>
             ) : (

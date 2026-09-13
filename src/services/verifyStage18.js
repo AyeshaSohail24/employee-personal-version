@@ -37,6 +37,7 @@ import { offboardingService } from './offboardingService.js';
 import { activityService } from './activityService.js';
 import { dashboardService } from './dashboardService.js';
 import { notesService } from './notesService.js';
+import { notificationService } from './notificationService.js';
 import { loadDatabase, saveDatabase, resetDatabase, migrateOnboardingScopesIfNeeded } from '../mock-data/storageEngine.js';
 import fs from 'fs';
 import path from 'path';
@@ -4184,9 +4185,9 @@ export async function verifyStage18() {
 
       // --- DELETE ACTION ON CARDS ---
 
-      // 649. A visible Delete/Trash icon now exists on non-archived note cards too (previously Archived-only)
+      // 649. UPDATED — A visible Delete/Trash icon now exists on non-archived note cards too (previously Archived-only). Window widened from 900 to 1400 chars: adding the Reminder bell action between Pin and Edit pushed Delete further down the same JSX block without changing this check's intent.
       assert(
-        noteCardSrc2.match(/variant !== 'archived'[\s\S]{0,900}icon-btn icon-btn-danger" title="Delete"/),
+        noteCardSrc2.match(/variant !== 'archived'[\s\S]{0,1400}icon-btn icon-btn-danger" title="Delete"/),
         '649. Non-archived note cards (My Notes / Pinned) now expose a Delete icon alongside Pin/Edit/Archive'
       );
 
@@ -4893,8 +4894,8 @@ export async function verifyStage18() {
       // 757. Save Changes remains correctly gated by isDirty (no point persisting a no-op save)
       assert(/onClick=\{handleSaveChanges\}\s+disabled=\{saving \|\| !isDirty\}>/.test(notesDocViewSrc3), '757. The Save Changes button remains disabled when there is nothing to save (disabled={saving || !isDirty})');
 
-      // 758. READ state's formatted content is rendered via dangerouslySetInnerHTML fed through resolveNoteContentHtml — sanitized, same rendering path as Card View
-      assert(/isArchivedReadOnly \|\| !isEditing[\s\S]{0,1500}dangerouslySetInnerHTML=\{\{ __html: resolveNoteContentHtml\(selectedNote\) \}\}/.test(notesDocViewSrc3), '758. READ state renders the saved note\'s formatted content via dangerouslySetInnerHTML fed through resolveNoteContentHtml (sanitized), not a disabled input');
+      // 758. UPDATED — READ state's formatted content is rendered via dangerouslySetInnerHTML fed through resolveNoteContentHtml — sanitized, same rendering path as Card View. Window widened from 1500 to 2000 chars: the Reminder badge line (rendered between the meta row and the content div) pushed this further down the same JSX block without changing this check's intent.
+      assert(/isArchivedReadOnly \|\| !isEditing[\s\S]{0,2600}dangerouslySetInnerHTML=\{\{ __html: resolveNoteContentHtml\(selectedNote\) \}\}/.test(notesDocViewSrc3), '758. READ state renders the saved note\'s formatted content via dangerouslySetInnerHTML fed through resolveNoteContentHtml (sanitized), not a disabled input');
 
       // 759. READ state shows the note as a document (title/category badge/tags/content) rather than a form with disabled inputs — no disabled-input styling is used for the read view
       assert(notesDocViewSrc3.includes('notes-document-title') && notesDocViewSrc3.includes('notes-document-meta') && !/isArchivedReadOnly \|\| !isEditing[\s\S]{0,800}disabled(?!ArchivedReadOnly)/.test(notesDocViewSrc3.slice(notesDocViewSrc3.indexOf('isArchivedReadOnly || !isEditing'), notesDocViewSrc3.indexOf('isArchivedReadOnly || !isEditing') + 800)), '759. READ state renders a title/category-badge/tags/content document layout — not disabled form inputs');
@@ -5318,6 +5319,947 @@ export async function verifyStage18() {
 
       // 838. No nested-list/indent controls were added (no Indent/Outdent/checkbox-list controls)
       assert(!/Indent|Outdent|checkbox|Roman/i.test(noteContentEditorSrcV5), '838. No indent/outdent, nested-list, checkbox-list, or Roman-numeral controls were added — only flat Bulleted List and Numbered List');
+
+      resetDatabase();
+    }
+    // ==========================================================================
+    // Notes: Optional Reminders + In-App Notification Bell
+    // ==========================================================================
+    {
+      const noteDomainSrcV6 = fs.readFileSync(path.resolve('./src/domain/noteDomain.js'), 'utf-8');
+      const notesServiceSrcV6 = fs.readFileSync(path.resolve('./src/services/notesService.js'), 'utf-8');
+      const notificationServiceSrcV6 = fs.existsSync(path.resolve('./src/services/notificationService.js'))
+        ? fs.readFileSync(path.resolve('./src/services/notificationService.js'), 'utf-8')
+        : '';
+      const noteCardSrcV6 = fs.readFileSync(path.resolve('./src/components/notes/NoteCard.jsx'), 'utf-8');
+      const notesDocViewSrcV6 = fs.readFileSync(path.resolve('./src/components/notes/NotesDocumentView.jsx'), 'utf-8');
+      const noteEditorModalSrcV6 = fs.readFileSync(path.resolve('./src/components/notes/NoteEditorModal.jsx'), 'utf-8');
+      const reminderModalSrcV6 = fs.existsSync(path.resolve('./src/components/notes/ReminderModal.jsx'))
+        ? fs.readFileSync(path.resolve('./src/components/notes/ReminderModal.jsx'), 'utf-8')
+        : '';
+      const headerSrcV6 = fs.readFileSync(path.resolve('./src/components/layout/Header.jsx'), 'utf-8');
+      const notificationPanelSrcV6 = fs.existsSync(path.resolve('./src/components/layout/NotificationPanel.jsx'))
+        ? fs.readFileSync(path.resolve('./src/components/layout/NotificationPanel.jsx'), 'utf-8')
+        : '';
+      const notificationContextSrcV6 = fs.existsSync(path.resolve('./src/state/NotificationContext.jsx'))
+        ? fs.readFileSync(path.resolve('./src/state/NotificationContext.jsx'), 'utf-8')
+        : '';
+      const storageEngineSrcV6 = fs.readFileSync(path.resolve('./src/mock-data/storageEngine.js'), 'utf-8');
+      const notesPageSrcV6 = fs.readFileSync(path.resolve('./src/pages/notes/NotesPage.jsx'), 'utf-8');
+      const activityServiceSrcV6 = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
+      const indexCssSrcV6 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      const { validateReminder: validateReminderV6, combineReminderDateTime: combineV6, formatReminderLabel: formatReminderLabelV6 } = await import('../domain/noteDomain.js');
+
+      // --- REMINDER BASICS (1-15) ---
+
+      // 839. FUNCTIONAL: a brand-new note defaults to no reminder
+      {
+        const n = await notesService.create({ title: 'Reminder Basics — New Note', content: 'x', category: 'General' });
+        assert(n.reminderAt === null, '839. A newly created note defaults reminderAt to null — reminders are off by default');
+      }
+
+      // 840. Existing legacy notes (no reminderAt field at all) behave as "no reminder" — no destructive migration was run
+      {
+        const legacyNote = { id: 'legacy-1', title: 'Legacy', content: 'x' }; // no reminderAt key
+        assert(!legacyNote.reminderAt, '840. A legacy note object with no reminderAt field at all is treated as having no reminder (falsy), without needing a migration to add the field');
+      }
+
+      // 841. A Reminder Bell action exists on NoteCard (Card View)
+      assert(noteCardSrcV6.includes("import { Pin, PinOff, Pencil, Archive, RotateCcw, Trash2, Bell } from 'lucide-react'") || (noteCardSrcV6.includes("Bell") && noteCardSrcV6.includes('onReminderRequest')), '841. NoteCard renders a Reminder Bell action wired to onReminderRequest');
+
+      // 842. A Reminder Bell action exists on NotesDocumentView (Document View), in the same always-visible actions bar as Pin/Archive/Delete
+      assert(notesDocViewSrcV6.includes('onReminderRequest') && /notes-document-actions[\s\S]{0,1400}<Bell size=\{15\} \/>/.test(notesDocViewSrcV6), '842. NotesDocumentView renders a Reminder Bell action inside the same .notes-document-actions bar as Pin/Archive/Delete');
+
+      // 843. Tooltip text switches between "Set reminder" (no reminder) and "Edit reminder" (reminder exists) in both views
+      assert(
+        noteCardSrcV6.includes("note.reminderAt ? 'Edit reminder' : 'Set reminder'") &&
+        notesDocViewSrcV6.includes("selectedNote.reminderAt ? 'Edit reminder' : 'Set reminder'"),
+        '843. Both NoteCard and NotesDocumentView show "Set reminder" when none exists and "Edit reminder" when one does'
+      );
+
+      // 844. A shared ReminderModal component exists with Date and Time fields — one implementation reused by both views
+      assert(reminderModalSrcV6.includes('export default function ReminderModal') && (noteCardSrcV6.match(/ReminderModal/g) || notesDocViewSrcV6.match(/ReminderModal/g) || notesPageSrcV6.match(/ReminderModal/g)), '844. A single shared ReminderModal component exists (not a separate dialog per view)');
+
+      // 845. Date can be selected via a real <input type="date">
+      assert(reminderModalSrcV6.includes('type="date"'), '845. ReminderModal renders a real <input type="date"> for picking the reminder date');
+
+      // 846. Time can be selected via a real <input type="time">
+      assert(reminderModalSrcV6.includes('type="time"'), '846. ReminderModal renders a real <input type="time"> for picking the reminder time');
+
+      // 847. FUNCTIONAL: a reminder saves correctly via notesService.setReminder()
+      {
+        const n = await notesService.create({ title: 'Save Reminder Check', content: 'x', category: 'General' });
+        const futureIso = new Date(Date.now() + 3600000).toISOString();
+        const saved = await notesService.setReminder(n.id, futureIso);
+        assert(saved.reminderAt === futureIso, '847. notesService.setReminder() saves the exact chosen reminder timestamp');
+
+        // 848. FUNCTIONAL: reminder persists after reload (fresh getById)
+        const reloaded = await notesService.getById(n.id);
+        assert(reloaded.reminderAt === futureIso, '848. The reminder persists after a fresh notesService.getById() (simulated reload)');
+
+        // 849. FUNCTIONAL: only the targeted note receives the reminder
+        const other = await notesService.create({ title: 'Untouched By Reminder', content: 'y', category: 'General' });
+        assert(other.reminderAt === null, '849. Setting a reminder on one note does not affect a different, unrelated note');
+
+        // 850. FUNCTIONAL: reminder can be edited (changed to a different future value)
+        const editedIso = new Date(Date.now() + 7200000).toISOString();
+        const edited = await notesService.setReminder(n.id, editedIso);
+        assert(edited.reminderAt === editedIso && edited.reminderAt !== futureIso, '850. An existing reminder can be edited to a new date/time via the same setReminder()');
+
+        // 851/852. FUNCTIONAL: reminder can be removed, and removing it does not alter note content
+        const beforeRemoveContent = edited.content;
+        const removed = await notesService.removeReminder(n.id);
+        assert(removed.reminderAt === null, '851. notesService.removeReminder() clears the reminder');
+        assert(removed.content === beforeRemoveContent && removed.title === n.title, '852. Removing a reminder does not alter the note\'s title/content');
+      }
+
+      // 853. FUNCTIONAL: a past date/time cannot be newly scheduled
+      {
+        const n = await notesService.create({ title: 'Past Reminder Rejection Check', content: 'x', category: 'General' });
+        const pastIso = new Date(Date.now() - 60000).toISOString();
+        let threw = false;
+        try {
+          await notesService.setReminder(n.id, pastIso);
+        } catch (err) {
+          threw = true;
+        }
+        assert(threw, '853. notesService.setReminder() rejects a reminder time that has already passed, at the service boundary (not just the UI)');
+        assert(!validateReminderV6(pastIso).isValid, '853b. noteDomain.validateReminder() also rejects a past timestamp directly');
+        assert(validateReminderV6(new Date(Date.now() + 60000).toISOString()).isValid, '853c. noteDomain.validateReminder() accepts a genuinely future timestamp');
+      }
+
+      // 854. UPDATED — Reminder metadata is rendered conditionally in both views, never unconditionally. Originally gated on reminderAt alone; a later task changed this to gate on the shared isReminderActive (attention-state) result instead, so the line also hides once a due reminder has been read — see checks 940/954+ for the full attention-state-driven behavior.
+      assert(
+        /\{isReminderActive && \([\s\S]{0,200}note-reminder-badge/.test(noteCardSrcV6) &&
+        /\{isReminderActive && \([\s\S]{0,200}note-reminder-badge/.test(notesDocViewSrcV6),
+        '854. The reminder metadata line is conditionally rendered only when isReminderActive is true, in both NoteCard and NotesDocumentView — never unconditionally'
+      );
+
+      // 855. No "Reminder: None" (or equivalent placeholder) is ever actually RENDERED as JSX text — checked as a real text node (">Reminder: None<"), not merely mentioned in a source comment explaining what to avoid (both NoteCard's and this check's own comments legitimately contain that phrase as prose)
+      {
+        const allNotesUi = [noteCardSrcV6, notesDocViewSrcV6, reminderModalSrcV6, noteEditorModalSrcV6].join('\n');
+        assert(!/>\s*Reminder:\s*None\s*</i.test(allNotesUi), '855. No "Reminder: None" placeholder is ever rendered as actual JSX text — a note without a reminder shows no reminder line at all');
+      }
+
+      // --- NOTIFICATIONS (16-30) ---
+
+      // 856. The top application Bell is clickable (has a real onClick handler, not inert)
+      assert(headerSrcV6.includes('onClick={() => setIsNotificationPanelOpen') && headerSrcV6.includes('aria-label="Notifications"'), '856. The top header Bell button has a real onClick handler that opens the notification panel');
+
+      // 857. Clicking the bell opens a notification panel/dropdown
+      assert(headerSrcV6.includes('<NotificationPanel') && notificationPanelSrcV6.includes('export default function NotificationPanel'), '857. Header renders a NotificationPanel component tied to the bell\'s open state');
+
+      // 858. Empty state works ("No notifications yet." or a concise equivalent)
+      assert(/No notifications yet\.?/i.test(notificationPanelSrcV6), '858. NotificationPanel shows a concise empty state ("No notifications yet.") when there are none — never fake/demo notifications');
+
+      // 859. FUNCTIONAL: a future (not-yet-due) reminder does not create a notification early
+      {
+        const n = await notesService.create({ title: 'Future Reminder — No Early Notif', content: 'x', category: 'General' });
+        await notesService.setReminder(n.id, new Date(Date.now() + 3600000).toISOString());
+        await notificationService.checkDueReminders();
+        const all = await notificationService.getAll();
+        assert(!all.some((notif) => notif.noteId === n.id), '859. checkDueReminders() does not generate a notification for a reminder that is not yet due');
+      }
+
+      // 860. FUNCTIONAL: a due reminder creates a notification, using the note's title dynamically
+      let dueTestNoteId;
+      {
+        const n = await notesService.create({ title: 'Candidate Follow-ups (Due Test)', content: 'x', category: 'General' });
+        dueTestNoteId = n.id;
+        await notesService.setReminder(n.id, new Date(Date.now() + 400).toISOString());
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        await notificationService.checkDueReminders();
+        const all = await notificationService.getAll();
+        const generated = all.find((notif) => notif.noteId === n.id);
+        assert(Boolean(generated), '860. A due reminder generates an in-app notification');
+        assert(generated && generated.title === 'Candidate Follow-ups (Due Test)', '860b. The notification uses the note\'s actual title dynamically, never a hard-coded example name');
+      }
+
+      // 861. FUNCTIONAL: the notification is created only once for that reminder occurrence (repeated checks never duplicate it)
+      {
+        await notificationService.checkDueReminders();
+        await notificationService.checkDueReminders();
+        await notificationService.checkDueReminders();
+        const all = await notificationService.getAll();
+        const count = all.filter((notif) => notif.noteId === dueTestNoteId).length;
+        assert(count === 1, `861. Repeated checkDueReminders() calls (simulating render/refresh/route-change) never create a duplicate notification for the same reminder occurrence (found ${count})`);
+      }
+
+      // 862. FUNCTIONAL: a newly triggered notification starts unread
+      {
+        const all = await notificationService.getAll();
+        const generated = all.find((notif) => notif.noteId === dueTestNoteId);
+        assert(generated && generated.isRead === false, '862. A newly generated notification starts unread (isRead: false)');
+      }
+
+      // 863/864. The top unread indicator is conditional on unreadCount > 0 — it disappears once nothing is unread (same conditional both ways)
+      assert(/\{unreadCount > 0 && <span className="notification-dot" \/>\}/.test(headerSrcV6), '863. The top bell\'s red/unread dot only renders when unreadCount > 0 — it is never a permanently-shown fake indicator, and disappears automatically once unreadCount returns to 0');
+
+      // 865. FUNCTIONAL: clicking/marking a notification as read works
+      {
+        const all = await notificationService.getAll();
+        const generated = all.find((notif) => notif.noteId === dueTestNoteId);
+        await notificationService.markAsRead(generated.id);
+        const after = await notificationService.getAll();
+        assert(after.find((notif) => notif.id === generated.id).isRead === true, '865. notificationService.markAsRead() marks the specific notification read');
+      }
+
+      // 866. Clicking a notification looks up its note and navigates to the correct specific note (archived vs non-archived route), reusing the existing note-selection architecture (openNoteId router state) rather than a duplicate note editor
+      assert(
+        notificationPanelSrcV6.includes('notesService.getById(notification.noteId)') &&
+        notificationPanelSrcV6.includes("navigate(note.isArchived ? '/notes/archived' : '/notes', { state: { openNoteId: note.id } })") &&
+        notesPageSrcV6.includes('location.state?.openNoteId'),
+        '866. Clicking a notification looks up the real note, routes to the correct My Notes/Archived page, and NotesPage reads openNoteId from router state to select that exact note in Document View — no duplicate note editor was built'
+      );
+
+      // 867. FUNCTIONAL: changing a reminder to a new future time makes it eligible for a new notification occurrence
+      {
+        const n = await notesService.create({ title: 'Re-trigger Reminder Check', content: 'x', category: 'General' });
+        await notesService.setReminder(n.id, new Date(Date.now() + 400).toISOString());
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        await notificationService.checkDueReminders();
+        let all = await notificationService.getAll();
+        assert(all.filter((notif) => notif.noteId === n.id).length === 1, '867a. First occurrence generates exactly one notification');
+
+        await notesService.setReminder(n.id, new Date(Date.now() + 400).toISOString());
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        await notificationService.checkDueReminders();
+        all = await notificationService.getAll();
+        assert(all.filter((notif) => notif.noteId === n.id).length === 2, '867b. Rescheduling to a new future time and letting it become due again produces a second, new notification occurrence');
+      }
+
+      // 868. FUNCTIONAL: no duplicate notification appears from repeated getAll()/refresh() calls with no new due reminders (simulates re-renders/route changes)
+      {
+        const beforeCount = (await notificationService.getAll()).length;
+        await notificationService.checkDueReminders();
+        await notificationService.checkDueReminders();
+        const afterCount = (await notificationService.getAll()).length;
+        assert(beforeCount === afterCount, '868. Calling checkDueReminders()/getAll() repeatedly with no newly-due reminders never creates duplicate notifications (simulates polling/re-render/route-change)');
+      }
+
+      // 869. No fake/demo notifications exist — the initial database state always starts with an empty notifications collection
+      assert(/notifications:\s*\[\]/.test(storageEngineSrcV6), '869. storageEngine\'s initial state seeds notifications as an empty array — no fake/demo notification records are ever pre-populated');
+
+      // 870. An optional "Mark all as read" action exists and works functionally
+      {
+        assert(notificationPanelSrcV6.includes('Mark all as read') && notificationPanelSrcV6.includes('markAllAsRead'), '870. NotificationPanel offers a "Mark all as read" action');
+        await notificationService.markAllAsRead();
+        const all = await notificationService.getAll();
+        assert(all.every((notif) => notif.isRead), '870b. notificationService.markAllAsRead() marks every notification read');
+      }
+
+      // --- IN-APP ONLY (31-35) ---
+
+      // 871. No email service is imported or called anywhere in the reminder/notification code path
+      {
+        const reminderNotificationFiles = [noteDomainSrcV6, notesServiceSrcV6, notificationServiceSrcV6, reminderModalSrcV6, notificationPanelSrcV6, notificationContextSrcV6, noteCardSrcV6, notesDocViewSrcV6, headerSrcV6].join('\n');
+        assert(!/candidateEmailService|emailTemplateService|emailService/i.test(reminderNotificationFiles), '871. No email service (candidateEmailService/emailTemplateService/any emailService) is imported or referenced anywhere in the reminder/notification feature');
+      }
+
+      // 872. No email is ever sent as part of setting, editing, or triggering a reminder
+      assert(!/sendEmail|mailto:|smtp/i.test([notesServiceSrcV6, notificationServiceSrcV6, reminderModalSrcV6].join('\n')), '872. Nothing in the reminder-writing or due-reminder-detection code path sends an email');
+
+      // 873. No email option/field exists in the reminder UI
+      assert(!/email/i.test(reminderModalSrcV6), '873. ReminderModal has no email address field, "Email me" checkbox, or any email-related option — reminders are in-app only');
+
+      // 874. No browser push notification API is used
+      {
+        const allReminderFiles = [notificationServiceSrcV6, notificationContextSrcV6, notificationPanelSrcV6, reminderModalSrcV6, headerSrcV6].join('\n');
+        assert(!/new Notification\(|serviceWorker|showNotification/.test(allReminderFiles), '874. No browser push Notification API (new Notification(), serviceWorker, showNotification) is used anywhere — this is an in-app-only notification center');
+      }
+
+      // 875. No browser notification permission is ever requested
+      {
+        const allReminderFiles = [notificationServiceSrcV6, notificationContextSrcV6, notificationPanelSrcV6, reminderModalSrcV6, headerSrcV6].join('\n');
+        assert(!/requestPermission/.test(allReminderFiles), '875. Notification.requestPermission() (or any permission request) is never called');
+      }
+
+      // --- INDEPENDENCE (36-43) ---
+
+      // 876/877. FUNCTIONAL: Pin/Unpin do not change the reminder
+      {
+        const n = await notesService.create({ title: 'Pin Independence Check', content: 'x', category: 'General' });
+        const futureIso = new Date(Date.now() + 3600000).toISOString();
+        await notesService.setReminder(n.id, futureIso);
+        await notesService.togglePin(n.id);
+        const pinned = await notesService.getById(n.id);
+        assert(pinned.reminderAt === futureIso, '876. Pinning a note does not change its reminder');
+        await notesService.togglePin(n.id);
+        const unpinned = await notesService.getById(n.id);
+        assert(unpinned.reminderAt === futureIso, '877. Unpinning a note does not change its reminder');
+      }
+
+      // 878. FUNCTIONAL: Archive does not remove the reminder
+      {
+        const n = await notesService.create({ title: 'Archive Independence Check', content: 'x', category: 'General' });
+        const futureIso = new Date(Date.now() + 3600000).toISOString();
+        await notesService.setReminder(n.id, futureIso);
+        await notesService.archive(n.id);
+        const archived = await notesService.getById(n.id);
+        assert(archived.reminderAt === futureIso, '878. Archiving a note does not remove its reminder — Archive and Reminder are independent features');
+
+        // 879. FUNCTIONAL: Restore does not change the reminder
+        await notesService.restore(n.id);
+        const restored = await notesService.getById(n.id);
+        assert(restored.reminderAt === futureIso, '879. Restoring an archived note does not change its reminder');
+      }
+
+      // 880. FUNCTIONAL: editing note content/title does not remove its reminder
+      {
+        const n = await notesService.create({ title: 'Edit Independence Check', content: 'original', category: 'General' });
+        const futureIso = new Date(Date.now() + 3600000).toISOString();
+        await notesService.setReminder(n.id, futureIso);
+        const edited = await notesService.update(n.id, { title: 'Edited Title', content: 'new content', category: 'Recruitment' });
+        assert(edited.reminderAt === futureIso, '880. Editing a note\'s title/content/category does not accidentally remove or change its reminder');
+
+        // 881. FUNCTIONAL: editing the reminder does not modify note content
+        const rescheduled = new Date(Date.now() + 7200000).toISOString();
+        const reminderEdited = await notesService.setReminder(n.id, rescheduled);
+        assert(reminderEdited.title === 'Edited Title' && reminderEdited.content === 'new content', '881. Changing a reminder\'s date/time does not modify the note\'s title/content');
+      }
+
+      // 882. FUNCTIONAL: permanently deleting a note prevents its reminder from ever triggering again
+      {
+        const n = await notesService.create({ title: 'Delete Prevents Trigger Check', content: 'x', category: 'General' });
+        await notesService.setReminder(n.id, new Date(Date.now() + 400).toISOString());
+        await notesService.deletePermanently(n.id);
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        await notificationService.checkDueReminders();
+        const all = await notificationService.getAll();
+        assert(!all.some((notif) => notif.noteId === n.id), '882. A permanently-deleted note\'s reminder never generates a notification, even after its scheduled time passes');
+      }
+
+      // 883. Clicking a notification for an already-deleted note is handled safely (no crash) — the panel defensively looks up the note and no-ops if it is missing
+      assert(
+        notificationPanelSrcV6.includes('.catch(() => null)') && /if \(!note\) return;/.test(notificationPanelSrcV6),
+        '883. NotificationPanel\'s click handler defensively handles a note that no longer exists (safe no-op) rather than crashing'
+      );
+
+      // --- EXISTING FEATURES REGRESSION SPOT-CHECKS (44-64 covered broadly by the full suite re-passing; a few targeted checks specific to this task's integration points) ---
+
+      // 884. NoteEditorModal (Card View's New/Edit modal) was not given its own separate reminder UI — reminders live only in the one shared ReminderModal via NoteCard/NotesDocumentView's bell
+      assert(!/reminder/i.test(noteEditorModalSrcV6), '884. NoteEditorModal has no reminder-related code at all — Create/Edit Note behavior is completely unchanged, and there is exactly one reminder UI (ReminderModal), not a second one embedded in the modal');
+
+      // 885. Document View's Reminder button is deliberately NOT wrapped in requestAction() — opening it can never trigger (or be blocked by) the Unsaved Changes guard, and can never silently discard in-progress edits
+      assert(/onClick=\{\(\) => onReminderRequest\(selectedNote\)\}/.test(notesDocViewSrcV6) && !/onClick=\{\(\) => requestAction\(\(\) => onReminderRequest/.test(notesDocViewSrcV6), '885. The Reminder button calls onReminderRequest directly (not through requestAction), so it never interacts with the unsaved-changes guard — Save Changes/Cancel Changes/Unsaved Changes behavior is completely unaffected');
+
+      // 886. Pin/Archive/Delete in Document View remain wrapped in requestAction() exactly as before — the reminder addition did not weaken the existing unsaved-changes guard
+      assert(
+        /onClick=\{\(\) => requestAction\(\(\) => onTogglePin\(selectedNote\)\)\}/.test(notesDocViewSrcV6) &&
+        /onClick=\{\(\) => requestAction\(\(\) => onArchive\(selectedNote\)\)\}/.test(notesDocViewSrcV6) &&
+        /onClick=\{\(\) => requestAction\(\(\) => onDeleteRequest\(selectedNote\)\)\}/.test(notesDocViewSrcV6),
+        '886. Pin/Archive/Delete in Document View still route through requestAction() exactly as before — the existing unsaved-changes guard is unweakened by this task'
+      );
+
+      // 887. notesService.setReminder()/removeReminder() never touch content/contentHtml/title — reminder writes are provably isolated from note content fields
+      assert(
+        /async setReminder\(id, reminderAtIso\) \{[\s\S]*?notes\[index\] = \{ \.\.\.notes\[index\], reminderAt: reminderAtIso, reminderNotificationGeneratedFor: null, updatedAt: new Date\(\)\.toISOString\(\) \};/.test(notesServiceSrcV6) &&
+        /async removeReminder\(id\) \{[\s\S]*?notes\[index\] = \{ \.\.\.notes\[index\], reminderAt: null, reminderNotificationGeneratedFor: null, updatedAt: new Date\(\)\.toISOString\(\) \};/.test(notesServiceSrcV6),
+        '887. setReminder()/removeReminder() only ever write reminderAt/reminderNotificationGeneratedFor/updatedAt onto the existing note object — title/content/contentHtml/category/tags/colorAccent/isPinned/isArchived are provably untouched by these two methods'
+      );
+
+      // 888. notificationService.js has no dependency on notesService.js (one-directional: notesService -> notificationService only) — no circular import
+      assert(!/from ['"]\.\/notesService\.js['"]/.test(notificationServiceSrcV6), '888. notificationService.js does not import notesService.js — reminder/notification service boundaries stay one-directional, matching the clean-architecture goal for a future real backend');
+
+      // 889. Shared Onboarding/Offboarding activity infrastructure remains completely untouched by this Notes-only feature
+      assert(activityServiceSrcV6.includes('async markComplete(') && activityServiceSrcV6.includes('async reopen(') && !/reminder/i.test(activityServiceSrcV6), '889. activityService.js has no reminder-related code and its existing methods are unchanged — this task touched only the Notes module');
+
+      // 890. No Stage 19 verification file was created
+      assert(!fs.existsSync(path.resolve('./src/services/verifyStage19.js')), '890. No verifyStage19.js file exists — Stage 18 was extended in place as instructed');
+
+      // 891. UPDATED — Reminder popup uses the standard compact .modal-card size (not a large/wide modal) — "keep this popup clean and compact". It now also carries a scoped `reminder-modal` class (for the footer-padding fix), but still not the wide/xl modal size tiers.
+      assert(reminderModalSrcV6.includes('<div className="modal-card reminder-modal" onClick') && !reminderModalSrcV6.includes('wide-modal') && !reminderModalSrcV6.includes('xl-modal'), '891. ReminderModal uses the default compact .modal-card size (plus its own scoped reminder-modal class for footer spacing), not the wide/xl modal tiers — kept clean and compact per spec');
+
+      // 892. The notification panel's width is capped relative to the viewport so it can never overflow horizontally at mobile widths
+      assert(/\.notification-panel\s*\{[^}]*max-width:\s*calc\(100vw/.test(indexCssSrcV6), '892. .notification-panel caps its width via calc(100vw - ...) so it never causes horizontal overflow on narrow screens');
+
+      resetDatabase();
+    }
+    // ==========================================================================
+    // Fix: Reminder Modal Spacing + Active Reminder Bell + Due Notification Bug
+    // ==========================================================================
+    {
+      const reminderModalSrcV7 = fs.readFileSync(path.resolve('./src/components/notes/ReminderModal.jsx'), 'utf-8');
+      const noteCardSrcV7 = fs.readFileSync(path.resolve('./src/components/notes/NoteCard.jsx'), 'utf-8');
+      const notesDocViewSrcV7 = fs.readFileSync(path.resolve('./src/components/notes/NotesDocumentView.jsx'), 'utf-8');
+      const notificationContextSrcV7 = fs.readFileSync(path.resolve('./src/state/NotificationContext.jsx'), 'utf-8');
+      const notificationServiceSrcV7 = fs.readFileSync(path.resolve('./src/services/notificationService.js'), 'utf-8');
+      const headerSrcV7 = fs.readFileSync(path.resolve('./src/components/layout/Header.jsx'), 'utf-8');
+      const indexCssSrcV7 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      const { validateReminder: validateReminderV7, combineReminderDateTime: combineV7, splitReminderDateTime: splitV7 } = await import('../domain/noteDomain.js');
+
+      // --- ISSUE 1: MODAL SPACING (1-4) ---
+
+      // 893. Reminder modal footer has proper padding (24-32px horizontal, 24-28px bottom), scoped so it doesn't affect the many other modals sharing .modal-footer
+      {
+        const footerRuleMatch = indexCssSrcV7.match(/\.modal-card\.reminder-modal \.modal-footer\s*\{\s*padding:\s*([\d.]+)rem\s+([\d.]+)rem\s+([\d.]+)rem\s+([\d.]+)rem;/);
+        assert(footerRuleMatch, '893. A scoped .modal-card.reminder-modal .modal-footer padding rule exists');
+        if (footerRuleMatch) {
+          const [, , rightRem, bottomRem, leftRem] = footerRuleMatch.map((v, i) => (i === 0 ? v : parseFloat(v)));
+          const rightPx = rightRem * 16;
+          const leftPx = leftRem * 16;
+          const bottomPx = bottomRem * 16;
+          assert(rightPx >= 24 && rightPx <= 32 && leftPx >= 24 && leftPx <= 32, `893b. Footer horizontal padding is within the requested 24-32px range (left=${leftPx}px, right=${rightPx}px)`);
+          assert(bottomPx >= 24 && bottomPx <= 28, `893c. Footer bottom padding is within the requested 24-28px range (bottom=${bottomPx}px)`);
+        }
+      }
+
+      // 894. Footer buttons do not touch modal edges — the fix is scoped to reminder-modal only, not a change to the shared .modal-footer used by many unrelated modals across the app
+      assert(!/^\.modal-footer\s*\{[^}]*padding:/m.test(indexCssSrcV7.replace(/\.modal-card\.reminder-modal \.modal-footer[\s\S]{0,10}?\{[^}]*\}/g, '')), '894. The shared/global .modal-footer class itself was not given new padding — only the scoped .reminder-modal variant was, so unrelated modals elsewhere in the app are unaffected');
+
+      // 895. Desktop layout stays balanced: Remove Reminder still on the left (marginRight: auto), Cancel + Save Changes on the right — layout order unchanged, only spacing fixed
+      assert(reminderModalSrcV7.includes("style={{ marginRight: 'auto' }}") && reminderModalSrcV7.indexOf('Remove Reminder') < reminderModalSrcV7.indexOf('Cancel'), '895. Remove Reminder remains left-aligned (marginRight: auto) ahead of Cancel/Save Changes in source order — the fix only touched spacing, not button arrangement');
+
+      // 896. Mobile: the 3-button footer (Remove Reminder/Cancel/Save Changes) stacks to full-width rows below 480px so no label wraps awkwardly mid-button, and no horizontal overflow is introduced
+      assert(/@media \(max-width:\s*480px\)\s*\{\s*\.modal-card\.reminder-modal \.modal-footer\s*\{[^}]*flex-direction:\s*column-reverse;/.test(indexCssSrcV7) && !/\.modal-card\.reminder-modal[\s\S]{0,400}overflow-x:\s*(scroll|auto)/.test(indexCssSrcV7), '896. At mobile widths the reminder modal footer stacks to full-width buttons (no overflow-x rule was introduced)');
+
+      // --- ISSUE 2: ACTIVE REMINDER BELL (5-8) ---
+
+      // 897. UPDATED — Note Bell has a neutral appearance when no reminder exists — the active class is now applied conditionally on the shared attention-state result (not merely Boolean(reminderAt)), never unconditionally
+      assert(/\{isReminderActive \? 'icon-btn-reminder-active' : ''\}/.test(noteCardSrcV7) && /\{isReminderActive \? 'icon-btn-reminder-active' : ''\}/.test(notesDocViewSrcV7), '897. The active reminder-bell class is applied only when getReminderAttentionState() returns true, in both NoteCard and NotesDocumentView — a note with no reminder (or an acknowledged one) keeps the normal neutral Bell');
+
+      // 898. Active Bell uses a clear, persistent teal-tinted treatment (visible at rest, not just on hover) built from the exact brand tokens named in this fix (Primary Teal / Teal Light Tint / Teal Border), not a red/warning/error color
+      {
+        const activeRuleMatch = indexCssSrcV7.match(/\.icon-btn-reminder-active\s*\{([^}]*)\}/);
+        assert(activeRuleMatch, '898. .icon-btn-reminder-active CSS rule exists');
+        if (activeRuleMatch) {
+          const body = activeRuleMatch[1];
+          assert(body.includes('var(--color-primary)') && body.includes('var(--color-primary-light)') && body.includes('var(--color-primary-border)'), '898b. The active Bell state is built from the existing --color-primary / --color-primary-light / --color-primary-border tokens (#129FA9 / #E6F7F8 / #BCE7EA) — no new one-off colors invented');
+          assert(!/red|#DC2626|#EF4444|--color-danger|error|warning/i.test(body), '898c. The active Bell treatment contains no red/error/warning styling — it is a calm, tasteful "reminder ON" indicator, not an alert');
+        }
+      }
+
+      // 899. UPDATED — Card View: the active Bell state is wired to the shared getReminderAttentionState() result (functional source check — not just present in CSS but actually applied)
+      assert(/className=\{`icon-btn \$\{isReminderActive \? 'icon-btn-reminder-active' : ''\}`\}/.test(noteCardSrcV7) && noteCardSrcV7.includes('getReminderAttentionState(note, notifications)'), '899. NoteCard\'s Bell button className is computed from getReminderAttentionState(note, notifications), not merely Boolean(reminderAt)');
+
+      // 900. UPDATED — Document View: the same active Bell state is wired identically via the same shared helper — one consistent indicator, not a separate implementation
+      assert(/className=\{`icon-btn \$\{isReminderActive \? 'icon-btn-reminder-active' : ''\}`\}/.test(notesDocViewSrcV7) && notesDocViewSrcV7.includes('getReminderAttentionState(selectedNote, notifications)'), '900. NotesDocumentView\'s Bell button className is computed from getReminderAttentionState(selectedNote, notifications), identically to Card View');
+
+      // --- ISSUE 3: DUE-REMINDER RELIABILITY FIXES (9-25) ---
+
+      // 901. FUNCTIONAL: local date/time input converts correctly to a stored reminderAt that represents the SAME local moment (round-trip through combine -> split)
+      {
+        const dateStr = '2026-09-13';
+        const timeStr = '18:31';
+        const combined = combineV7(dateStr, timeStr);
+        const split = splitV7(combined);
+        assert(split.dateStr === dateStr && split.timeStr === timeStr, `901. combineReminderDateTime('${dateStr}','${timeStr}') -> splitReminderDateTime() round-trips back to the exact same local date/time (got ${split.dateStr} ${split.timeStr}) — no timezone shift, no day/hour drift`);
+      }
+
+      // 902. FUNCTIONAL: the stored reminderAt is genuine UTC (has a 'Z' suffix / is a valid ISO instant), while the UI still works in local wall-clock terms
+      {
+        const combined = combineV7('2026-09-13', '18:31');
+        assert(combined.endsWith('Z') && !isNaN(new Date(combined).getTime()), '902. The stored reminderAt is a real ISO 8601 UTC instant (machine storage stays ISO) even though the modal\'s own inputs are local date/time');
+      }
+
+      // 903. FUNCTIONAL: validateReminder's FIXED edge case — a reminder truncated to :00 seconds in the CURRENT minute is valid even if "now" already has a few seconds elapsed in that same minute (the exact bug found via runtime debugging: minute-granularity input vs to-the-second validation could previously reject a legitimately-intended near-future time)
+      {
+        const now = '2026-09-13T18:57:05.000Z';
+        const sameMinuteTruncated = '2026-09-13T18:57:00.000Z';
+        const result = validateReminderV7(sameMinuteTruncated, now);
+        assert(result.isValid === true, `903. A reminder in the same current minute (target 18:57:00 vs now 18:57:05) is accepted, not falsely rejected as "already passed" (got: ${JSON.stringify(result)})`);
+      }
+
+      // 904. FUNCTIONAL: validateReminder still correctly rejects a genuinely past minute (the fix did not weaken real past-time rejection)
+      {
+        const now = '2026-09-13T18:57:05.000Z';
+        const previousMinute = '2026-09-13T18:56:59.000Z';
+        const result = validateReminderV7(previousMinute, now);
+        assert(result.isValid === false, `904. A reminder in a genuinely earlier minute is still correctly rejected as already passed (got: ${JSON.stringify(result)})`);
+      }
+
+      // 905. FUNCTIONAL: due-check condition is "now >= reminderAt" (inclusive) — exact-equal instants count as due, not requiring the minute to match some other way
+      {
+        resetDatabase();
+        const exact = new Date().toISOString();
+        const n = await notesService.create({ title: 'Exact Boundary Due Check', content: 'x', category: 'General' });
+        // Bypass validateReminder's future-only guard (which is correctly for NEW reminders only) to
+        // directly test checkDueReminders' own due-boundary condition by writing reminderAt in the past.
+        const db = loadDatabase();
+        const idx = db.notes.findIndex((note) => note.id === n.id);
+        db.notes[idx] = { ...db.notes[idx], reminderAt: exact, reminderNotificationGeneratedFor: null };
+        saveDatabase(db);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        await notificationService.checkDueReminders();
+        const all = await notificationService.getAll();
+        assert(all.some((notif) => notif.noteId === n.id), '905. checkDueReminders() treats now >= reminderAt as due (inclusive boundary), matching the exact spec condition');
+      }
+
+      // 906. FUNCTIONAL: NotificationContext.refresh() synchronously updates React state (setNotifications) immediately after checkDueReminders()+getAll() in the SAME function call — no separate manual step/page refresh is needed for the UI to reflect a newly-generated notification
+      assert(/const refresh = useCallback\(async \(\) => \{[\s\S]*?await notificationService\.checkDueReminders\(\);[\s\S]*?const all = await notificationService\.getAll\(\);[\s\S]*?setNotifications\(all\);/.test(notificationContextSrcV7), '906. refresh() calls checkDueReminders() then getAll() then setNotifications() all in one synchronous chain — the moment a notification is generated, the very next line updates React state with it');
+
+      // 907. A silently-thrown exception can no longer permanently stall future due-reminder checks — refresh() is wrapped in try/catch so one bad tick doesn't leave the bell/panel stuck on stale data forever
+      assert(/const refresh = useCallback\(async \(\) => \{[\s\S]{0,300}try \{[\s\S]*?\} catch \(err\) \{\s*console\.error\(/.test(notificationContextSrcV7), '907. NotificationContext.refresh() is wrapped in try/catch — an exception during one check is logged and does not prevent subsequent interval ticks from running');
+
+      // 908. Background/inactive-tab robustness: refresh() also runs immediately on visibilitychange (tab regains focus) and window focus, not only on the 30s interval — closes the gap where browsers throttle setInterval in backgrounded tabs
+      assert(notificationContextSrcV7.includes("document.addEventListener('visibilitychange'") && notificationContextSrcV7.includes("window.addEventListener('focus', refresh)"), '908. NotificationContext re-checks immediately when the tab becomes visible/focused again, in addition to the 30s interval — protects against browser timer throttling in backgrounded tabs');
+
+      // 909. The interval/listener cleanup is complete — no leaked interval or dangling event listeners on unmount (one lightweight global interval, not several overlapping ones)
+      assert(/return \(\) => \{\s*mountedRef\.current = false;\s*clearInterval\(interval\);\s*document\.removeEventListener\('visibilitychange', handleVisibilityChange\);\s*window\.removeEventListener\('focus', refresh\);\s*\};/.test(notificationContextSrcV7), '909. The effect\'s cleanup function clears the interval AND removes both the visibilitychange and focus listeners — no leaks, no duplicate/overlapping intervals across remounts');
+
+      // 910. Header's unread count and red dot derive directly from live NotificationContext state via useNotifications() — no separate polling/state copy that could go stale independently
+      assert(headerSrcV7.includes('const { unreadCount } = useNotifications();') && headerSrcV7.includes('{unreadCount > 0 && <span className="notification-dot" />}'), '910. Header reads unreadCount directly from the shared NotificationContext — when that context\'s state updates (e.g. after a due-reminder refresh), the bell re-renders automatically with no manual refresh needed');
+
+      // 911. FUNCTIONAL: duplicate-prevention field (reminderNotificationGeneratedFor) is only ever set together with, and never before, the notification being appended — inspected at the exact source line so the ordering itself is verified, not just the end result
+      assert(/notifications\.push\(\{[\s\S]*?\}\);\s*notesChanged = true;\s*return \{ \.\.\.note, reminderNotificationGeneratedFor: note\.reminderAt \};/.test(notificationServiceSrcV7), '911. checkDueReminders() appends the notification record BEFORE returning the note with reminderNotificationGeneratedFor updated — both changes are written to storage together in the same atomic saveDatabase() call, so the note can never be marked as "already notified" without the notification actually having been created');
+
+      // 912. FUNCTIONAL: editing a reminder to a new future value resets reminderNotificationGeneratedFor, making it eligible for exactly one new notification at the new time
+      {
+        const n = await notesService.create({ title: 'Reset Generated-For Check', content: 'x', category: 'General' });
+        await notesService.setReminder(n.id, new Date(Date.now() + 3600000).toISOString());
+        const afterFirstSet = await notesService.getById(n.id);
+        assert(afterFirstSet.reminderNotificationGeneratedFor === null, '912. Setting a reminder resets reminderNotificationGeneratedFor to null');
+        await notesService.setReminder(n.id, new Date(Date.now() + 7200000).toISOString());
+        const afterReset = await notesService.getById(n.id);
+        assert(afterReset.reminderNotificationGeneratedFor === null, '912b. Rescheduling an existing reminder to a new time also resets reminderNotificationGeneratedFor to null');
+      }
+
+      // 913. FUNCTIONAL: no duplicate notification is created across multiple checkDueReminders() calls that simulate an interval tick, a route change, and a refresh in quick succession
+      {
+        resetDatabase();
+        const n = await notesService.create({ title: 'Multi-Trigger Duplicate Check', content: 'x', category: 'General' });
+        const db = loadDatabase();
+        const idx = db.notes.findIndex((note) => note.id === n.id);
+        db.notes[idx] = { ...db.notes[idx], reminderAt: new Date(Date.now() - 1000).toISOString(), reminderNotificationGeneratedFor: null };
+        saveDatabase(db);
+
+        await notificationService.checkDueReminders(); // simulates interval tick
+        await notificationService.checkDueReminders(); // simulates a route change re-running refresh()
+        await notificationService.checkDueReminders(); // simulates another refresh (e.g. focus regained)
+        const all = await notificationService.getAll();
+        const count = all.filter((notif) => notif.noteId === n.id).length;
+        assert(count === 1, `913. Exactly one notification exists after 3 rapid checkDueReminders() calls simulating interval/route-change/focus-refresh triggers (found ${count})`);
+      }
+
+      // 914. No fake/demo notifications and no email/push behavior were introduced by this fix task
+      {
+        const allFixFiles = [reminderModalSrcV7, notificationContextSrcV7, notificationServiceSrcV7, headerSrcV7].join('\n');
+        assert(!/candidateEmailService|emailTemplateService|sendEmail|new Notification\(|serviceWorker|requestPermission/i.test(allFixFiles), '914. No email service, browser push Notification API, or permission request was added while fixing this bug');
+      }
+
+      resetDatabase();
+    }
+    // ==========================================================================
+    // Fix: Notification Panel Spacing + Individual Mark as Read + Reminder Bell Attention State
+    // ==========================================================================
+    {
+      const noteDomainSrcV8 = fs.readFileSync(path.resolve('./src/domain/noteDomain.js'), 'utf-8');
+      const noteCardSrcV8 = fs.readFileSync(path.resolve('./src/components/notes/NoteCard.jsx'), 'utf-8');
+      const notesDocViewSrcV8 = fs.readFileSync(path.resolve('./src/components/notes/NotesDocumentView.jsx'), 'utf-8');
+      const notificationPanelSrcV8 = fs.readFileSync(path.resolve('./src/components/layout/NotificationPanel.jsx'), 'utf-8');
+      const notificationContextSrcV8 = fs.readFileSync(path.resolve('./src/state/NotificationContext.jsx'), 'utf-8');
+      const notificationServiceSrcV8 = fs.readFileSync(path.resolve('./src/services/notificationService.js'), 'utf-8');
+      const indexCssSrcV8 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      const { getReminderAttentionState: attentionV8, combineReminderDateTime: combineV8 } = await import('../domain/noteDomain.js');
+
+      // --- ISSUE 1: NOTIFICATION PANEL SPACING (1-3) ---
+
+      // 915. Panel width is widened into the requested 460-520px range (was 340px), still capped to the viewport
+      {
+        const widthMatch = indexCssSrcV8.match(/^\.notification-panel\s*\{\s*position:\s*absolute;\s*top:[^;]+;\s*right:\s*0;\s*width:\s*(\d+)px;/m);
+        assert(widthMatch && parseInt(widthMatch[1], 10) >= 460 && parseInt(widthMatch[1], 10) <= 520, `915. .notification-panel width is within the requested 460-520px desktop range (found ${widthMatch ? widthMatch[1] : 'not found'}px)`);
+        assert(/\.notification-panel\s*\{[^}]*max-width:\s*calc\(100vw/.test(indexCssSrcV8), '915b. .notification-panel still caps to calc(100vw - ...) so it never exceeds the viewport on narrow screens');
+      }
+
+      // 916. Header has more breathing room: increased padding vs. the original 0.85rem/1rem, plus an explicit gap between title and "Mark all as read"
+      {
+        const headerRule = indexCssSrcV8.match(/\.notification-panel-header\s*\{([^}]*)\}/);
+        assert(headerRule && /padding:\s*1\.1rem 1\.5rem;/.test(headerRule[1]) && /gap:\s*1rem;/.test(headerRule[1]), '916. .notification-panel-header has increased padding (1.1rem 1.5rem) and an explicit gap, so "Mark all as read" no longer sits pressed against the title/edge');
+      }
+
+      // 917. Notification item internal spacing increased (padding + icon/body gap + body-internal gap), not just typography made larger
+      {
+        const itemRule = indexCssSrcV8.match(/\.header-notification-item\s*\{([^}]*)\}/);
+        const bodyRule = indexCssSrcV8.match(/\.header-notification-item-body\s*\{([^}]*)\}/);
+        assert(itemRule && /padding:\s*1rem 2\.5rem 1rem 1\.5rem;/.test(itemRule[1]) && /gap:\s*0\.85rem;/.test(itemRule[1]), '917. .header-notification-item has increased padding and icon/body gap versus the original cramped 0.8rem/1rem/0.65rem values');
+        assert(bodyRule && /gap:\s*0\.3rem;/.test(bodyRule[1]), '917b. .header-notification-item-body has increased internal line spacing (0.3rem, up from 0.15rem) between NOTE REMINDER/title/message/time — spacing was used, not enlarged font sizes');
+      }
+
+      // 918. Root cause of the original congestion: a genuine CSS class collision. The Notes notification rows were previously named .notification-item, which the UNRELATED Upcoming/Overdue-Tasks notification list (src/components/upcoming/NotificationsPanel.jsx, src/components/onboarding/OverdueTasksModal.jsx) already used with different padding/gap/border — that older, later-in-cascade rule was silently overriding this panel's own spacing. Renaming to .header-notification-item removes the collision entirely.
+      {
+        const upcomingPanelSrc = fs.readFileSync(path.resolve('./src/components/upcoming/NotificationsPanel.jsx'), 'utf-8');
+        const overdueModalSrc = fs.readFileSync(path.resolve('./src/components/onboarding/OverdueTasksModal.jsx'), 'utf-8');
+        assert(
+          !notificationPanelSrcV8.includes('className="notification-item') &&
+          notificationPanelSrcV8.includes('className="header-notification-item') &&
+          (upcomingPanelSrc.includes('notification-item') || overdueModalSrc.includes('notification-item')),
+          '918. The Header notification row class was renamed to .header-notification-item specifically to stop colliding with the unrelated pre-existing .notification-item class used by the Upcoming/Overdue-Tasks notification list — this collision was the real root cause of the panel looking cramped'
+        );
+      }
+
+      // --- ISSUE 2: INDIVIDUAL MARK AS READ (4-7) ---
+
+      // 919. Every rendered (unread) notification row has its own individual Mark as Read control with the correct accessible label
+      assert(notificationPanelSrcV8.includes('className="icon-btn notification-mark-read-btn"') && notificationPanelSrcV8.includes('title="Mark as read"') && notificationPanelSrcV8.includes('aria-label="Mark as read"'), '919. Each notification row renders its own small "Mark as read" icon action with the correct tooltip/aria-label');
+
+      // 920. Individual Mark as Read stops propagation, so it can never also fire the row's own click/navigate behavior — and it does not itself call navigate anywhere
+      assert(/const handleMarkAsReadOnly = \(e, notification\) => \{\s*e\.stopPropagation\(\);\s*markAsRead\(notification\.id\);\s*\};/.test(notificationPanelSrcV8) && !/handleMarkAsReadOnly[\s\S]{0,150}navigate\(/.test(notificationPanelSrcV8), '920. handleMarkAsReadOnly() calls e.stopPropagation() before marking read and never calls navigate() — clicking it can never also open the note');
+
+      // 921. FUNCTIONAL: marking one notification read affects ONLY that notification — a second unread notification (for a different note) is untouched
+      {
+        resetDatabase();
+        const n1 = await notesService.create({ title: 'Individual Read Target', content: 'x', category: 'General' });
+        const n2 = await notesService.create({ title: 'Individual Read Untouched', content: 'x', category: 'General' });
+        const db1 = loadDatabase();
+        db1.notes = db1.notes.map((n) => (n.id === n1.id || n.id === n2.id) ? { ...n, reminderAt: new Date(Date.now() - 1000).toISOString(), reminderNotificationGeneratedFor: null } : n);
+        saveDatabase(db1);
+        await notificationService.checkDueReminders();
+        const allBefore = await notificationService.getAll();
+        const notif1 = allBefore.find((notif) => notif.noteId === n1.id);
+        const notif2 = allBefore.find((notif) => notif.noteId === n2.id);
+        assert(notif1 && notif2 && !notif1.isRead && !notif2.isRead, '921pre. Both notifications start unread (setup check)');
+
+        await notificationService.markAsRead(notif1.id);
+        const allAfter = await notificationService.getAll();
+        const notif1After = allAfter.find((notif) => notif.id === notif1.id);
+        const notif2After = allAfter.find((notif) => notif.id === notif2.id);
+        assert(notif1After.isRead === true && notif2After.isRead === false, '921. Marking one notification read leaves every other notification (including one for a different note) completely untouched');
+      }
+
+      // 922. FUNCTIONAL: after marking read, that notification is excluded from the "unread" set the dropdown renders — it disappears from the visible dropdown without needing deletion
+      {
+        const all = await notificationService.getAll();
+        const unread = all.filter((n) => !n.isRead);
+        const readOne = all.find((n) => n.isRead);
+        assert(readOne && !unread.some((n) => n.id === readOne.id), '922. The just-read notification is absent from the unread-filtered set (what the dropdown actually renders) — removed from view without deleting the record');
+      }
+
+      // --- ISSUE 5/6: UNREAD-ONLY DROPDOWN + MARK ALL (8-17) ---
+
+      // 923. NotificationContext exposes a derived unreadNotifications list (filtered from the full notifications state), and NotificationPanel renders that list, not the full one
+      assert(notificationContextSrcV8.includes('const unreadNotifications = notifications.filter((n) => !n.isRead);') && notificationPanelSrcV8.includes('const { unreadNotifications, markAsRead, markAllAsRead } = useNotifications();'), '923. NotificationContext derives unreadNotifications from the full list, and NotificationPanel consumes that derived list for what it displays');
+
+      // 924. The dropdown's empty state, row list, and "Mark all as read" visibility are ALL driven by unreadNotifications.length, not the full notifications count
+      assert((notificationPanelSrcV8.match(/unreadNotifications\.length/g) || []).length >= 2 && !notificationPanelSrcV8.includes('notifications.length'), '924. Empty-state / row-rendering / Mark-all-as-read visibility are all gated on unreadNotifications.length — the panel never references the full (read+unread) notifications count directly');
+
+      // 925. FUNCTIONAL: clicking the notification itself still marks it read AND still navigates (existing behavior preserved) — verified at the source level since navigation requires a router
+      assert(/const handleNotificationClick = async \(notification\) => \{\s*await markAsRead\(notification\.id\);\s*onClose\(\);[\s\S]*?navigate\(note\.isArchived \? '\/notes\/archived' : '\/notes', \{ state: \{ openNoteId: note\.id \} \}\);/.test(notificationPanelSrcV8), '925. handleNotificationClick() (the row\'s own click, distinct from the individual Mark-as-Read button) still marks read, closes the panel, and navigates to the correct note — unchanged from before this fix');
+
+      // 926. FUNCTIONAL: read notification records are NOT deleted from storage — notificationService.getAll() (the full, unfiltered accessor) still returns them
+      {
+        const allIncludingRead = await notificationService.getAll();
+        assert(allIncludingRead.some((n) => n.isRead === true), '926. notificationService.getAll() still returns read notification records — marking read never deletes them, it only changes isRead');
+      }
+
+      // 927. FUNCTIONAL: "Mark all as read" clears every currently-unread notification, leaving the unread-filtered set empty
+      {
+        await notificationService.markAllAsRead();
+        const all = await notificationService.getAll();
+        const stillUnread = all.filter((n) => !n.isRead);
+        assert(stillUnread.length === 0, '927. notificationService.markAllAsRead() leaves zero unread notifications — the dropdown would show its empty state immediately after');
+      }
+
+      // 928. "Mark all as read" is hidden (not merely disabled) once there is nothing unread left
+      assert(/\{unreadNotifications\.length > 0 && \(\s*<button type="button" className="notification-mark-all-btn"/.test(notificationPanelSrcV8), '928. The "Mark all as read" button is conditionally rendered only while unreadNotifications.length > 0 — hidden entirely (not just disabled) once nothing is unread, per the task\'s explicit preference');
+
+      // 929. Empty state shows the concise "No notifications yet." text and never fake/demo history
+      assert(notificationPanelSrcV8.includes('No notifications yet.') && !/Sample|Example|Demo|Lorem/i.test(notificationPanelSrcV8), '929. The empty state remains the concise "No notifications yet." message, with no fake/demo notification content anywhere in the panel');
+
+      // 930/931. FUNCTIONAL: Header red dot logic — present while >=1 unread, absent at 0 unread (already covered structurally by check 863; re-confirm functionally against fresh data here)
+      {
+        const n = await notesService.create({ title: 'Dot Behavior Check', content: 'x', category: 'General' });
+        const db2 = loadDatabase();
+        db2.notes = db2.notes.map((note) => (note.id === n.id ? { ...note, reminderAt: new Date(Date.now() - 1000).toISOString(), reminderNotificationGeneratedFor: null } : note));
+        saveDatabase(db2);
+        await notificationService.checkDueReminders();
+        const allNow = await notificationService.getAll();
+        const unreadNow = allNow.filter((notif) => !notif.isRead);
+        assert(unreadNow.length >= 1, '930. At least one unread notification exists (dot should show) after a fresh due reminder');
+        await notificationService.markAllAsRead();
+        const allAfterMarkAll = await notificationService.getAll();
+        assert(allAfterMarkAll.every((notif) => notif.isRead), '931. Zero unread notifications remain after markAllAsRead (dot should disappear)');
+      }
+
+      // --- ISSUE 8: REMINDER BELL ATTENTION-STATE RULES (18-27) ---
+
+      // 932. getReminderAttentionState exists as ONE shared helper, imported identically by both NoteCard and NotesDocumentView — not duplicated logic
+      assert(noteDomainSrcV8.includes('export function getReminderAttentionState(') && noteCardSrcV8.includes('getReminderAttentionState(note, notifications)') && notesDocViewSrcV8.includes('getReminderAttentionState(selectedNote, notifications)'), '932. getReminderAttentionState() is one shared noteDomain function, called identically by NoteCard and NotesDocumentView — no separate reimplementation in either');
+
+      // 933. FUNCTIONAL: no reminder -> neutral
+      assert(attentionV8({ id: 'x', reminderAt: null }, []) === false, '933. A note with no reminderAt returns a neutral (false) attention state');
+
+      // 934. FUNCTIONAL: future reminder -> active teal, regardless of reminderNotificationGeneratedFor's value
+      {
+        const future = new Date(Date.now() + 3600000).toISOString();
+        assert(attentionV8({ id: 'x', reminderAt: future, reminderNotificationGeneratedFor: null }, []) === true, '934. A future (not-yet-due) reminderAt returns an active (true) attention state');
+      }
+
+      // 935. FUNCTIONAL: due + unread notification -> active teal
+      {
+        const due = new Date(Date.now() - 1000).toISOString();
+        const note = { id: 'x', reminderAt: due, reminderNotificationGeneratedFor: due };
+        const notifs = [{ noteId: 'x', dueAt: due, isRead: false }];
+        assert(attentionV8(note, notifs) === true, '935. A due reminder whose generated notification is still unread returns active (true)');
+      }
+
+      // 936. FUNCTIONAL: due + READ notification -> neutral — THE EXACT BUG FIXED IN THIS TASK. Also verified with a note object carrying a STALE reminderNotificationGeneratedFor (null, as if NotesPage's `notes` list hadn't refreshed since the reminder fired), proving the fix no longer depends on that field being fresh.
+      {
+        const due = new Date(Date.now() - 1000).toISOString();
+        const freshNote = { id: 'x', reminderAt: due, reminderNotificationGeneratedFor: due };
+        const staleNote = { id: 'x', reminderAt: due, reminderNotificationGeneratedFor: null };
+        const notifs = [{ noteId: 'x', dueAt: due, isRead: true }];
+        assert(attentionV8(freshNote, notifs) === false, '936. A due reminder whose notification has been read returns neutral (false) with a fresh note object');
+        assert(attentionV8(staleNote, notifs) === false, '936b. THE ACTUAL BUG FIX: the same due+read result holds even when reminderNotificationGeneratedFor on the note object is stale/null (simulating NotesPage not having reloaded notes since the background due-check ran) — the Bell no longer gets stuck teal because attention state is derived from reminderAt vs now, not from that field');
+      }
+
+      // 937. FUNCTIONAL: rescheduling a read reminder to a new future time reactivates the teal state immediately
+      {
+        const newFuture = new Date(Date.now() + 3600000).toISOString();
+        const rescheduledNote = { id: 'x', reminderAt: newFuture, reminderNotificationGeneratedFor: null };
+        const staleNotifs = [{ noteId: 'x', dueAt: '2020-01-01T00:00:00.000Z', isRead: true }];
+        assert(attentionV8(rescheduledNote, staleNotifs) === true, '937. Rescheduling to a new future reminderAt returns active (true) immediately, and an old unrelated read notification for the same note does not interfere');
+      }
+
+      // 938. FUNCTIONAL: end-to-end via the real services — set a reminder, let it become due, mark read, confirm neutral, reschedule, confirm active again, let it become due again, confirm exactly one NEW notification (no duplicate of the old read one)
+      {
+        resetDatabase();
+        const n = await notesService.create({ title: 'End To End Attention Check', content: 'x', category: 'General' });
+        const setPast = (iso) => {
+          const db3 = loadDatabase();
+          db3.notes = db3.notes.map((note) => (note.id === n.id ? { ...note, reminderAt: iso, reminderNotificationGeneratedFor: null } : note));
+          saveDatabase(db3);
+        };
+        setPast(new Date(Date.now() - 1000).toISOString());
+        await notificationService.checkDueReminders();
+        let noteNow = await notesService.getById(n.id);
+        let allNotifs = await notificationService.getAll();
+        assert(attentionV8(noteNow, allNotifs) === true, '938a. Freshly due + unread -> active');
+
+        const firstNotif = allNotifs.find((notif) => notif.noteId === n.id);
+        await notificationService.markAsRead(firstNotif.id);
+        noteNow = await notesService.getById(n.id); // note itself is untouched by markAsRead — reminderAt/reminderNotificationGeneratedFor unchanged
+        allNotifs = await notificationService.getAll();
+        assert(attentionV8(noteNow, allNotifs) === false, '938b. After marking read -> neutral (this is the real end-to-end reproduction of the originally-reported bug, now fixed)');
+        assert(noteNow.reminderAt !== null, '938c. reminderAt is still present on the note after marking the notification read — reading a notification never clears the reminder');
+
+        const rescheduled = await notesService.setReminder(n.id, new Date(Date.now() + 3600000).toISOString());
+        allNotifs = await notificationService.getAll();
+        assert(attentionV8(rescheduled, allNotifs) === true, '938d. Rescheduling to a new future time -> active again immediately');
+
+        // Now let the NEW occurrence become due and confirm exactly one new notification (2 total: the old read one + the new one), no duplicates
+        const db4 = loadDatabase();
+        db4.notes = db4.notes.map((note) => (note.id === n.id ? { ...note, reminderAt: new Date(Date.now() - 1000).toISOString(), reminderNotificationGeneratedFor: null } : note));
+        saveDatabase(db4);
+        await notificationService.checkDueReminders();
+        const finalNotifs = (await notificationService.getAll()).filter((notif) => notif.noteId === n.id);
+        assert(finalNotifs.length === 2, `938e. Exactly 2 total notification records exist for this note after the full read -> reschedule -> due-again cycle (the original read one, plus exactly one new one) — found ${finalNotifs.length}`);
+      }
+
+      // 939. FUNCTIONAL: a note with no reminder at all is always neutral regardless of notification history for other notes
+      assert(attentionV8({ id: 'never-had-one', reminderAt: null, reminderNotificationGeneratedFor: null }, [{ noteId: 'other-note', dueAt: '2020-01-01T00:00:00.000Z', isRead: false }]) === false, '939. A note that never had a reminder stays neutral no matter what notifications exist for other notes');
+
+      // 940. SUPERSEDED by a later task — the reminder metadata badge is now intentionally conditioned on the SAME attention-state result as the Bell (isReminderActive), not on reminderAt alone, so it hides once a due reminder is read. See the "Hide Reminder Metadata After Read" block below for the full behavior and its dedicated checks.
+      assert(/\{isReminderActive && \(/.test(noteCardSrcV8) && /\{isReminderActive && \(/.test(notesDocViewSrcV8), '940. The reminder metadata badge (in both views) is conditioned on the shared isReminderActive attention-state result — consistent with the Bell, and hidden once a due reminder has been read');
+
+      // 941. Card View and Document View both subscribe to live NotificationContext state (useNotifications hook), so Bell attention state updates immediately on any notification change with no reload
+      assert(noteCardSrcV8.includes("import { useNotifications } from '../../state/NotificationContext';") && notesDocViewSrcV8.includes("import { useNotifications } from '../../state/NotificationContext';"), '941. Both NoteCard and NotesDocumentView subscribe directly to NotificationContext — they re-render automatically whenever notification state changes, with no manual refresh/reload needed');
+
+      // --- REGRESSION: PRESERVE PREVIOUS DUE-REMINDER FIXES (28-30) ---
+
+      // 942. The 30s interval, focus re-check, visibilitychange re-check, and exception-safe refresh from the previous fix are all still intact
+      assert(
+        notificationContextSrcV8.includes('const POLL_INTERVAL_MS = 30000;') &&
+        notificationContextSrcV8.includes("window.addEventListener('focus', refresh)") &&
+        notificationContextSrcV8.includes("document.addEventListener('visibilitychange'") &&
+        /const refresh = useCallback\(async \(\) => \{[\s\S]{0,300}try \{/.test(notificationContextSrcV8),
+        '942. The previous reliability fixes (30s interval, focus listener, visibilitychange listener, try/catch-wrapped refresh) are all still present and unmodified'
+      );
+
+      // 943. Local date/time -> UTC ISO conversion (combineReminderDateTime) is unchanged by this task
+      assert(combineV8('2026-09-13', '18:31') === new Date('2026-09-13T18:31:00').toISOString(), '943. combineReminderDateTime() still converts local date/time to the correct UTC ISO instant, unchanged from the previous fix');
+
+      // 944. checkDueReminders' duplicate-prevention (reminderNotificationGeneratedFor) is unchanged
+      assert(notificationServiceSrcV8.includes('reminderNotificationGeneratedFor: note.reminderAt') && notificationServiceSrcV8.includes('note.reminderNotificationGeneratedFor === note.reminderAt) return note;'), '944. checkDueReminders() still uses the same reminderNotificationGeneratedFor duplicate-prevention mechanism, unmodified');
+
+      // --- IN-APP ONLY (31-32) ---
+
+      assert(!/candidateEmailService|emailTemplateService|sendEmail/i.test([notificationPanelSrcV8, notificationContextSrcV8, notificationServiceSrcV8].join('\n')), '945. No email service is referenced anywhere in the updated notification files');
+      assert(!/new Notification\(|serviceWorker|requestPermission/.test([notificationPanelSrcV8, notificationContextSrcV8, notificationServiceSrcV8].join('\n')), '946. No browser push Notification API is used anywhere in the updated notification files');
+
+      resetDatabase();
+    }
+    // ==========================================================================
+    // Fix: Hide Reminder Metadata After Reminder Is Read/Acknowledged
+    // ==========================================================================
+    {
+      const noteCardSrcV9 = fs.readFileSync(path.resolve('./src/components/notes/NoteCard.jsx'), 'utf-8');
+      const notesDocViewSrcV9 = fs.readFileSync(path.resolve('./src/components/notes/NotesDocumentView.jsx'), 'utf-8');
+
+      const { getReminderAttentionState: attentionV9 } = await import('../domain/noteDomain.js');
+
+      // --- SHARED LOGIC / SOURCE WIRING ---
+
+      // 947. The reminder metadata line in BOTH views is gated on the exact same isReminderActive variable already used for the Bell — no separate/duplicated hide-logic was introduced
+      assert(/\{isReminderActive && \(\s*<span className="note-reminder-badge">/.test(noteCardSrcV9), '947. NoteCard\'s reminder metadata <span> is gated on {isReminderActive && (...)} — the same value driving the Bell\'s active class');
+      assert(/\{isReminderActive && \(\s*<span className="note-reminder-badge"/.test(notesDocViewSrcV9), '947b. NotesDocumentView\'s reminder metadata <span> is gated on {isReminderActive && (...)} — identical to NoteCard, so the two views can never disagree');
+
+      // 948. No second/duplicate attention-state computation was added — both views still call the ONE shared noteDomain.getReminderAttentionState() exactly once each (checked as an actual invocation assigned to isReminderActive, not merely mentioned in a comment)
+      assert((noteCardSrcV9.match(/const isReminderActive = getReminderAttentionState\(/g) || []).length === 1, '948. NoteCard invokes getReminderAttentionState() exactly once, assigning isReminderActive — that single result drives both the Bell and the metadata line');
+      assert((notesDocViewSrcV9.match(/const isReminderActive = getReminderAttentionState\(/g) || []).length === 1, '948b. NotesDocumentView invokes getReminderAttentionState() exactly once, assigning isReminderActive — that single result drives both the Bell and the metadata line');
+
+      // --- FUNCTIONAL: THE FIVE DISPLAY STATES (1-8, 16-19) ---
+
+      // 949/950. Future reminder: metadata shown, Bell teal (same boolean drives both)
+      {
+        const future = new Date(Date.now() + 3600000).toISOString();
+        const note = { id: 'x', reminderAt: future, reminderNotificationGeneratedFor: null };
+        assert(attentionV9(note, []) === true, '949. Future reminder -> isReminderActive is true (metadata shown)');
+        assert(attentionV9(note, []) === true, '950. Future reminder -> Bell teal (same true value — Bell and metadata always agree by construction)');
+      }
+
+      // 951/952. Due + unread: metadata shown, Bell teal
+      {
+        const due = new Date(Date.now() - 1000).toISOString();
+        const note = { id: 'x', reminderAt: due, reminderNotificationGeneratedFor: due };
+        const notifs = [{ noteId: 'x', dueAt: due, isRead: false }];
+        assert(attentionV9(note, notifs) === true, '951. Due + unread -> isReminderActive is true (metadata shown)');
+        assert(attentionV9(note, notifs) === true, '952. Due + unread -> Bell teal (same true value)');
+      }
+
+      // 953/954. Due + read: metadata HIDDEN, Bell neutral — the actual behavior this task adds
+      {
+        const due = new Date(Date.now() - 1000).toISOString();
+        const note = { id: 'x', reminderAt: due, reminderNotificationGeneratedFor: due };
+        const notifs = [{ noteId: 'x', dueAt: due, isRead: true }];
+        assert(attentionV9(note, notifs) === false, '953. Due + read -> isReminderActive is false, so the reminder metadata line is now hidden (this task\'s new behavior — it previously stayed visible)');
+        assert(attentionV9(note, notifs) === false, '954. Due + read -> Bell neutral (same false value)');
+      }
+
+      // 955/956. No reminder: metadata hidden, Bell neutral (unchanged pre-existing behavior)
+      assert(attentionV9({ id: 'x', reminderAt: null }, []) === false, '955. No reminder -> isReminderActive is false, metadata hidden (unchanged)');
+      assert(attentionV9({ id: 'x', reminderAt: null }, []) === false, '956. No reminder -> Bell neutral (unchanged)');
+
+      // 957. Rescheduled to future: metadata shows again with the NEW time, Bell teal — old read notification does not resurrect the hidden state
+      {
+        const newFuture = new Date(Date.now() + 7200000).toISOString();
+        const rescheduledNote = { id: 'x', reminderAt: newFuture, reminderNotificationGeneratedFor: null };
+        const oldReadNotif = [{ noteId: 'x', dueAt: '2020-01-01T00:00:00.000Z', isRead: true }];
+        assert(attentionV9(rescheduledNote, oldReadNotif) === true, '957. Rescheduling a previously-read reminder to a new future time makes isReminderActive true again immediately — metadata reappears showing the new reminderAt, Bell teal');
+      }
+
+      // 958. Future reminders are NOT affected by a "Mark all as read" that only touches DUE notifications — a future reminder has no notification yet to mark read, so it stays active regardless
+      {
+        const future = new Date(Date.now() + 3600000).toISOString();
+        const untouchedFutureNote = { id: 'future-note', reminderAt: future, reminderNotificationGeneratedFor: null };
+        const dueNote = { id: 'due-note', reminderAt: new Date(Date.now() - 1000).toISOString(), reminderNotificationGeneratedFor: new Date(Date.now() - 1000).toISOString() };
+        const allRead = [{ noteId: 'due-note', dueAt: dueNote.reminderAt, isRead: true }]; // simulates "mark all as read" already applied to the one existing (due) notification
+        assert(attentionV9(untouchedFutureNote, allRead) === true, '958. A future reminder remains active (metadata + teal Bell) after "Mark all as read" — that action only affects notifications for reminders that have actually already fired');
+        assert(attentionV9(dueNote, allRead) === false, '958b. Meanwhile the due note whose notification WAS marked read correctly goes neutral/hidden — Mark all as read only hides the ones it actually acted on');
+      }
+
+      // --- INDEPENDENCE: DATA IS NEVER DELETED (13-15) ---
+
+      // 959. FUNCTIONAL, end-to-end via the real services: after the notification is read (metadata now hidden), reminderAt, reminderNotificationGeneratedFor, and the notification record itself all remain fully intact in storage
+      {
+        resetDatabase();
+        const n = await notesService.create({ title: 'Hide Metadata Data-Integrity Check', content: 'x', category: 'General' });
+        const dueIso = new Date(Date.now() - 1000).toISOString();
+        const db5 = loadDatabase();
+        db5.notes = db5.notes.map((note) => (note.id === n.id ? { ...note, reminderAt: dueIso, reminderNotificationGeneratedFor: null } : note));
+        saveDatabase(db5);
+        await notificationService.checkDueReminders();
+
+        let noteNow = await notesService.getById(n.id);
+        let allNotifs = await notificationService.getAll();
+        const generatedNotif = allNotifs.find((notif) => notif.noteId === n.id);
+        assert(attentionV9(noteNow, allNotifs) === true, '959pre. Sanity: freshly due + unread is active before marking read');
+
+        await notificationService.markAsRead(generatedNotif.id);
+        noteNow = await notesService.getById(n.id);
+        allNotifs = await notificationService.getAll();
+        assert(attentionV9(noteNow, allNotifs) === false, '959. After marking read, isReminderActive is false (metadata now hidden) — this is the UI-only change this task makes');
+        assert(noteNow.reminderAt === dueIso, '959b. reminderAt is completely unchanged in storage — hiding the metadata never clears it');
+        assert(noteNow.reminderNotificationGeneratedFor === dueIso, '959c. reminderNotificationGeneratedFor is completely unchanged in storage — duplicate-prevention state is untouched by hiding the metadata');
+        const notifStillThere = (await notificationService.getAll()).find((notif) => notif.id === generatedNotif.id);
+        assert(notifStillThere && notifStillThere.isRead === true, '959d. The notification record itself still exists internally (read, not deleted) — notificationService.getAll() still returns it');
+      }
+
+      // --- REACTIVITY: NO REFRESH NEEDED (9-12) ---
+
+      // 960. Both views subscribe directly to live NotificationContext state (already verified structurally in check 941) — since isReminderActive is recomputed from that live `notifications` value on every render, the metadata line hides/reappears in the same render pass as the Bell, with no separate effect or manual refresh needed
+      assert(noteCardSrcV9.includes('const { notifications } = useNotifications();') && notesDocViewSrcV9.includes('const { notifications } = useNotifications();'), '960. Both NoteCard and NotesDocumentView read live `notifications` from NotificationContext and recompute isReminderActive (driving both Bell and metadata) on every render — individual Mark as Read / Mark all as read / rescheduling all propagate to the metadata line with no page refresh, exactly as they already did for the Bell');
+
+      // --- REGRESSION: EVERYTHING ELSE UNCHANGED (20) ---
+
+      // 961. The reminder metadata text/format itself (formatReminderLabel, "Reminder: <label>") is completely unchanged — only the show/hide CONDITION changed, not what it displays or how it's formatted
+      assert(noteCardSrcV9.includes('Reminder: {formatReminderLabel(note.reminderAt)}') && notesDocViewSrcV9.includes('Reminder: {formatReminderLabel(selectedNote.reminderAt)}'), '961. The metadata line still renders "Reminder: " + formatReminderLabel(reminderAt) exactly as before — only its visibility condition changed');
+
+      // 962. Set/Edit/Remove Reminder, due-detection, the 30s interval, visibility/focus handling, notification storage, unread-only dropdown, and duplicate-prevention are all unchanged (re-confirmed here since this task specifically touches the same files/behaviors)
+      {
+        const notificationServiceSrcV9 = fs.readFileSync(path.resolve('./src/services/notificationService.js'), 'utf-8');
+        const notificationContextSrcV9 = fs.readFileSync(path.resolve('./src/state/NotificationContext.jsx'), 'utf-8');
+        const notesServiceSrcV9 = fs.readFileSync(path.resolve('./src/services/notesService.js'), 'utf-8');
+        assert(
+          notesServiceSrcV9.includes('async setReminder(id, reminderAtIso)') &&
+          notesServiceSrcV9.includes('async removeReminder(id)') &&
+          notificationServiceSrcV9.includes('async checkDueReminders()') &&
+          notificationContextSrcV9.includes('const POLL_INTERVAL_MS = 30000;') &&
+          notificationContextSrcV9.includes("document.addEventListener('visibilitychange'") &&
+          notificationContextSrcV9.includes('const unreadNotifications = notifications.filter((n) => !n.isRead);') &&
+          notificationServiceSrcV9.includes('note.reminderNotificationGeneratedFor === note.reminderAt) return note;'),
+          '962. setReminder/removeReminder, checkDueReminders, the 30s interval, visibilitychange handling, the unread-only dropdown filter, and duplicate-prevention are all present and unmodified by this metadata-visibility-only change'
+        );
+      }
+
+      resetDatabase();
+    }
+    // ==========================================================================
+    // Fix: Clear Vertical Spacing Between Notification Cards
+    // ==========================================================================
+    {
+      const indexCssSrcV10 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const notificationPanelSrcV10 = fs.readFileSync(path.resolve('./src/components/layout/NotificationPanel.jsx'), 'utf-8');
+
+      // 963. The notification list uses an explicit flex `gap` (not sibling margins, which were
+      // silently collapsing to ~2px under the previous non-flex parent) for consistent inter-card spacing
+      {
+        const listRule = indexCssSrcV10.match(/\.notification-panel-list\s*\{([^}]*)\}/);
+        assert(listRule && /display:\s*flex;/.test(listRule[1]) && /flex-direction:\s*column;/.test(listRule[1]) && /gap:\s*0\.5rem;/.test(listRule[1]), '963. .notification-panel-list is a flex column with an explicit gap — the robust fix for spacing between notification cards, not fragile margin-collapse');
+      }
+
+      // 964. The gap value is exactly 0.5rem (8px), within the requested ~8-10px target
+      {
+        const gapMatch = indexCssSrcV10.match(/\.notification-panel-list\s*\{[^}]*gap:\s*([\d.]+)rem;/);
+        assert(gapMatch, '964. .notification-panel-list declares a gap value');
+        const px = gapMatch ? parseFloat(gapMatch[1]) * 16 : 0;
+        assert(px >= 8 && px <= 10, `964b. The gap is within the requested 8-10px range (found ${px}px)`);
+      }
+
+      // 965. The old sibling-margin approach on .header-notification-item no longer carries a vertical component (only the horizontal inset remains) — spacing between cards now comes from one place, not two overlapping mechanisms
+      {
+        const itemRule = indexCssSrcV10.match(/\.header-notification-item\s*\{([^}]*)\}/);
+        assert(itemRule && /margin:\s*0 0\.5rem;/.test(itemRule[1]), '965. .header-notification-item\'s margin is horizontal-only (0 0.5rem) — vertical card-to-card spacing comes exclusively from the parent\'s gap, not a leftover collapsing margin');
+      }
+
+      // 966. Internal card content was NOT touched by this fix — header padding, item padding, icon/body gap, and internal body-line spacing are all unchanged from the previous task
+      {
+        const headerRule = indexCssSrcV10.match(/\.notification-panel-header\s*\{([^}]*)\}/);
+        const itemRule = indexCssSrcV10.match(/\.header-notification-item\s*\{([^}]*)\}/);
+        const bodyRule = indexCssSrcV10.match(/\.header-notification-item-body\s*\{([^}]*)\}/);
+        assert(headerRule && /padding:\s*1\.1rem 1\.5rem;/.test(headerRule[1]), '966. .notification-panel-header padding is unchanged (1.1rem 1.5rem) — header breathing room from the previous task was not touched');
+        assert(itemRule && /padding:\s*1rem 2\.5rem 1rem 1\.5rem;/.test(itemRule[1]) && /gap:\s*0\.85rem;/.test(itemRule[1]), '966b. .header-notification-item\'s own internal padding and icon/body gap are unchanged — only inter-card spacing was addressed, not internal card spacing');
+        assert(bodyRule && /gap:\s*0\.3rem;/.test(bodyRule[1]), '966c. .header-notification-item-body\'s internal line spacing (NOTE REMINDER/title/message/time) is unchanged');
+      }
+
+      // 967. Panel width was not touched by this fix
+      {
+        const widthMatch = indexCssSrcV10.match(/^\.notification-panel\s*\{\s*position:\s*absolute;\s*top:[^;]+;\s*right:\s*0;\s*width:\s*(\d+)px;/m);
+        assert(widthMatch && widthMatch[1] === '480', '967. .notification-panel width remains 480px, unchanged by this spacing-only fix');
+      }
+
+      // 968. `gap` never adds space before the first or after the last item — no extra :first-child/:last-child overrides were needed or added, since flex `gap` only ever applies BETWEEN items by definition
+      assert(!/\.header-notification-item:first-child|\.header-notification-item:last-child/.test(indexCssSrcV10), '968. No :first-child/:last-child margin overrides were added — flex `gap` inherently never adds space before the first or after the last card, so none were needed');
+
+      // 969. Existing notification functionality (individual Mark as Read, Mark all as read, click-to-navigate, unread-only filtering) is completely unchanged by this CSS-only fix
+      assert(
+        notificationPanelSrcV10.includes('const handleMarkAsReadOnly = (e, notification) => {') &&
+        notificationPanelSrcV10.includes('const { unreadNotifications, markAsRead, markAllAsRead } = useNotifications();') &&
+        notificationPanelSrcV10.includes('const handleNotificationClick = async (notification) => {'),
+        '969. Individual Mark as Read, Mark all as read, and click-to-navigate handlers are all present and unmodified — this was a CSS/layout-only change'
+      );
 
       resetDatabase();
     }

@@ -309,3 +309,119 @@ export function formatNoteUpdatedLabel(updatedAtIso, referenceDate = new Date())
   const sameYear = updated.getFullYear() === referenceDate.getFullYear();
   return sameYear ? `Updated ${day} ${month}, ${time}` : `Updated ${day} ${month} ${updated.getFullYear()}`;
 }
+
+// --------------------------------------------------------------------------
+// Optional per-note Reminders — a note may have AT MOST one reminder, entirely independent of
+// Pin/Archive/content. `reminderAt` is a full ISO 8601 UTC timestamp (built from the user's
+// local date+time picker input, same machine-readable convention as createdAt/updatedAt) or
+// null when no reminder is set. `reminderNotificationGeneratedFor` tracks which exact
+// `reminderAt` value has already produced its one in-app notification, so checking for due
+// reminders on every app load/interval never creates duplicates — and simply setting a NEW
+// reminderAt value (different from whatever was last generated-for) makes that note eligible
+// for exactly one new notification again.
+// --------------------------------------------------------------------------
+
+/**
+ * Combines a 'YYYY-MM-DD' date input and 'HH:MM' time input (both in the user's local
+ * browser time, straight from <input type="date">/<input type="time">) into a full ISO 8601
+ * UTC timestamp for storage. Returns null for incomplete/invalid input.
+ */
+export function combineReminderDateTime(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return null;
+  const local = new Date(`${dateStr}T${timeStr}:00`);
+  if (isNaN(local.getTime())) return null;
+  return local.toISOString();
+}
+
+/**
+ * Inverse of combineReminderDateTime() — splits a stored ISO timestamp back into the local
+ * 'YYYY-MM-DD' / 'HH:MM' strings <input type="date">/<input type="time"> expect, so the
+ * reminder modal can prefill its fields when editing an existing reminder. Returns empty
+ * strings for a missing/invalid input (a brand-new reminder starts with blank fields).
+ */
+export function splitReminderDateTime(reminderAtIso) {
+  if (!reminderAtIso) return { dateStr: '', timeStr: '' };
+  const d = new Date(reminderAtIso);
+  if (isNaN(d.getTime())) return { dateStr: '', timeStr: '' };
+  const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return { dateStr, timeStr };
+}
+
+/**
+ * Validates a candidate reminder timestamp: required, and must not be in the past relative to
+ * `referenceIso` (defaults to now) — a reminder can never be newly scheduled for a time that
+ * has already passed. Does not mutate/round the reminder value itself; the user's exact chosen
+ * minute is always kept.
+ *
+ * Compares at MINUTE granularity, not to-the-second: the Date/Time picker only lets the user
+ * choose a minute (<input type="time"> has no seconds), so the stored reminderAt always has
+ * :00 seconds. Comparing that directly against a to-the-second "now" would falsely reject a
+ * perfectly valid "this current minute" (or the very next minute, picked while only a few
+ * seconds remain in the current one) reminder purely because a few seconds ticked by between
+ * picking the time and clicking Save — an unpredictable, confusing failure for no real reason.
+ * Rounding the reference down to the start of ITS current minute before comparing fixes this:
+ * only a reminder in a genuinely earlier minute is ever rejected.
+ */
+export function validateReminder(reminderAtIso, referenceIso = new Date().toISOString()) {
+  if (!reminderAtIso) {
+    return { isValid: false, error: 'Pick a date and time for the reminder.' };
+  }
+  const target = new Date(reminderAtIso);
+  if (isNaN(target.getTime())) {
+    return { isValid: false, error: 'Pick a valid date and time.' };
+  }
+  const reference = new Date(referenceIso);
+  const referenceMinuteStart = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate(), reference.getHours(), reference.getMinutes(), 0, 0);
+  if (target.getTime() < referenceMinuteStart.getTime()) {
+    return { isValid: false, error: 'Reminder time has already passed — choose a future date and time.' };
+  }
+  return { isValid: true, error: null };
+}
+
+/**
+ * Formats a reminder's ISO timestamp into a short human-readable label in the viewer's local
+ * time, e.g. "Sep 15, 2026 · 10:00 AM" — the one place this format is produced, reused by the
+ * note card badge, Document View, the reminder modal, and the notification panel.
+ */
+export function formatReminderLabel(reminderAtIso) {
+  if (!reminderAtIso) return '';
+  const d = new Date(reminderAtIso);
+  if (isNaN(d.getTime())) return '';
+  const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${datePart} · ${timePart}`;
+}
+
+/**
+ * Derives whether a note's Reminder Bell should show the active teal "needs attention" state.
+ * ONE shared rule — Card View and Document View both call this instead of separately
+ * reimplementing the logic, so they can never disagree. `notifications` should be the FULL
+ * notification list (read and unread both), not a pre-filtered unread-only list, since telling
+ * "due + read" apart from "due + unread" requires seeing the read one too.
+ *
+ * - No reminderAt at all -> neutral (nothing scheduled).
+ * - reminderAt is still in the future -> active (a future reminder).
+ * - reminderAt has passed -> look up the notification generated for this exact occurrence
+ *   (matched by noteId + dueAt) and return active only while it is unread.
+ *
+ * Deliberately compares `reminderAt` against `now` directly here rather than trusting the
+ * note's own `reminderNotificationGeneratedFor` field to decide "is this due yet": that field
+ * lives on the `note` object, which callers (NoteCard/NotesDocumentView) receive from
+ * NotesPage's `notes` list — and `notificationService.checkDueReminders()` updates
+ * `reminderNotificationGeneratedFor` directly in storage on its own 30s interval, independent
+ * of any explicit note action that would make NotesPage reload `notes`. That left this field
+ * stale in the UI's copy of the note for arbitrarily long after a reminder actually fired
+ * (until the next unrelated Pin/Archive/edit refreshed `notes`), which made a just-read
+ * reminder's Bell appear stuck teal. `reminderAt` itself never has this problem — it only ever
+ * changes via setReminder()/removeReminder(), both of which already refresh `notes` — so
+ * computing "due" from it fresh on every render is always correct regardless of any staleness
+ * elsewhere on the note object. `notifications`, read live from NotificationContext, is what's
+ * actually queried for the fresh isRead state.
+ */
+export function getReminderAttentionState(note, notifications = [], nowIso = new Date().toISOString()) {
+  if (!note || !note.reminderAt) return false;
+  if (note.reminderAt > nowIso) return true;
+  const notification = notifications.find((n) => n.noteId === note.id && n.dueAt === note.reminderAt);
+  return notification ? !notification.isRead : true;
+}
