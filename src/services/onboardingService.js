@@ -427,19 +427,18 @@ export const onboardingService = {
     const employee = await employeeService.getById(employeeId);
     if (!employee) throw new Error(`Employee with ID "${employeeId}" not found.`);
 
-    // Check one active primary plan policy
     const existingInstances = db.onboardingPlanInstances || [];
     const rawActivities = db.activities || [];
     const rawTaskInstances = db.onboardingTaskInstances || [];
 
-    const activeInstanceForEmp = existingInstances.find((inst) => {
-      if (inst.employeeId !== employeeId) return false;
-      const instTasks = rawTaskInstances.filter((ti) => ti.planInstanceId === inst.id);
-      const derivedStatus = derivePlanInstanceStatus(inst, instTasks, rawActivities, employee);
-      return derivedStatus !== PLAN_INSTANCE_STATUS.COMPLETED;
-    });
-
-    if (activeInstanceForEmp) {
+    // Duplicate-plan guard — reuses the exact same active-instance definition as
+    // getActiveOnboardingEmployeeIds()/getLaunchEligibleEmployees() (the Launch modal
+    // dropdown's data source), so the UI filter and this final check can never disagree. This
+    // is NOT made redundant by the modal hiding ineligible people — it remains the
+    // authoritative last line of defense (e.g. a stale/bypassed UI selection), and is the seam
+    // where a future real backend would enforce the same rule server-side.
+    const activeOnboardingEmployeeIds = await this.getActiveOnboardingEmployeeIds();
+    if (activeOnboardingEmployeeIds.has(employeeId)) {
       throw new Error(`Employee ${employee.fullName} already has an active onboarding plan (In Progress / Needs Attention).`);
     }
 
@@ -700,6 +699,39 @@ export const onboardingService = {
     if (!id) return null;
     const instances = await this.getAllInstances({ referenceDate });
     return instances.find((inst) => inst.id === id) || null;
+  },
+
+  /**
+   * Returns the Set of employeeIds that currently have an ACTIVE (derivedStatus !== Completed)
+   * onboarding plan instance — the single source of truth for "already has an active onboarding
+   * plan," built on the exact same derivedStatus this module already computes everywhere else
+   * (getAllInstances() / derivePlanInstanceStatus()). Reused by BOTH getLaunchEligibleEmployees()
+   * (the Launch modal's dropdown source) and launchPlanInstance()'s final duplicate-plan guard
+   * below, so the two can never drift apart. A person whose only instance(s) are COMPLETED is
+   * NOT included — completing a plan makes them eligible to be launched into a new one again.
+   */
+  async getActiveOnboardingEmployeeIds() {
+    const instances = await this.getAllInstances();
+    return new Set(
+      instances
+        .filter((inst) => inst.derivedStatus !== PLAN_INSTANCE_STATUS.COMPLETED)
+        .map((inst) => inst.employeeId)
+    );
+  },
+
+  /**
+   * Resolves employees/interns eligible to have onboarding launched right now: current
+   * lifecycle status 'Onboarding' AND no existing active onboarding plan instance. This is the
+   * single service-boundary source the Launch Onboarding Plan modal reads (it never inspects
+   * storageEngine/localStorage directly), so when a real backend replaces this method's
+   * internals later, the modal needs no changes. Reuses getActiveOnboardingEmployeeIds() — the
+   * exact same active-plan definition launchPlanInstance() enforces as its final safety check.
+   */
+  async getLaunchEligibleEmployees() {
+    const allEmployees = await employeeService.getAll();
+    const onboardingStatusEmployees = allEmployees.filter((e) => e.status === 'Onboarding');
+    const activeOnboardingEmployeeIds = await this.getActiveOnboardingEmployeeIds();
+    return onboardingStatusEmployees.filter((e) => !activeOnboardingEmployeeIds.has(e.id));
   },
 
   /**

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Play, AlertTriangle, User, Calendar, Building2, Users, UsersRound, GraduationCap } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
-import { employeeService } from '../../services/employeeService.js';
 import Select from '../common/Select.jsx';
 
 export default function LaunchPlanModal({
@@ -30,8 +29,11 @@ export default function LaunchPlanModal({
     if (preselectedEmployeeId) setSelectedEmployeeId(preselectedEmployeeId);
   }, [preselectedEmployeeId]);
 
-  // If the currently selected employee no longer matches the newly chosen type filter,
-  // clear the selection so Launch can't proceed against a now-hidden person.
+  // If the currently selected person is no longer present in the eligible-candidates list
+  // (e.g. they picked up an active plan, or their lifecycle status changed elsewhere) or no
+  // longer matches the chosen type filter, clear the selection so Launch can't proceed against
+  // a now-hidden/ineligible person. Re-runs on BOTH typeFilter and onboardingEmployees changes,
+  // not just the filter, so a stale selection is caught even if the eligible set itself changes.
   useEffect(() => {
     if (!selectedEmployeeId) return;
     const currentlySelected = onboardingEmployees.find((emp) => emp.id === selectedEmployeeId);
@@ -40,7 +42,7 @@ export default function LaunchPlanModal({
       setSelectedEmployeeId('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typeFilter]);
+  }, [typeFilter, onboardingEmployees]);
 
   useEffect(() => {
     if (selectedEmployeeId) {
@@ -61,15 +63,13 @@ export default function LaunchPlanModal({
 
   const loadInitialOptions = async () => {
     try {
-      const allEmps = await employeeService.getAll();
-
-      // Launch eligibility: only employee/intern records whose CURRENT lifecycle status is
-      // 'Onboarding' — the existing normalized employee.status field used throughout the
-      // app (directory, onboarding population helpers, etc.), not a new eligibility model.
-      // This intentionally reads from the Employees service boundary, not Upcoming
-      // candidates directly: by the time someone is selectable here they must already be a
-      // converted Employee record in Onboarding status.
-      const eligibleEmps = allEmps.filter((e) => e.status === 'Onboarding');
+      // Launch eligibility = current lifecycle status 'Onboarding' AND no existing active
+      // onboarding plan instance, resolved entirely through the service boundary
+      // (onboardingService.getLaunchEligibleEmployees()) — this component never inspects
+      // storageEngine/localStorage directly. That service method reuses the exact same
+      // active-plan definition launchPlanInstance() enforces as its final duplicate-plan
+      // guard, so this dropdown and that validation can never disagree.
+      const eligibleEmps = await onboardingService.getLaunchEligibleEmployees();
 
       setOnboardingEmployees(eligibleEmps);
     } catch (err) {
@@ -120,18 +120,20 @@ export default function LaunchPlanModal({
   // a valid, non-empty composition has been previewed for the selected employee.
   const canLaunch = Boolean(preview) && preview.isValid && preview.counts.total > 0 && !previewLoading;
 
-  // Lifecycle eligibility (status === 'Onboarding') is applied first in loadInitialOptions();
-  // this is the secondary All/Employees/Interns narrowing on top of that already-eligible set.
+  // Full eligibility (Onboarding lifecycle status AND no active onboarding plan) is already
+  // applied in loadInitialOptions() via onboardingService.getLaunchEligibleEmployees(); this is
+  // only the secondary All/Employees/Interns narrowing on top of that already-eligible set, so
+  // none of the 3 filters can ever reintroduce an ineligible person.
   const filteredOnboardingEmployees = onboardingEmployees.filter(
     (emp) => typeFilter === 'all' || emp.directoryType === typeFilter
   );
 
   const employeeEmptyStateMessage =
     typeFilter === 'Employee'
-      ? 'No onboarding employees available'
+      ? 'No employees are currently eligible to launch onboarding.'
       : typeFilter === 'Intern'
-      ? 'No onboarding interns available'
-      : 'No employees currently awaiting onboarding';
+      ? 'No interns are currently eligible to launch onboarding.'
+      : 'No employees or interns are currently eligible to launch onboarding.';
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -214,7 +216,7 @@ export default function LaunchPlanModal({
                 ]}
               />
             )}
-            <span className="form-hint">Only employees/interns currently in Onboarding status are eligible</span>
+            <span className="form-hint">Only employees/interns in Onboarding status without an active onboarding plan are eligible.</span>
           </div>
 
           {/* Preview Details */}

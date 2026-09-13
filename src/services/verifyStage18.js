@@ -2384,22 +2384,36 @@ export async function verifyStage18() {
 
     // --- LAUNCH PLAN EMPLOYEE ELIGIBILITY (Onboarding status only) ---
 
-    // 401. LaunchPlanModal reads employee data via the Employees service boundary — not Upcoming candidates directly
+    // 401. UPDATED — LaunchPlanModal sources its eligible-candidate list through the
+    // onboardingService boundary (getLaunchEligibleEmployees()) rather than importing
+    // employeeService and filtering inline — it still never reads Upcoming candidates directly.
+    // This supersedes the earlier check (from before the "Exclude People With an Existing
+    // Active Onboarding Plan" task), which asserted a direct employeeService import.
     assert(
-      launchPlanModalSrc5.includes("import { employeeService } from '../../services/employeeService.js'") && !launchPlanModalSrc5.includes('upcomingCandidateService'),
-      '401. LaunchPlanModal sources employee data from employeeService (existing Employees domain boundary) — it does not read Upcoming candidates directly'
+      launchPlanModalSrc5.includes('onboardingService.getLaunchEligibleEmployees()') && !launchPlanModalSrc5.includes('upcomingCandidateService') && !launchPlanModalSrc5.includes("from '../../services/employeeService.js'"),
+      '401. UPDATED — LaunchPlanModal sources its eligible-candidate list from onboardingService.getLaunchEligibleEmployees() (not a direct employeeService import, and not Upcoming candidates)'
     );
 
-    // 402. The eligibility filter is exactly employee.status === 'Onboarding' — the existing normalized lifecycle field, no new eligibility model
-    assert(launchPlanModalSrc5.includes("allEmps.filter((e) => e.status === 'Onboarding')"), "402. Launch employee eligibility uses exactly `employee.status === 'Onboarding'` — the existing lifecycle field, not a new isEligibleForOnboarding model");
+    // 402. UPDATED — The Onboarding-lifecycle-status half of eligibility is still exactly
+    // employee.status === 'Onboarding' — the existing normalized lifecycle field, no new
+    // eligibility model — but this now lives in onboardingService.getLaunchEligibleEmployees()
+    // rather than inline in the modal, since eligibility also requires no active onboarding
+    // plan (see checks 970+ for the full updated eligibility rule).
+    {
+      const onboardingServiceSrcForEligibilityCheck = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+      assert(onboardingServiceSrcForEligibilityCheck.includes("allEmployees.filter((e) => e.status === 'Onboarding')"), "402. UPDATED — Launch employee eligibility still uses exactly `employee.status === 'Onboarding'` (now inside onboardingService.getLaunchEligibleEmployees()) — the existing lifecycle field, not a new isEligibleForOnboarding model");
+    }
 
     // 403. Employee dropdown labels no longer show a bracketed lifecycle status (e.g. "[Active]") — every visible entry is already Onboarding by construction
     assert(!launchPlanModalSrc5.includes('— [${emp.status}]'), '403. Employee dropdown labels no longer append a bracketed lifecycle status — redundant now that every entry is guaranteed Onboarding');
 
-    // 404. Empty state: a clear disabled message renders instead of a broken/blank dropdown when no one is eligible under the current type filter
+    // 404. UPDATED — Empty state: a clear disabled message renders instead of a broken/blank
+    // dropdown when no one is eligible under the current type filter. Wording was later updated
+    // (see checks 970+) to reflect the fuller eligibility rule (Onboarding status AND no active
+    // plan), not just "awaiting onboarding".
     assert(
-      launchPlanModalSrc5.includes('No employees currently awaiting onboarding') && launchPlanModalSrc5.includes('filteredOnboardingEmployees.length === 0') && launchPlanModalSrc5.match(/filteredOnboardingEmployees\.length === 0[\s\S]{0,200}disabled/),
-      '404. A clear disabled empty state renders when zero employees are eligible under the current All/Employees/Interns filter, instead of a broken/blank dropdown'
+      launchPlanModalSrc5.includes('No employees or interns are currently eligible to launch onboarding.') && launchPlanModalSrc5.includes('filteredOnboardingEmployees.length === 0') && launchPlanModalSrc5.match(/filteredOnboardingEmployees\.length === 0[\s\S]{0,200}disabled/),
+      '404. UPDATED — A clear disabled empty state renders when zero employees are eligible under the current All/Employees/Interns filter, instead of a broken/blank dropdown'
     );
 
     // 405. UPDATED — the per-task "Resolved Assignee" override picker (and its backing assigneeCandidates population) is completely
@@ -2477,25 +2491,32 @@ export async function verifyStage18() {
     // 415. typeFilter defaults to 'all'
     assert(launchPlanModalSrc6.includes("useState('all')"), "415. The Employee/Intern type filter defaults to 'all'");
 
-    // 416. Lifecycle eligibility (status === 'Onboarding') is applied FIRST, then the All/Employees/Interns filter narrows further by the existing directoryType field — no new classification invented
+    // 416. UPDATED — Full eligibility (Onboarding lifecycle status AND no active onboarding
+    // plan, resolved via onboardingService.getLaunchEligibleEmployees()) is applied FIRST, then
+    // the All/Employees/Interns filter narrows further by the existing directoryType field — no
+    // new classification invented.
     assert(
-      launchPlanModalSrc6.includes("allEmps.filter((e) => e.status === 'Onboarding')") &&
+      launchPlanModalSrc6.includes('onboardingService.getLaunchEligibleEmployees()') &&
       launchPlanModalSrc6.includes("onboardingEmployees.filter(\n    (emp) => typeFilter === 'all' || emp.directoryType === typeFilter\n  )"),
-      '416. Onboarding lifecycle eligibility is applied first, then All/Employees/Interns narrows by the existing employee.directoryType field'
+      '416. UPDATED — Full Onboarding-lifecycle-AND-no-active-plan eligibility is applied first (via getLaunchEligibleEmployees()), then All/Employees/Interns narrows by the existing employee.directoryType field'
     );
 
-    // 417. Three distinct empty-state messages exist for All / Employees / Interns
+    // 417. UPDATED — Three distinct empty-state messages exist for All / Employees / Interns,
+    // reworded (see checks 970+) to reflect the fuller eligibility rule.
     assert(
-      launchPlanModalSrc6.includes('No employees currently awaiting onboarding') &&
-      launchPlanModalSrc6.includes('No onboarding employees available') &&
-      launchPlanModalSrc6.includes('No onboarding interns available'),
-      '417. Three distinct empty-state messages exist for the All / Employees / Interns filter states'
+      launchPlanModalSrc6.includes('No employees or interns are currently eligible to launch onboarding.') &&
+      launchPlanModalSrc6.includes('No employees are currently eligible to launch onboarding.') &&
+      launchPlanModalSrc6.includes('No interns are currently eligible to launch onboarding.'),
+      '417. UPDATED — Three distinct, personType-aware empty-state messages exist for the All / Employees / Interns filter states'
     );
 
-    // 418. Changing the filter clears an incompatible selection (source-level: effect keyed on typeFilter that resets selectedEmployeeId when the current selection no longer matches)
+    // 418. UPDATED — Changing the filter (or the eligible-candidate list itself changing) clears
+    // an incompatible/now-ineligible selection — the effect's dependency array was widened from
+    // [typeFilter] to [typeFilter, onboardingEmployees] so a stale selection is also caught if
+    // the eligible set changes, not just the filter.
     assert(
-      launchPlanModalSrc6.match(/typeFilter === 'all' \|\| currentlySelected\.directoryType === typeFilter/) && launchPlanModalSrc6.includes("setSelectedEmployeeId('')") && launchPlanModalSrc6.includes('}, [typeFilter]);'),
-      '418. An effect keyed on typeFilter clears the selected employee when they no longer match the newly chosen filter'
+      launchPlanModalSrc6.match(/typeFilter === 'all' \|\| currentlySelected\.directoryType === typeFilter/) && launchPlanModalSrc6.includes("setSelectedEmployeeId('')") && launchPlanModalSrc6.includes('}, [typeFilter, onboardingEmployees]);'),
+      '418. UPDATED — An effect keyed on [typeFilter, onboardingEmployees] clears the selected employee when they no longer match the filter or are no longer in the eligible set'
     );
 
     resetDatabase();
@@ -6658,6 +6679,217 @@ export async function verifyStage18() {
         assert(
           !offboardingServiceSrcFinal.includes('personType') && !notesServiceSrcFinal.includes('personType') && !notificationServiceSrcFinal.includes('personType'),
           '1004. NEW — Offboarding, Notes, and the reminder/notification system contain no reference to the onboarding personType concept — this refactor is fully isolated to Onboarding Plans'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Exclude Employees/Interns With an Existing Active Onboarding Plan From
+    // the Launch Dropdown
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const launchPlanModalSrcFinal2 = fs.readFileSync(path.resolve('./src/components/onboarding/LaunchPlanModal.jsx'), 'utf-8');
+      const onboardingServiceSrcFinal2 = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+
+      // 1005. Baseline seed data: Hannah Razak (emp-013, Employee) and Kevin Heng (emp-014,
+      // Intern) are both Onboarding-status but ALSO both already have an active (Needs
+      // Attention) instance out of the box — matching the task brief's own Hannah Razak
+      // example — so BOTH are correctly excluded, leaving zero eligible candidates by default.
+      {
+        const activeIds = await onboardingService.getActiveOnboardingEmployeeIds();
+        const eligible = await onboardingService.getLaunchEligibleEmployees();
+        assert(activeIds.has('emp-013') && activeIds.has('emp-014'), '1005. NEW — Hannah Razak (emp-013, Employee) and Kevin Heng (emp-014, Intern) both have an existing active onboarding plan in the seed data, matching the task brief\'s own example');
+        assert(eligible.length === 0, `1005b. NEW — With both Onboarding-status seed people already carrying active plans, getLaunchEligibleEmployees() correctly returns zero candidates (found ${eligible.length})`);
+      }
+
+      // --- SCENARIO 7: NO ELIGIBLE CANDIDATES (EMPTY STATE) ---
+
+      // 1006. Empty-state wording matches the exact required copy for All/Employees/Interns
+      assert(
+        launchPlanModalSrcFinal2.includes('No employees or interns are currently eligible to launch onboarding.') &&
+        launchPlanModalSrcFinal2.includes('No employees are currently eligible to launch onboarding.') &&
+        launchPlanModalSrcFinal2.includes('No interns are currently eligible to launch onboarding.'),
+        '1006. NEW — SCENARIO 7: Empty-state copy matches the exact required wording for All, Employees, and Interns'
+      );
+
+      // 1007. The dropdown renders a disabled Select (not a broken/blank one) when the eligible list is empty
+      assert(launchPlanModalSrcFinal2.match(/filteredOnboardingEmployees\.length === 0[\s\S]{0,200}disabled/), '1007. NEW — SCENARIO 7: A disabled Select with the empty-state message renders instead of a blank/broken dropdown when zero candidates are eligible');
+
+      // --- SCENARIOS 1 & 8 (EMPLOYEE): COMPLETE HANNAH'S EXISTING PLAN -> SHE BECOMES ELIGIBLE AGAIN ---
+      // Also proves Scenario 8: a historical/COMPLETED plan does NOT permanently block re-eligibility,
+      // since the active-plan definition is derivedStatus !== Completed, not "has ANY instance ever".
+      // NOTE: completion is simulated via a fresh .map()-derived `activities` array (not
+      // activityService.markComplete()'s in-place `activities[index] = ...` write) — in the
+      // Node/no-localStorage fallback this storage engine uses here, db.activities is a direct
+      // reference to the imported seed module array, so an in-place index write would otherwise
+      // permanently corrupt the shared seed singleton across this run's later resetDatabase()
+      // calls (the exact bug the module's own `notes` handling already guards against — see
+      // storageEngine.js's getInitialState()). Assigning a NEW array here avoids that entirely.
+      {
+        const hannahInstanceBefore = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        const hannahActivityIds = new Set(hannahInstanceBefore.progress.tasks.map((t) => t.activityId));
+        const dbForHannahComplete = loadDatabase();
+        dbForHannahComplete.activities = dbForHannahComplete.activities.map((a) =>
+          hannahActivityIds.has(a.id) ? { ...a, completed: true, completedAt: new Date().toISOString() } : a
+        );
+        saveDatabase(dbForHannahComplete);
+        const hannahInstanceAfter = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        assert(hannahInstanceAfter.derivedStatus === 'Completed', `1008. NEW — Setup: completing every task on Hannah's existing instance correctly flips its derivedStatus to Completed (found ${hannahInstanceAfter.derivedStatus})`);
+
+        const activeIdsAfterComplete = await onboardingService.getActiveOnboardingEmployeeIds();
+        assert(!activeIdsAfterComplete.has('emp-013'), '1009. NEW — SCENARIO 8: Once Hannah\'s onboarding plan is fully COMPLETED (not just any historical record existing), she is no longer counted as having an "active" plan — a completed plan does not permanently block re-eligibility');
+
+        const eligibleAfterComplete = await onboardingService.getLaunchEligibleEmployees();
+        const hannahEligible = eligibleAfterComplete.find((e) => e.id === 'emp-013');
+        assert(Boolean(hannahEligible), '1010. NEW — SCENARIO 1: Hannah (Onboarding status, now with a Completed — not active — plan) correctly appears in the eligible-candidates list');
+
+        // 1011. All/Employees filter narrowing (mirroring LaunchPlanModal's own filteredOnboardingEmployees logic) both include Hannah once she is eligible
+        const allFilterResult = eligibleAfterComplete;
+        const employeesFilterResult = eligibleAfterComplete.filter((e) => e.directoryType === 'Employee');
+        assert(allFilterResult.some((e) => e.id === 'emp-013') && employeesFilterResult.some((e) => e.id === 'emp-013'), '1011. NEW — SCENARIO 1: Hannah appears under both the All filter and the Employees filter once eligible (same eligible set, narrowed only by directoryType, matching LaunchPlanModal\'s own filter logic)');
+
+        // 1012. A fresh preview for Hannah composes correctly now that she is eligible again
+        const previewForHannah = await onboardingService.previewOnboardingComposition('emp-013');
+        assert(previewForHannah.isValid && previewForHannah.counts.total === 11, `1012. NEW — SCENARIO 1: Previewing onboarding for the now-eligible Hannah composes correctly (Employee Universal(7)+Department(4)=11, found ${previewForHannah.counts.total})`);
+
+        resetDatabase(); // restore Hannah's original seeded active instance for subsequent checks
+      }
+
+      // --- SCENARIO 3 & 6 (INTERN): SAME COMPLETION APPROACH FOR KEVIN ---
+      // Same non-mutating .map()-based completion simulation as the Hannah block above, for the
+      // same reason (avoids corrupting the shared seed `activities` singleton in Node's
+      // no-localStorage storage fallback).
+      {
+        const kevinInstanceBefore = (await onboardingService.getAllInstances({ employeeId: 'emp-014' }))[0];
+        const kevinActivityIds = new Set(kevinInstanceBefore.progress.tasks.map((t) => t.activityId));
+        const dbForKevinComplete = loadDatabase();
+        dbForKevinComplete.activities = dbForKevinComplete.activities.map((a) =>
+          kevinActivityIds.has(a.id) ? { ...a, completed: true, completedAt: new Date().toISOString() } : a
+        );
+        saveDatabase(dbForKevinComplete);
+        const eligibleAfterKevinComplete = await onboardingService.getLaunchEligibleEmployees();
+        const kevinEligible = eligibleAfterKevinComplete.find((e) => e.id === 'emp-014');
+        assert(Boolean(kevinEligible) && kevinEligible.directoryType === 'Intern', '1013. NEW — SCENARIO 3: Kevin Heng (Intern, Onboarding status, now with a Completed plan) correctly appears in the eligible-candidates list');
+
+        const internsFilterResult = eligibleAfterKevinComplete.filter((e) => e.directoryType === 'Intern');
+        assert(internsFilterResult.some((e) => e.id === 'emp-014'), '1014. NEW — SCENARIO 3/6: Kevin appears under the Interns filter once eligible');
+
+        const previewForKevin = await onboardingService.previewOnboardingComposition('emp-014');
+        assert(previewForKevin.isValid && previewForKevin.counts.total === 7, `1015. NEW — SCENARIO 3: Previewing onboarding for the now-eligible Kevin composes the correct Intern task set (Intern Universal(3)+Department(4)=7, found ${previewForKevin.counts.total})`);
+
+        resetDatabase();
+      }
+
+      // --- SCENARIO 2 & 4 (RE-DERIVED FROM FRESH RESET): ACTIVE-PLAN PEOPLE EXCLUDED FROM ALL 3 FILTERS ---
+      {
+        const eligibleFresh = await onboardingService.getLaunchEligibleEmployees();
+        assert(!eligibleFresh.some((e) => e.id === 'emp-013'), '1016. NEW — SCENARIO 2: Hannah (active plan) does NOT appear in the eligible list — excluded from All');
+        assert(!eligibleFresh.filter((e) => e.directoryType === 'Employee').some((e) => e.id === 'emp-013'), '1016b. NEW — SCENARIO 2: Hannah remains excluded even after applying the Employees filter narrowing');
+        assert(!eligibleFresh.some((e) => e.id === 'emp-014'), '1017. NEW — SCENARIO 4: Kevin (active plan) does NOT appear in the eligible list — excluded from All');
+        assert(!eligibleFresh.filter((e) => e.directoryType === 'Intern').some((e) => e.id === 'emp-014'), '1017b. NEW — SCENARIO 4: Kevin remains excluded even after applying the Interns filter narrowing');
+      }
+
+      // --- SCENARIO 5: WRONG LIFECYCLE STATUS STAYS EXCLUDED REGARDLESS OF ACTIVE-PLAN STATUS ---
+      {
+        const allEmpsForWrongStatus = await employeeService.getAll();
+        const nonOnboardingPerson = allEmpsForWrongStatus.find((e) => e.status !== 'Onboarding');
+        const eligibleForWrongStatusCheck = await onboardingService.getLaunchEligibleEmployees();
+        assert(
+          Boolean(nonOnboardingPerson) && !eligibleForWrongStatusCheck.some((e) => e.id === nonOnboardingPerson.id),
+          `1018. NEW — SCENARIO 5: A person whose lifecycle status is NOT 'Onboarding' (e.g. ${nonOnboardingPerson ? nonOnboardingPerson.status : 'n/a'}) remains excluded from the eligible list regardless of active-plan status — the existing lifecycle rule is unchanged`
+        );
+      }
+
+      // --- SCENARIO 9: FINAL DUPLICATE-LAUNCH VALIDATION STILL EXISTS (BYPASS-THE-UI TEST) ---
+
+      // 1019. Source-level: launchPlanInstance() still contains the duplicate-plan guard, now reusing getActiveOnboardingEmployeeIds()
+      assert(
+        onboardingServiceSrcFinal2.includes('already has an active onboarding plan (In Progress / Needs Attention)') &&
+        onboardingServiceSrcFinal2.match(/activeOnboardingEmployeeIds\.has\(employeeId\)/),
+        '1019. NEW — SCENARIO 9: launchPlanInstance() still contains the final duplicate-plan guard, now built on getActiveOnboardingEmployeeIds() (the same source the dropdown uses) rather than a separate inline computation'
+      );
+
+      // 1020. FUNCTIONAL: calling launchPlanInstance() directly for Hannah (who still has her seeded active plan, entirely bypassing any UI dropdown filtering) is correctly rejected
+      {
+        let threw = false;
+        let errMsg = '';
+        try {
+          await onboardingService.launchPlanInstance('emp-013');
+        } catch (err) {
+          threw = true;
+          errMsg = err.message;
+        }
+        assert(threw && errMsg.includes('already has an active onboarding plan'), '1020. NEW — SCENARIO 9: Calling launchPlanInstance(\'emp-013\') directly (bypassing the UI dropdown filter entirely) still throws "already has an active onboarding plan" — the validation is not merely redundant with the UI filter, it remains the authoritative guard');
+      }
+
+      // --- SCENARIO 10: STALE SELECTION HANDLED SAFELY (SOURCE-LEVEL) ---
+
+      // 1021. The modal's stale-selection effect is keyed on BOTH typeFilter and the eligible-candidates list itself
+      assert(
+        launchPlanModalSrcFinal2.match(/\}, \[typeFilter, onboardingEmployees\]\);/) &&
+        launchPlanModalSrcFinal2.includes("setSelectedEmployeeId('')"),
+        '1021. NEW — SCENARIO 10: The stale-selection effect is keyed on [typeFilter, onboardingEmployees] — a selection is safely cleared if the person no longer matches the filter OR is no longer present in the eligible-candidates list at all'
+      );
+
+      // 1022. When selectedEmployeeId is cleared, the preview is also cleared — no misleading stale task preview can linger for a person who is no longer selectable
+      assert(
+        launchPlanModalSrcFinal2.match(/if \(selectedEmployeeId\)\s*\{\s*\n\s*loadPreview\(selectedEmployeeId\);\s*\n\s*\}\s*else\s*\{\s*\n\s*setPreview\(null\);/),
+        '1022. NEW — SCENARIO 10: Preview state is derived from selectedEmployeeId via its own effect — clearing the selection (e.g. by the stale-selection guard) automatically clears the preview too, so no misleading task preview can linger for an ineligible person'
+      );
+
+      // --- HELPER TEXT ---
+
+      // 1023. Helper text communicates BOTH eligibility conditions
+      assert(
+        launchPlanModalSrcFinal2.includes('Only employees/interns in Onboarding status without an active onboarding plan are eligible.'),
+        '1023. NEW — The helper text communicates both eligibility conditions (Onboarding status AND no active onboarding plan), not just the old lifecycle-only wording'
+      );
+
+      // --- PLAN COMPOSITION / PERSONTYPE SEPARATION UNCHANGED ---
+
+      // 1024. composeOnboardingTasks()/getScopeTaskDefinitions() are untouched — same Employee/Intern totals and no cross-type leakage, as before this task
+      {
+        const scopeDefsFinal2 = await onboardingService.getScopeTaskDefinitions();
+        const empCompositionFinal2 = composeOnboardingTasks({ id: 'eligibility-check-emp', directoryType: 'Employee', department: { id: 'dept-3', name: 'Software Engineering' } }, scopeDefsFinal2, '2026-08-15');
+        const internCompositionFinal2 = composeOnboardingTasks({ id: 'eligibility-check-intern', directoryType: 'Intern', department: { id: 'dept-3', name: 'Software Engineering' } }, scopeDefsFinal2, '2026-08-15');
+        assert(
+          empCompositionFinal2.counts.total === 11 && internCompositionFinal2.counts.total === 7 &&
+          !empCompositionFinal2.tasks.some((t) => t.personType === 'intern') && !internCompositionFinal2.tasks.some((t) => t.personType === 'employee'),
+          `1024. NEW — Plan composition (Employee Universal+Department=11, Intern Universal+Department=7, no cross-type leakage) is completely unaffected by this launch-eligibility task (found Employee:${empCompositionFinal2.counts.total}, Intern:${internCompositionFinal2.counts.total})`
+        );
+      }
+
+      // 1025. The Plans-configuration service methods retain their exact signatures from the previous Plans refactor — this task only added 2 new read-only eligibility methods and touched launchPlanInstance's guard
+      assert(
+        onboardingServiceSrcFinal2.includes('async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = [], currentUserId') &&
+        onboardingServiceSrcFinal2.includes('async getScopeTasks(scopeType, personType, departmentId = null)') &&
+        onboardingServiceSrcFinal2.includes("async getScopesSummary(personType = 'employee')"),
+        '1025. NEW — saveScopeTasks/getScopeTasks/getScopesSummary retain their exact signatures from the previous Plans refactor — this task did not touch plan composition/configuration, only launch candidate eligibility'
+      );
+
+      // --- EXISTING LAUNCHED INSTANCES UNCHANGED ---
+
+      // 1026. getActiveOnboardingEmployeeIds()/getLaunchEligibleEmployees() are purely read-only — neither calls saveDatabase(), so computing eligibility can never mutate an already-launched instance
+      assert(
+        !onboardingServiceSrcFinal2.match(/async getActiveOnboardingEmployeeIds\(\)[\s\S]{0,400}saveDatabase/) &&
+        !onboardingServiceSrcFinal2.match(/async getLaunchEligibleEmployees\(\)[\s\S]{0,400}saveDatabase/),
+        '1026. NEW — getActiveOnboardingEmployeeIds() and getLaunchEligibleEmployees() are both purely read-only (no saveDatabase() call in either) — computing launch eligibility can never mutate an existing launched onboarding instance'
+      );
+
+      // 1027. FUNCTIONAL: Hannah's seeded instance (inst-001) is byte-for-byte unchanged after repeatedly computing launch eligibility
+      {
+        const hannahInstanceCheck1 = await onboardingService.getInstanceById('inst-001');
+        await onboardingService.getLaunchEligibleEmployees();
+        await onboardingService.getLaunchEligibleEmployees();
+        const hannahInstanceCheck2 = await onboardingService.getInstanceById('inst-001');
+        assert(
+          hannahInstanceCheck1.progress.totalTasks === hannahInstanceCheck2.progress.totalTasks &&
+          JSON.stringify(hannahInstanceCheck1.progress.tasks.map((t) => t.title)) === JSON.stringify(hannahInstanceCheck2.progress.tasks.map((t) => t.title)),
+          '1027. NEW — Repeatedly computing launch eligibility does not alter Hannah\'s existing launched instance (inst-001) in any way — same task count and titles before and after'
         );
       }
 
