@@ -1,204 +1,229 @@
 import React, { useState, useEffect } from 'react';
-import { X, Play, AlertCircle, Calendar, UserCheck, ShieldAlert } from 'lucide-react';
+import { X, Play, AlertTriangle, User, Calendar, Building2, Users, UsersRound, GraduationCap } from 'lucide-react';
 import { offboardingService } from '../../services/offboardingService.js';
-import { employeeService } from '../../services/employeeService.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
 import Select from '../common/Select.jsx';
 
-export default function LaunchOffboardingPlanModal({ isOpen, onClose, onSuccess, initialEmployeeId = null }) {
-  const [employees, setEmployees] = useState([]);
-  const [templates, setTemplates] = useState([]);
+// Mirrors Onboarding's LaunchPlanModal UX pattern (eligible-candidates dropdown + composed-task
+// preview), but keeps one genuinely offboarding-specific control Onboarding doesn't need: a
+// Final Working Date custom override, since (unlike an onboarding start date) many employees have
+// no confirmed exit date on record yet. All composition/eligibility logic is offboarding's own —
+// nothing here is shared with or copied from onboardingService.
+export default function LaunchOffboardingPlanModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  initialEmployeeId = null,
+}) {
+  const [offboardingEmployees, setOffboardingEmployees] = useState([]);
+  const [typeFilter, setTypeFilter] = useState('all'); // 'all' | 'Employee' | 'Intern'
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(initialEmployeeId || '');
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [customAnchorDate, setCustomAnchorDate] = useState('');
-  const [manualOverrides, setManualOverrides] = useState({});
-
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [launching, setLaunching] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
-      loadInitialData();
+      loadInitialOptions();
       if (initialEmployeeId) {
         setSelectedEmployeeId(initialEmployeeId);
       }
     } else {
-      resetModalState();
+      resetState();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialEmployeeId]);
 
+  // If the currently selected person is no longer present in the eligible-candidates list (e.g.
+  // they picked up an active plan elsewhere, or their lifecycle status changed) or no longer
+  // matches the chosen type filter, clear the selection so Launch can't proceed against a
+  // now-hidden/ineligible person.
   useEffect(() => {
-    if (selectedEmployeeId && selectedTemplateId) {
-      updatePreview();
+    if (!selectedEmployeeId) return;
+    const currentlySelected = offboardingEmployees.find((emp) => emp.id === selectedEmployeeId);
+    const stillEligible = currentlySelected && (typeFilter === 'all' || currentlySelected.directoryType === typeFilter);
+    if (!stillEligible) {
+      setSelectedEmployeeId('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeFilter, offboardingEmployees]);
+
+  useEffect(() => {
+    if (selectedEmployeeId) {
+      loadPreview(selectedEmployeeId, customAnchorDate);
     } else {
       setPreview(null);
     }
-  }, [selectedEmployeeId, selectedTemplateId, customAnchorDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmployeeId, customAnchorDate]);
 
-  const resetModalState = () => {
-    setSelectedEmployeeId('');
-    setSelectedTemplateId('');
-    setCustomAnchorDate('');
-    setManualOverrides({});
-    setPreview(null);
-    setError(null);
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  const loadInitialOptions = async () => {
+    try {
+      // Launch eligibility = current lifecycle status 'Active'/'Departing' AND no existing active
+      // offboarding plan instance, resolved entirely through the service boundary
+      // (offboardingService.getLaunchEligibleEmployees()) — this component never inspects
+      // storageEngine/localStorage directly. That service method reuses the exact same
+      // active-plan definition launchPlanInstance() enforces as its final duplicate-plan guard.
+      const eligibleEmps = await offboardingService.getLaunchEligibleEmployees();
+      setOffboardingEmployees(eligibleEmps);
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
-  const loadInitialData = async () => {
-    setLoading(true);
+  const loadPreview = async (empId, anchorOverride) => {
+    setPreviewLoading(true);
+    setError(null);
     try {
-      const [allEmps, allTpls] = await Promise.all([
-        employeeService.getAll(),
-        offboardingService.getAllTemplates(),
-      ]);
-
-      const activeTpls = allTpls.filter((t) => t.active !== false);
-      setEmployees(allEmps);
-      setTemplates(activeTpls);
-
-      if (activeTpls.length > 0 && !selectedTemplateId) {
-        setSelectedTemplateId(activeTpls[0].id);
-      }
+      const res = await offboardingService.previewOffboardingComposition(empId, anchorOverride || null);
+      setPreview(res);
     } catch (err) {
-      setError(`Failed to load launch options: ${err.message}`);
+      setError(err.message);
+      setPreview(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const resetState = () => {
+    setSelectedEmployeeId(initialEmployeeId || '');
+    setTypeFilter('all');
+    setCustomAnchorDate('');
+    setPreview(null);
+    setError(null);
+    setLoading(false);
+  };
+
+  const handleLaunch = async () => {
+    if (!selectedEmployeeId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const newInst = await offboardingService.launchPlanInstance(selectedEmployeeId, customAnchorDate || null, 'emp-001');
+      if (onSuccess) onSuccess(newInst);
+      onClose();
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const updatePreview = async () => {
-    setError(null);
-    try {
-      const prev = await offboardingService.previewPlanLaunch(
-        selectedEmployeeId,
-        selectedTemplateId,
-        customAnchorDate
-      );
-      setPreview(prev);
-    } catch (err) {
-      setPreview(null);
-      setError(err.message);
-    }
-  };
-
-  const handleOverrideAssignee = (taskId, assigneeId) => {
-    setManualOverrides((prev) => ({
-      ...prev,
-      [taskId]: assigneeId,
-    }));
-  };
-
-  const handleLaunch = async (e) => {
-    e.preventDefault();
-    if (!selectedEmployeeId || !selectedTemplateId) {
-      setError('Please select an employee and an offboarding plan template.');
-      return;
-    }
-
-    setLaunching(true);
-    setError(null);
-    try {
-      await offboardingService.launchPlanInstance(
-        selectedEmployeeId,
-        selectedTemplateId,
-        manualOverrides,
-        customAnchorDate,
-        'emp-001'
-      );
-
-      if (onSuccess) onSuccess();
-      onClose();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLaunching(false);
-    }
-  };
-
   if (!isOpen) return null;
 
-  const selectedEmployee = employees.find((e) => e.id === selectedEmployeeId);
+  // Composed tasks are the same object the actual launch uses — Launch is only available once a
+  // valid, non-empty composition has been previewed for the selected employee (which also
+  // requires a resolved Final Working Date — from record or the custom override below).
+  const canLaunch = Boolean(preview) && preview.isValid && preview.counts.total > 0 && !previewLoading;
+
+  const filteredOffboardingEmployees = offboardingEmployees.filter(
+    (emp) => typeFilter === 'all' || emp.directoryType === typeFilter
+  );
+
+  const employeeEmptyStateMessage =
+    typeFilter === 'Employee'
+      ? 'No employees are currently eligible to launch offboarding.'
+      : typeFilter === 'Intern'
+      ? 'No interns are currently eligible to launch offboarding.'
+      : 'No employees or interns are currently eligible to launch offboarding.';
 
   return (
-    <div className="modal-backdrop-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
-      <div className="modal-container-card" style={{ backgroundColor: '#FFF', borderRadius: '12px', width: '100%', maxWidth: '780px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', overflow: 'hidden' }}>
-        
-        {/* Modal Header */}
-        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <div style={{ width: '34px', height: '34px', borderRadius: '8px', backgroundColor: '#FEF2F2', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Play size={18} />
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card xl-modal modal-launch-plan modal-scroll-shell" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title-group">
+            <div className="modal-icon-badge" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
+              <Play size={20} />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-navy-header)' }}>
-                Launch Offboarding Plan
-              </h2>
-              <p style={{ margin: 0, fontSize: '0.785rem', color: 'var(--text-muted)' }}>
-                Single-write, validate-first PoC persistence launch flow
-              </p>
+              <h3 className="modal-title">Launch Offboarding Plan</h3>
+              <p className="modal-subtitle">Assign an offboarding plan to a departing employee or intern.</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.35rem', borderRadius: '6px' }}>
-            <X size={20} />
+          <button type="button" className="modal-close-btn" onClick={onClose}>
+            <X size={18} />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          
+        <div className="modal-body modal-body-spacious">
           {error && (
-            <div style={{ padding: '0.85rem 1rem', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', color: '#991B1B', fontSize: '0.825rem', display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-              <AlertCircle size={18} style={{ color: '#DC2626', flexShrink: 0, marginTop: '2px' }} />
-              <div>{error}</div>
+            <div className="modal-error-alert" style={{ marginBottom: '1.25rem' }}>
+              <AlertTriangle size={16} />
+              <span>{error}</span>
             </div>
           )}
 
-          {/* Form Selection Inputs */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.815rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-main)' }}>
-                Departing Employee <span style={{ color: '#DC2626' }}>*</span>
-              </label>
+          {/* Employee Selector */}
+          <div className="form-group">
+            <label className="form-label">Select Departing Employee <span className="required-star">*</span></label>
+
+            <div className="view-switcher-group" style={{ marginBottom: '0.6rem' }}>
+              <button
+                type="button"
+                className={`view-btn ${typeFilter === 'all' ? 'active' : ''}`}
+                onClick={() => setTypeFilter('all')}
+              >
+                <Users size={14} />
+                <span>All</span>
+              </button>
+              <button
+                type="button"
+                className={`view-btn ${typeFilter === 'Employee' ? 'active' : ''}`}
+                onClick={() => setTypeFilter('Employee')}
+              >
+                <UsersRound size={14} />
+                <span>Employees</span>
+              </button>
+              <button
+                type="button"
+                className={`view-btn ${typeFilter === 'Intern' ? 'active' : ''}`}
+                onClick={() => setTypeFilter('Intern')}
+              >
+                <GraduationCap size={14} />
+                <span>Interns</span>
+              </button>
+            </div>
+
+            {filteredOffboardingEmployees.length === 0 ? (
+              <Select
+                variant="form"
+                value=""
+                onChange={() => {}}
+                disabled
+                options={[{ value: '', label: employeeEmptyStateMessage }]}
+              />
+            ) : (
               <Select
                 variant="form"
                 value={selectedEmployeeId}
                 onChange={(e) => setSelectedEmployeeId(e.target.value)}
                 options={[
-                  { value: '', label: '-- Select Departing Employee --' },
-                  ...employees.map((emp) => {
-                    const statusTag = emp.status === 'Departing' ? ' [Departing]' : emp.status === 'Active' ? ' [Active]' : ` [${emp.status}]`;
-                    return {
-                      value: emp.id,
-                      label: `${emp.fullName} (${emp.employeeId})${statusTag}`
-                    };
-                  })
-                ]}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.815rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-main)' }}>
-                Offboarding Plan Template <span style={{ color: '#DC2626' }}>*</span>
-              </label>
-              <Select
-                variant="form"
-                value={selectedTemplateId}
-                onChange={(e) => setSelectedTemplateId(e.target.value)}
-                options={[
-                  { value: '', label: '-- Select Clearance Template --' },
-                  ...templates.map((tpl) => ({
-                    value: tpl.id,
-                    label: `${tpl.name} (${tpl.taskCount || 0} tasks)`
+                  { value: '', label: '-- Choose Employee --' },
+                  ...filteredOffboardingEmployees.map((emp) => ({
+                    value: emp.id,
+                    label: emp.directoryType === 'Intern'
+                      ? `${emp.fullName} (${emp.employeeId}) — Intern [${emp.status}]`
+                      : `${emp.fullName} (${emp.employeeId}) [${emp.status}]`
                   }))
                 ]}
               />
-            </div>
+            )}
+            <span className="form-hint">Only Active/Departing employees or interns without an active offboarding plan are eligible.</span>
           </div>
 
-          {/* Anchor Date & Custom Override */}
-          <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+          {/* Final Working Date Anchor & Custom Override */}
+          <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Calendar size={18} style={{ color: 'var(--color-primary)' }} />
               <div>
@@ -206,7 +231,7 @@ export default function LaunchOffboardingPlanModal({ isOpen, onClose, onSuccess,
                   Final Working Date Anchor
                 </div>
                 <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
-                  {preview?.anchorDate ? `Calculated anchor date: ${formatDateDisplay(preview.anchorDate)}` : 'Select employee to resolve exit anchor date'}
+                  {preview?.anchorDate ? `Resolved anchor date: ${formatDateDisplay(preview.anchorDate)}` : 'Select an employee to resolve their exit anchor date'}
                 </div>
               </div>
             </div>
@@ -224,94 +249,114 @@ export default function LaunchOffboardingPlanModal({ isOpen, onClose, onSuccess,
             </div>
           </div>
 
-          {/* Live Task Preview Section */}
-          {preview && (
-            <div style={{ border: '1px solid var(--border-light)', borderRadius: '8px', overflow: 'hidden' }}>
-              <div style={{ padding: '0.75rem 1rem', backgroundColor: '#F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)' }}>
-                <span style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                  Task Launch Preview ({preview.totalTasks} tasks, {preview.requiredTasksCount} required)
-                </span>
-                <span style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem', borderRadius: '12px', fontWeight: 600, backgroundColor: preview.isValid ? '#ECFDF5' : '#FEF2F2', color: preview.isValid ? '#059669' : '#DC2626' }}>
-                  {preview.isValid ? 'Valid & Ready' : `${preview.unresolvedCount} Unresolved`}
-                </span>
-              </div>
-
-              <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                  <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid var(--border-light)' }}>
-                    <tr>
-                      <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>#</th>
-                      <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Task Title</th>
-                      <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>Relative Offset</th>
-                      <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>Due Date</th>
-                      <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left' }}>Assignee</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.taskPreviews.map((pt) => {
-                      const offsetLabel = pt.relativeOffsetDays === 0
-                        ? 'Day 0 (Exit)'
-                        : pt.relativeOffsetDays < 0
-                        ? `Day ${pt.relativeOffsetDays}`
-                        : `Day +${pt.relativeOffsetDays}`;
-
-                      return (
-                        <tr key={pt.planTaskId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                          <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>{pt.sequence}</td>
-                          <td style={{ padding: '0.5rem 0.75rem' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{pt.title}</div>
-                            {pt.required && <span style={{ fontSize: '0.685rem', color: '#DC2626', fontWeight: 700 }}>Required</span>}
-                          </td>
-                          <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-muted)' }}>
-                            {offsetLabel}
-                          </td>
-                          <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            {formatDateDisplay(pt.calculatedDueDate)}
-                          </td>
-                          <td style={{ padding: '0.5rem 0.75rem' }}>
-                            {pt.isResolved ? (
-                              <span style={{ color: '#059669', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                                <UserCheck size={13} /> {pt.resolvedAssigneeName}
-                              </span>
-                            ) : (
-                              <span style={{ color: '#DC2626', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                                <ShieldAlert size={13} /> {pt.resolvedAssigneeName}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+          {/* Preview Details */}
+          {previewLoading && (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              Composing applicable offboarding tasks...
             </div>
           )}
 
+          {preview && !previewLoading && (
+            <div style={{ background: '#F8FAFC', borderRadius: '8px', padding: '1rem', border: '1px solid #E2E8F0', marginTop: '1rem' }}>
+              {/* Summary Header */}
+              <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1rem', background: '#FFF', padding: '0.85rem 1rem', borderRadius: '6px', border: '1px solid #E2E8F0', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <User size={16} style={{ color: 'var(--color-primary)' }} />
+                  <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{preview.employee.fullName}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {preview.typeScope === 'intern' ? <GraduationCap size={16} style={{ color: '#7C3AED' }} /> : <UsersRound size={16} style={{ color: '#2563EB' }} />}
+                  <span style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
+                    {preview.typeScope === 'intern' ? 'Intern' : 'Employee'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Building2 size={16} style={{ color: '#059669' }} />
+                  <span style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
+                    {preview.employee.department ? preview.employee.department.name : 'No Department'}
+                  </span>
+                </div>
+                {preview.anchorDate && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Calendar size={16} style={{ color: '#D97706' }} />
+                    <span style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
+                      Final Working Date: <strong style={{ color: 'var(--text-main)' }}>{preview.anchorDate}</strong>
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Scope Composition Breakdown */}
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600 }}>
+                  Universal Tasks {preview.counts.universal}
+                </span>
+                <span style={{ background: '#ECFDF5', color: '#059669', padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600 }}>
+                  Department Tasks {preview.counts.department}
+                </span>
+                <span style={{ background: '#0F172A', color: '#FFF', padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700 }}>
+                  Total {preview.counts.total}
+                </span>
+              </div>
+
+              {!preview.isValid || preview.counts.total === 0 ? (
+                <div style={{ padding: '1.25rem', textAlign: 'center', color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600 }}>
+                  {preview.error || 'No offboarding tasks are configured for this employee.'}
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="presence-data-table" style={{ width: '100%', fontSize: '0.815rem' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '7%', textAlign: 'center' }}>#</th>
+                        <th style={{ width: '48%', textAlign: 'left' }}>Task Title</th>
+                        <th style={{ width: '20%', textAlign: 'center' }}>Relative Timing</th>
+                        <th style={{ width: '25%', textAlign: 'center' }}>Calculated Due Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.tasks.map((pt) => (
+                        <tr key={pt.id}>
+                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{pt.sequence}</td>
+                          <td>
+                            <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{pt.title}</div>
+                            {pt.description && (
+                              <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>{pt.description}</div>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.725rem', fontWeight: 600 }}>
+                              Day {pt.relativeOffsetDays >= 0 ? `+${pt.relativeOffsetDays}` : pt.relativeOffsetDays}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {pt.calculatedDueDate}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Modal Footer */}
-        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', backgroundColor: '#F8FAFC' }}>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={onClose}
-            style={{ padding: '0.45rem 1rem', fontSize: '0.85rem' }}
-          >
+        <div className="modal-footer modal-footer-spacious">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={loading}>
             Cancel
           </button>
           <button
             type="button"
             className="btn-primary"
-            disabled={launching || (preview && !preview.isValid)}
             onClick={handleLaunch}
-            style={{ padding: '0.45rem 1.25rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', opacity: (preview && !preview.isValid) ? 0.6 : 1 }}
+            disabled={!canLaunch || loading}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
           >
-            <Play size={15} />
-            <span>{launching ? 'Launching...' : 'Confirm & Launch Plan'}</span>
+            <Play size={14} />
+            <span>{loading ? 'Launching Plan...' : 'Launch Offboarding Plan'}</span>
           </button>
         </div>
-
       </div>
     </div>
   );

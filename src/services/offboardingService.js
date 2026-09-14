@@ -1,6 +1,7 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
 import { employeeService } from './employeeService.js';
 import { employmentRecordService } from './employmentRecordService.js';
+import { departmentService } from './departmentService.js';
 import { auditService, AUDIT_ACTIONS } from './auditService.js';
 import {
   generateOffboardingPlanPreview,
@@ -8,9 +9,11 @@ import {
   calculateOffboardingProgress,
   reconcileOffboardingPlanInstanceCompletion,
   checkOffboardingEligibility,
+  composeOffboardingTasks,
+  isActiveOffboardingPlanStatus,
   OFFBOARDING_INSTANCE_STATUS,
 } from '../domain/offboardingDomain.js';
-import { getTodayLocalDateString } from '../utils/dateUtils.js';
+import { addDaysToLocalDate, getTodayLocalDateString } from '../utils/dateUtils.js';
 
 export const offboardingService = {
   /**
@@ -220,6 +223,9 @@ export const offboardingService = {
 
   /**
    * Generates a preview for launching an offboarding plan template for an employee.
+   * LEGACY — kept for historical templates (getAllTemplates()/getTemplateById() remain available
+   * for getAllInstances()'s template-name lookup on pre-refactor instances); the Launch
+   * Offboarding Plan UI no longer calls this, use previewOffboardingComposition() instead.
    */
   async previewPlanLaunch(employeeId, templateId, customAnchorDate = null, referenceDate = getTodayLocalDateString()) {
     const db = loadDatabase();
@@ -246,10 +252,205 @@ export const offboardingService = {
   },
 
   /**
-   * Single-write, validate-first PoC persistence launch transaction.
-   * Performs complete in-memory validation before persisting any records.
+   * Fetches all active, scope-tagged offboarding task definitions — each carrying both a
+   * scopeType ('universal' | 'department') and a personType ('employee' | 'intern') — the raw
+   * building blocks composeOffboardingTasks() combines per departing person. Legacy tasks without
+   * a scopeType/personType (pre-migration) are excluded here; the storageEngine migration
+   * backfills both fields on every load so this should not occur. Entirely independent from
+   * onboardingPlanTasks — offboarding scope tasks are never mixed with onboarding's.
    */
-  async launchPlanInstance(employeeId, templateId, manualOverrides = {}, customAnchorDate = null, currentUserId = 'emp-001') {
+  async getScopeTaskDefinitions() {
+    const db = loadDatabase();
+    return (db.offboardingPlanTasks || []).filter((t) => t.active !== false && t.scopeType && t.personType);
+  },
+
+  /**
+   * Fetches summary counts (task count) AND the actual ordered task list for the given person
+   * type's Universal scope and every real Department (dynamically sourced — never hardcoded),
+   * scoped entirely to ONE personType at a time — an Employee Universal offboarding task and an
+   * Intern Universal offboarding task are never mixed together here, and likewise for a
+   * department's tasks. Backs the Plans page's per-filter view (switching the Employees/Interns
+   * segmented control just calls this again with the other personType), plus each card's inline
+   * read-only task-list preview.
+   */
+  async getScopesSummary(personType = 'employee') {
+    const tasks = await this.getScopeTaskDefinitions();
+    const departments = await departmentService.getAll({ withCount: false });
+    const bySequence = (a, b) => (a.sequence || 0) - (b.sequence || 0);
+
+    const universalScoped = tasks.filter((t) => t.scopeType === 'universal' && t.personType === personType).sort(bySequence);
+
+    const departmentSummaries = departments.map((dept) => {
+      const scoped = tasks
+        .filter((t) => t.scopeType === 'department' && t.personType === personType && t.scopeDepartmentId === dept.id)
+        .sort(bySequence);
+      return {
+        department: dept,
+        taskCount: scoped.length,
+        tasks: scoped,
+      };
+    });
+
+    return {
+      personType,
+      universal: { taskCount: universalScoped.length, tasks: universalScoped },
+      departments: departmentSummaries,
+    };
+  },
+
+  /**
+   * Fetches the ordered task list for ONE (personType, scopeType[, departmentId]) combination
+   * (used by the "Manage Tasks" editor). `scopeType` is 'universal' or 'department' only.
+   */
+  async getScopeTasks(scopeType, personType, departmentId = null) {
+    const tasks = await this.getScopeTaskDefinitions();
+    return tasks
+      .filter((t) => t.scopeType === scopeType && t.personType === personType && (scopeType !== 'department' || t.scopeDepartmentId === departmentId))
+      .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+  },
+
+  /**
+   * Replaces the task set for ONE (personType, scopeType[, departmentId]) combination. Every
+   * other scope/personType combination's tasks are left untouched — saving Employee Universal,
+   * for example, can never affect Intern Universal or any Department scope. No minimum-task-count
+   * validation — a scope may legitimately be empty (e.g. a brand-new department, or Universal
+   * before HR configures it). New tasks are never given an assignmentRule — offboarding launches
+   * no longer resolve an assignee at all (every launched task instance is created unassigned).
+   */
+  async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = [], currentUserId = 'emp-001') {
+    const db = loadDatabase();
+    const allTasks = db.offboardingPlanTasks || [];
+
+    const isSameScope = (t) => t.scopeType === scopeType && t.personType === personType && (scopeType !== 'department' || t.scopeDepartmentId === departmentId);
+    const otherTasks = allTasks.filter((t) => !isSameScope(t));
+
+    const newTasks = (tasksData || []).map((t, index) => ({
+      id: t.id && String(t.id).startsWith('pt-off-') ? t.id : `pt-off-scope-${personType}-${scopeType}${departmentId ? `-${departmentId}` : ''}-${index + 1}-${Date.now().toString().slice(-4)}`,
+      planTemplateId: null,
+      scopeType,
+      personType,
+      scopeDepartmentId: scopeType === 'department' ? departmentId : null,
+      activityTypeId: t.activityTypeId || 'act-type-1',
+      title: (t.title || '').trim(),
+      description: (t.description || '').trim(),
+      assignmentRule: null,
+      specificAssigneeId: null,
+      relativeOffsetDays: parseInt(t.relativeOffsetDays || 0, 10),
+      // Required Task is no longer collected by the scope editor — internal compatibility field
+      // only (all tasks now count equally toward progress; see calculateOffboardingProgress()).
+      required: t.required !== false,
+      sequence: index + 1,
+      active: true,
+    }));
+
+    db.offboardingPlanTasks = [...otherTasks, ...newTasks];
+    saveDatabase(db);
+
+    try {
+      const scopeLabel = `${personType}-${scopeType}`;
+      await auditService.logAction(
+        currentUserId,
+        AUDIT_ACTIONS.OFFBOARDING_TEMPLATE_UPDATED || 'OFFBOARDING_TEMPLATE_UPDATED',
+        'OffboardingTaskScope',
+        departmentId ? `${scopeLabel}:${departmentId}` : scopeLabel,
+        `Updated ${scopeLabel} offboarding task scope${departmentId ? ` (${departmentId})` : ''} with ${newTasks.length} tasks`
+      );
+    } catch (err) {}
+
+    return this.getScopeTasks(scopeType, personType, departmentId);
+  },
+
+  /**
+   * Composes a departing person's full applicable offboarding task set (Universal + Department)
+   * via the centralized composeOffboardingTasks() domain function, calculating due dates off the
+   * departure/Final Working Date anchor — resolved via the SAME checkOffboardingEligibility()
+   * precedence (customAnchorDate override -> current employment record -> contractEndDate ->
+   * historical record) every other offboarding entry point already uses. This is the SAME
+   * function launchPlanInstance() calls below — the preview and the actual launch can never drift
+   * apart because they share one code path and one set of inputs.
+   */
+  async previewOffboardingComposition(employeeId, customAnchorDate = null, referenceDate = getTodayLocalDateString()) {
+    const db = loadDatabase();
+    const employee = await employeeService.getById(employeeId);
+    if (!employee) throw new Error(`Employee with ID "${employeeId}" not found.`);
+
+    const records = await employmentRecordService.getAll();
+    const existingInstances = db.offboardingPlanInstances || [];
+    const eligibility = checkOffboardingEligibility(employee, records, existingInstances, customAnchorDate, referenceDate);
+
+    if (!eligibility.isEligible) {
+      return {
+        isValid: false,
+        error: eligibility.reason,
+        employee,
+        anchorDate: null,
+        tasks: [],
+        personType: employee.directoryType === 'Intern' ? 'intern' : 'employee',
+        typeScope: employee.directoryType === 'Intern' ? 'intern' : 'employee',
+        departmentId: (employee.department && employee.department.id) || null,
+        counts: { universal: 0, typeSpecific: 0, department: 0, total: 0, required: 0 },
+      };
+    }
+
+    const taskDefinitions = await this.getScopeTaskDefinitions();
+    const composition = composeOffboardingTasks(employee, taskDefinitions, eligibility.resolvedAnchorDate);
+
+    return {
+      isValid: composition.counts.total > 0,
+      error: composition.counts.total === 0 ? 'No offboarding tasks are configured for this employee.' : null,
+      employee,
+      anchorDate: eligibility.resolvedAnchorDate,
+      ...composition,
+    };
+  },
+
+  /**
+   * Returns the Set of employeeIds that currently have an ACTIVE offboarding plan instance — the
+   * single source of truth for "already has an active offboarding plan," built on the exact same
+   * derivedStatus this module already computes everywhere else. UPDATED — now uses
+   * isActiveOffboardingPlanStatus() (excludes both COMPLETED and DROPPED) instead of a bare
+   * `!== COMPLETED` check, so a Dropped plan correctly stops counting as active — mirroring
+   * onboarding's isActivePlanStatus() reuse pattern, via offboarding's own independent helper.
+   * Reused by BOTH getLaunchEligibleEmployees() (the Launch modal's dropdown source) and
+   * launchPlanInstance()'s final duplicate-plan guard below, so the two can never drift apart.
+   */
+  async getActiveOffboardingEmployeeIds() {
+    const instances = await this.getAllInstances();
+    return new Set(
+      instances
+        .filter((inst) => isActiveOffboardingPlanStatus(inst.derivedStatus))
+        .map((inst) => inst.employeeId)
+    );
+  },
+
+  /**
+   * Resolves employees/interns eligible to have offboarding launched right now: current lifecycle
+   * status 'Active' or 'Departing' (mirroring checkOffboardingEligibility()'s own status rule —
+   * Upcoming/Onboarding/Former are excluded) AND no existing active offboarding plan instance.
+   * Deliberately does NOT require a pre-resolved Final Working Date anchor here — unlike
+   * Onboarding, the Launch modal still offers a Custom Anchor Date override for people without one
+   * on record, so excluding them from this list would incorrectly hide a legitimately-launchable
+   * person. This is the single service-boundary source the Launch Offboarding Plan modal reads.
+   */
+  async getLaunchEligibleEmployees() {
+    const allEmployees = await employeeService.getAll();
+    const eligibleStatusEmployees = allEmployees.filter((e) => e.status === 'Active' || e.status === 'Departing');
+    const activeOffboardingEmployeeIds = await this.getActiveOffboardingEmployeeIds();
+    return eligibleStatusEmployees.filter((e) => !activeOffboardingEmployeeIds.has(e.id));
+  },
+
+  /**
+   * Single-write, validate-first PoC persistence launch transaction. Composed from reusable
+   * scope-based task definitions (Universal + Department) via the same
+   * previewOffboardingComposition() used by the Launch modal's preview panel, so the launched
+   * instance's task set always exactly matches what HR was shown before clicking Launch. Creates
+   * a full SNAPSHOT of the currently-applicable tasks: later edits to Universal or Department
+   * scopes never retroactively change an already-launched instance, because these task-instance
+   * records are plain field-copies, never re-read live from offboardingPlanTasks. No assignee is
+   * ever resolved (every task instance is created with assigneeId: null) — composable scope tasks
+   * never carry an assignmentRule.
+   */
+  async launchPlanInstance(employeeId, customAnchorDate = null, currentUserId = 'emp-001') {
     const db = loadDatabase();
     const employee = await employeeService.getById(employeeId);
     if (!employee) throw new Error(`Employee with ID "${employeeId}" not found.`);
@@ -259,15 +460,21 @@ export const offboardingService = {
     const rawActivities = db.activities || [];
     const rawTaskInstances = db.offboardingTaskInstances || [];
 
-    // Pre-launch eligibility check
+    // Pre-launch eligibility check (status + duplicate active-plan protection + anchor-date
+    // resolution) — the exact same authoritative gate previewOffboardingComposition() uses, so
+    // this final service-level check can never disagree with what the Launch modal already
+    // showed. Reused as-is from before this refactor — offboarding's own eligibility rules were
+    // not touched by the Plans architecture change.
     const eligibility = checkOffboardingEligibility(employee, records, existingInstances, customAnchorDate);
     if (!eligibility.isEligible) {
       throw new Error(`Cannot launch offboarding plan: ${eligibility.reason}`);
     }
 
-    const preview = await this.previewPlanLaunch(employeeId, templateId, customAnchorDate);
-    if (!preview.isValid && !manualOverrides.allowLaunch) {
-      throw new Error(`Cannot launch offboarding plan: Required tasks contain unresolved assignees.`);
+    const taskDefinitions = await this.getScopeTaskDefinitions();
+    const composition = composeOffboardingTasks(employee, taskDefinitions, eligibility.resolvedAnchorDate);
+
+    if (composition.counts.total === 0) {
+      throw new Error(`Cannot launch offboarding plan: No offboarding tasks are configured for ${employee.fullName}.`);
     }
 
     const nowIso = new Date().toISOString();
@@ -275,10 +482,10 @@ export const offboardingService = {
 
     const newPlanInstance = {
       id: newInstId,
-      planTemplateId: templateId,
+      planTemplateId: null,
       employeeId,
-      startedAt: preview.anchorDate,
-      anchorDate: preview.anchorDate,
+      startedAt: eligibility.resolvedAnchorDate,
+      anchorDate: eligibility.resolvedAnchorDate,
       completedAt: null,
       createdBy: currentUserId,
       createdAt: nowIso,
@@ -288,34 +495,26 @@ export const offboardingService = {
     const newActivities = [];
     const existingActivityCount = rawActivities.length;
 
-    preview.taskPreviews.forEach((pt, index) => {
-      const resolvedAssigneeId = manualOverrides[pt.planTaskId] || pt.resolvedAssigneeId;
-
-      if (!resolvedAssigneeId && pt.required) {
-        throw new Error(`Validation failed: Required task "${pt.title}" has no assigned employee.`);
-      }
-
-      if (!resolvedAssigneeId && !pt.required) {
-        return;
-      }
-
+    composition.tasks.forEach((pt, index) => {
       const newActId = `act-off-gen-${String(existingActivityCount + index + 1).padStart(3, '0')}`;
       const newTiId = `ti-off-${newInstId}-${index + 1}`;
 
       const taskInst = {
         id: newTiId,
         planInstanceId: newInstId,
-        planTaskId: pt.planTaskId,
+        planTaskId: pt.id,
         activityId: newActId,
         title: pt.title,
         description: pt.description,
         activityTypeId: pt.activityTypeId,
-        assignmentRule: pt.assignmentRule,
-        originallyResolvedAssigneeId: resolvedAssigneeId,
+        assignmentRule: null,
+        originallyResolvedAssigneeId: null,
         relativeOffsetDays: pt.relativeOffsetDays,
         originallyCalculatedDueDate: pt.calculatedDueDate,
         required: pt.required,
         sequence: pt.sequence,
+        scopeType: pt.scopeType,
+        scopeDepartmentId: pt.scopeDepartmentId || null,
         createdAt: nowIso,
       };
 
@@ -325,7 +524,7 @@ export const offboardingService = {
         title: pt.title,
         description: pt.description,
         employeeId,
-        assigneeId: resolvedAssigneeId,
+        assigneeId: null,
         dueDate: pt.calculatedDueDate,
         completed: false,
         completedAt: null,
@@ -355,11 +554,217 @@ export const offboardingService = {
         AUDIT_ACTIONS.OFFBOARDING_PLAN_LAUNCHED || 'OFFBOARDING_PLAN_LAUNCHED',
         'PlanInstance',
         newInstId,
-        `Launched Offboarding Plan "${preview.template.name}" for employee ${employee.fullName} (${newTaskInstances.length} tasks)`
+        `Launched composed Offboarding Plan for employee ${employee.fullName} (${newTaskInstances.length} tasks: ${composition.counts.universal} universal, ${composition.counts.department} department)`
       );
     } catch (err) {}
 
     return this.getInstanceById(newInstId);
+  },
+
+  /**
+   * Adds a single task to ONE departing person's already-launched offboarding plan instance.
+   * Employee-specific only — never touches offboardingPlanTasks (the reusable Universal/
+   * Department Plans configuration under Offboarding > Plans), so other people's launched
+   * instances and all future launches are completely unaffected. Simpler than onboarding's
+   * addTaskToInstance(): offboarding's launch architecture no longer resolves an assignee at all
+   * (every composed task is created with assigneeId: null — see launchPlanInstance() above), so a
+   * manually-added instance task follows the exact same neutral/unassigned convention rather than
+   * re-introducing assignment-rule resolution just for this one path.
+   */
+  async addTaskToInstance(planInstanceId, taskData = {}, currentUserId = 'emp-001') {
+    if (!taskData.title || !taskData.title.trim()) {
+      throw new Error('Task title is required.');
+    }
+
+    const db = loadDatabase();
+    const planInstances = db.offboardingPlanInstances || [];
+    const planInstance = planInstances.find((inst) => inst.id === planInstanceId);
+    if (!planInstance) {
+      throw new Error(`PlanInstance with ID "${planInstanceId}" not found.`);
+    }
+
+    const employee = await employeeService.getById(planInstance.employeeId);
+    if (!employee) {
+      throw new Error(`Employee for plan instance "${planInstanceId}" not found.`);
+    }
+
+    const relativeOffsetDays = parseInt(taskData.relativeOffsetDays || 0, 10);
+    const calculatedDueDate = addDaysToLocalDate(planInstance.anchorDate, relativeOffsetDays);
+
+    const rawTaskInstances = db.offboardingTaskInstances || [];
+    const rawActivities = db.activities || [];
+    const existingInstTasks = rawTaskInstances.filter((t) => t.planInstanceId === planInstanceId);
+    const nextSequence = existingInstTasks.length > 0
+      ? Math.max(...existingInstTasks.map((t) => t.sequence || 0)) + 1
+      : 1;
+
+    const nowIso = new Date().toISOString();
+    const uniqueSuffix = `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 900 + 100)}`;
+    const newTiId = `ti-off-${planInstanceId}-manual-${uniqueSuffix}`;
+    const newActId = `act-off-manual-${uniqueSuffix}`;
+
+    const taskInst = {
+      id: newTiId,
+      planInstanceId,
+      planTaskId: null, // manually added — not tied to a reusable scope task
+      activityId: newActId,
+      title: taskData.title.trim(),
+      description: (taskData.description || '').trim(),
+      activityTypeId: taskData.activityTypeId || 'act-type-1',
+      assignmentRule: null,
+      originallyResolvedAssigneeId: null,
+      relativeOffsetDays,
+      originallyCalculatedDueDate: calculatedDueDate,
+      // Required Task is not collected by the instance Add Task modal — internal compatibility
+      // field only, defaults true so every launched/added task counts equally toward progress.
+      required: true,
+      sequence: nextSequence,
+      createdAt: nowIso,
+      manuallyAdded: true,
+    };
+
+    const activity = {
+      id: newActId,
+      typeId: taskInst.activityTypeId,
+      title: taskInst.title,
+      description: taskInst.description,
+      employeeId: employee.id,
+      assigneeId: null,
+      dueDate: calculatedDueDate,
+      completed: false,
+      completedAt: null,
+      completedBy: null,
+      source: 'Offboarding',
+      sourceEntityType: 'OffboardingTaskInstance',
+      sourceEntityId: newTiId,
+      createdAt: nowIso,
+      createdBy: currentUserId,
+      updatedAt: nowIso,
+    };
+
+    db.offboardingTaskInstances = [taskInst, ...rawTaskInstances];
+    db.activities = [activity, ...rawActivities];
+
+    saveDatabase(db);
+
+    try {
+      await auditService.logAction(
+        currentUserId,
+        AUDIT_ACTIONS.OFFBOARDING_TASK_ADDED || 'OFFBOARDING_TASK_ADDED',
+        'PlanInstance',
+        planInstanceId,
+        `Added task "${taskInst.title}" to ${employee.fullName}'s offboarding plan instance`
+      );
+    } catch (err) {}
+
+    return this.getInstanceById(planInstanceId);
+  },
+
+  /**
+   * Deletes ONE task from ONE departing person's already-launched offboarding PlanInstance.
+   * Employee-specific only — mirrors addTaskToInstance()'s boundary: this only ever touches
+   * offboardingTaskInstances/activities for this one instance, and NEVER touches
+   * offboardingPlanTasks (the reusable Plans configuration). Progress/percentage/derivedStatus
+   * are never stored — they are recalculated fresh from the remaining task instances the next
+   * time this instance is read, so no separate recalculation step is needed here.
+   */
+  async deleteTaskFromInstance(planInstanceId, taskInstanceId, currentUserId = 'emp-001') {
+    const db = loadDatabase();
+    const planInstance = (db.offboardingPlanInstances || []).find((inst) => inst.id === planInstanceId);
+    if (!planInstance) {
+      throw new Error(`PlanInstance with ID "${planInstanceId}" not found.`);
+    }
+
+    const rawTaskInstances = db.offboardingTaskInstances || [];
+    const instanceTaskInstances = rawTaskInstances.filter((ti) => ti.planInstanceId === planInstanceId);
+    const targetTask = instanceTaskInstances.find((ti) => ti.id === taskInstanceId);
+    if (!targetTask) {
+      throw new Error(`Task with ID "${taskInstanceId}" was not found on this offboarding plan instance.`);
+    }
+
+    // An offboarding plan instance must always retain at least 1 task — deleting the final
+    // remaining task would leave 0 tasks, which calculateOffboardingProgress()/
+    // deriveOffboardingInstanceStatus() would otherwise have to treat as a degenerate 0/0 case.
+    // Blocking here is the cleanest rule compatible with the existing domain model, mirroring
+    // onboarding's exact equivalent guard.
+    if (instanceTaskInstances.length <= 1) {
+      throw new Error('An offboarding plan must contain at least one task. Add another task before deleting this one.');
+    }
+
+    db.offboardingTaskInstances = rawTaskInstances.filter((ti) => ti.id !== taskInstanceId);
+    db.activities = (db.activities || []).filter((a) => a.id !== targetTask.activityId);
+    saveDatabase(db);
+
+    const employee = await employeeService.getById(planInstance.employeeId);
+    try {
+      await auditService.logAction(
+        currentUserId,
+        AUDIT_ACTIONS.OFFBOARDING_TASK_DELETED || 'OFFBOARDING_TASK_DELETED',
+        'PlanInstance',
+        planInstanceId,
+        `Deleted task "${targetTask.title}" from ${employee ? employee.fullName : planInstance.employeeId}'s offboarding plan instance (reusable Plans configuration untouched)`
+      );
+    } catch (err) {}
+
+    return this.getInstanceById(planInstanceId);
+  },
+
+  /**
+   * Drops (cancels) an active offboarding PlanInstance — an intentional stop before successful
+   * completion, distinct from COMPLETED. Sets `droppedAt`/`droppedBy`, the field
+   * deriveOffboardingInstanceStatus() checks (ahead of every other rule) to permanently derive
+   * OFFBOARDING_INSTANCE_STATUS.DROPPED going forward. Nothing is deleted: all task instances,
+   * activities (completed and incomplete), titles/descriptions, the Final Working Date/launch
+   * dates, and the plan name remain exactly as they were — the instance stays fully readable as
+   * historical information. Dropped is non-active (see isActiveOffboardingPlanStatus()), so
+   * getActiveOffboardingEmployeeIds()/getLaunchEligibleEmployees() automatically stop counting it,
+   * and checkOffboardingEligibility()'s duplicate-plan check now also recognizes droppedAt — no
+   * separate eligibility rule is introduced. The employee/intern's own lifecycle `status` field is
+   * intentionally never touched here; that transition stays a separate, later decision, exactly
+   * mirroring onboarding's own dropPlanInstance().
+   */
+  async dropPlanInstance(planInstanceId, currentUserId = 'emp-001') {
+    const db = loadDatabase();
+    const planInstances = db.offboardingPlanInstances || [];
+    const idx = planInstances.findIndex((inst) => inst.id === planInstanceId);
+    if (idx === -1) {
+      throw new Error(`PlanInstance with ID "${planInstanceId}" not found.`);
+    }
+
+    const planInstance = planInstances[idx];
+    const employee = await employeeService.getById(planInstance.employeeId);
+    const instTasks = (db.offboardingTaskInstances || []).filter((ti) => ti.planInstanceId === planInstanceId);
+    const rawActivities = db.activities || [];
+    const currentDerivedStatus = deriveOffboardingInstanceStatus(planInstance, instTasks, rawActivities, employee);
+
+    if (currentDerivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED) {
+      throw new Error('A completed offboarding plan cannot be dropped — it remains a historical record of successful completion.');
+    }
+    if (currentDerivedStatus === OFFBOARDING_INSTANCE_STATUS.DROPPED) {
+      throw new Error('This offboarding plan has already been dropped.');
+    }
+
+    // Built via .map() into a brand-new array (never `planInstances[idx] = ...` in place) — the
+    // Node/no-localStorage storage fallback can hand back a live reference to the seed module's
+    // own array, and an in-place index write would permanently corrupt that shared singleton for
+    // the rest of the process.
+    const nowIso = new Date().toISOString();
+    db.offboardingPlanInstances = planInstances.map((inst) =>
+      inst.id === planInstanceId ? { ...inst, droppedAt: nowIso, droppedBy: currentUserId } : inst
+    );
+    saveDatabase(db);
+
+    try {
+      await auditService.logAction(
+        currentUserId,
+        AUDIT_ACTIONS.OFFBOARDING_PLAN_DROPPED || 'OFFBOARDING_PLAN_DROPPED',
+        'PlanInstance',
+        planInstanceId,
+        `Dropped offboarding plan for ${employee ? employee.fullName : planInstance.employeeId} — completed task history retained, employee lifecycle status unchanged`
+      );
+    } catch (err) {}
+
+    return this.getInstanceById(planInstanceId);
   },
 
   /**

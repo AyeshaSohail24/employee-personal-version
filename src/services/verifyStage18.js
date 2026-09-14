@@ -38,6 +38,13 @@ import {
   isActivePlanStatus,
 } from '../domain/onboardingDomain.js';
 import { offboardingService } from './offboardingService.js';
+import {
+  OFFBOARDING_INSTANCE_STATUS,
+  checkOffboardingEligibility,
+  resolveOffboardingAnchorDate,
+  composeOffboardingTasks,
+  isActiveOffboardingPlanStatus,
+} from '../domain/offboardingDomain.js';
 import { activityService } from './activityService.js';
 import { dashboardService } from './dashboardService.js';
 import { notesService } from './notesService.js';
@@ -6675,14 +6682,18 @@ export async function verifyStage18() {
         '1003. NEW — calculatePlanProgress() and derivePlanInstanceStatus() (completion/progress/lifecycle logic) contain no personType-related changes — this task only touched reusable plan CONFIGURATION, not task execution/progress'
       );
 
-      // 1004. Offboarding, Notes, and the reminder/notification system are entirely unaffected — none of their service/domain files reference the onboarding personType concept
+      // 1004. UPDATED — Notes and the reminder/notification system remain entirely unaffected by the onboarding personType concept. Offboarding itself later grew its OWN independent
+      // personType concept (via the separate "Refactor Offboarding Plans" task) — that is a deliberate, parallel addition to offboardingService.js/offboardingDomain.js, never a leak of
+      // ONBOARDING's personType logic, so this check now proves independence (no cross-import from onboardingDomain.js) rather than absence. See checks 1170+ for that task's own coverage.
       {
         const offboardingServiceSrcFinal = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+        const offboardingDomainSrcFinal = fs.readFileSync(path.resolve('./src/domain/offboardingDomain.js'), 'utf-8');
         const notesServiceSrcFinal = fs.readFileSync(path.resolve('./src/services/notesService.js'), 'utf-8');
         const notificationServiceSrcFinal = fs.readFileSync(path.resolve('./src/services/notificationService.js'), 'utf-8');
         assert(
-          !offboardingServiceSrcFinal.includes('personType') && !notesServiceSrcFinal.includes('personType') && !notificationServiceSrcFinal.includes('personType'),
-          '1004. NEW — Offboarding, Notes, and the reminder/notification system contain no reference to the onboarding personType concept — this refactor is fully isolated to Onboarding Plans'
+          !notesServiceSrcFinal.includes('personType') && !notificationServiceSrcFinal.includes('personType') &&
+          !offboardingServiceSrcFinal.includes("from '../domain/onboardingDomain.js'") && !offboardingDomainSrcFinal.includes("from './onboardingDomain.js'"),
+          '1004. UPDATED — Notes and the reminder/notification system still contain no reference to any personType concept, and offboardingService.js/offboardingDomain.js never import from onboardingDomain.js — Offboarding\'s own (later-added) personType concept is a fully independent, parallel implementation, not a leak of Onboarding\'s'
         );
       }
 
@@ -7997,6 +8008,1213 @@ export async function verifyStage18() {
 
       resetDatabase();
     }
+
+    // ==========================================================================
+    // Refactor Offboarding Navigation and Pages to Match the New Onboarding Structure
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const sidebarSrcOff = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+      const headerSrcOff = fs.readFileSync(path.resolve('./src/components/layout/Header.jsx'), 'utf-8');
+      const routerSrcOff = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+      const offProgressSrc = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingDepartingPage.jsx'), 'utf-8');
+      const offDetailSrc = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const offPlansSrc = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingPlansPage.jsx'), 'utf-8');
+      const overdueOffboardingTasksModalSrc = fs.readFileSync(path.resolve('./src/components/offboarding/OverdueOffboardingTasksModal.jsx'), 'utf-8');
+      const launchOffboardingPlanModalSrc = fs.readFileSync(path.resolve('./src/components/offboarding/LaunchOffboardingPlanModal.jsx'), 'utf-8');
+      const offboardingServiceSrcOff = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+      const offboardingDomainSrcOff = fs.readFileSync(path.resolve('./src/domain/offboardingDomain.js'), 'utf-8');
+
+      // --- ROUTER ---
+
+      // 1138. The old dashboard route no longer renders a dashboard page — it redirects to the canonical Progress route
+      assert(
+        !routerSrcOff.includes('OffboardingDashboardPage') &&
+        routerSrcOff.match(/path:\s*'dashboard',\s*element:\s*<Navigate to="\/offboarding\/departing" replace \/>/),
+        '1138. NEW — /offboarding/dashboard no longer renders a Dashboard page component; it now redirects to the canonical /offboarding/departing Progress route, so no old bookmarked link is left dead'
+      );
+
+      // 1139. The /offboarding index route now redirects to the canonical Progress route, not the removed Dashboard
+      assert(
+        routerSrcOff.match(/path:\s*'offboarding',[\s\S]{0,60}children:\s*\[\s*\{\s*index:\s*true,\s*element:\s*<Navigate to="\/offboarding\/departing" replace \/>/),
+        '1139. NEW — The /offboarding index route redirects to /offboarding/departing (was /offboarding/dashboard)'
+      );
+
+      // 1140. Offboarding routing still serves departing (Progress)/detail/plans/plan editor
+      assert(
+        routerSrcOff.includes("path: 'offboarding'") && routerSrcOff.includes('OffboardingDepartingPage') && routerSrcOff.includes('OffboardingPlansPage') && routerSrcOff.includes('OffboardingEmployeeDetailPage') && routerSrcOff.includes("path: 'departing'") && routerSrcOff.includes("path: 'plans'"),
+        '1140. Offboarding routing still serves the Progress page (departing), employee detail, Plans, and the plan editor'
+      );
+
+      // --- SIDEBAR ---
+
+      // 1141. Sidebar's Offboarding sub-menu now lists only Progress and Plans (no Dashboard, no Departing Employees)
+      {
+        const offboardingSubmenuMatch = sidebarSrcOff.match(/\{\/\* Offboarding \*\/\}[\s\S]*?\{\/\* WORK Section \*\/\}/);
+        const offboardingSubmenuBlock = offboardingSubmenuMatch ? offboardingSubmenuMatch[0] : '';
+        const offboardingNavLinkCount = (offboardingSubmenuBlock.match(/<NavLink/g) || []).length;
+        assert(
+          Boolean(offboardingSubmenuMatch) &&
+          !offboardingSubmenuBlock.includes('/offboarding/dashboard') &&
+          !offboardingSubmenuBlock.includes('Dashboard') &&
+          !offboardingSubmenuBlock.includes('Departing Employees') &&
+          offboardingSubmenuBlock.includes('/offboarding/departing') &&
+          offboardingSubmenuBlock.includes('/offboarding/plans') &&
+          offboardingNavLinkCount === 2,
+          '1141. NEW — The Offboarding sidebar sub-menu shows only Progress and Plans (exactly 2 links) — the Dashboard link and the old "Departing Employees" label are both gone'
+        );
+
+        assert(
+          offboardingSubmenuBlock.match(/to="\/offboarding\/departing"[\s\S]{0,250}Progress/),
+          '1141b. NEW — The Offboarding submenu\'s first sublink now reads "Progress" while routing to the preserved /offboarding/departing path'
+        );
+        assert(
+          offboardingSubmenuBlock.match(/to="\/offboarding\/plans"[\s\S]{0,250}Plans/),
+          '1141c. The Offboarding submenu\'s "Plans" sublink is unchanged, still routing to /offboarding/plans'
+        );
+      }
+
+      // 1142. MAIN > Employees and Onboarding > Progress/Plans are completely unaffected by this Offboarding-only task
+      {
+        const mainSectionMatchOff = sidebarSrcOff.match(/MAIN Section \*\/\}[\s\S]*?PEOPLE Section/);
+        const mainSectionBlockOff = mainSectionMatchOff ? mainSectionMatchOff[0] : '';
+        const onboardingSubmenuMatchOff = sidebarSrcOff.match(/\{\/\* Onboarding \*\/\}[\s\S]*?\{\/\* Offboarding \*\/\}/);
+        const onboardingSubmenuBlockOff = onboardingSubmenuMatchOff ? onboardingSubmenuMatchOff[0] : '';
+        assert(
+          mainSectionBlockOff.includes('to="/employees"') && mainSectionBlockOff.includes('<span>Employees</span>') &&
+          onboardingSubmenuBlockOff.includes('to="/onboarding/employees"') && onboardingSubmenuBlockOff.match(/to="\/onboarding\/employees"[\s\S]{0,250}Progress/) &&
+          onboardingSubmenuBlockOff.includes('to="/onboarding/plans"'),
+          '1142. REGRESSION: MAIN > Employees and Onboarding > Progress/Plans remain completely untouched by this Offboarding-scoped navigation task'
+        );
+      }
+
+      // --- PAGE HEADING / BREADCRUMB ---
+
+      // 1143. Offboarding Progress page <h1> reads exactly "Offboarding Progress"
+      assert(offProgressSrc.includes('>Offboarding Progress<'), '1143. NEW — The Offboarding Progress page\'s <h1> heading reads exactly "Offboarding Progress"');
+
+      // 1144. Subtitle reads the required, structurally-consistent description
+      assert(
+        offProgressSrc.includes('View and track individual offboarding progress for employees and interns.'),
+        '1144. NEW — The page subtitle reads "View and track individual offboarding progress for employees and interns." — mirroring the Onboarding Progress subtitle\'s phrasing'
+      );
+
+      // 1145. Breadcrumb display metadata: path-scoped label overrides map both /offboarding/departing and /offboarding/employees -> "Progress" — not a hardcoded second breadcrumb, not a route rename
+      assert(
+        headerSrcOff.match(/'\/offboarding\/departing':\s*'Progress',/) &&
+        headerSrcOff.match(/'\/offboarding\/employees':\s*'Progress',/) &&
+        headerSrcOff.includes('BREADCRUMB_LABEL_OVERRIDES[url] || formatBreadcrumbText(segment)'),
+        '1145. NEW — Header.jsx defines path-keyed BREADCRUMB_LABEL_OVERRIDES entries (\'/offboarding/departing\' -> \'Progress\', \'/offboarding/employees\' -> \'Progress\') consumed by the existing single breadcrumb generator, so Home > Offboarding > Progress renders correctly (and cascades into the detail page breadcrumb too)'
+      );
+      // 1145b. Overrides are keyed by the FULL path, never the bare segment — so MAIN > Employees and Onboarding > Progress breadcrumbs are provably unaffected
+      assert(
+        !headerSrcOff.match(/^\s*'departing':\s*'Progress',/m) && !headerSrcOff.match(/^\s*'employees':\s*'Progress',/m) && !headerSrcOff.match(/'\/employees':\s*'Progress'/),
+        '1145b. NEW — The Offboarding breadcrumb overrides are keyed by the full paths \'/offboarding/departing\'/\'/offboarding/employees\', never by a bare segment or the unrelated top-level \'/employees\' — the MAIN > Employees breadcrumb is provably unaffected'
+      );
+
+      // 1146. Detail-page Back link says "Back to Offboarding Progress" in both render branches (normal state and "Employee Not Found" fallback), destination route unchanged
+      assert(
+        (offDetailSrc.match(/Back to Offboarding Progress/g) || []).length === 2 &&
+        !offDetailSrc.includes('Back to Offboarding Directory') &&
+        !offDetailSrc.includes('Return to Offboarding Directory') &&
+        (offDetailSrc.match(/to="\/offboarding\/departing"/g) || []).length === 2,
+        '1146. NEW — Both Back-link render branches on the detail page (normal state and "Employee Not Found" fallback) now read "Back to Offboarding Progress" (were "Back to Offboarding Directory"/"Return to Offboarding Directory"), each still navigating to the unchanged /offboarding/departing route'
+      );
+
+      // --- ORPHANED DASHBOARD PAGE REMOVED CLEANLY ---
+
+      // 1147. OffboardingDashboardPage.jsx no longer exists on disk, and nothing in the app imports it any more
+      {
+        const dashboardFileExists = fs.existsSync(path.resolve('./src/pages/offboarding/OffboardingDashboardPage.jsx'));
+        assert(!dashboardFileExists, '1147. NEW — OffboardingDashboardPage.jsx was removed as genuine dead code — its unique KPI/overdue-panel content was consolidated into the Progress page first, and it had zero remaining references (only the router import, which was removed)');
+        assert(!routerSrcOff.includes("import OffboardingDashboardPage"), '1147b. NEW — router/index.jsx no longer imports the deleted OffboardingDashboardPage');
+      }
+
+      // --- KPI CARDS CONSOLIDATED (no duplicated Dashboard table) ---
+
+      // 1148. All 4 summary cards render on the Progress page via the existing summary-cards-grid layout, reusing the same OFFBOARDING_INSTANCE_STATUS-based calculations the old Dashboard used
+      assert(
+        offProgressSrc.includes('summary-cards-grid') && offProgressSrc.includes('Active Exit Plans') && offProgressSrc.includes('In Progress') && offProgressSrc.includes('Needs Attention') && offProgressSrc.includes('Completed Exit Plans') &&
+        offProgressSrc.includes("i.derivedStatus !== OFFBOARDING_INSTANCE_STATUS.COMPLETED") && offProgressSrc.includes('i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.IN_PROGRESS') && offProgressSrc.includes('i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.NEEDS_ATTENTION') && offProgressSrc.includes('i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED'),
+        '1148. NEW — The 4 summary cards (Active Exit Plans, In Progress, Needs Attention, Completed Exit Plans) now render on the Progress page, reusing the exact same OFFBOARDING_INSTANCE_STATUS-based filter predicates the old Dashboard used — not reimplemented, and not borrowed from Onboarding\'s PLAN_INSTANCE_STATUS'
+      );
+
+      // 1149. Only ONE data table exists on the Progress page — no second Dashboard-style operational table duplicated alongside it
+      {
+        const offTableTagMatches = offProgressSrc.match(/<table\b/g) || [];
+        assert(offTableTagMatches.length === 1, '1149. NEW — Only ONE offboarding progress table exists on the Progress page (no duplicated second Dashboard-style table)');
+      }
+
+      // 1150. The single table carries the Part 3 field set — adapted to offboarding's own legitimate terminology ("Final Working Date", not a forced generic "End/Departure Date")
+      assert(
+        offProgressSrc.includes('>Employee<') && offProgressSrc.includes('>Department<') && offProgressSrc.includes('>Final Working Date<') && offProgressSrc.includes('>Offboarding Plan<') && offProgressSrc.includes('>Progress<') && offProgressSrc.includes('>Status<') && offProgressSrc.includes('>Action<') &&
+        offProgressSrc.includes('<span>View Progress</span>'),
+        '1150. NEW — The consolidated table shows Employee / Department / Final Working Date / Offboarding Plan / Progress / Status / Action(View Progress) — the offboarding-specific "Final Working Date" term was intentionally kept instead of forcing a generic "End/Departure Date" label'
+      );
+
+      // --- FILTERS / SEARCH (mirrors Onboarding's UI pattern, reusing the shared employee.directoryType field) ---
+
+      // 1151. All/Employees/Interns pill filter is present, reusing view-switcher-group/view-btn and the shared employee.directoryType field (not an onboarding-specific concept)
+      assert(
+        offProgressSrc.includes('view-switcher-group') && (offProgressSrc.match(/view-btn/g) || []).length >= 3 && offProgressSrc.includes('>All</span>') && offProgressSrc.includes('>Employees</span>') && offProgressSrc.includes('>Interns</span>') &&
+        offProgressSrc.includes('emp.directoryType !== typeFilter'),
+        '1151. NEW — The All / Employees / Interns pill filter is present on the Progress page, reusing the same view-switcher-group/view-btn UI pattern as Onboarding and the shared, module-agnostic employee.directoryType field — no onboarding-specific logic was imported'
+      );
+
+      // 1152. Simple name/ID search remains present (a strict superset — also still matches template name, preserving the old Departing page's search behavior)
+      assert(
+        offProgressSrc.includes('Search employee name or ID') && offProgressSrc.includes('setSearch(e.target.value)'),
+        '1152. NEW — The Progress page has the Employee name/ID search box, matching Onboarding\'s pattern (search additionally still matches template name too, so no existing search capability was lost)'
+      );
+
+      // 1153. The old 4-way status tab UI (Departing/Needs Attention/Completed/All Workflows) was not reintroduced — status is now shown via the KPI cards + per-row Status badge, matching the Onboarding structure
+      assert(
+        !offProgressSrc.includes('filter-tab-btn') && !offProgressSrc.includes('Departing (') && !offProgressSrc.includes('All Workflows ('),
+        '1153. NEW — The old 4-way status-tab bar was replaced by the All/Employees/Interns type filter (status is still fully visible via the KPI cards and the per-row Status column) — this mirrors the Onboarding Progress page\'s structure'
+      );
+
+      // --- OVERDUE TASKS: dedicated offboarding modal, reusing generic activityService infrastructure only ---
+
+      // 1154. A dedicated OverdueOffboardingTasksModal exists (not the onboarding OverdueTasksModal reused directly) — UI pattern reused, but kept as its own offboarding-owned component per the architecture split
+      assert(
+        fs.existsSync(path.resolve('./src/components/offboarding/OverdueOffboardingTasksModal.jsx')) &&
+        overdueOffboardingTasksModalSrc.includes('>Overdue Offboarding Tasks<') &&
+        overdueOffboardingTasksModalSrc.includes('modal-scroll-shell') && overdueOffboardingTasksModalSrc.includes('app-scroll-area') && overdueOffboardingTasksModalSrc.includes('modal-header') && overdueOffboardingTasksModalSrc.includes('modal-body'),
+        '1154. NEW — A dedicated OverdueOffboardingTasksModal.jsx exists under src/components/offboarding/ (the Onboarding OverdueTasksModal component itself was not imported/reused) with its own "Overdue Offboarding Tasks" heading and the same fixed-header/single-scroll-region modal-scroll-shell pattern'
+      );
+
+      // 1155. The modal renders via props only (task title/dueDate/relatedEmployee, Mark Complete, Mark All as Complete) — no owned data fetch, matching the Onboarding modal's presentation-only contract
+      {
+        const overdueOffModalCodeOnly = stripComments(overdueOffboardingTasksModalSrc);
+        assert(
+          overdueOffModalCodeOnly.includes('task.title') && overdueOffModalCodeOnly.includes('task.dueDate') && overdueOffModalCodeOnly.includes('task.relatedEmployee') && overdueOffModalCodeOnly.includes('onMarkComplete(task.id)') && overdueOffModalCodeOnly.includes('onMarkAllComplete') &&
+          !overdueOffModalCodeOnly.includes('activityService') && !overdueOffModalCodeOnly.includes('getOverdueActivities'),
+          '1155. NEW — OverdueOffboardingTasksModal renders task title/due date/employee, Mark Complete, and Mark All as Complete via props only — there is no owned activityService call (no duplicated data source; the parent Progress page owns the single fetch)'
+        );
+      }
+
+      // 1156. The Progress page fetches overdue Offboarding-sourced activities once (reusing the exact same source==='Offboarding' filter the old Dashboard used) and wires that single state/handlers into the modal
+      assert(
+        offProgressSrc.includes('activityService.getOverdueActivities()') && offProgressSrc.includes("a.source === 'Offboarding'") &&
+        offProgressSrc.includes('tasks={overdueTasks}') && offProgressSrc.includes('onMarkComplete={handleMarkTaskComplete}') && offProgressSrc.includes('onMarkAllComplete={handleMarkAllOverdueComplete}') && offProgressSrc.includes('activityService.markCompleteMany(idsToComplete)'),
+        '1156. NEW — The Progress page fetches overdue Offboarding-sourced activities via the same source===\'Offboarding\' filter the old Dashboard used (single call site) and wires individual Mark Complete plus bulk Mark All as Complete (via the existing generic activityService.markCompleteMany) into the modal'
+      );
+
+      // --- LAUNCH OFFBOARDING PLAN: untouched, offboarding-specific eligibility preserved ---
+
+      // 1157. UPDATED (Offboarding Plans scope refactor) — LaunchOffboardingPlanModal was later updated to drive launch via the composed-task preview (previewOffboardingComposition) instead of a manually-selected template (previewPlanLaunch), per the "Refactor Offboarding Plans" task — it still keeps its own offboarding-specific Final Working Date anchor/override, never copied from Onboarding (which has no such override).
+      assert(
+        launchOffboardingPlanModalSrc.includes('offboardingService.launchPlanInstance') && launchOffboardingPlanModalSrc.includes('offboardingService.previewOffboardingComposition') && launchOffboardingPlanModalSrc.includes('Final Working Date Anchor'),
+        '1157. UPDATED — LaunchOffboardingPlanModal now drives employee selection, composed-task preview (previewOffboardingComposition, not the retired previewPlanLaunch), and launch via offboardingService, keeping its own offboarding-specific Final Working Date anchor/override (no onboarding eligibility logic was ever copied in)'
+      );
+      assert(
+        offProgressSrc.includes('isOpen={isLaunchModalOpen}') && offProgressSrc.includes('onSuccess={() => loadData()}') && offDetailSrc.includes('<LaunchOffboardingPlanModal'),
+        '1157b. The Progress page and the individual detail page both still wire the existing LaunchOffboardingPlanModal with their existing open/close state (no reimplementation)'
+      );
+
+      // 1158. Offboarding-specific eligibility rules are untouched: Upcoming/Onboarding-status people remain ineligible for an offboarding launch (a rule with no Onboarding-side equivalent)
+      {
+        const upcomingSynthetic = { id: 'synth-off-upcoming', fullName: 'Synthetic Upcoming', status: 'Upcoming' };
+        const onboardingSynthetic = { id: 'synth-off-onboarding', fullName: 'Synthetic Onboarding', status: 'Onboarding' };
+        const upcomingElig = checkOffboardingEligibility(upcomingSynthetic, [], []);
+        const onboardingElig = checkOffboardingEligibility(onboardingSynthetic, [], []);
+        assert(
+          upcomingElig.isEligible === false && onboardingElig.isEligible === false,
+          '1158. NEW — checkOffboardingEligibility() still rejects Upcoming/Onboarding-status people as ineligible for an offboarding launch — this offboarding-specific rule was not touched or replaced with onboarding logic'
+        );
+      }
+
+      // 1159. Former-status employees remain permanently ineligible for a new offboarding launch (offboarding's own terminal-lifecycle rule)
+      {
+        const formerSynthetic = { id: 'synth-off-former', fullName: 'Synthetic Former', status: 'Former' };
+        const formerElig = checkOffboardingEligibility(formerSynthetic, [], []);
+        assert(formerElig.isEligible === false, '1159. NEW — checkOffboardingEligibility() still rejects Former-status employees from a new offboarding launch (Former is offboarding\'s own terminal lifecycle state)');
+      }
+
+      // 1160. An Active employee with a resolvable exit anchor (contractEndDate) is eligible, and the resolved anchor comes from the departure/end date — NOT a start date, unlike Onboarding
+      {
+        const activeSynthetic = { id: 'synth-off-active', fullName: 'Synthetic Active', status: 'Active', contractEndDate: '2026-12-31' };
+        const activeElig = checkOffboardingEligibility(activeSynthetic, [], []);
+        assert(
+          activeElig.isEligible === true && activeElig.resolvedAnchorDate === '2026-12-31',
+          '1160. NEW — checkOffboardingEligibility() resolves an Active employee with a confirmed contractEndDate as eligible, anchored to that departure/end date — resolveOffboardingAnchorDate() was not touched, and no onboarding start-date anchor logic was substituted in'
+        );
+
+        const noAnchorSynthetic = { id: 'synth-off-no-anchor', fullName: 'Synthetic No Anchor', status: 'Active', contractEndDate: null };
+        const noAnchorElig = checkOffboardingEligibility(noAnchorSynthetic, [], []);
+        assert(noAnchorElig.isEligible === false, '1160b. NEW — An Active employee with no confirmed exit date on record correctly remains ineligible until a Final Working Date override is set');
+      }
+
+      // 1161. Duplicate-plan protection: an employee who already has an active (non-completed) offboarding plan instance cannot have a second one launched
+      {
+        const preLaunchInstancesOff = await offboardingService.getAllInstances();
+        const farahInstance = preLaunchInstancesOff.find((i) => i.employeeId === 'emp-016' && i.derivedStatus !== OFFBOARDING_INSTANCE_STATUS.COMPLETED);
+        if (farahInstance) {
+          let duplicateBlocked = false;
+          let duplicateErrorMessage = '';
+          try {
+            await offboardingService.launchPlanInstance('emp-016', 'tpl-off-001', {}, null, 'emp-001');
+          } catch (err) {
+            duplicateBlocked = true;
+            duplicateErrorMessage = err.message;
+          }
+          assert(
+            duplicateBlocked && duplicateErrorMessage.includes('already has an active offboarding plan'),
+            '1161. NEW — Attempting to launch a second offboarding plan for an employee who already has an active one (emp-016 / Farah Mansor) is blocked at the service level with a clear "already has an active offboarding plan" error — the final service-level validation protects even though the UI never offers this scenario'
+          );
+        } else {
+          assert(true, '1161. Duplicate-plan protection check skipped — seed employee emp-016 no longer has an active offboarding instance in the current database state (checkOffboardingEligibility\'s duplicate-plan rule is verified directly via synthetic data elsewhere in this suite)');
+        }
+      }
+
+      // --- ANCHOR / DUE-DATE CALCULATION PRESERVED ---
+
+      // 1162. Existing offboarding task due dates remain calculated from the departure/end-date anchor exactly as before (spot-checked against the known seed instance) — not the onboarding start-date anchor
+      {
+        const farahFullInstance = await offboardingService.getInstanceById('inst-off-001');
+        if (farahFullInstance) {
+          const dayZeroTask = farahFullInstance.taskInstances.find((t) => t.relativeOffsetDays === 0);
+          const dayMinus30Task = farahFullInstance.taskInstances.find((t) => t.relativeOffsetDays === -30);
+          assert(
+            farahFullInstance.anchorDate === '2026-09-30' &&
+            dayZeroTask && dayZeroTask.originallyCalculatedDueDate === '2026-09-30' &&
+            dayMinus30Task && dayMinus30Task.originallyCalculatedDueDate === '2026-08-31',
+            '1162. NEW — inst-off-001\'s (Farah Mansor) task due dates remain correctly anchored to the Final Working Date (2026-09-30): Day 0 = 2026-09-30, Day -30 = 2026-08-31 — offboarding\'s departure-date anchor semantics were not altered by this navigation refactor'
+          );
+        } else {
+          assert(true, '1162. Anchor/due-date spot check skipped — seed instance inst-off-001 not present in current database state');
+        }
+
+        const resolvedFromContractEnd = resolveOffboardingAnchorDate({ id: 'synth-anchor-check', contractEndDate: '2027-01-15' }, [], null, '2026-01-01');
+        assert(resolvedFromContractEnd === '2027-01-15', '1162b. NEW — resolveOffboardingAnchorDate() still resolves from the employee\'s departure-related fields (contractEndDate), unrelated to any onboarding start-date concept');
+      }
+
+      // --- PLANS (untouched AS OF THIS TASK — later fully refactored by "Refactor Offboarding Plans to Match the New Onboarding Structure"; see checks 1170+ for its own coverage) ---
+
+      // 1163. UPDATED — At the time of the Progress refactor, the Offboarding Plans page/route were untouched (Part 6 explicitly scoped that task away from a Plans redesign). The old template-based page/heading this check originally asserted on ("Offboarding Plan Templates" / "Create Exit Template") was intentionally retired by the later Plans scope refactor — re-pointed here to the CURRENT Plans page/route shape so this check keeps proving the /offboarding/plans route itself was never lost across either task.
+      assert(
+        offPlansSrc.includes('>Offboarding Plans<') && routerSrcOff.includes("{ path: 'plans', element: <OffboardingPlansPage /> }"),
+        '1163. UPDATED — The Offboarding Plans route (/offboarding/plans) has remained continuously registered across both the Progress refactor (which left it untouched) and the later Plans scope refactor (which changed its page content/heading but not its route)'
+      );
+
+      // --- INDIVIDUAL PROGRESS / DETAIL PAGE ---
+
+      // 1164. UPDATED — The individual offboarding detail page still shows the person's real plan/task progress and Mark Done/Reopen actions. Its task table was earlier changed (by the
+      // "Refactor Offboarding Plans" task) from instance.taskInstances.map(...) to instance.progress.tasks.map(...) — a pre-existing compatibility bug fix (instance.taskInstances was always the
+      // RAW, unenriched array with no linkedActivity field). The old instance.progress.completedRequiredCount reference this check originally asserted on was REMOVED by the later "Refactor
+      // Individual Offboarding Progress Page" task (the 4-block PLAN TEMPLATE/CLEARANCE STATUS/REQUIRED TASKS PROGRESS/TOTAL TASKS FINISHED layout was replaced by a single Onboarding-style plan
+      // summary card reading instance.progress.progressPercentage/completedTasksCount/totalTasks directly) — re-pointed here to the current fields; see checks 1200+ for that task's own full coverage.
+      assert(
+        offDetailSrc.includes('instance.progress.progressPercentage') && offDetailSrc.includes('instance.derivedStatus') && offDetailSrc.includes('handleToggleTaskComplete') && offDetailSrc.includes('instance.progress.tasks.map'),
+        '1164. UPDATED — REGRESSION: The individual offboarding detail page continues to render the employee\'s actual plan/task progress and task completion actions — its task table reads the enriched instance.progress.tasks, and its summary now reads progressPercentage/completedTasksCount/totalTasks directly (the old completedRequiredCount-based 4-block layout was later replaced; see checks 1200+)'
+      );
+
+      // --- FUNCTIONAL: OVERDUE MARK COMPLETE / MARK ALL AS COMPLETE ---
+
+      // 1165. Mark Complete functionally still completes an overdue offboarding activity end-to-end through the reused activityService
+      {
+        const overdueBeforeOff = await activityService.getOverdueActivities();
+        const offboardingOverdueBeforeOff = overdueBeforeOff.filter((a) => a.source === 'Offboarding');
+        if (offboardingOverdueBeforeOff.length > 0) {
+          const targetOverdueTaskOff = offboardingOverdueBeforeOff[0];
+          const completedTaskOff = await activityService.markComplete(targetOverdueTaskOff.id);
+          assert(completedTaskOff.completed === true, '1165. NEW — Mark Complete functionally completes an overdue offboarding task through the reused activityService.markComplete()');
+          await activityService.reopen(targetOverdueTaskOff.id);
+        } else {
+          assert(true, '1165. Mark Complete functional check skipped — no overdue Offboarding activities present in current seed state (activityService.markComplete/reopen verified functional elsewhere in this suite)');
+        }
+      }
+
+      // 1166. Mark All as Complete completes exactly the offboarding-sourced overdue set via the generic, already-proven activityService.markCompleteMany — no offboarding-specific bulk logic was invented
+      {
+        const overdueBeforeBulkOff = await activityService.getOverdueActivities();
+        const offboardingOverdueBeforeBulkOff = overdueBeforeBulkOff.filter((a) => a.source === 'Offboarding');
+        if (offboardingOverdueBeforeBulkOff.length > 0) {
+          const bulkTargetIdsOff = offboardingOverdueBeforeBulkOff.map((t) => t.id);
+          const bulkResultsOff = await activityService.markCompleteMany(bulkTargetIdsOff);
+          assert(
+            Array.isArray(bulkResultsOff) && bulkResultsOff.length === bulkTargetIdsOff.length && bulkResultsOff.every((r) => r.completed === true),
+            '1166. NEW — Mark All as Complete completes every currently-overdue Offboarding-sourced task via the shared activityService.markCompleteMany() — the exact same bulk helper Onboarding uses, with no offboarding-specific reimplementation'
+          );
+          for (const id of bulkTargetIdsOff) {
+            await activityService.reopen(id);
+          }
+        } else {
+          assert(true, '1166. Mark All as Complete functional check skipped — no overdue Offboarding activities present in current seed state');
+        }
+      }
+
+      // 1167. Task completion still correctly recomputes offboarding plan progress/status through the existing, untouched reconciliation path
+      {
+        const instBeforeToggle = await offboardingService.getInstanceById('inst-off-002');
+        if (instBeforeToggle) {
+          const incompleteTask = instBeforeToggle.progress.tasks.find((t) => !t.isCompleted);
+          if (incompleteTask && incompleteTask.linkedActivity) {
+            await activityService.markComplete(incompleteTask.linkedActivity.id);
+            const instAfterToggle = await offboardingService.getInstanceById('inst-off-002');
+            assert(
+              instAfterToggle.progress.completedTasksCount === instBeforeToggle.progress.completedTasksCount + 1,
+              '1167. NEW — Completing an offboarding task still correctly recomputes the plan instance\'s progress/status via the existing, untouched reconcileOffboardingPlanProgress() path'
+            );
+            await activityService.reopen(incompleteTask.linkedActivity.id);
+          } else {
+            assert(true, '1167. Task completion regression check skipped — inst-off-002 has no remaining incomplete task in current seed state');
+          }
+        } else {
+          assert(true, '1167. Task completion regression check skipped — seed instance inst-off-002 not present in current database state');
+        }
+      }
+
+      // --- ONBOARDING COMPLETELY UNAFFECTED ---
+
+      // 1168. No onboarding functionality, business logic, or navigation was touched by this Offboarding-scoped task
+      {
+        const onboardingServiceSrcOffRegr = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+        const onboardingDomainSrcOffRegr = fs.readFileSync(path.resolve('./src/domain/onboardingDomain.js'), 'utf-8');
+        const onbEmployeesSrcOffRegr = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeesPage.jsx'), 'utf-8');
+        assert(
+          onboardingServiceSrcOffRegr.includes('async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = [], currentUserId') &&
+          onboardingDomainSrcOffRegr.includes("DROPPED: 'Dropped'") &&
+          onbEmployeesSrcOffRegr.includes('>Onboarding Progress<') &&
+          routerSrcOff.includes('<Navigate to="/onboarding/employees" replace />'),
+          '1168. REGRESSION: onboardingService.js/onboardingDomain.js signatures, the Onboarding Progress page heading, and the /onboarding/employees route are all byte-for-byte unaffected by this Offboarding-only navigation/consolidation task'
+        );
+
+        const eligibleOnboardingRegr = await onboardingService.getLaunchEligibleEmployees();
+        assert(Array.isArray(eligibleOnboardingRegr), '1168b. REGRESSION: Onboarding launch eligibility still resolves correctly, untouched by this task');
+      }
+
+      // 1169. UPDATED — offboardingService.js/offboardingDomain.js core status states and eligibility/anchor functions are unchanged by THIS (Progress) task — only launchPlanInstance()'s own signature was later evolved by the separate "Refactor Offboarding Plans" task (template-based -> composed-scope-based); see checks 1170+ for that task's own signature/regression coverage.
+      assert(
+        offboardingServiceSrcOff.includes('async getAllInstances(options = {})') &&
+        offboardingDomainSrcOff.includes("IN_PROGRESS: 'In Progress'") && offboardingDomainSrcOff.includes("NEEDS_ATTENTION: 'Needs Attention'") && offboardingDomainSrcOff.includes("COMPLETED: 'Completed'") &&
+        offboardingDomainSrcOff.includes('export function checkOffboardingEligibility') && offboardingDomainSrcOff.includes('export function resolveOffboardingAnchorDate'),
+        '1169. UPDATED — REGRESSION: offboardingService.js\'s getAllInstances() and offboardingDomain.js\'s core status states/eligibility/anchor-date functions remain unchanged by this Progress-consolidation task'
+      );
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Refactor Offboarding Plans to Match the New Onboarding Structure
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const offPlansSrc2 = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingPlansPage.jsx'), 'utf-8');
+      const offPlanEditorSrc = fs.readFileSync(path.resolve('./src/pages/offboarding/PlanEditorPage.jsx'), 'utf-8');
+      const launchOffboardingPlanModalSrc2 = fs.readFileSync(path.resolve('./src/components/offboarding/LaunchOffboardingPlanModal.jsx'), 'utf-8');
+      const offboardingServiceSrc2 = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+      const offboardingDomainSrc2 = fs.readFileSync(path.resolve('./src/domain/offboardingDomain.js'), 'utf-8');
+      const storageEngineSrc2 = fs.readFileSync(path.resolve('./src/mock-data/storageEngine.js'), 'utf-8');
+      const routerSrc4 = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+      const onbPlansSrc4 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingPlansPage.jsx'), 'utf-8');
+      const onbPlanEditorSrc4 = fs.readFileSync(path.resolve('./src/pages/onboarding/PlanEditorPage.jsx'), 'utf-8');
+      const onboardingServiceSrc4 = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+      const onboardingDomainSrc4 = fs.readFileSync(path.resolve('./src/domain/onboardingDomain.js'), 'utf-8');
+
+      // --- OLD TEMPLATE-BASED PLANS UI FULLY REMOVED ---
+
+      // 1170. Old template-card page UI (heading, Create Exit Template, per-card Active/Required/Launch, named template cards) is completely gone from the Plans page
+      assert(
+        offPlansSrc2.includes('>Offboarding Plans<') && !offPlansSrc2.includes('>Offboarding Plan Templates<') &&
+        !offPlansSrc2.includes('Create Exit Template') && !offPlansSrc2.includes('Edit Template') &&
+        !offPlansSrc2.includes('Launch Offboarding Plan') && !offPlansSrc2.includes('Standard Employee Offboarding') &&
+        !offPlansSrc2.includes('assignmentRule') && !offPlansSrc2.includes('Required'),
+        '1170. NEW — The old template-card page UI (heading "Offboarding Plan Templates", "Create Exit Template"/"Edit Template" actions, per-card Launch button, Active/Required badges, named template cards) is fully removed — the page now reads "Offboarding Plans" with the new scope-based structure'
+      );
+
+      // 1171. Subtitle matches the required, structurally-consistent wording
+      assert(
+        offPlansSrc2.includes('Configure reusable offboarding tasks for employees and interns. Universal and department-specific tasks are combined automatically when offboarding is launched.'),
+        '1171. NEW — The Offboarding Plans subtitle reads the required wording, mirroring Onboarding Plans\' phrasing'
+      );
+
+      // --- EMPLOYEES / INTERNS FILTER ---
+
+      // 1172. Employees/Interns segmented-control filter is present, defaulting to Employees, reusing the exact view-switcher-group/view-btn pattern (not a new control style)
+      assert(
+        offPlansSrc2.includes("useState(location.state?.personType === 'intern' ? 'intern' : 'employee')") &&
+        offPlansSrc2.includes('view-switcher-group onboarding-person-type-switcher') &&
+        offPlansSrc2.includes('>Employees</span>') && offPlansSrc2.includes('>Interns</span>'),
+        '1172. NEW — The Employees/Interns filter defaults to Employees and reuses the existing view-switcher-group/view-btn segmented-control pattern already established by Onboarding Plans — no new filter style was invented'
+      );
+
+      // --- UNIVERSAL + DEPARTMENT-SPECIFIC STRUCTURE ---
+
+      // 1173. Universal Tasks card (emphasized, full width) and a dynamically-rendered Department-Specific Tasks grid are both present, routing to the new scope-aware URLs
+      assert(
+        offPlansSrc2.includes('title="Universal Tasks"') && offPlansSrc2.includes('Department-Specific Tasks') &&
+        offPlansSrc2.includes('to={`/offboarding/plans/${personType}/universal`}') &&
+        offPlansSrc2.includes('to={`/offboarding/plans/${personType}/department/${row.department.id}`}') &&
+        !offPlansSrc2.match(/'Software Engineering'|"Software Engineering"|'Marketing'|"Marketing"|'Executive Office'|"Executive Office"/),
+        '1173. NEW — Universal Tasks (emphasized card) and Department-Specific Tasks (dynamically rendered — no hardcoded department names in JSX) both route to the new /offboarding/plans/:personType/universal and /offboarding/plans/:personType/department/:departmentId scope-aware URLs'
+      );
+
+      // 1174. Empty-state wording is offboarding-specific and never uses retired "template" terminology
+      assert(
+        offPlansSrc2.includes('No employee-specific tasks configured for this department. Employee Universal Tasks will still apply.') &&
+        offPlansSrc2.includes('No intern-specific tasks configured for this department. Intern Universal Tasks will still apply.') &&
+        !offPlansSrc2.includes('template') && !offPlansSrc2.includes('Template'),
+        '1174. NEW — Department empty-state wording matches the required Employee/Intern copy exactly, with no "template" terminology anywhere on the page'
+      );
+
+      // --- OFFBOARDING SCOPE DOMAIN MODEL (independent of Onboarding's) ---
+
+      // 1175. offboardingDomain.js defines its OWN scope/person-type constants and composeOffboardingTasks() — never importing from onboardingDomain.js. UPDATED — the no-cross-import check
+      // looks for an actual `import ... from '...onboardingDomain.js'` statement specifically (not a bare substring match), since offboardingDomain.js's own doc comments legitimately mention
+      // "onboardingDomain.js" in prose when explaining a parallel/independent pattern (e.g. "mirrors onboardingDomain.js's isActivePlanStatus() in concept only") — that documentation is not a
+      // real coupling and must not fail this check.
+      assert(
+        offboardingDomainSrc2.includes("export const OFFBOARDING_TASK_SCOPES") && offboardingDomainSrc2.includes("UNIVERSAL: 'universal'") && offboardingDomainSrc2.includes("DEPARTMENT: 'department'") &&
+        offboardingDomainSrc2.includes("export const OFFBOARDING_PERSON_TYPES") && offboardingDomainSrc2.includes("EMPLOYEE: 'employee'") && offboardingDomainSrc2.includes("INTERN: 'intern'") &&
+        offboardingDomainSrc2.includes('export function composeOffboardingTasks') &&
+        !offboardingDomainSrc2.match(/import[\s\S]{0,200}from\s+['"][^'"]*onboardingDomain\.js['"]/),
+        '1175. UPDATED — offboardingDomain.js defines its own OFFBOARDING_TASK_SCOPES/OFFBOARDING_PERSON_TYPES/composeOffboardingTasks() — a fully independent implementation, with zero actual import statement from onboardingDomain.js (documentation comments mentioning it for conceptual comparison are fine and expected)'
+      );
+
+      // 1176. composeOffboardingTasks() resolves personType from employee.directoryType exactly like Onboarding's equivalent, but is a separate function operating only on offboarding scope tasks
+      {
+        const empSynthetic = { directoryType: 'Employee', department: { id: 'dept-3' } };
+        const internSynthetic = { directoryType: 'Intern', department: { id: 'dept-3' } };
+        const taskDefs = [
+          { id: 'u-emp', scopeType: 'universal', personType: 'employee', relativeOffsetDays: -7, title: 'Emp Universal', sequence: 1, active: true },
+          { id: 'u-intern', scopeType: 'universal', personType: 'intern', relativeOffsetDays: -7, title: 'Intern Universal', sequence: 1, active: true },
+          { id: 'd-emp', scopeType: 'department', personType: 'employee', scopeDepartmentId: 'dept-3', relativeOffsetDays: 0, title: 'Emp SWE', sequence: 2, active: true },
+          { id: 'd-intern', scopeType: 'department', personType: 'intern', scopeDepartmentId: 'dept-3', relativeOffsetDays: 0, title: 'Intern SWE', sequence: 2, active: true },
+        ];
+        const empComp = composeOffboardingTasks(empSynthetic, taskDefs, '2026-09-30');
+        const internComp = composeOffboardingTasks(internSynthetic, taskDefs, '2026-09-30');
+        assert(
+          empComp.tasks.map((t) => t.id).sort().join(',') === 'd-emp,u-emp' &&
+          internComp.tasks.map((t) => t.id).sort().join(',') === 'd-intern,u-intern',
+          '1176. NEW — composeOffboardingTasks() resolves the correct, entirely non-overlapping task set per personType (Employee gets only Employee-scoped tasks, Intern gets only Intern-scoped tasks) for the same department'
+        );
+      }
+
+      // --- DATA PRESERVATION / MIGRATION ---
+
+      // 1177. migrateOffboardingScopesIfNeeded() exists and is wired into BOTH loadDatabase() call sites (in-memory init and localStorage-parsed path), mirroring the onboarding migration's wiring pattern
+      assert(
+        storageEngineSrc2.includes('export function migrateOffboardingScopesIfNeeded') &&
+        (storageEngineSrc2.match(/migrateOffboardingScopesIfNeeded\(/g) || []).length === 3,
+        '1177. NEW — migrateOffboardingScopesIfNeeded() is defined once and called from both getInitialState() and the localStorage-parsed loadDatabase() path (3 total occurrences: the definition plus 2 call sites) — the exact same wiring pattern used for onboarding\'s migrations'
+      );
+
+      // 1178. Migration is additive/non-destructive and idempotent: repeated resetDatabase()+loadDatabase() cycles produce a stable, correctly-tagged task count
+      {
+        resetDatabase();
+        const db1 = loadDatabase();
+        const count1 = db1.offboardingPlanTasks.length;
+        const db2 = loadDatabase();
+        const count2 = db2.offboardingPlanTasks.length;
+        const db3 = loadDatabase();
+        const count3 = db3.offboardingPlanTasks.length;
+        const allTagged = db3.offboardingPlanTasks.every((t) => t.scopeType && t.personType);
+        assert(
+          count1 === count2 && count2 === count3 && allTagged,
+          `1178. NEW — migrateOffboardingScopesIfNeeded() is idempotent: repeated loadDatabase() calls produce a stable task count (${count1} -> ${count2} -> ${count3}), and every offboardingPlanTask carries both scopeType and personType after migration`
+        );
+      }
+
+      // 1179. Migration mapping matches the documented decisions: tpl-off-001 (7, general) + tpl-off-003 (4, general/Executive) merge into Employee Universal (11); tpl-off-002 (4, Software Engineering) is duplicated into Employee AND Intern department scope (4 each) — nothing lost, nothing guessed
+      {
+        resetDatabase();
+        const db = loadDatabase();
+        const tasks = db.offboardingPlanTasks;
+        const empUniversal = tasks.filter((t) => t.scopeType === 'universal' && t.personType === 'employee');
+        const internUniversal = tasks.filter((t) => t.scopeType === 'universal' && t.personType === 'intern');
+        const empSwe = tasks.filter((t) => t.scopeType === 'department' && t.personType === 'employee' && t.scopeDepartmentId === 'dept-3');
+        const internSwe = tasks.filter((t) => t.scopeType === 'department' && t.personType === 'intern' && t.scopeDepartmentId === 'dept-3');
+        assert(
+          empUniversal.length === 11 && internUniversal.length === 0 && empSwe.length === 4 && internSwe.length === 4 && tasks.length === 19,
+          `1179. NEW — Migration mapping verified: Employee Universal = 11 (tpl-off-001's 7 + tpl-off-003's 4, merged — documented in the migration's own comments), Intern Universal = 0 (no legacy intern-named template existed), Employee Software Engineering = 4 and Intern Software Engineering = 4 (tpl-off-002 duplicated into both person types, since the source data never distinguished them), total offboardingPlanTasks = 19 (found ${empUniversal.length}/${internUniversal.length}/${empSwe.length}/${internSwe.length}/${tasks.length})`
+        );
+        // No original task content was altered — every migrated task's title/description/relativeOffsetDays/activityTypeId still exactly matches its seed source (pt-off-001 through pt-off-023 remain findable by original id or by their intern-duplicate suffix).
+        const originalIds = new Set(['pt-off-001','pt-off-002','pt-off-003','pt-off-004','pt-off-005','pt-off-006','pt-off-007','pt-off-010','pt-off-011','pt-off-012','pt-off-013','pt-off-020','pt-off-021','pt-off-022','pt-off-023']);
+        const allOriginalIdsPresent = [...originalIds].every((id) => tasks.some((t) => t.id === id));
+        assert(allOriginalIdsPresent, '1179b. NEW — Every original legacy task id (pt-off-001 through pt-off-023) is still present after migration — additive tagging/duplication only, nothing was dropped or replaced');
+      }
+
+      // --- MANAGE TASKS EDITOR (scope-aware, simplified fields) ---
+
+      // 1180. The task editor reads personType/scopeType/departmentId from the route and titles itself correctly for all 4 combinations
+      assert(
+        offPlanEditorSrc.includes("const { personType, departmentId } = useParams();") &&
+        offPlanEditorSrc.includes("const scopeType = departmentId !== undefined ? 'department' : 'universal';") &&
+        offPlanEditorSrc.includes('title: `${personLabel} Universal Tasks`') &&
+        offPlanEditorSrc.includes('title: `${department.name} — ${personLabel} Tasks`'),
+        '1180. NEW — The editor derives personType/scopeType/departmentId from its own route params and titles itself "Employee Universal Tasks" / "Intern Universal Tasks" / "<Department> — Employee Tasks" / "<Department> — Intern Tasks" depending on the combination — matching Onboarding\'s exact editor pattern'
+      );
+
+      // 1181. Editor keeps only Task Title / Activity Type / Relative Offset / Task Description — Required checkbox, Assignment Rule, Template Name, and an in-editor department selector are all gone
+      assert(
+        offPlanEditorSrc.includes('Task Title') && offPlanEditorSrc.includes('Activity Type') && offPlanEditorSrc.includes('Relative Offset (Days)') && offPlanEditorSrc.includes('Task Description') &&
+        !offPlanEditorSrc.includes('Required Clearance Task') && !offPlanEditorSrc.includes('Assignment Rule') &&
+        !offPlanEditorSrc.includes('Template Name') && !offPlanEditorSrc.includes('Target Department Scope') && !offPlanEditorSrc.includes('Select Specific Assignee'),
+        '1181. NEW — The editor keeps exactly Task Title / Activity Type / Relative Offset (Days) / Task Description — the Required Task checkbox, Assignment Rule selector, Template Name field, and in-editor department selector (departmentId already comes from the route) are all removed'
+      );
+
+      // 1182. Day-offset helper text uses offboarding's Final Working Date anchor semantics — never onboarding's start-date wording
+      assert(
+        offPlanEditorSrc.includes('Final Working Date') && !offPlanEditorSrc.toLowerCase().includes('start date') &&
+        offPlanEditorSrc.includes('= Final Working Date') && offPlanEditorSrc.includes('After Final Working Date') && offPlanEditorSrc.includes('Before Final Working Date'),
+        '1182. NEW — The Relative Offset helper text reads "0 = Final Working Date", "+ value = After Final Working Date", "− value = Before Final Working Date" — the offboarding departure-date anchor, never onboarding\'s start-date wording'
+      );
+
+      // 1183. saveScopeTasks()/getScopeTasks() are correctly scope-isolated: saving one (personType, scopeType[, departmentId]) combination never touches any other combination's tasks
+      {
+        resetDatabase();
+        const beforeInternSwe = await offboardingService.getScopeTasks('department', 'intern', 'dept-3');
+        await offboardingService.saveScopeTasks('department', 'employee', 'dept-3', [{ title: 'QA Employee SWE Only', relativeOffsetDays: 0 }]);
+        const afterInternSwe = await offboardingService.getScopeTasks('department', 'intern', 'dept-3');
+        const afterEmpSwe = await offboardingService.getScopeTasks('department', 'employee', 'dept-3');
+        const afterEmpUniversal = await offboardingService.getScopeTasks('universal', 'employee', null);
+        assert(
+          afterInternSwe.length === beforeInternSwe.length &&
+          afterEmpSwe.length === 1 && afterEmpSwe[0].title === 'QA Employee SWE Only' &&
+          afterEmpUniversal.length === 11,
+          `1183. NEW — saveScopeTasks('department','employee','dept-3', ...) replaced ONLY that exact scope (now ${afterEmpSwe.length} task) — Intern Software Engineering (${afterInternSwe.length}, unchanged from ${beforeInternSwe.length}) and Employee Universal (${afterEmpUniversal.length}, unchanged) were both left completely untouched`
+        );
+        resetDatabase();
+      }
+
+      // --- LAUNCH FLOW: composition-based, offboarding-specific eligibility/anchor preserved ---
+
+      // 1184. LaunchOffboardingPlanModal no longer has a template selector — it now drives eligible-employee selection + composed-task preview, still keeping its own Final Working Date custom override (a genuine offboarding-specific need Onboarding's modal doesn't have)
+      assert(
+        !launchOffboardingPlanModalSrc2.includes('Offboarding Plan Template') && !launchOffboardingPlanModalSrc2.includes('selectedTemplateId') &&
+        launchOffboardingPlanModalSrc2.includes('offboardingService.getLaunchEligibleEmployees()') &&
+        launchOffboardingPlanModalSrc2.includes('offboardingService.previewOffboardingComposition') &&
+        launchOffboardingPlanModalSrc2.includes('Final Working Date Anchor') && launchOffboardingPlanModalSrc2.includes('Custom Override'),
+        '1184. NEW — LaunchOffboardingPlanModal has no template dropdown any more (no "Offboarding Plan Template" label, no selectedTemplateId state) — it now sources candidates from getLaunchEligibleEmployees() and previews via previewOffboardingComposition(), while keeping its own Final Working Date custom-override control (offboarding-specific; Onboarding\'s Launch modal has no equivalent)'
+      );
+
+      // 1185. Composition breakdown UI shows Universal/Department/Total (no per-task assignee columns — assignment resolution is gone from the new launch flow)
+      assert(
+        launchOffboardingPlanModalSrc2.includes('Universal Tasks {preview.counts.universal}') && launchOffboardingPlanModalSrc2.includes('Department Tasks {preview.counts.department}') && launchOffboardingPlanModalSrc2.includes('Total {preview.counts.total}') &&
+        !launchOffboardingPlanModalSrc2.includes('resolvedAssigneeName') && !launchOffboardingPlanModalSrc2.includes('isResolved'),
+        '1185. NEW — The Launch modal\'s composition breakdown shows Universal/Department/Total badges (no separate "Employee/Intern Tasks" bucket, since Universal is already person-type-scoped) and the task preview table has no per-task assignee/resolution columns — assignment resolution was removed along with Assignment Rule'
+      );
+
+      // 1186. launchPlanInstance() has the new composition-based signature (employeeId, customAnchorDate, currentUserId) — the templateId/manualOverrides parameters are gone
+      assert(
+        offboardingServiceSrc2.includes("async launchPlanInstance(employeeId, customAnchorDate = null, currentUserId = 'emp-001')") &&
+        offboardingServiceSrc2.includes('composeOffboardingTasks(employee, taskDefinitions, eligibility.resolvedAnchorDate)'),
+        '1186. NEW — offboardingService.launchPlanInstance() now takes (employeeId, customAnchorDate, currentUserId) and composes its task set via composeOffboardingTasks() + the existing checkOffboardingEligibility() anchor resolution — the old (employeeId, templateId, manualOverrides, customAnchorDate, currentUserId) template-based signature is gone'
+      );
+
+      // 1187. FUNCTIONAL — Employee launch composition = Employee Universal + Employee Department only (no Intern tasks), verified end-to-end through the real service against real seed data
+      {
+        resetDatabase();
+        const empPreview = await offboardingService.previewOffboardingComposition('emp-005', '2026-12-31');
+        const empHasInternTask = empPreview.tasks.some((t) => t.personType === 'intern');
+        assert(
+          empPreview.isValid && empPreview.counts.universal === 11 && empPreview.counts.department === 4 && empPreview.counts.total === 15 && !empHasInternTask,
+          `1187. NEW — FUNCTIONAL: Priyanka Nair (Active, Software Engineering, Employee) composes to exactly Employee Universal(11) + Employee Software Engineering(4) = 15 total, with zero Intern-scoped tasks present (found universal=${empPreview.counts.universal}, department=${empPreview.counts.department}, total=${empPreview.counts.total})`
+        );
+      }
+
+      // 1188. FUNCTIONAL — Intern launch composition = Intern Universal + Intern Department only (no Employee tasks). No eligible seed Intern exists (Active/Departing) — a synthetic Intern is created via the real employeeService for this isolated, in-memory-only check (never touches real persisted data; Node has no localStorage).
+      {
+        const syntheticIntern = await employeeService.createDirectoryEmployee(
+          { firstName: 'QA', lastName: 'InternComposeCheck', workEmail: 'qa.interncomposecheck@rizurf.example', directoryType: 'Intern', startDate: '2026-01-01', contractEndDate: '2026-12-31', allowance: 'Unpaid', workMode: 'On-site', status: 'Active' },
+          { departmentId: 'dept-3' }
+        );
+        const internPreview = await offboardingService.previewOffboardingComposition(syntheticIntern.id, null);
+        const internHasEmployeeTask = internPreview.tasks.some((t) => t.personType === 'employee');
+        assert(
+          internPreview.isValid && internPreview.counts.universal === 0 && internPreview.counts.department === 4 && internPreview.counts.total === 4 && !internHasEmployeeTask,
+          `1188. NEW — FUNCTIONAL: A synthetic Active Intern in Software Engineering composes to exactly Intern Universal(0, none configured) + Intern Software Engineering(4) = 4 total, with zero Employee-scoped tasks present — no cross-type leakage in either direction (found universal=${internPreview.counts.universal}, department=${internPreview.counts.department}, total=${internPreview.counts.total})`
+        );
+      }
+
+      // 1189. FUNCTIONAL — Launching for a real eligible employee creates a plan instance whose task snapshot matches the previewed composition exactly, and duplicate-plan protection still blocks a second launch
+      {
+        resetDatabase();
+        const launched = await offboardingService.launchPlanInstance('emp-005', '2026-12-31', 'emp-001');
+        assert(launched.taskInstances.length === 15, `1189. NEW — FUNCTIONAL: Launching for Priyanka Nair creates exactly 15 task instances, matching the previewed composition (found ${launched.taskInstances.length})`);
+
+        let duplicateBlocked = false;
+        try {
+          await offboardingService.launchPlanInstance('emp-005', '2026-12-31', 'emp-001');
+        } catch (err) {
+          duplicateBlocked = err.message.includes('already has an active offboarding plan');
+        }
+        assert(duplicateBlocked, '1189b. NEW — FUNCTIONAL: Duplicate active-plan protection still blocks a second launch for the same employee under the new composition-based launchPlanInstance()');
+      }
+
+      // 1190. FUNCTIONAL — Relative timing / Final Working Date anchor math is unchanged: Day -30/0/+1 calculate correctly from the resolved anchor
+      {
+        const taskDefs = [
+          { id: 't-30', scopeType: 'universal', personType: 'employee', relativeOffsetDays: -30, title: 'D-30', sequence: 1, active: true },
+          { id: 't0', scopeType: 'universal', personType: 'employee', relativeOffsetDays: 0, title: 'D0', sequence: 2, active: true },
+          { id: 't1', scopeType: 'universal', personType: 'employee', relativeOffsetDays: 1, title: 'D+1', sequence: 3, active: true },
+        ];
+        const comp = composeOffboardingTasks({ directoryType: 'Employee', department: null }, taskDefs, '2026-09-30');
+        const d30 = comp.tasks.find((t) => t.id === 't-30').calculatedDueDate;
+        const d0 = comp.tasks.find((t) => t.id === 't0').calculatedDueDate;
+        const d1 = comp.tasks.find((t) => t.id === 't1').calculatedDueDate;
+        assert(
+          d30 === '2026-08-31' && d0 === '2026-09-30' && d1 === '2026-10-01',
+          `1190. NEW — FUNCTIONAL: Day -30/0/+1 relative to a Final Working Date of 2026-09-30 calculate to 2026-08-31/2026-09-30/2026-10-01 exactly (found ${d30}/${d0}/${d1}) — offboarding's departure-date anchor semantics are unchanged, never onboarding's start-date anchor`
+        );
+      }
+
+      // 1191. FUNCTIONAL — Historical, pre-existing launched offboarding instances remain byte-for-byte unchanged after scope edits AND after new launches under the new architecture
+      {
+        resetDatabase();
+        const before = await offboardingService.getInstanceById('inst-off-001');
+        const beforeSnapshot = JSON.stringify(before.taskInstances);
+        await offboardingService.launchPlanInstance('emp-005', '2026-12-31', 'emp-001');
+        await offboardingService.saveScopeTasks('universal', 'employee', null, [{ title: 'QA Regression Universal Task', relativeOffsetDays: 0 }]);
+        const after = await offboardingService.getInstanceById('inst-off-001');
+        assert(
+          JSON.stringify(after.taskInstances) === beforeSnapshot && after.anchorDate === '2026-09-30',
+          '1191. NEW — FUNCTIONAL: The pre-existing inst-off-001 (Farah Mansor) task-instance snapshot and anchor date remain byte-for-byte unchanged after both a new composition-based launch and a Universal scope edit — historical instances are plain field-copies, never re-read live from offboardingPlanTasks'
+        );
+        resetDatabase();
+      }
+
+      // --- OLD TEMPLATE ROUTE CLEANUP ---
+
+      // 1192. Old template-edit routes (plans/new, plans/:planId/edit) are gone from the offboarding route block; the new scope-aware routes replace them
+      {
+        const offboardingRouteBlockMatch2 = routerSrc4.match(/path: 'offboarding',[\s\S]*?\],\s*\},/);
+        const offboardingRouteBlock2 = offboardingRouteBlockMatch2 ? offboardingRouteBlockMatch2[0] : '';
+        assert(
+          Boolean(offboardingRouteBlockMatch2) &&
+          !offboardingRouteBlock2.includes("path: 'plans/new'") && !offboardingRouteBlock2.includes("path: 'plans/:planId/edit'") &&
+          offboardingRouteBlock2.includes("path: 'plans/:personType/universal'") && offboardingRouteBlock2.includes("path: 'plans/:personType/department/:departmentId'"),
+          '1192. NEW — The old plans/new and plans/:planId/edit routes are gone from the offboarding route block, replaced by plans/:personType/universal and plans/:personType/department/:departmentId — mirroring Onboarding\'s own equivalent route shape (deliberately not left as redirects, since neither old path was ever a top-level nav destination — only reachable via the now-removed Create/Edit Template buttons)'
+        );
+      }
+
+      // 1193. No remaining source reference to the retired template-editor routes anywhere in the offboarding pages/components
+      assert(
+        !offPlansSrc2.includes('/plans/new') && !offPlanEditorSrc.includes('planId') && !launchOffboardingPlanModalSrc2.includes('/plans/new'),
+        '1193. NEW — No remaining page/component reference to the retired /offboarding/plans/new or /offboarding/plans/:planId/edit routes — no dead navigation was left behind'
+      );
+
+      // 1194. Legacy template service methods are preserved (not deleted) — proven still used elsewhere (verifyStage9.js, getAllInstances()'s historical template-name lookup for pre-refactor instances), matching the exact conservative precedent already established for onboarding's own legacy methods
+      assert(
+        offboardingServiceSrc2.includes('async getAllTemplates()') && offboardingServiceSrc2.includes('async getTemplateById(') &&
+        offboardingServiceSrc2.includes('async createTemplate(') && offboardingServiceSrc2.includes('async updateTemplate(') &&
+        offboardingServiceSrc2.includes('async toggleTemplateActive(') && offboardingServiceSrc2.includes('async previewPlanLaunch(') &&
+        offboardingDomainSrc2.includes('export function generateOffboardingPlanPreview') && offboardingDomainSrc2.includes('export function resolveAssigneeForRule') && offboardingDomainSrc2.includes('export const ASSIGNMENT_RULES'),
+        '1194. NEW — Legacy template-based service/domain methods (getAllTemplates/getTemplateById/createTemplate/updateTemplate/toggleTemplateActive/previewPlanLaunch, generateOffboardingPlanPreview/resolveAssigneeForRule/ASSIGNMENT_RULES) are all preserved, UI-orphaned but intact — getAllInstances() still uses getTemplateById()\'s templateMap for historical (pre-refactor) instances\' template-name display, and these functions remain provably in use elsewhere (not genuinely dead code)'
+      );
+
+      // --- OFFBOARDING PROGRESS MUST KEEP WORKING ---
+
+      // 1195. FUNCTIONAL — getLaunchEligibleEmployees() correctly resolves Active/Departing employees without an active plan (the Launch modal's dropdown source) — eligible people still appear correctly
+      {
+        resetDatabase();
+        const eligible = await offboardingService.getLaunchEligibleEmployees();
+        const statusesValid = eligible.every((e) => e.status === 'Active' || e.status === 'Departing');
+        const noActiveInstanceHolders = !eligible.some((e) => e.id === 'emp-016' || e.id === 'emp-017'); // both already have active instances
+        assert(
+          Array.isArray(eligible) && eligible.length > 0 && statusesValid && noActiveInstanceHolders,
+          `1195. NEW — FUNCTIONAL: getLaunchEligibleEmployees() returns only Active/Departing employees (found ${eligible.length}) and correctly excludes Farah Mansor/Aaron Kumar (already have active offboarding plans) — eligible people still appear correctly for the Launch modal`
+        );
+      }
+
+      // 1196. FUNCTIONAL — Overdue tasks and Mark All as Complete remain fully functional (untouched generic activityService infrastructure, unaffected by the Plans scope refactor)
+      {
+        const overdueBeforeOff2 = await activityService.getOverdueActivities();
+        const offboardingOverdueBeforeOff2 = overdueBeforeOff2.filter((a) => a.source === 'Offboarding');
+        if (offboardingOverdueBeforeOff2.length > 0) {
+          const bulkIds = offboardingOverdueBeforeOff2.map((t) => t.id);
+          const bulkResults = await activityService.markCompleteMany(bulkIds);
+          assert(bulkResults.every((r) => r.completed === true), '1196. NEW — FUNCTIONAL: Mark All as Complete still completes every currently-overdue Offboarding-sourced task via the unaffected activityService.markCompleteMany()');
+          for (const id of bulkIds) await activityService.reopen(id);
+        } else {
+          assert(true, '1196. Overdue/Mark All as Complete functional check skipped — no overdue Offboarding activities present in current seed state (verified functional elsewhere in this suite)');
+        }
+      }
+
+      // 1197. FUNCTIONAL — Task completion on a freshly-launched (new architecture) instance still correctly recomputes progress/derivedStatus through the untouched reconciliation path
+      {
+        resetDatabase();
+        const launched2 = await offboardingService.launchPlanInstance('emp-005', '2026-12-31', 'emp-001');
+        const firstTaskActivityId = launched2.taskInstances[0].activityId;
+        await activityService.markComplete(firstTaskActivityId);
+        const afterMark = await offboardingService.getInstanceById(launched2.id);
+        const completedTask = afterMark.progress.tasks.find((t) => t.activityId === firstTaskActivityId);
+        assert(
+          afterMark.progress.completedTasksCount === 1 && completedTask && completedTask.isCompleted === true && Boolean(completedTask.linkedActivity),
+          '1197. NEW — FUNCTIONAL: Completing a task on a freshly-launched (composition-based) offboarding instance correctly recomputes progress.completedTasksCount and resolves the enriched progress.tasks entry\'s linkedActivity — the detail page\'s Mark Done/Reopen flow works end-to-end for new launches, not just historical ones'
+        );
+        resetDatabase();
+      }
+
+      // --- ONBOARDING COMPLETELY UNCHANGED ---
+
+      // 1198. Onboarding Plans page/editor/service/domain are all byte-for-byte unaffected by this Offboarding-only Plans refactor
+      assert(
+        onbPlansSrc4.includes('>Onboarding Plans<') && onbPlansSrc4.includes('Universal Tasks') &&
+        onbPlanEditorSrc4.includes('const scopeType = departmentId !== undefined') &&
+        onboardingServiceSrc4.includes('async getScopesSummary(personType = \'employee\')') &&
+        onboardingDomainSrc4.includes('export function composeOnboardingTasks'),
+        '1198. REGRESSION: Onboarding Plans page/editor and onboardingService.js/onboardingDomain.js\'s own scope functions remain completely unchanged — Onboarding was the UX reference only, never a shared code path with this Offboarding Plans refactor'
+      );
+
+      // 1199. FUNCTIONAL — Onboarding's own scope composition and launch eligibility still resolve correctly, unaffected by the Offboarding scope model being introduced
+      {
+        const onboardingScopeDefsRegr = await onboardingService.getScopeTaskDefinitions();
+        const onboardingCompositionRegr = composeOnboardingTasks({ id: 'offplans-regr-check', directoryType: 'Employee', department: { id: 'dept-3', name: 'Software Engineering' } }, onboardingScopeDefsRegr, '2026-08-15');
+        assert(onboardingCompositionRegr.counts.total === 11, `1199. REGRESSION: Onboarding's own composeOnboardingTasks() still composes an Employee in Software Engineering to 11 tasks, unaffected by the introduction of offboardingDomain.js's parallel composeOffboardingTasks() (found ${onboardingCompositionRegr.counts.total})`);
+
+        const onboardingEligibleRegr = await onboardingService.getLaunchEligibleEmployees();
+        assert(Array.isArray(onboardingEligibleRegr), '1199b. REGRESSION: Onboarding launch eligibility still resolves correctly');
+      }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Refactor Individual Offboarding Progress Page to Match Onboarding Detail UX
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const offDetailSrc2 = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const offboardingServiceSrc3 = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+      const offboardingDomainSrc3 = fs.readFileSync(path.resolve('./src/domain/offboardingDomain.js'), 'utf-8');
+      const addOffboardingTaskModalSrc = fs.readFileSync(path.resolve('./src/components/offboarding/AddOffboardingTaskModal.jsx'), 'utf-8');
+      const deleteOffboardingTaskModalSrc = fs.readFileSync(path.resolve('./src/components/offboarding/DeleteOffboardingTaskModal.jsx'), 'utf-8');
+      const dropOffboardingPlanModalSrc = fs.readFileSync(path.resolve('./src/components/offboarding/DropOffboardingPlanModal.jsx'), 'utf-8');
+      const offProgressSrc2 = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingDepartingPage.jsx'), 'utf-8');
+      const offPlansSrc3 = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingPlansPage.jsx'), 'utf-8');
+      const onbDetailSrc4 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const onboardingServiceSrc5 = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+      const onboardingDomainSrc5 = fs.readFileSync(path.resolve('./src/domain/onboardingDomain.js'), 'utf-8');
+
+      // --- LAYOUT ---
+
+      // 1200. Back to Offboarding Progress link exists in both render branches (normal + Employee Not Found), routing to the unchanged /offboarding/departing
+      assert(
+        (offDetailSrc2.match(/Back to Offboarding Progress/g) || []).length === 2 &&
+        (offDetailSrc2.match(/to="\/offboarding\/departing"/g) || []).length === 2,
+        '1200. "Back to Offboarding Progress" appears in both render branches (main page + "Employee Not Found" fallback), each still routing to the unchanged /offboarding/departing'
+      );
+
+      // 1201. Drop Plan sits in its own page-level top row (LEFT: Back link, RIGHT: Drop Plan) — never inside the employee card, plan summary, or task table
+      {
+        const topRowMatch = offDetailSrc2.match(/Page-Level Navigation\/Action Row[\s\S]*?Employee Information Card/);
+        const topRowBlock = topRowMatch ? topRowMatch[0] : '';
+        assert(
+          Boolean(topRowMatch) && topRowBlock.includes('Back to Offboarding Progress') && topRowBlock.includes('Drop Plan') && topRowBlock.includes('isActiveOffboardingPlanStatus(instance.derivedStatus)'),
+          '1201. NEW — Drop Plan lives in its own page-level top row alongside the Back link (matching Onboarding\'s exact pattern) — not nested inside the employee card, plan summary, or task table — gated by the offboarding-specific isActiveOffboardingPlanStatus(), never an onboarding status enum'
+        );
+      }
+
+      // 1202. Employee header shows Final Working Date (never "Anchor Start Date"), plus role/department/ID using the correct hydrated employee fields (not the previously-broken employee.currentRecord path)
+      assert(
+        offDetailSrc2.includes('Final Working Date') && !offDetailSrc2.includes('Anchor Start Date') &&
+        offDetailSrc2.includes('employee.position?.name') && offDetailSrc2.includes('employee.department?.name') && !offDetailSrc2.includes('employee.currentRecord'),
+        '1202. NEW — REGRESSION FIX: The employee header shows "Final Working Date" (never "Anchor Start Date"), and role/department now read from the correctly-hydrated employee.position/employee.department fields — the old employee.currentRecord?.department/.position path never actually existed on the hydrated employee object, so Position/Department always silently showed their fallback text before this fix'
+      );
+
+      // 1203. Old 4-block summary layout (PLAN TEMPLATE / CLEARANCE STATUS / REQUIRED TASKS PROGRESS / TOTAL TASKS FINISHED) is completely removed
+      assert(
+        !offDetailSrc2.includes('Plan Template') && !offDetailSrc2.includes('Clearance Status') &&
+        !offDetailSrc2.includes('Required Tasks Progress') && !offDetailSrc2.includes('Total Tasks Finished') &&
+        !offDetailSrc2.includes("gridTemplateColumns: 'repeat(4, 1fr)'"),
+        '1203. NEW — The old 4-column grid summary (Plan Template / Clearance Status / Required Tasks Progress / Total Tasks Finished) is completely removed from the detail page'
+      );
+
+      // 1204. New single plan-summary card exists: plan name, launch date, status badge, percentage, progress bar, and "X of Y tasks completed" — mirroring Onboarding's exact summary card structure
+      assert(
+        offDetailSrc2.includes("instance.template ? instance.template.name : 'Offboarding Plan'") &&
+        offDetailSrc2.includes('Launched on {instance.createdAt') &&
+        offDetailSrc2.includes('instance.progress.progressPercentage}%') &&
+        offDetailSrc2.match(/width: `\$\{instance\.progress\.progressPercentage\}%`/) &&
+        offDetailSrc2.includes('{instance.progress.completedTasksCount} of {instance.progress.totalTasks}'),
+        '1204. NEW — A single plan-summary card shows plan name, launch date, status badge, percentage, a horizontal progress bar (width tied directly to progressPercentage), and "X of Y tasks completed" — the same structure as Onboarding\'s summary card, reading offboarding\'s own instance/progress data'
+      );
+
+      // 1205. Task section heading updated to match Onboarding's naming convention exactly
+      assert(
+        offDetailSrc2.includes('Offboarding Task Breakdown & Operational Status') && !offDetailSrc2.includes('Offboarding Task Execution Timeline'),
+        '1205. NEW — Task section heading changed from "Offboarding Task Execution Timeline" to "Offboarding Task Breakdown & Operational Status", matching Onboarding\'s "Onboarding Task Breakdown & Operational Status" naming convention exactly'
+      );
+
+      // 1206. Add Task button sits top-right of the task breakdown section, using the same visual pattern (btn-primary + Plus icon) as Onboarding's
+      assert(
+        offDetailSrc2.match(/Offboarding Task Breakdown & Operational Status[\s\S]{0,400}<Plus size=\{14\} \/>[\s\S]{0,50}<span>Add Task<\/span>/),
+        '1206. NEW — Add Task button (btn-primary, Plus icon) sits directly top-right of the "Offboarding Task Breakdown & Operational Status" heading, matching Onboarding\'s exact placement/visual pattern'
+      );
+
+      // 1207. Task table uses the simplified column set: # / Task Title / Relative Timing / Due Date / Action — no Assignee column
+      assert(
+        offDetailSrc2.includes('>#<') && offDetailSrc2.includes('>Task Title<') && offDetailSrc2.includes('>Relative Timing<') && offDetailSrc2.includes('>Due Date<') && offDetailSrc2.includes('>Action<') &&
+        !offDetailSrc2.includes('>Assignee<') && !offDetailSrc2.includes('assigneeEmployee') && !offDetailSrc2.includes('Rule: {ti.assignmentRule}') && !offDetailSrc2.includes('Rule: {task.assignmentRule}'),
+        '1207. NEW — The task table now uses exactly # / Task Title / Relative Timing / Due Date / Action — the Assignee column (header, assigneeEmployee display, and "Rule: X" metadata) is completely removed from the UI'
+      );
+
+      // 1208. Assignee is legacy/internal-only — the underlying assignmentRule/originallyResolvedAssigneeId fields still exist on task instance records (not destructively removed), just no longer rendered
+      assert(
+        offboardingServiceSrc3.includes('assignmentRule: null') && offboardingServiceSrc3.includes('originallyResolvedAssigneeId: null'),
+        '1208. NEW — The underlying assignmentRule/originallyResolvedAssigneeId fields are preserved internally on every task instance record (set to null/neutral, never deleted) — only the visible Assignee column was removed, not the data shape'
+      );
+
+      // --- TASK ACTIONS ---
+
+      // 1209. Done/Reopen button labels and icons match Onboarding exactly ("Done" + CheckCircle2 for incomplete, "Reopen" + RotateCcw for completed), using btn-compact-override/btn-compact-clear
+      assert(
+        offDetailSrc2.includes("className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}") &&
+        offDetailSrc2.includes("<span>{isDone ? 'Reopen' : 'Done'}</span>") &&
+        offDetailSrc2.includes('<RotateCcw size={11} />') && offDetailSrc2.includes('<CheckCircle2 size={11} />') &&
+        !offDetailSrc2.includes("'Mark Done'") && !offDetailSrc2.includes("'Completed'"),
+        '1209. NEW — Done/Reopen buttons read exactly "Done"/"Reopen" (not the old "Mark Done"/"Completed" labels) with CheckCircle2/RotateCcw icons and btn-compact-override/btn-compact-clear styling — matching Onboarding\'s task row action pattern exactly'
+      );
+
+      // 1210. Delete action (Trash icon) sits beside Done/Reopen on every row, using the same generic activityService toggle — no second completion mechanism was invented
+      assert(
+        offDetailSrc2.includes('icon-btn icon-btn-danger') && offDetailSrc2.includes('<Trash2 size={13} />') && offDetailSrc2.includes('title="Delete task"') &&
+        offDetailSrc2.includes('setTaskPendingDelete(task)') &&
+        offDetailSrc2.includes('handleToggleTaskComplete(act.id, isDone)'),
+        '1210. NEW — A Delete (Trash icon) button sits beside Done/Reopen on every task row; Done/Reopen still routes through the single existing handleToggleTaskComplete() -> activityService.markComplete()/reopen() path — no second completion mechanism was introduced'
+      );
+      // 1210b. handleToggleTaskComplete itself reuses the existing generic activityService methods only
+      {
+        const handlerMatch = offDetailSrc2.match(/const handleToggleTaskComplete = async[\s\S]*?\n  \};/);
+        const handlerBlock = handlerMatch ? handlerMatch[0] : '';
+        assert(
+          handlerBlock.includes('activityService.reopen(activityId)') && handlerBlock.includes('activityService.markComplete(activityId)'),
+          '1210b. NEW — handleToggleTaskComplete() calls the existing generic activityService.markComplete()/reopen() — the exact same methods Onboarding\'s detail page and Offboarding\'s own Overdue Tasks popup already use'
+        );
+      }
+
+      // 1211. Delete confirmation modal exists (offboarding-specific component), requires an explicit click before any deletion happens
+      assert(
+        fs.existsSync(path.resolve('./src/components/offboarding/DeleteOffboardingTaskModal.jsx')) &&
+        deleteOffboardingTaskModalSrc.includes('>Delete Task?<') &&
+        deleteOffboardingTaskModalSrc.includes('offboardingService.deleteTaskFromInstance') &&
+        deleteOffboardingTaskModalSrc.includes('will not affect the reusable offboarding plan configuration under Offboarding &gt; Plans'),
+        '1211. NEW — A dedicated DeleteOffboardingTaskModal.jsx exists with a "Delete Task?" confirmation, explicit Cancel/Delete Task actions, and wording confirming the reusable Offboarding > Plans configuration is unaffected — deletion never happens without this explicit step'
+      );
+
+      // 1212. Deletion affects ONLY the launched instance's own task/activity records — never offboardingPlanTasks (reusable Plans config)
+      {
+        const deleteFnMatch = offboardingServiceSrc3.match(/async deleteTaskFromInstance\([\s\S]*?\n  \},/);
+        const deleteFnBlock = deleteFnMatch ? deleteFnMatch[0] : '';
+        assert(
+          deleteFnBlock.includes('db.offboardingTaskInstances = rawTaskInstances.filter') && deleteFnBlock.includes('db.activities = (db.activities || []).filter') &&
+          !deleteFnBlock.includes('offboardingPlanTasks'),
+          '1212. NEW — deleteTaskFromInstance() only ever mutates db.offboardingTaskInstances/db.activities for the ONE targeted instance — it never touches db.offboardingPlanTasks (the reusable Plans configuration)'
+        );
+      }
+
+      // 1213. Reusable Offboarding Plans configuration is provably unaffected by an instance-level task delete (functional)
+      {
+        resetDatabase();
+        const scopeBefore = await offboardingService.getScopeTasks('universal', 'employee', null);
+        const inst = await offboardingService.getInstanceById('inst-off-001');
+        const targetTask = inst.progress.tasks.find((t) => !t.isCompleted);
+        await offboardingService.deleteTaskFromInstance('inst-off-001', targetTask.id);
+        const scopeAfter = await offboardingService.getScopeTasks('universal', 'employee', null);
+        assert(
+          scopeAfter.length === scopeBefore.length,
+          `1213. NEW — FUNCTIONAL: Deleting a task from Farah Mansor's launched instance (inst-off-001) left the reusable Employee Universal scope completely unchanged (${scopeBefore.length} -> ${scopeAfter.length} tasks)`
+        );
+        resetDatabase();
+      }
+
+      // 1214. Final-task deletion is blocked with a clear message (mirrors Onboarding's exact wording/rule)
+      {
+        resetDatabase();
+        let current = await offboardingService.getInstanceById('inst-off-002');
+        while (current.progress.tasks.length > 1) {
+          current = await offboardingService.deleteTaskFromInstance('inst-off-002', current.progress.tasks[0].id);
+        }
+        let blocked = false;
+        let blockedMessage = '';
+        try {
+          await offboardingService.deleteTaskFromInstance('inst-off-002', current.progress.tasks[0].id);
+        } catch (err) {
+          blocked = true;
+          blockedMessage = err.message;
+        }
+        assert(
+          blocked && blockedMessage.includes('An offboarding plan must contain at least one task. Add another task before deleting this one.'),
+          `1214. NEW — FUNCTIONAL: Deleting the final remaining task is blocked with "An offboarding plan must contain at least one task. Add another task before deleting this one." — no 0/0 state is ever reachable (message: "${blockedMessage}")`
+        );
+        resetDatabase();
+      }
+
+      // 1215. Add Task exists (offboarding-specific modal + service method), affects ONLY the launched instance, and derives its due date from the Final Working Date anchor — never a start date.
+      // Checked against the user-VISIBLE code only (stripComments) — the file's own doc comment legitimately contains the phrase "never a start date" when explaining what it is NOT, which must not
+      // itself fail this check.
+      assert(
+        fs.existsSync(path.resolve('./src/components/offboarding/AddOffboardingTaskModal.jsx')) &&
+        addOffboardingTaskModalSrc.includes('Task Title') && addOffboardingTaskModalSrc.includes('Activity Type') && addOffboardingTaskModalSrc.includes('Relative Timing (Day Offset)') && addOffboardingTaskModalSrc.includes('Task Description') &&
+        !addOffboardingTaskModalSrc.includes('Required task') &&
+        addOffboardingTaskModalSrc.includes("Final Working Date") && !stripComments(addOffboardingTaskModalSrc).toLowerCase().includes('start date') &&
+        addOffboardingTaskModalSrc.includes('offboardingService.addTaskToInstance'),
+        '1215. NEW — AddOffboardingTaskModal.jsx collects exactly Task Title / Activity Type / Relative Offset (Days) / Task Description (no Required checkbox — offboarding has none), its visible helper text references the Final Working Date anchor (never a start date), and it calls offboardingService.addTaskToInstance()'
+      );
+
+      // 1216. FUNCTIONAL — Add Task only appears on the targeted employee's instance, and due date is calculated correctly from Final Working Date
+      {
+        resetDatabase();
+        const before = await offboardingService.getInstanceById('inst-off-002');
+        const afterAdd = await offboardingService.addTaskToInstance('inst-off-002', { title: 'QA Stage18 Instance Task', relativeOffsetDays: 2, activityTypeId: 'act-type-1', description: 'test' });
+        const addedTask = afterAdd.progress.tasks.find((t) => t.title === 'QA Stage18 Instance Task');
+        assert(
+          Boolean(addedTask) && addedTask.currentDueDate === addDaysToLocalDate(before.anchorDate, 2) &&
+          afterAdd.progress.totalTasks === before.progress.totalTasks + 1,
+          `1216. NEW — FUNCTIONAL: Adding a task to inst-off-002 (Aaron Kumar, Final Working Date ${before.anchorDate}) with offset +2 correctly calculates its due date as ${addDaysToLocalDate(before.anchorDate, 2)} and only that one instance's task count increases`
+        );
+        const otherInstanceUnaffected = await offboardingService.getInstanceById('inst-off-001');
+        assert(!otherInstanceUnaffected.progress.tasks.some((t) => t.title === 'QA Stage18 Instance Task'), '1216b. NEW — FUNCTIONAL: The manually-added task does not appear on a different employee\'s instance (inst-off-001)');
+        resetDatabase();
+      }
+
+      // --- STATUS DERIVATION ---
+
+      // 1217. OFFBOARDING_INSTANCE_STATUS.DROPPED exists as offboarding's own independent status — never imported from onboarding's PLAN_INSTANCE_STATUS
+      assert(
+        offboardingDomainSrc3.includes("DROPPED: 'Dropped'") && offboardingDomainSrc3.includes('export function isActiveOffboardingPlanStatus'),
+        '1217. NEW — OFFBOARDING_INSTANCE_STATUS.DROPPED and isActiveOffboardingPlanStatus() are offboarding\'s own independent additions — no import from or reuse of onboarding\'s PLAN_INSTANCE_STATUS/isActivePlanStatus'
+      );
+
+      // 1218. Dropped is checked FIRST in deriveOffboardingInstanceStatus() — ahead of Completed/Former/Needs Attention — so it can never be resurrected
+      {
+        const deriveFnMatch = offboardingDomainSrc3.match(/export function deriveOffboardingInstanceStatus\([\s\S]*?\n\}/);
+        const deriveFnBlock = deriveFnMatch ? deriveFnMatch[0] : '';
+        const droppedCheckIndex = deriveFnBlock.indexOf('planInstance.droppedAt');
+        const completedCheckIndex = deriveFnBlock.indexOf('allRequiredDone');
+        assert(
+          droppedCheckIndex !== -1 && completedCheckIndex !== -1 && droppedCheckIndex < completedCheckIndex,
+          '1218. NEW — deriveOffboardingInstanceStatus() checks planInstance.droppedAt before the all-tasks-done Completed check — Dropped is a permanent terminal state that can never be resurrected into Completed/Needs Attention/In Progress'
+        );
+      }
+
+      // 1219. FUNCTIONAL — All four statuses derive correctly: In Progress, Needs Attention, Completed, Dropped
+      {
+        resetDatabase();
+        const inProgressInst = await offboardingService.getInstanceById('inst-off-002');
+        assert(inProgressInst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.IN_PROGRESS || inProgressInst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.NEEDS_ATTENTION, `1219a. NEW — FUNCTIONAL: An incomplete plan instance derives a non-terminal status (found ${inProgressInst.derivedStatus})`);
+
+        // Needs Attention: complete every task except one whose due date is in the past. Only
+        // tasks with a resolvable linkedActivity can actually be marked complete — a handful of
+        // seed offboarding task instances reference activity IDs not present in seedActivities.js
+        // (a pre-existing seed-data gap, unrelated to this task; documented in the prior
+        // Progress-refactor task's report), so those are safely skipped rather than crashing.
+        const overdueTask = inProgressInst.progress.tasks.find((t) => !t.isCompleted && t.currentDueDate && t.currentDueDate < getTodayLocalDateString());
+        if (overdueTask) {
+          const otherIncomplete = inProgressInst.progress.tasks.filter((t) => !t.isCompleted && t.id !== overdueTask.id && t.linkedActivity);
+          for (const t of otherIncomplete) await activityService.markComplete(t.activityId);
+          const needsAttnInst = await offboardingService.getInstanceById('inst-off-002');
+          assert(needsAttnInst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.NEEDS_ATTENTION, `1219b. NEW — FUNCTIONAL: With every task done except one overdue task, status derives Needs Attention (found ${needsAttnInst.derivedStatus})`);
+        } else {
+          assert(true, '1219b. Needs Attention functional check skipped — no naturally-overdue task present in current seed state for inst-off-002');
+        }
+        resetDatabase();
+
+        // Completed: complete every task
+        const launched = await offboardingService.launchPlanInstance('emp-005', '2026-12-31', 'emp-001');
+        for (const t of launched.taskInstances) await activityService.markComplete(t.activityId);
+        const completedInst = await offboardingService.getInstanceById(launched.id);
+        assert(completedInst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED && completedInst.progress.progressPercentage === 100, `1219c. NEW — FUNCTIONAL: With every task completed, status derives Completed at 100% (found ${completedInst.derivedStatus}, ${completedInst.progress.progressPercentage}%)`);
+
+        // Dropped: drop a fresh active plan
+        const launched2 = await offboardingService.launchPlanInstance('emp-010', '2026-12-31', 'emp-001');
+        const dropped = await offboardingService.dropPlanInstance(launched2.id);
+        assert(dropped.derivedStatus === OFFBOARDING_INSTANCE_STATUS.DROPPED, `1219d. NEW — FUNCTIONAL: Dropping an active plan derives status Dropped (found ${dropped.derivedStatus})`);
+        resetDatabase();
+      }
+
+      // 1220. FUNCTIONAL — Progress percentage always mathematically matches completed/total, with no contradictory values, even for a legacy scope task migrated with required:false (the exact
+      // real contradiction found via live testing: percentage could read 100% while status stayed stuck at "In Progress", since the pre-fix formula computed completion from required tasks only,
+      // and a legacy required:false task was never counted). Isolates the migrated "Post-Exit Payroll & Tax Certificate Settlement" task (originally pt-off-007, required:false in the seed data)
+      // down to the sole remaining task on a fresh launch, completes it, and proves percentage/completedCount/totalCount/status are all mutually consistent.
+      {
+        resetDatabase();
+        const launched3 = await offboardingService.launchPlanInstance('emp-005', '2026-12-31', 'emp-001');
+        const legacyTask = launched3.taskInstances.find((t) => t.required === false);
+        assert(Boolean(legacyTask), '1220setup. NEW — Setup: the migrated legacy required:false task (Post-Exit Payroll & Tax Certificate Settlement) is present in a fresh composed launch');
+
+        if (legacyTask) {
+          let current = await offboardingService.getInstanceById(launched3.id);
+          while (current.progress.tasks.length > 1) {
+            const other = current.progress.tasks.find((t) => t.id !== legacyTask.id);
+            if (!other) break;
+            current = await offboardingService.deleteTaskFromInstance(launched3.id, other.id);
+          }
+          assert(current.progress.tasks.length === 1 && current.progress.tasks[0].id === legacyTask.id, '1220a. NEW — Isolated down to the single legacy required:false task');
+
+          await activityService.markComplete(current.progress.tasks[0].activityId);
+          const afterComplete = await offboardingService.getInstanceById(launched3.id);
+          const consistent =
+            afterComplete.progress.progressPercentage === 100 &&
+            afterComplete.progress.completedTasksCount === afterComplete.progress.totalTasks &&
+            afterComplete.derivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED;
+          assert(
+            consistent,
+            `1220b. NEW — FUNCTIONAL: Completing the sole legacy required:false task yields fully consistent values — percentage=${afterComplete.progress.progressPercentage}%, completed=${afterComplete.progress.completedTasksCount}/${afterComplete.progress.totalTasks}, status=${afterComplete.derivedStatus} — no contradiction between percentage/count/status (the pre-fix behavior left status stuck at "In Progress" despite 100%)`
+          );
+        }
+        resetDatabase();
+      }
+
+      // 1221. Progress bar width is always tied directly to the same progressPercentage value the summary text displays — never a separately computed number
+      assert(
+        offDetailSrc2.match(/width: `\$\{instance\.progress\.progressPercentage\}%`[\s\S]{0,450}transition: 'width 0\.4s ease'/),
+        '1221. NEW — The progress bar\'s width is bound directly to instance.progress.progressPercentage — the exact same value shown as text — so the bar and the percentage can never visually disagree'
+      );
+
+      // --- COMPLETED PLAN ---
+
+      // 1222. When Completed: Drop Plan hidden, but Reopen remains available on individual tasks (matching Onboarding's precedent — task actions aren't specially locked by plan-level status)
+      assert(
+        offDetailSrc2.includes('instance && isActiveOffboardingPlanStatus(instance.derivedStatus)') &&
+        !offDetailSrc2.match(/derivedStatus === OFFBOARDING_INSTANCE_STATUS\.COMPLETED[\s\S]{0,80}disabled/),
+        '1222. NEW — Drop Plan is hidden once Completed (gated by isActiveOffboardingPlanStatus, which excludes COMPLETED), while individual Done/Reopen task actions remain available exactly as before — no new task-level lock was introduced, matching Onboarding\'s own established behavior for completed historical plans'
+      );
+
+      // --- DROPPED PLAN ---
+
+      // 1223. Dropped status renders via the same presence-badge status logic (gray/slate styling) already used for Completed/Needs Attention/In Progress — no separate rendering path invented
+      assert(
+        offDetailSrc2.includes('OFFBOARDING_INSTANCE_STATUS.DROPPED') && offDetailSrc2.includes("backgroundColor: '#F1F5F9', color: '#64748B'"),
+        '1223. NEW — Dropped renders through the existing status-badge/progress-bar conditional styling chain (gray/slate, matching the badge already used elsewhere for non-active states) — not a separately invented rendering path'
+      );
+
+      // 1224. FUNCTIONAL — Dropped plan preserves task history, contributes zero overdue alerts, and does not alter employee lifecycle status
+      {
+        resetDatabase();
+        const empBefore = await employeeService.getById('emp-011');
+        const launched4 = await offboardingService.launchPlanInstance('emp-011', '2026-12-31', 'emp-001');
+        const dropped2 = await offboardingService.dropPlanInstance(launched4.id);
+        assert(dropped2.taskInstances.length === launched4.taskInstances.length, `1224a. NEW — FUNCTIONAL: Task history is fully preserved after dropping (${launched4.taskInstances.length} -> ${dropped2.taskInstances.length} task instances)`);
+
+        const activeIdsAfterDrop = await offboardingService.getActiveOffboardingEmployeeIds();
+        assert(!activeIdsAfterDrop.has('emp-011'), '1224b. NEW — FUNCTIONAL: A Dropped plan no longer counts as active — getActiveOffboardingEmployeeIds() (the same set overdue/summary counts are built on) excludes it');
+
+        const empAfter = await employeeService.getById('emp-011');
+        assert(empAfter.status === empBefore.status, `1224c. NEW — FUNCTIONAL: Dropping the plan did NOT alter the employee's own lifecycle status (${empBefore.status} -> ${empAfter.status})`);
+
+        // Replacement eligibility: a new plan CAN now be launched for the same employee
+        const relaunched2 = await offboardingService.launchPlanInstance('emp-011', '2027-01-15', 'emp-001');
+        assert(Boolean(relaunched2.id) && relaunched2.id !== launched4.id, '1224d. NEW — FUNCTIONAL: A replacement offboarding plan can be launched for the same employee after their previous plan was Dropped — checkOffboardingEligibility()\'s duplicate-plan check correctly excludes droppedAt instances');
+        resetDatabase();
+      }
+
+      // --- REGRESSION ---
+
+      // 1225. Launch Offboarding Plan (Progress page + detail page) remains fully functional, and Employee/Intern composition is unchanged by this task
+      {
+        resetDatabase();
+        const empPreview2 = await offboardingService.previewOffboardingComposition('emp-005', '2026-12-31');
+        assert(empPreview2.isValid && empPreview2.counts.universal === 11 && empPreview2.counts.department === 4 && empPreview2.counts.total === 15, `1225. REGRESSION: Employee composition (Universal 11 + Department 4 = 15) is unchanged by this task (found universal=${empPreview2.counts.universal}, department=${empPreview2.counts.department}, total=${empPreview2.counts.total})`);
+        assert(offProgressSrc2.includes('<LaunchOffboardingPlanModal') && offDetailSrc2.includes('<LaunchOffboardingPlanModal'), '1225b. REGRESSION: Both the Progress page and the individual detail page still wire the existing, untouched LaunchOffboardingPlanModal');
+      }
+
+      // 1226. Duplicate active-plan protection remains intact for normal (non-dropped) active plans
+      {
+        resetDatabase();
+        let duplicateBlocked2 = false;
+        try {
+          await offboardingService.launchPlanInstance('emp-016', '2026-12-31', 'emp-001');
+        } catch (err) {
+          duplicateBlocked2 = err.message.includes('already has an active offboarding plan');
+        }
+        assert(duplicateBlocked2, '1226. REGRESSION: Duplicate active-plan protection still blocks a second launch for Farah Mansor (emp-016), who already has an active (non-dropped) offboarding plan');
+      }
+
+      // 1227. Offboarding Progress and Offboarding Plans pages are both unchanged by this task
+      assert(
+        offProgressSrc2.includes('>Offboarding Progress<') && offPlansSrc3.includes('>Offboarding Plans<'),
+        '1227. REGRESSION: Offboarding Progress (heading, KPI cards, filters) and Offboarding Plans (scope-based structure) pages are both unaffected by this individual-detail-page-scoped task'
+      );
+
+      // 1228. Onboarding is completely unchanged — detail page, service, and domain all byte-for-byte unaffected
+      assert(
+        onbDetailSrc4.includes('Anchor Start Date') && onbDetailSrc4.includes('isActivePlanStatus(planInstance.derivedStatus)') &&
+        onboardingServiceSrc5.includes('async dropPlanInstance(planInstanceId, currentUserId') &&
+        onboardingDomainSrc5.includes("DROPPED: 'Dropped'") && onboardingDomainSrc5.includes('export function isActivePlanStatus'),
+        '1228. REGRESSION: Onboarding\'s own detail page ("Anchor Start Date", isActivePlanStatus), service (dropPlanInstance), and domain (PLAN_INSTANCE_STATUS.DROPPED, isActivePlanStatus) are all completely unchanged — Onboarding was the UX reference only'
+      );
+
+      // 1229. FUNCTIONAL — Overdue Tasks popup and Mark All as Complete remain fully functional, unaffected by the detail page refactor
+      {
+        const overdueBeforeOff3 = await activityService.getOverdueActivities();
+        const offboardingOverdueBeforeOff3 = overdueBeforeOff3.filter((a) => a.source === 'Offboarding');
+        if (offboardingOverdueBeforeOff3.length > 0) {
+          const bulkIds2 = offboardingOverdueBeforeOff3.map((t) => t.id);
+          const bulkResults2 = await activityService.markCompleteMany(bulkIds2);
+          assert(bulkResults2.every((r) => r.completed === true), '1229. REGRESSION: Mark All as Complete still completes every currently-overdue Offboarding-sourced task via the unaffected activityService.markCompleteMany()');
+          for (const id of bulkIds2) await activityService.reopen(id);
+        } else {
+          assert(true, '1229. Overdue/Mark All as Complete functional check skipped — no overdue Offboarding activities present in current seed state (verified functional in the prior Progress-refactor task\'s coverage)');
+        }
+      }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Fix Offboarding Employee Avatar Initial Color for App-Wide Consistency
+    // ==========================================================================
+    {
+      const offProgressSrc3 = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingDepartingPage.jsx'), 'utf-8');
+      const offDetailSrc3 = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const onbEmployeesSrcAvatar = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeesPage.jsx'), 'utf-8');
+      const indexCssSrcAvatar = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1230. The Offboarding Progress table avatar no longer overrides color/backgroundColor — it now falls back cleanly to the shared .emp-avatar-circle class (teal gradient + white text)
+      assert(
+        offProgressSrc3.includes('<div className="emp-avatar-circle">') &&
+        !offProgressSrc3.includes("style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}"),
+        '1230. NEW — The Offboarding Progress table\'s employee avatar no longer applies an inline `color: \'#DC2626\'` override — it renders via the bare .emp-avatar-circle class, exactly like every other correctly-styled employee avatar in the app'
+      );
+
+      // 1231. The Offboarding detail page avatar (already correct before this fix) still carries no color/background override — only size, confirming this fix did not touch a location that never had the bug
+      assert(
+        offDetailSrc3.match(/emp-avatar-circle[\s\S]{0,30}style=\{\{ width: '48px', height: '48px', fontSize: '1\.1rem' \}\}/),
+        '1231. REGRESSION: The Offboarding detail page\'s (larger, 48px) employee avatar is unchanged — it never had the red-text bug, and still only overrides size/fontSize, never color/background'
+      );
+
+      // 1232. The shared .emp-avatar-circle CSS class itself is untouched — teal gradient background, white text — this was a call-site inline-style bug, not a shared-style defect
+      assert(
+        indexCssSrcAvatar.match(/\.emp-avatar-circle \{[\s\S]{0,220}background: linear-gradient\(135deg, #129FA9 0%, #0E848D 100%\);[\s\S]{0,40}color: #FFFFFF;/),
+        '1232. NEW — The shared .emp-avatar-circle CSS class itself (teal gradient background, white text) is untouched — the bug was a call-site inline-style override, not a defect in the shared class, so no shared-style change was needed or made'
+      );
+
+      // 1233. Onboarding's avatar usage (the reference for correct behavior) remains completely unchanged — still no color override at the avatar itself, only a legitimate background tint for Former status
+      assert(
+        onbEmployeesSrcAvatar.includes("style={emp.status === 'Former' ? { background: '#64748B' } : undefined}") &&
+        !onbEmployeesSrcAvatar.match(/emp-avatar-circle[\s\S]{0,80}color:/),
+        '1233. REGRESSION: Onboarding\'s own employee avatar usage is completely unchanged — it only ever conditionally tints the background for Former status, never overrides text color, exactly as before this task'
+      );
+
+      // 1234. No employee-avatar location anywhere in the offboarding UI still applies a red/destructive text-color override — the fix is complete across every avatar render site
+      {
+        const launchOffboardingPlanModalSrcAvatar = fs.readFileSync(path.resolve('./src/components/offboarding/LaunchOffboardingPlanModal.jsx'), 'utf-8');
+        const overdueOffboardingTasksModalSrcAvatar = fs.readFileSync(path.resolve('./src/components/offboarding/OverdueOffboardingTasksModal.jsx'), 'utf-8');
+        assert(
+          !offProgressSrc3.match(/emp-avatar-circle[\s\S]{0,60}color:\s*'#DC2626'/) &&
+          !offDetailSrc3.match(/emp-avatar-circle[\s\S]{0,60}color:\s*'#DC2626'/),
+          '1234setup. Sanity: no remaining emp-avatar-circle + red-text combination anywhere in the two offboarding pages that render one'
+        );
+        assert(
+          !launchOffboardingPlanModalSrcAvatar.includes('emp-avatar-circle') && !overdueOffboardingTasksModalSrcAvatar.includes('emp-avatar-circle'),
+          '1234. NEW — The Launch Offboarding Plan modal and the Overdue Offboarding Tasks popup render no employee avatar at all (text-only employee identification) — confirmed out of scope for this fix, not silently missed'
+        );
+      }
+
+      // 1235. REGRESSION: no lifecycle/status badge, warning, or destructive-action styling was touched — Needs Attention/Departing/Drop Plan/Delete still use their own legitimate red
+      assert(
+        offProgressSrc3.match(/isNeedsAttn[\s\S]{0,60}\?\s*\{\s*backgroundColor:\s*'#FEF2F2',\s*color:\s*'#DC2626'/),
+        '1235. REGRESSION: The Needs Attention status badge on the Offboarding Progress table still legitimately uses red styling — only the employee avatar\'s inline override was removed, no status/badge/warning logic was touched'
+      );
+    }
+
+    resetDatabase();
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);

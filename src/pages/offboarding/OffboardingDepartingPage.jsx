@@ -3,27 +3,35 @@ import { Link } from 'react-router-dom';
 import {
   Users,
   Search,
-  Filter,
-  Play,
   ArrowUpRight,
+  UsersRound,
+  GraduationCap,
   AlertTriangle,
   CheckCircle2,
   Clock,
-  UserX,
+  Play,
 } from 'lucide-react';
 import { offboardingService } from '../../services/offboardingService.js';
-import { employeeService } from '../../services/employeeService.js';
+import { activityService } from '../../services/activityService.js';
 import { OFFBOARDING_INSTANCE_STATUS } from '../../domain/offboardingDomain.js';
 import LaunchOffboardingPlanModal from '../../components/offboarding/LaunchOffboardingPlanModal.jsx';
+import OverdueOffboardingTasksModal from '../../components/offboarding/OverdueOffboardingTasksModal.jsx';
 
+// Canonical Offboarding Progress page — consolidates what used to be split across the separate
+// Offboarding Dashboard (KPI cards + overdue exit tasks panel) and Offboarding Employee Directory
+// ("Departing Employees", the filterable instance table) pages. Both of those routes/nav entries
+// were retired; this page keeps serving the existing /offboarding/departing route so no internal
+// link needed to change. Offboarding's own instance/status model (OFFBOARDING_INSTANCE_STATUS,
+// derivedStatus) is used throughout — nothing from onboardingDomain is imported here.
 export default function OffboardingDepartingPage() {
   const [instances, setInstances] = useState([]);
-  const [employees, setEmployees] = useState([]);
+  const [overdueTasks, setOverdueTasks] = useState([]);
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all'); // 'all' | 'Employee' | 'Intern'
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('departing'); // 'departing' | 'needsAttention' | 'completed' | 'all'
-  const [searchQuery, setSearchQuery] = useState('');
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
-  const [selectedLaunchEmpId, setSelectedLaunchEmpId] = useState(null);
+  const [isOverdueModalOpen, setIsOverdueModalOpen] = useState(false);
+  const [isMarkingAllComplete, setIsMarkingAllComplete] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -32,62 +40,99 @@ export default function OffboardingDepartingPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [allInsts, allEmps] = await Promise.all([
-        offboardingService.getAllInstances(),
-        employeeService.getAll(),
-      ]);
+      const allInsts = await offboardingService.getAllInstances();
       setInstances(allInsts);
-      setEmployees(allEmps);
+
+      // Fetch overdue activities that belong to Offboarding — same source-filtered query the old
+      // Dashboard used, just now surfaced through the popup pattern instead of an inline panel.
+      const overdues = await activityService.getOverdueActivities();
+      const offboardingOverdues = overdues.filter((a) => a.source === 'Offboarding');
+      setOverdueTasks(offboardingOverdues);
     } catch (err) {
-      console.error('Failed to load offboarding directory data:', err);
+      console.error('Failed to load offboarding progress data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLaunchForEmployee = (empId) => {
-    setSelectedLaunchEmpId(empId);
-    setIsLaunchModalOpen(true);
-  };
+  // Summary card metrics — same derivedStatus-based calculations the old Dashboard used.
+  const activeInstances = instances.filter((i) => i.derivedStatus !== OFFBOARDING_INSTANCE_STATUS.COMPLETED);
+  const inProgressCount = instances.filter((i) => i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.IN_PROGRESS).length;
+  const needsAttentionCount = instances.filter((i) => i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.NEEDS_ATTENTION).length;
+  const completedCount = instances.filter((i) => i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED).length;
 
-  // Filter instances by active tab and search query
+  // Offboarding progress population: everyone with a current (or historical) offboarding plan
+  // instance. Unlike Onboarding's Employees page, this intentionally does NOT also list
+  // Departing/Former employees who have no instance yet — that population was never shown here
+  // before this refactor, and inventing it is out of scope for a navigation/consolidation task.
   const filteredInstances = instances.filter((inst) => {
     const emp = inst.employee || {};
-    const matchesSearch =
-      !searchQuery ||
-      emp.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.employeeId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inst.template?.name?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    if (!matchesSearch) return false;
+    if (typeFilter !== 'all' && emp.directoryType !== typeFilter) return false;
 
-    if (activeTab === 'departing') {
-      return emp.status === 'Departing' || inst.derivedStatus !== OFFBOARDING_INSTANCE_STATUS.COMPLETED;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const matchName = emp.fullName?.toLowerCase().includes(q);
+      const matchId = emp.employeeId?.toLowerCase().includes(q);
+      const matchTemplate = inst.template?.name?.toLowerCase().includes(q);
+      if (!matchName && !matchId && !matchTemplate) return false;
     }
-    if (activeTab === 'needsAttention') {
-      return inst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.NEEDS_ATTENTION;
-    }
-    if (activeTab === 'completed') {
-      return inst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED;
-    }
-    return true; // 'all'
+
+    return true;
   });
+
+  const handleMarkTaskComplete = async (actId) => {
+    try {
+      await activityService.markComplete(actId);
+      await loadData();
+    } catch (err) {
+      alert(`Failed to complete task: ${err.message}`);
+    }
+  };
+
+  // Mirrors the Onboarding Progress page's "Mark All as Complete" behavior exactly: executes
+  // immediately (no confirmation step), targets only the exact set of activity IDs shown in the
+  // popup at click time, and guards against a double-click firing the bulk completion twice.
+  const handleMarkAllOverdueComplete = async () => {
+    if (isMarkingAllComplete) return;
+    setIsMarkingAllComplete(true);
+    try {
+      const idsToComplete = overdueTasks.map((t) => t.id);
+      await activityService.markCompleteMany(idsToComplete);
+      await loadData();
+    } catch (err) {
+      alert(`Failed to complete overdue tasks: ${err.message}`);
+    } finally {
+      setIsMarkingAllComplete(false);
+    }
+  };
 
   return (
     <div className="page-layout-container">
       {/* Page Header */}
       <div className="onboarding-dashboard-header">
         <div className="header-text-group">
-          <h1 className="page-title">Offboarding Employee Directory</h1>
+          <h1 className="page-title">Offboarding Progress</h1>
           <p className="page-subtitle">
-            Track clearance progress, final working dates, and historical offboarding workflows.
+            View and track individual offboarding progress for employees and interns.
           </p>
         </div>
         <div className="header-actions">
           <button
             type="button"
+            className="btn-secondary btn-header-action candidate-notification-btn"
+            onClick={() => setIsOverdueModalOpen(true)}
+          >
+            <AlertTriangle size={15} />
+            <span>Overdue Tasks</span>
+            {overdueTasks.length > 0 && (
+              <span className="candidate-notification-badge">{overdueTasks.length}</span>
+            )}
+          </button>
+          <button
+            type="button"
             className="btn-primary btn-header-action"
-            onClick={() => handleLaunchForEmployee(null)}
+            onClick={() => setIsLaunchModalOpen(true)}
           >
             <Play size={15} />
             <span>Launch Offboarding Plan</span>
@@ -95,220 +140,265 @@ export default function OffboardingDepartingPage() {
         </div>
       </div>
 
-      {/* Directory Filter Bar & Tabs */}
-      <div className="table-container-card" style={{ padding: '1rem', marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          
-          {/* Tabs */}
-          <div style={{ display: 'flex', gap: '0.35rem', backgroundColor: '#F1F5F9', padding: '0.25rem', borderRadius: '8px' }}>
-            <button
-              type="button"
-              className={`filter-tab-btn ${activeTab === 'departing' ? 'active' : ''}`}
-              onClick={() => setActiveTab('departing')}
+      {/* Metric KPI Summary Grid */}
+      <div className="summary-cards-grid" style={{ marginBottom: '1.75rem' }}>
+        <div className="summary-card">
+          <div className="summary-card-header">
+            <span className="summary-card-title">Active Exit Plans</span>
+            <div
+              className="summary-card-icon"
               style={{
-                padding: '0.4rem 0.85rem',
-                fontSize: '0.815rem',
-                fontWeight: 600,
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                backgroundColor: activeTab === 'departing' ? '#FFF' : 'transparent',
-                color: activeTab === 'departing' ? 'var(--color-primary)' : 'var(--text-muted)',
-                boxShadow: activeTab === 'departing' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                backgroundColor: 'var(--color-primary-light)',
+                color: 'var(--color-primary-active)',
+                borderColor: '#99E6EB',
               }}
             >
-              Departing ({instances.filter((i) => i.derivedStatus !== OFFBOARDING_INSTANCE_STATUS.COMPLETED).length})
-            </button>
-            <button
-              type="button"
-              className={`filter-tab-btn ${activeTab === 'needsAttention' ? 'active' : ''}`}
-              onClick={() => setActiveTab('needsAttention')}
-              style={{
-                padding: '0.4rem 0.85rem',
-                fontSize: '0.815rem',
-                fontWeight: 600,
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                backgroundColor: activeTab === 'needsAttention' ? '#FFF' : 'transparent',
-                color: activeTab === 'needsAttention' ? '#DC2626' : 'var(--text-muted)',
-                boxShadow: activeTab === 'needsAttention' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-              }}
-            >
-              Needs Attention ({instances.filter((i) => i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.NEEDS_ATTENTION).length})
-            </button>
-            <button
-              type="button"
-              className={`filter-tab-btn ${activeTab === 'completed' ? 'active' : ''}`}
-              onClick={() => setActiveTab('completed')}
-              style={{
-                padding: '0.4rem 0.85rem',
-                fontSize: '0.815rem',
-                fontWeight: 600,
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                backgroundColor: activeTab === 'completed' ? '#FFF' : 'transparent',
-                color: activeTab === 'completed' ? '#059669' : 'var(--text-muted)',
-                boxShadow: activeTab === 'completed' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-              }}
-            >
-              Completed ({instances.filter((i) => i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED).length})
-            </button>
-            <button
-              type="button"
-              className={`filter-tab-btn ${activeTab === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveTab('all')}
-              style={{
-                padding: '0.4rem 0.85rem',
-                fontSize: '0.815rem',
-                fontWeight: 600,
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                backgroundColor: activeTab === 'all' ? '#FFF' : 'transparent',
-                color: activeTab === 'all' ? 'var(--text-main)' : 'var(--text-muted)',
-                boxShadow: activeTab === 'all' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-              }}
-            >
-              All Workflows ({instances.length})
-            </button>
+              <Users size={17} />
+            </div>
           </div>
-
-          {/* Search Box */}
-          <div style={{ position: 'relative', width: '260px' }}>
-            <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input
-              type="text"
-              placeholder="Search employee or template..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.45rem 0.75rem 0.45rem 2.25rem',
-                fontSize: '0.825rem',
-                border: '1px solid var(--border-light)',
-                borderRadius: '20px',
-                outline: 'none',
-                backgroundColor: '#FFF',
-              }}
-            />
+          <div className="summary-card-value" style={{ color: 'var(--color-primary-active)' }}>
+            {activeInstances.length}
           </div>
+          <div className="summary-card-subtext">Departing staff actively offboarding</div>
+        </div>
 
+        <div className="summary-card">
+          <div className="summary-card-header">
+            <span className="summary-card-title">In Progress</span>
+            <div
+              className="summary-card-icon"
+              style={{
+                backgroundColor: '#EFF6FF',
+                color: '#2563EB',
+                borderColor: '#BFDBFE',
+              }}
+            >
+              <Clock size={17} />
+            </div>
+          </div>
+          <div className="summary-card-value" style={{ color: '#2563EB' }}>
+            {inProgressCount}
+          </div>
+          <div className="summary-card-subtext">On-track clearance workflows</div>
+        </div>
+
+        <div className="summary-card">
+          <div className="summary-card-header">
+            <span className="summary-card-title">Needs Attention</span>
+            <div
+              className="summary-card-icon"
+              style={{
+                backgroundColor: '#FEF2F2',
+                color: '#DC2626',
+                borderColor: '#FECACA',
+              }}
+            >
+              <AlertTriangle size={17} />
+            </div>
+          </div>
+          <div className="summary-card-value" style={{ color: '#DC2626' }}>
+            {needsAttentionCount}
+          </div>
+          <div className="summary-card-subtext">Overdue tasks or unassigned items</div>
+        </div>
+
+        <div className="summary-card">
+          <div className="summary-card-header">
+            <span className="summary-card-title">Completed Exit Plans</span>
+            <div
+              className="summary-card-icon"
+              style={{
+                backgroundColor: '#ECFDF5',
+                color: '#059669',
+                borderColor: '#A7F3D0',
+              }}
+            >
+              <CheckCircle2 size={17} />
+            </div>
+          </div>
+          <div className="summary-card-value" style={{ color: '#059669' }}>
+            {completedCount}
+          </div>
+          <div className="summary-card-subtext">Fully cleared former staff</div>
         </div>
       </div>
 
-      {/* Directory Table */}
+      {/* Filter Bar */}
+      <div className="table-toolbar-card" style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem', padding: '0.75rem 1rem', flexWrap: 'wrap' }}>
+        <div className="view-switcher-group">
+          <button
+            type="button"
+            className={`view-btn ${typeFilter === 'all' ? 'active' : ''}`}
+            onClick={() => setTypeFilter('all')}
+          >
+            <Users size={15} />
+            <span>All</span>
+          </button>
+          <button
+            type="button"
+            className={`view-btn ${typeFilter === 'Employee' ? 'active' : ''}`}
+            onClick={() => setTypeFilter('Employee')}
+          >
+            <UsersRound size={15} />
+            <span>Employees</span>
+          </button>
+          <button
+            type="button"
+            className={`view-btn ${typeFilter === 'Intern' ? 'active' : ''}`}
+            onClick={() => setTypeFilter('Intern')}
+          >
+            <GraduationCap size={15} />
+            <span>Interns</span>
+          </button>
+        </div>
+
+        <div className="toolbar-search-box" style={{ maxWidth: '280px' }}>
+          <Search size={16} className="toolbar-search-icon" />
+          <input
+            type="text"
+            className="toolbar-search-input"
+            placeholder="Search employee name or ID"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Progress Table */}
       <div className="table-container-card">
         {loading ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-            Loading offboarding directory...
+          <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            Loading offboarding progress...
           </div>
         ) : filteredInstances.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-            No offboarding workflows found for the selected filter.
+            <Users size={32} style={{ marginBottom: '0.5rem', color: 'var(--border-dark)' }} />
+            <h3>No Offboarding Progress Found</h3>
+            <p style={{ fontSize: '0.85rem' }}>
+              No offboarding workflows currently match the selected filter or search query.
+            </p>
           </div>
         ) : (
-          <table className="presence-data-table" style={{ width: '100%' }}>
-            <thead>
-              <tr>
-                <th style={{ width: '25%', textAlign: 'left' }}>Employee</th>
-                <th style={{ width: '22%', textAlign: 'left' }}>Plan Template</th>
-                <th style={{ width: '16%', textAlign: 'center' }}>Final Working Date</th>
-                <th style={{ width: '15%', textAlign: 'center' }}>Status</th>
-                <th style={{ width: '14%', textAlign: 'center' }}>Progress</th>
-                <th style={{ width: '8%', textAlign: 'center' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredInstances.map((inst) => {
-                const emp = inst.employee || {};
-                const isCompleted = inst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED;
-                const isNeedsAttn = inst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.NEEDS_ATTENTION;
+          <div className="onboarding-table-scroll" style={{ overflowX: 'auto' }}>
+            <table className="presence-data-table onboarding-employees-table" style={{ width: '100%' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '22%', textAlign: 'left' }}>Employee</th>
+                  <th style={{ width: '14%', textAlign: 'left' }}>Department</th>
+                  <th style={{ width: '13%', textAlign: 'center' }}>Final Working Date</th>
+                  <th style={{ width: '17%', textAlign: 'left' }}>Offboarding Plan</th>
+                  <th style={{ width: '12%', textAlign: 'center' }}>Progress</th>
+                  <th style={{ width: '12%', textAlign: 'center' }}>Status</th>
+                  <th style={{ width: '10%', textAlign: 'center' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredInstances.map((inst) => {
+                  const emp = inst.employee || {};
+                  const isCompleted = inst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED;
+                  const isNeedsAttn = inst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.NEEDS_ATTENTION;
 
-                return (
-                  <tr key={inst.id} className="presence-table-row">
-                    <td>
-                      <div className="emp-identity-block">
-                        <div className="emp-avatar-circle" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
-                          {emp.photo || 'EM'}
-                        </div>
-                        <div className="emp-identity-text">
-                          <div className="emp-name-text" style={{ whiteSpace: 'nowrap' }}>
-                            {emp.fullName || 'Unknown Employee'}
+                  return (
+                    <tr key={inst.id} className="presence-table-row">
+                      <td>
+                        <div className="emp-identity-block">
+                          <div className="emp-avatar-circle">
+                            {emp.photo || 'EM'}
                           </div>
-                          <div className="emp-id-subtext">{emp.employeeId || 'N/A'} · {emp.status}</div>
+                          <div className="emp-identity-text">
+                            <div className="emp-name-text" style={{ whiteSpace: 'nowrap' }}>
+                              {emp.fullName || 'Unknown Employee'}
+                            </div>
+                            <div className="emp-id-subtext">{emp.employeeId || 'N/A'}</div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: '0.825rem', color: 'var(--text-main)' }}>
-                        {inst.template ? inst.template.name : 'Custom Exit Plan'}
-                      </div>
-                      <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
-                        {inst.progress.completedRequiredCount} / {inst.progress.requiredTasksCount} required tasks
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '0.815rem', fontWeight: 600 }}>
-                      {inst.anchorDate}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span
-                        style={{
-                          fontSize: '0.725rem',
-                          padding: '0.2rem 0.55rem',
-                          borderRadius: '12px',
-                          fontWeight: 700,
-                          backgroundColor: isCompleted ? '#ECFDF5' : isNeedsAttn ? '#FEF2F2' : '#EFF6FF',
-                          color: isCompleted ? '#059669' : isNeedsAttn ? '#DC2626' : '#2563EB',
-                        }}
-                      >
-                        {inst.derivedStatus}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                        <span style={{ fontSize: '0.785rem', fontWeight: 700 }}>
-                          {inst.progress.progressPercentage}%
+                      </td>
+
+                      <td>
+                        <div style={{ fontSize: '0.815rem', color: 'var(--text-main)' }}>
+                          {emp.department?.name || 'Department N/A'}
+                        </div>
+                      </td>
+
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '0.815rem' }}>
+                        {inst.anchorDate}
+                      </td>
+
+                      <td>
+                        <div style={{ fontWeight: 600, fontSize: '0.825rem', color: 'var(--text-main)' }}>
+                          {inst.template ? inst.template.name : 'Custom Exit Plan'}
+                        </div>
+                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
+                          {inst.progress.completedRequiredCount} / {inst.progress.requiredTasksCount} required tasks
+                        </div>
+                      </td>
+
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}>
+                          <div style={{ width: '60px', height: '6px', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                width: `${inst.progress.progressPercentage}%`,
+                                height: '100%',
+                                background: isNeedsAttn ? '#EF4444' : isCompleted ? '#10B981' : '#129FA9',
+                              }}
+                            />
+                          </div>
+                          <span style={{ fontSize: '0.735rem', fontWeight: 700 }}>
+                            {inst.progress.progressPercentage}%
+                          </span>
+                        </div>
+                      </td>
+
+                      <td style={{ textAlign: 'center' }}>
+                        <span
+                          className="presence-badge"
+                          style={
+                            isCompleted
+                              ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' }
+                              : isNeedsAttn
+                              ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA' }
+                              : { backgroundColor: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' }
+                          }
+                        >
+                          {inst.derivedStatus}
                         </span>
-                        <div style={{ width: '70px', height: '5px', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              width: `${inst.progress.progressPercentage}%`,
-                              height: '100%',
-                              background: isNeedsAttn ? '#EF4444' : isCompleted ? '#10B981' : '#129FA9',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <Link
-                        to={`/offboarding/employees/${emp.id}`}
-                        className="btn-compact-override"
-                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.725rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
-                      >
-                        <span>View</span>
-                        <ArrowUpRight size={12} />
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+
+                      <td style={{ textAlign: 'center' }}>
+                        <Link
+                          to={`/offboarding/employees/${emp.id}`}
+                          className="btn-compact-override"
+                          style={{ padding: '0.2rem 0.4rem', fontSize: '0.72rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', whiteSpace: 'nowrap' }}
+                        >
+                          <span>View Progress</span>
+                          <ArrowUpRight size={11} />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {/* Launch Plan Modal */}
       <LaunchOffboardingPlanModal
         isOpen={isLaunchModalOpen}
-        onClose={() => {
-          setIsLaunchModalOpen(false);
-          setSelectedLaunchEmpId(null);
-        }}
+        onClose={() => setIsLaunchModalOpen(false)}
         onSuccess={() => loadData()}
-        initialEmployeeId={selectedLaunchEmpId}
+      />
+
+      {/* Overdue Tasks Modal — Mark All as Complete executes immediately (no confirmation step) */}
+      <OverdueOffboardingTasksModal
+        isOpen={isOverdueModalOpen}
+        onClose={() => setIsOverdueModalOpen(false)}
+        tasks={overdueTasks}
+        onMarkComplete={handleMarkTaskComplete}
+        onMarkAllComplete={handleMarkAllOverdueComplete}
+        isMarkingAllComplete={isMarkingAllComplete}
       />
     </div>
   );

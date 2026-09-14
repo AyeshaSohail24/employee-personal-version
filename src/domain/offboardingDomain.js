@@ -16,7 +16,89 @@ export const OFFBOARDING_INSTANCE_STATUS = {
   IN_PROGRESS: 'In Progress',
   NEEDS_ATTENTION: 'Needs Attention',
   COMPLETED: 'Completed',
+  // Terminal state for a plan intentionally stopped/cancelled before successful completion (via
+  // "Drop Plan"). Distinct from COMPLETED (successful finish) — both are non-active for
+  // duplicate-launch eligibility, but only COMPLETED represents success. See
+  // isActiveOffboardingPlanStatus(). This is offboarding's OWN independent status model — not
+  // imported from or shared with onboardingDomain.js's PLAN_INSTANCE_STATUS.DROPPED.
+  DROPPED: 'Dropped',
 };
+
+/**
+ * Single source of truth for "is this offboarding plan instance currently active" — i.e. it can
+ * still block a duplicate launch, still contribute to overdue alerts/active summary counts, and
+ * can still be In Progress/Needs Attention. Both COMPLETED and DROPPED are non-active terminal
+ * states. Mirrors onboardingDomain.js's isActivePlanStatus() in concept only — a fully
+ * independent implementation over OFFBOARDING_INSTANCE_STATUS, never importing from
+ * onboardingDomain.js.
+ */
+export function isActiveOffboardingPlanStatus(status) {
+  return status !== OFFBOARDING_INSTANCE_STATUS.COMPLETED && status !== OFFBOARDING_INSTANCE_STATUS.DROPPED;
+}
+
+export const OFFBOARDING_TASK_SCOPES = {
+  UNIVERSAL: 'universal',
+  DEPARTMENT: 'department',
+};
+
+export const OFFBOARDING_PERSON_TYPES = {
+  EMPLOYEE: 'employee',
+  INTERN: 'intern',
+};
+
+/**
+ * Composes a departing person's full set of applicable offboarding tasks from reusable,
+ * person-type-aware scope-based task definitions: (Employee OR Intern) Universal + (Employee OR
+ * Intern) Department (by the employee's own department ID) — mirroring the same composition
+ * shape as composeOnboardingTasks(), but entirely independent: offboarding scope tasks
+ * (db.offboardingPlanTasks) are never mixed with onboarding's. Person type is resolved once from
+ * `employee.directoryType`, exactly like onboarding, and applied consistently to BOTH lookups —
+ * an Employee Universal offboarding task and an Intern Universal offboarding task are two
+ * entirely separate, non-overlapping task sets, and likewise for Department. This is the SINGLE
+ * source of offboarding composition truth — the Plans page's per-type summary, the Launch modal's
+ * preview, and the actual launch transaction all call this same function (or service methods
+ * built directly on it) with the same inputs, so a previewed count can never drift from what
+ * actually gets launched. `anchorDate` here is the resolved Final Working Date/departure anchor
+ * (never an onboarding start-date anchor).
+ */
+export function composeOffboardingTasks(employee, taskDefinitions = [], anchorDate = null) {
+  const personType = employee && employee.directoryType === 'Intern'
+    ? OFFBOARDING_PERSON_TYPES.INTERN
+    : OFFBOARDING_PERSON_TYPES.EMPLOYEE;
+  const departmentId = (employee && employee.department && employee.department.id) || null;
+
+  const bySequence = (a, b) => (a.sequence || 0) - (b.sequence || 0);
+  const activeDefs = (taskDefinitions || []).filter((t) => t && t.active !== false);
+
+  const universalTasks = activeDefs
+    .filter((t) => t.scopeType === OFFBOARDING_TASK_SCOPES.UNIVERSAL && t.personType === personType)
+    .sort(bySequence);
+
+  const departmentTasks = departmentId
+    ? activeDefs
+        .filter((t) => t.scopeType === OFFBOARDING_TASK_SCOPES.DEPARTMENT && t.personType === personType && t.scopeDepartmentId === departmentId)
+        .sort(bySequence)
+    : [];
+
+  const composed = [...universalTasks, ...departmentTasks];
+
+  const tasks = composed.map((t, idx) => ({
+    ...t,
+    scopeSequence: t.sequence,
+    sequence: idx + 1,
+    calculatedDueDate: anchorDate ? addDaysToLocalDate(anchorDate, t.relativeOffsetDays || 0) : null,
+  }));
+
+  const counts = {
+    universal: universalTasks.length,
+    department: departmentTasks.length,
+    typeSpecific: universalTasks.length,
+    total: tasks.length,
+    required: tasks.filter((t) => t.required).length,
+  };
+
+  return { tasks, personType, typeScope: personType, departmentId, counts };
+}
 
 /**
  * Resolves the canonical employment end date / final working date anchor for offboarding.
@@ -88,9 +170,12 @@ export function checkOffboardingEligibility(
     };
   }
 
-  // Check one active plan policy
+  // Check one active plan policy — a Dropped plan (droppedAt set) is a non-active terminal state,
+  // exactly like a Completed one, so it must NOT block a replacement launch. This mirrors
+  // isActiveOffboardingPlanStatus()'s own definition of "active" without importing it here (this
+  // function receives raw stored instances, not derived-status-enriched ones).
   const activePlan = existingInstances.find(
-    (inst) => inst.employeeId === employee.id && !inst.completedAt
+    (inst) => inst.employeeId === employee.id && !inst.completedAt && !inst.droppedAt
   );
   if (activePlan) {
     return {
@@ -297,7 +382,17 @@ export function generateOffboardingPlanPreview({
 
 /**
  * Calculates plan execution progress percentage and task metrics based on linked activities.
- * Plan completion policy: completion is based on ALL REQUIRED tasks being completed.
+ * UPDATED — "Required Task" is no longer a configurable, HR-facing concept (the Offboarding
+ * Plans scope editor never collects it, and the individual detail page no longer shows a
+ * separate "Required Tasks Progress" block) — every launched/added task now counts equally
+ * toward completion, mirroring onboardingDomain.js's own identical fix. Legacy scope tasks
+ * migrated from the old template model may still carry `required: false` internally (e.g. the
+ * old "Post-Exit Payroll & Tax Certificate Settlement" task) — rather than silently excluding
+ * those from progress (which previously could leave percentage=100% while status stayed stuck
+ * at "In Progress", a real contradiction found via testing), progress/completion is computed
+ * against the FULL task set unconditionally. requiredTasksCount/completedRequiredCount are kept
+ * as field names for backward shape-compatibility with existing callers, but their values are
+ * now always equal to totalTasks/completedTasksCount.
  */
 export function calculateOffboardingProgress(taskInstances = [], activities = []) {
   const activityMap = new Map((activities || []).map((a) => [a.id, a]));
@@ -319,7 +414,7 @@ export function calculateOffboardingProgress(taskInstances = [], activities = []
     };
   });
 
-  const requiredTasks = enrichedTasks.filter((t) => t.required);
+  const requiredTasks = enrichedTasks;
   const completedRequiredTasks = requiredTasks.filter((t) => t.isCompleted);
 
   const progressPercentage = requiredTasks.length > 0
@@ -348,6 +443,15 @@ export function deriveOffboardingInstanceStatus(
   referenceDate = getTodayLocalDateString()
 ) {
   if (!planInstance) return OFFBOARDING_INSTANCE_STATUS.IN_PROGRESS;
+
+  // Dropped is a permanent terminal state — checked first, ahead of every other rule (including
+  // the Former-employee override and the all-required-done Completed check below), so a dropped
+  // plan can never be resurrected into Completed/Needs Attention/In Progress by a later change in
+  // task completion or the employee's lifecycle status. Mirrors the exact same ordering/reasoning
+  // as onboardingDomain.js's derivePlanInstanceStatus(), independently implemented here.
+  if (planInstance.droppedAt) {
+    return OFFBOARDING_INSTANCE_STATUS.DROPPED;
+  }
 
   const { totalTasks, requiredTasksCount, completedRequiredCount, tasks } = calculateOffboardingProgress(
     taskInstances,

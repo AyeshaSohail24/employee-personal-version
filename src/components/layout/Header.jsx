@@ -23,11 +23,16 @@ export default function Header({ toggleMobileSidebar }) {
   // Display-label overrides, keyed by the FULL accumulated path (never by bare segment text) so
   // a route can read differently in the breadcrumb than its URL slug without ever affecting any
   // other route that happens to share the same last segment — e.g. this does not touch the
-  // top-level /employees directory's own breadcrumb, only this one nested onboarding route.
-  // The URL itself (/onboarding/employees) is intentionally left unchanged; only this display
-  // label is remapped, so no route/link elsewhere needs to change.
+  // top-level /employees directory's own breadcrumb, only these nested onboarding/offboarding
+  // routes. The URLs themselves (/onboarding/employees, /offboarding/departing,
+  // /offboarding/employees) are intentionally left unchanged; only these display labels are
+  // remapped, so no route/link elsewhere needs to change. '/offboarding/employees' covers the
+  // individual detail page's intermediate breadcrumb segment (e.g. Home > Offboarding > Progress
+  // > <name>), mirroring how '/onboarding/employees' already cascades into its own detail page.
   const BREADCRUMB_LABEL_OVERRIDES = {
     '/onboarding/employees': 'Progress',
+    '/offboarding/departing': 'Progress',
+    '/offboarding/employees': 'Progress',
   };
 
   return (

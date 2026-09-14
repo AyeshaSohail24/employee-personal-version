@@ -246,6 +246,87 @@ export function migrateOnboardingPersonTypeIfNeeded(db) {
   return db;
 }
 
+/**
+ * Migrates legacy offboardingPlanTasks (tied only to a full PlanTemplate via planTemplateId) into
+ * the composable, person-type-aware scope model (scopeType: 'universal' | 'department',
+ * personType: 'employee' | 'intern') additively tagging scopeType/personType/scopeDepartmentId —
+ * a direct single-step migration (offboarding never went through onboarding's earlier
+ * intermediate 4-bucket "Universal/Employee/Intern/Department" model, so no 2-phase migration is
+ * needed here). Non-destructive: existing fields (planTemplateId, assignmentRule,
+ * specificAssigneeId, required, etc.) are preserved untouched for historical/legacy display —
+ * only new fields are added or, for department-scoped legacy tasks, the task is additively
+ * duplicated (never replaced/deleted).
+ *
+ * Mapping decisions (derived directly from each task's own originating template's stored
+ * departmentId/name — never guessed from task titles/content):
+ *
+ *  - Originating template has a real departmentId (e.g. tpl-off-002, Software Engineering)
+ *    -> DUPLICATED into personType 'employee' AND 'intern' (two records, same content, new
+ *    unique id for the intern copy). Reason: the source data gives no way to unambiguously say
+ *    these tasks were "for employees only" vs "for interns only" — department scope was
+ *    previously type-agnostic (composeOffboardingTasks-equivalent logic did not exist yet, so
+ *    ANY departing person in that department received these tasks). Duplicating is the safe,
+ *    documented, additive choice that preserves that exact same applicability for both person
+ *    types going forward, without guessing. This mirrors the identical, already-approved decision
+ *    made for Onboarding's own department-scope migration.
+ *  - Originating template has no departmentId (e.g. tpl-off-001 "Standard Employee Offboarding /
+ *    Exit Clearance", and tpl-off-003 "Executive / Managerial Exit Clearance") -> Universal scope,
+ *    personType 'employee' (unless the template's own NAME is clearly intern/apprentice-specific,
+ *    in which case personType 'intern' — never inferred from task content). Both tpl-off-001's
+ *    and tpl-off-003's tasks land in the same "Employee Universal" bucket: the new 2-axis model
+ *    (Universal + Department only) has no third "role-specific" scope to keep a separate
+ *    Executive/Managerial grouping distinct, and tpl-off-003's own stored data (departmentId:
+ *    null) gives no department to anchor it to instead — this is an inherent, documented
+ *    simplification required by the new architecture, not a silent guess. Nothing is ever
+ *    classified as Intern Universal here since no existing offboarding template name signals
+ *    that; Intern Universal starts empty and is populated later by HR via the UI, same as
+ *    Onboarding's equivalent migration.
+ */
+export function migrateOffboardingScopesIfNeeded(db) {
+  if (!db || !Array.isArray(db.offboardingPlanTasks)) return db;
+
+  const needsMigration = db.offboardingPlanTasks.some((t) => t && (!t.scopeType || !t.personType));
+  if (!needsMigration) return db;
+
+  const templates = db.offboardingPlanTemplates || [];
+  const templateMap = new Map(templates.map((t) => [t.id, t]));
+
+  const migrated = [];
+  let dupSuffix = 0;
+
+  db.offboardingPlanTasks.forEach((t) => {
+    if (!t || (t.scopeType && t.personType)) {
+      migrated.push(t);
+      return;
+    }
+
+    const tpl = templateMap.get(t.planTemplateId) || null;
+
+    if (tpl && tpl.departmentId) {
+      dupSuffix += 1;
+      migrated.push({ ...t, scopeType: 'department', personType: 'employee', scopeDepartmentId: tpl.departmentId });
+      migrated.push({ ...t, id: `${t.id}-intern-dup-${dupSuffix}`, scopeType: 'department', personType: 'intern', scopeDepartmentId: tpl.departmentId });
+    } else {
+      const nameLower = (tpl && tpl.name || '').toLowerCase();
+      const personType = /intern|apprentice/.test(nameLower) ? 'intern' : 'employee';
+      migrated.push({ ...t, scopeType: 'universal', personType, scopeDepartmentId: null });
+    }
+  });
+
+  db.offboardingPlanTasks = migrated;
+
+  inMemoryDb = db;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    } catch (err) {
+      console.error('StorageEngine: failed to save offboarding scope migration to localStorage.', err);
+    }
+  }
+
+  return db;
+}
+
 export function cleanupAttendanceIfNeeded(db) {
   if (!db) return db;
   if ('attendance' in db) {
@@ -436,7 +517,8 @@ function getInitialState() {
   const cleanedLoc = cleanupPenangLocationIfNeeded(cleanedDept);
   const cleanedTech = cleanupTechnologyDepartmentIfNeeded(cleanedLoc);
   const scopedOnboarding = migrateOnboardingScopesIfNeeded(cleanedTech);
-  return migrateOnboardingPersonTypeIfNeeded(scopedOnboarding);
+  const personTypedOnboarding = migrateOnboardingPersonTypeIfNeeded(scopedOnboarding);
+  return migrateOffboardingScopesIfNeeded(personTypedOnboarding);
 }
 
 export function loadDatabase() {
@@ -480,7 +562,8 @@ export function loadDatabase() {
     const cleanedLoc = cleanupPenangLocationIfNeeded(cleanedDept);
     const cleanedTech = cleanupTechnologyDepartmentIfNeeded(cleanedLoc);
     const scopedOnboarding = migrateOnboardingScopesIfNeeded(cleanedTech);
-    return migrateOnboardingPersonTypeIfNeeded(scopedOnboarding);
+    const personTypedOnboarding = migrateOnboardingPersonTypeIfNeeded(scopedOnboarding);
+    return migrateOffboardingScopesIfNeeded(personTypedOnboarding);
   } catch (err) {
     if (!inMemoryDb) {
       inMemoryDb = getInitialState();

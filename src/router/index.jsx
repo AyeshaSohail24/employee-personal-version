@@ -17,7 +17,6 @@ import OnboardingPlansPage from '../pages/onboarding/OnboardingPlansPage';
 import PlanEditorPage from '../pages/onboarding/PlanEditorPage';
 
 // Offboarding Pages
-import OffboardingDashboardPage from '../pages/offboarding/OffboardingDashboardPage';
 import OffboardingDepartingPage from '../pages/offboarding/OffboardingDepartingPage';
 import OffboardingEmployeeDetailPage from '../pages/offboarding/OffboardingEmployeeDetailPage';
 import OffboardingPlansPage from '../pages/offboarding/OffboardingPlansPage';
@@ -61,13 +60,16 @@ export const router = createBrowserRouter([
       {
         path: 'offboarding',
         children: [
-          { index: true, element: <Navigate to="/offboarding/dashboard" replace /> },
-          { path: 'dashboard', element: <OffboardingDashboardPage /> },
+          { index: true, element: <Navigate to="/offboarding/departing" replace /> },
+          // Legacy Dashboard route — its unique content (KPI cards + overdue exit tasks) was
+          // consolidated into the canonical Offboarding Progress page below; this redirect keeps
+          // any old bookmarked/shared /offboarding/dashboard link from landing on a 404.
+          { path: 'dashboard', element: <Navigate to="/offboarding/departing" replace /> },
           { path: 'departing', element: <OffboardingDepartingPage /> },
           { path: 'employees/:employeeId', element: <OffboardingEmployeeDetailPage /> },
           { path: 'plans', element: <OffboardingPlansPage /> },
-          { path: 'plans/new', element: <OffboardingPlanEditorPage /> },
-          { path: 'plans/:planId/edit', element: <OffboardingPlanEditorPage /> },
+          { path: 'plans/:personType/universal', element: <OffboardingPlanEditorPage /> },
+          { path: 'plans/:personType/department/:departmentId', element: <OffboardingPlanEditorPage /> },
         ],
       },
 
