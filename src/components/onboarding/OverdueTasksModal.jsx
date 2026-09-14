@@ -5,12 +5,14 @@ import { X, AlertTriangle, CheckCircle2, CheckCheck } from 'lucide-react';
  * Overdue Onboarding Tasks popup — reached from the Dashboard's "Overdue Tasks" button
  * instead of a permanently-visible side panel. Presentation-only: the parent page owns
  * fetching the overdue task list (via the existing activityService.getOverdueActivities()
- * path, filtered to source === 'Onboarding') and the Mark Complete handler, so no new
- * overdue-task data source or calculation is introduced here. "Mark All as Complete" follows
- * the same convention — clicking it only calls onRequestMarkAllComplete(), which the parent
- * uses to open its own bulk-confirmation modal; this component never completes tasks itself.
+ * path, filtered to source === 'Onboarding') and both the individual and bulk completion
+ * handlers, so no new overdue-task data source or calculation is introduced here. "Mark All as
+ * Complete" executes immediately on click (no confirmation step) — it calls
+ * onMarkAllComplete() directly, the same bulk-complete flow the parent already owns;
+ * isMarkingAllComplete (also owned by the parent) disables the button for the duration of that
+ * call so a rapid double-click cannot fire it twice.
  */
-export default function OverdueTasksModal({ isOpen, onClose, tasks = [], onMarkComplete, onRequestMarkAllComplete }) {
+export default function OverdueTasksModal({ isOpen, onClose, tasks = [], onMarkComplete, onMarkAllComplete, isMarkingAllComplete = false }) {
   useEffect(() => {
     if (!isOpen) return undefined;
     const handleKeyDown = (e) => {
@@ -52,12 +54,13 @@ export default function OverdueTasksModal({ isOpen, onClose, tasks = [], onMarkC
           <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '1rem 1.5rem 0 1.5rem' }}>
             <button
               type="button"
-              className="btn-secondary"
+              className="btn-success"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
-              onClick={onRequestMarkAllComplete}
+              onClick={onMarkAllComplete}
+              disabled={isMarkingAllComplete}
             >
               <CheckCheck size={14} />
-              <span>Mark All as Complete</span>
+              <span>{isMarkingAllComplete ? 'Completing...' : 'Mark All as Complete'}</span>
             </button>
           </div>
         )}

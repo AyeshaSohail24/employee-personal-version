@@ -17,7 +17,6 @@ import { activityService } from '../../services/activityService.js';
 import { PLAN_INSTANCE_STATUS, isActivePlanStatus, resolveAllOnboardingHistory } from '../../domain/onboardingDomain.js';
 import LaunchPlanModal from '../../components/onboarding/LaunchPlanModal.jsx';
 import OverdueTasksModal from '../../components/onboarding/OverdueTasksModal.jsx';
-import MarkAllOverdueCompleteModal from '../../components/onboarding/MarkAllOverdueCompleteModal.jsx';
 
 export default function OnboardingEmployeesPage() {
   const [employees, setEmployees] = useState([]);
@@ -28,7 +27,7 @@ export default function OnboardingEmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
   const [isOverdueModalOpen, setIsOverdueModalOpen] = useState(false);
-  const [isMarkAllOverdueModalOpen, setIsMarkAllOverdueModalOpen] = useState(false);
+  const [isMarkingAllComplete, setIsMarkingAllComplete] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -114,14 +113,25 @@ export default function OnboardingEmployeesPage() {
     }
   };
 
-  // Captures the exact set of activity IDs currently shown in the Overdue Onboarding Tasks
-  // popup at confirm time, so "Mark All as Complete" only ever affects that same set — never a
-  // freshly re-derived list that could have drifted between opening the confirmation and
-  // confirming it.
-  const handleConfirmMarkAllOverdueComplete = async () => {
-    const idsToComplete = overdueTasks.map((t) => t.id);
-    await activityService.markCompleteMany(idsToComplete);
-    await loadData();
+  // Executes immediately on click — no confirmation step. Captures the exact set of activity
+  // IDs currently shown in the Overdue Onboarding Tasks popup at click time, so "Mark All as
+  // Complete" only ever affects that same set — never a freshly re-derived list that could
+  // drift mid-operation. isMarkingAllComplete guards against a rapid double-click firing the
+  // bulk completion twice; on failure the overdue list/tasks are left untouched (loadData() is
+  // only called after a successful completion) and the error surfaces via the same alert()
+  // pattern already used by handleMarkTaskComplete above, rather than a new notification system.
+  const handleMarkAllOverdueComplete = async () => {
+    if (isMarkingAllComplete) return;
+    setIsMarkingAllComplete(true);
+    try {
+      const idsToComplete = overdueTasks.map((t) => t.id);
+      await activityService.markCompleteMany(idsToComplete);
+      await loadData();
+    } catch (err) {
+      alert(`Failed to complete overdue tasks: ${err.message}`);
+    } finally {
+      setIsMarkingAllComplete(false);
+    }
   };
 
   return (
@@ -129,7 +139,7 @@ export default function OnboardingEmployeesPage() {
       {/* Page Header */}
       <div className="onboarding-dashboard-header">
         <div className="header-text-group">
-          <h1 className="page-title">Onboarding Employees</h1>
+          <h1 className="page-title">Onboarding Progress</h1>
           <p className="page-subtitle">
             View and track individual onboarding progress for employees and interns.
           </p>
@@ -417,21 +427,14 @@ export default function OnboardingEmployeesPage() {
         onSuccess={() => loadData()}
       />
 
-      {/* Overdue Tasks Modal */}
+      {/* Overdue Tasks Modal — Mark All as Complete executes immediately (no confirmation step) */}
       <OverdueTasksModal
         isOpen={isOverdueModalOpen}
         onClose={() => setIsOverdueModalOpen(false)}
         tasks={overdueTasks}
         onMarkComplete={handleMarkTaskComplete}
-        onRequestMarkAllComplete={() => setIsMarkAllOverdueModalOpen(true)}
-      />
-
-      {/* Mark All Overdue Tasks Complete — bulk confirmation, stacked on top of the Overdue Tasks Modal */}
-      <MarkAllOverdueCompleteModal
-        isOpen={isMarkAllOverdueModalOpen}
-        onClose={() => setIsMarkAllOverdueModalOpen(false)}
-        onConfirm={handleConfirmMarkAllOverdueComplete}
-        count={overdueTasks.length}
+        onMarkAllComplete={handleMarkAllOverdueComplete}
+        isMarkingAllComplete={isMarkingAllComplete}
       />
     </div>
   );

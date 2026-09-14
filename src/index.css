@@ -4301,6 +4301,31 @@ input.form-control:focus {
   cursor: not-allowed;
 }
 
+/* Success/completion confirm action (e.g. "Mark All as Complete") — same shape/weight as
+   .btn-primary/.btn-danger, filled with the project's existing success token
+   (--status-active-text, already used everywhere else for "Active"/"Completed"/"Accepted"
+   states) instead of inventing a new green. */
+.btn-success {
+  padding: 0.5rem 1rem;
+  border: none;
+  background-color: var(--status-active-text);
+  color: #FFFFFF;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-success:hover {
+  background-color: #047857;
+}
+
+.btn-success:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Override Audit History List */
 .history-list {
   display: flex;

@@ -96,7 +96,7 @@ export default function OnboardingEmployeeDetailPage() {
         <div style={{ padding: '3rem', textAlign: 'center' }}>
           <h2>Employee Not Found</h2>
           <Link to="/onboarding/employees" className="btn-secondary" style={{ marginTop: '1rem', display: 'inline-block' }}>
-            Back to Onboarding Employees
+            Back to Onboarding Progress
           </Link>
         </div>
       </div>
@@ -109,11 +109,31 @@ export default function OnboardingEmployeeDetailPage() {
 
   return (
     <div className="page-layout-container">
-      {/* Back Link */}
-      <div style={{ marginBottom: '1rem' }}>
+      {/* Page-Level Navigation/Action Row — Back link on the left, Drop Plan (page-level
+          destructive action, not employee-card or plan-summary content) on the far right. Same
+          isActivePlanStatus() gate as before, just relocated here; when it doesn't apply this is
+          a plain single-child flex row, so no empty right-side placeholder is ever left behind. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
         <Link to="/onboarding/employees" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
-          <ArrowLeft size={14} /> Back to Onboarding Employees
+          <ArrowLeft size={14} /> Back to Onboarding Progress
         </Link>
+
+        {/* Structurally matches the Add Task button below (className btn-* + identical
+            display/alignItems/gap/padding/fontSize/flexShrink) — filled destructive red
+            (.btn-danger) instead of filled primary teal (.btn-primary), since this is the
+            destructive counterpart in the same button family, not a differently-shaped button. */}
+        {planInstance && isActivePlanStatus(planInstance.derivedStatus) && (
+          <button
+            type="button"
+            className="btn-danger"
+            title="Drop onboarding plan"
+            onClick={() => setIsDropPlanModalOpen(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem', fontSize: '0.8rem', flexShrink: 0 }}
+          >
+            <XCircle size={14} />
+            <span>Drop Plan</span>
+          </button>
+        )}
       </div>
 
       {/* Header Summary Card */}
@@ -138,30 +158,11 @@ export default function OnboardingEmployeeDetailPage() {
             </div>
           </div>
 
-          {/* Right-side header column: Drop Plan (only while the plan is active — same
-              isActivePlanStatus() gate as before, just relocated) stacked directly above Anchor
-              Start Date. When Drop Plan isn't shown (no plan instance, or a Completed/Dropped
-              one), this is simply a single-child column — the `gap` only applies BETWEEN
-              children, so no empty placeholder or extra space is left behind. */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.6rem' }}>
-            {planInstance && isActivePlanStatus(planInstance.derivedStatus) && (
-              <button
-                type="button"
-                className="btn-secondary"
-                title="Drop onboarding plan"
-                onClick={() => setIsDropPlanModalOpen(true)}
-                style={{ color: '#DC2626', borderColor: '#FECACA', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
-              >
-                <XCircle size={14} />
-                <span>Drop Plan</span>
-              </button>
-            )}
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>Anchor Start Date</div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                <Calendar size={14} style={{ color: 'var(--color-primary)' }} />
-                <span>{currentStartDate || 'N/A'}</span>
-              </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>Anchor Start Date</div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+              <Calendar size={14} style={{ color: 'var(--color-primary)' }} />
+              <span>{currentStartDate || 'N/A'}</span>
             </div>
           </div>
         </div>

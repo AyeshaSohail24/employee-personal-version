@@ -1535,10 +1535,10 @@ export async function verifyStage18() {
 
     // --- EMPLOYEES HEADER (merged actions) ---
 
-    // 298. Employees header still reads "Onboarding Employees" with its existing description
+    // 298. UPDATED — The page heading was later renamed from "Onboarding Employees" to "Onboarding Progress" (the sidebar submenu/breadcrumb naming cleanup), to disambiguate it from the unrelated MAIN > Employees directory — the description/subtitle is unchanged, since it already read correctly.
     assert(
-      onbEmployeesSrc.includes('>Onboarding Employees<') && onbEmployeesSrc.includes('View and track individual onboarding progress for employees and interns.'),
-      '298. Employees header reads "Onboarding Employees" with description "View and track individual onboarding progress for employees and interns."'
+      onbEmployeesSrc.includes('>Onboarding Progress<') && onbEmployeesSrc.includes('View and track individual onboarding progress for employees and interns.'),
+      '298. UPDATED — Employees page heading now reads "Onboarding Progress" (was "Onboarding Employees") with its unchanged description "View and track individual onboarding progress for employees and interns."'
     );
 
     // 299. Employees header now includes the "Overdue Tasks" button with a count badge, opening the existing OverdueTasksModal
@@ -1656,10 +1656,10 @@ export async function verifyStage18() {
 
     // --- GENERAL ---
 
-    // 315. The individual employee onboarding detail page is untouched, including its "Back to Onboarding Employees" link and Done/Reopen actions
+    // 315. UPDATED — The individual employee onboarding detail page keeps its Back link (wording later updated to "Back to Onboarding Progress", matching the page-name cleanup) and Done/Reopen actions — the navigation destination/behavior is untouched, only the visible text changed
     assert(
-      onbDetailSrc.includes('Back to Onboarding Employees') && onbDetailSrc.includes('ArrowLeft') && onbDetailSrc.includes('handleToggleTaskComplete'),
-      '315. The individual employee onboarding detail page is kept as-is, including the "Back to Onboarding Employees" link and Done/Reopen task actions'
+      onbDetailSrc.includes('Back to Onboarding Progress') && !onbDetailSrc.includes('Back to Onboarding Employees') && onbDetailSrc.includes('ArrowLeft') && onbDetailSrc.includes('handleToggleTaskComplete'),
+      '315. UPDATED — The individual employee onboarding detail page is otherwise kept as-is, now with its Back link reading "Back to Onboarding Progress" (was "Back to Onboarding Employees") and Done/Reopen task actions unchanged'
     );
 
     // 316. UPDATED — The employee/instance join (instanceMap) and progress/status rendering reuse the existing hydrated plan instance data — no re-implementation. The join itself was later made active-plan-aware (see the "Drop Onboarding Plan" task) so an employee with both a Dropped/Completed instance and a newer one always resolves to the correct (preferably active, else most recent) instance rather than whichever Map insertion happened to win.
@@ -6917,8 +6917,6 @@ export async function verifyStage18() {
         ? fs.readFileSync(path.resolve('./src/components/onboarding/DeleteOnboardingTaskModal.jsx'), 'utf-8') : '';
       const dropPlanModalSrc = fs.existsSync(path.resolve('./src/components/onboarding/DropPlanModal.jsx'))
         ? fs.readFileSync(path.resolve('./src/components/onboarding/DropPlanModal.jsx'), 'utf-8') : '';
-      const markAllOverdueModalSrc = fs.existsSync(path.resolve('./src/components/onboarding/MarkAllOverdueCompleteModal.jsx'))
-        ? fs.readFileSync(path.resolve('./src/components/onboarding/MarkAllOverdueCompleteModal.jsx'), 'utf-8') : '';
 
       // ================= DELETE TASK (checks 1-10) =================
 
@@ -7148,25 +7146,29 @@ export async function verifyStage18() {
 
       // 1050. Mark All as Complete exists in the Overdue Onboarding Tasks popup, using an appropriate icon, near the top/header area
       assert(
-        overdueTasksModalSrcFinal3.includes('Mark All as Complete') && overdueTasksModalSrcFinal3.includes('<CheckCheck') && overdueTasksModalSrcFinal3.includes('onRequestMarkAllComplete'),
-        '1050. NEW — OverdueTasksModal renders a "Mark All as Complete" action (CheckCheck icon) near the top of the popup, calling onRequestMarkAllComplete()'
+        overdueTasksModalSrcFinal3.includes('Mark All as Complete') && overdueTasksModalSrcFinal3.includes('<CheckCheck') && overdueTasksModalSrcFinal3.includes('onMarkAllComplete'),
+        '1050. UPDATED — OverdueTasksModal renders a "Mark All as Complete" action (CheckCheck icon) near the top of the popup, calling onMarkAllComplete() directly'
       );
 
       // 1051. Hidden when there are zero overdue tasks (preferred over merely disabling it)
       assert(
-        overdueTasksModalSrcFinal3.match(/\{tasks\.length > 0 && \([\s\S]{0,500}Mark All as Complete/),
+        overdueTasksModalSrcFinal3.match(/\{tasks\.length > 0 && \([\s\S]{0,650}Mark All as Complete/),
         '1051. NEW — "Mark All as Complete" is hidden entirely (not just disabled) when tasks.length is 0, per the task\'s explicit preference'
       );
 
-      // 1052. Bulk completion always requires confirmation — clicking the button only opens a confirmation modal, never completes tasks directly
+      // 1052. UPDATED — Bulk completion now executes IMMEDIATELY on click — no intermediate confirmation modal. OverdueTasksModal's button calls onMarkAllComplete() directly (a prop the parent wires straight to its bulk-complete handler); the retired MarkAllOverdueCompleteModal.jsx confirmation component no longer exists.
       assert(
-        !stripComments(overdueTasksModalSrcFinal3).includes('activityService') && !overdueTasksModalSrcFinal3.includes('markCompleteMany') &&
-        markAllOverdueModalSrc.includes('Mark All Overdue Tasks Complete?') && markAllOverdueModalSrc.includes('await onConfirm()'),
-        '1052. NEW — OverdueTasksModal itself never calls activityService/markCompleteMany directly — clicking "Mark All as Complete" only opens MarkAllOverdueCompleteModal, a real Cancel/Mark-All-as-Complete confirmation'
+        overdueTasksModalSrcFinal3.match(/onClick=\{onMarkAllComplete\}/) && !overdueTasksModalSrcFinal3.includes('onRequestMarkAllComplete') &&
+        !stripComments(overdueTasksModalSrcFinal3).includes('activityService') && !overdueTasksModalSrcFinal3.includes('markCompleteMany'),
+        '1052. UPDATED — OverdueTasksModal\'s "Mark All as Complete" button calls onMarkAllComplete() directly on click — no confirmation modal is opened first (the button itself still never imports activityService/markCompleteMany — the actual completion call lives in the parent\'s handler, same separation of concerns as before)'
       );
       assert(
-        onbEmployeesSrcFinal3.includes('<MarkAllOverdueCompleteModal') && onbEmployeesSrcFinal3.includes('handleConfirmMarkAllOverdueComplete') && onbEmployeesSrcFinal3.includes('count={overdueTasks.length}'),
-        '1052b. NEW — OnboardingEmployeesPage renders the bulk-confirmation modal wired to the real handler and the current overdue count'
+        !fs.existsSync(path.resolve('./src/components/onboarding/MarkAllOverdueCompleteModal.jsx')),
+        '1052b. UPDATED — MarkAllOverdueCompleteModal.jsx no longer exists — confirmed unused anywhere else in the app before removal, and cleanly deleted (not left as dead code) now that the confirmation step is gone'
+      );
+      assert(
+        !onbEmployeesSrcFinal3.includes('MarkAllOverdueCompleteModal') && onbEmployeesSrcFinal3.includes('onMarkAllComplete={handleMarkAllOverdueComplete}') && onbEmployeesSrcFinal3.includes('isMarkingAllComplete={isMarkingAllComplete}'),
+        '1052c. NEW — OnboardingEmployeesPage no longer references MarkAllOverdueCompleteModal anywhere, and instead wires OverdueTasksModal directly to its bulk-complete handler and loading-state flag'
       );
 
       // 1053-1055/1057-1059. FUNCTIONAL: bulk-complete affects exactly the overdue set, leaves future/unrelated tasks untouched, and recalculates progress/status (Needs Attention -> In Progress or Completed as appropriate)
@@ -7240,7 +7242,7 @@ export async function verifyStage18() {
         assert(bulkTargetIds.every((id) => onboardingOverdueBeforeBulk.some((a) => a.id === id && a.source === 'Onboarding')), '1055. NEW — Every ID passed to markCompleteMany() came from the Onboarding-sourced overdue list only — unrelated Offboarding/Manual overdue activities are never included in the bulk-complete target set');
 
         // 1056. Overdue list refreshes immediately after confirmation — parent page calls loadData() right after the bulk-complete resolves
-        assert(onbEmployeesSrcFinal3.match(/handleConfirmMarkAllOverdueComplete = async \(\) => \{[\s\S]{0,200}await loadData\(\);/), '1056. NEW — handleConfirmMarkAllOverdueComplete() calls loadData() immediately after the bulk operation, refreshing the overdue list, instances, and summary counts with no page reload');
+        assert(onbEmployeesSrcFinal3.match(/handleMarkAllOverdueComplete = async \(\) => \{[\s\S]{0,300}await loadData\(\);/), '1056. UPDATED — handleMarkAllOverdueComplete() (renamed now that it executes immediately, not on confirm) still calls loadData() right after the bulk operation, refreshing the overdue list, instances, and summary counts with no page reload');
       }
 
       // 1060. Individual Complete actions remain available and unchanged — Mark All as Complete is additive, not a replacement
@@ -7372,10 +7374,10 @@ export async function verifyStage18() {
         '1074. NEW — The whole bulk-action <div> (not just the <button> inside it) is conditionally rendered on tasks.length > 0 — with zero overdue tasks, the row itself does not exist in the DOM, leaving no empty action-row gap'
       );
 
-      // 1075. Bulk-complete wiring is completely unchanged by this layout-only task — still no direct activityService/markCompleteMany call inside OverdueTasksModal, still just onRequestMarkAllComplete()
+      // 1075. UPDATED — OverdueTasksModal still never imports activityService/markCompleteMany directly — the actual completion call is owned by the parent's handler, which the button now calls directly (onMarkAllComplete) since the confirmation step was later removed
       assert(
-        !stripComments(overdueTasksModalSrcFinal4).includes('activityService') && !overdueTasksModalSrcFinal4.includes('markCompleteMany') && overdueTasksModalSrcFinal4.includes('onClick={onRequestMarkAllComplete}'),
-        '1075. NEW — REGRESSION: OverdueTasksModal still never calls activityService/markCompleteMany directly — clicking "Mark All as Complete" only calls onRequestMarkAllComplete(), exactly as before this purely visual repositioning'
+        !stripComments(overdueTasksModalSrcFinal4).includes('activityService') && !overdueTasksModalSrcFinal4.includes('markCompleteMany') && overdueTasksModalSrcFinal4.includes('onClick={onMarkAllComplete}'),
+        '1075. UPDATED — OverdueTasksModal still never calls activityService/markCompleteMany directly — clicking "Mark All as Complete" calls the parent-owned onMarkAllComplete() (previously onRequestMarkAllComplete, before the confirmation step was removed)'
       );
 
       // 1076. Individual per-task "Mark Complete" is completely unchanged — still its own button, still calling onMarkComplete(task.id) per task
@@ -7384,66 +7386,104 @@ export async function verifyStage18() {
         '1076. NEW — REGRESSION: Individual per-task "Mark Complete" buttons are completely unchanged (still their own onClick calling onMarkComplete(task.id) per task) — this task only repositioned the bulk action, it did not touch individual completion'
       );
 
-      // --- DROP PLAN: MOVED FROM PLAN SUMMARY TO EMPLOYEE HEADER ---
+      // --- DROP PLAN: PLACEMENT CORRECTED TO THE PAGE-LEVEL ROW BESIDE "BACK TO ONBOARDING EMPLOYEES" ---
+      // (Supersedes an earlier, later-corrected placement — Drop Plan briefly lived inside the
+      // employee header card, above Anchor Start Date. This block replaces those now-invalid
+      // checks with the final, correct requirement: Drop Plan belongs at PAGE level, beside Back
+      // to Onboarding Employees, not inside any card.)
 
-      // 1077. Drop Plan no longer renders inside the plan-summary/progress-overview card — exactly one "Drop Plan" button exists in the whole file, and it is NOT inside the status-badge/percentage row
+      // 1077. UPDATED — Drop Plan still does not render inside the plan-summary/progress-overview card — exactly one "Drop Plan" button exists in the whole file, and it is NOT inside the status-badge/percentage row
       {
         const dropPlanButtonCount = (onbDetailSrcFinal4.match(/<span>Drop Plan<\/span>/g) || []).length;
-        assert(dropPlanButtonCount === 1, `1077a. NEW — Exactly one Drop Plan button exists in OnboardingEmployeeDetailPage.jsx (found ${dropPlanButtonCount})`);
+        assert(dropPlanButtonCount === 1, `1077a. UPDATED — Exactly one Drop Plan button exists in OnboardingEmployeeDetailPage.jsx (found ${dropPlanButtonCount})`);
         assert(
           !onbDetailSrcFinal4.match(/progressPercentage\}%\s*\n\s*<\/span>\s*\n\s*\{isActivePlanStatus/),
-          '1077. NEW — Drop Plan is no longer rendered immediately after the progress percentage inside the plan-summary status row (its previous location) — it has been fully removed from the plan-summary action area'
+          '1077. UPDATED — Drop Plan is not rendered inside the plan-summary status row (immediately after the progress percentage) — it remains fully absent from the plan-summary action area'
         );
       }
 
-      // 1078/1079. Drop Plan now renders in the employee-header card's right-side column, in source order BEFORE (i.e. visually above) "Anchor Start Date"
+      // 1077b. NEW — Drop Plan does NOT render inside the employee information/header card at all (its previous, now-corrected location) — the header card's right-side column is Anchor Start Date only
       {
         const headerCardMatch = onbDetailSrcFinal4.match(/Header Summary Card[\s\S]*?Warning Banners/);
         const headerCardBlock = headerCardMatch ? headerCardMatch[0] : '';
-        const dropPlanIdx = headerCardBlock.indexOf('Drop Plan');
-        const anchorDateIdx = headerCardBlock.indexOf('Anchor Start Date');
-        assert(dropPlanIdx !== -1 && anchorDateIdx !== -1, '1078. NEW — Both Drop Plan and Anchor Start Date are rendered inside the employee Header Summary Card');
-        assert(dropPlanIdx < anchorDateIdx, '1079. NEW — Drop Plan appears in source order BEFORE Anchor Start Date within the header\'s right-side column, rendering visually above it, exactly as required');
+        assert(!headerCardBlock.includes('Drop Plan'), '1077b. NEW — "Drop Plan" does not appear anywhere inside the Header Summary Card block — it is no longer rendered inside the employee information card');
       }
+
+      // 1078. UPDATED — Drop Plan is rendered in the page-level row that also contains the Back link (wording later updated to "Back to Onboarding Progress") — not inside any card
+      {
+        const pageRowMatch = onbDetailSrcFinal4.match(/Page-Level Navigation\/Action Row[\s\S]*?Header Summary Card/);
+        const pageRowBlock = pageRowMatch ? pageRowMatch[0] : '';
+        assert(
+          pageRowBlock.includes('Back to Onboarding Progress') && pageRowBlock.includes('Drop Plan') && pageRowBlock.indexOf('table-container-card') === -1,
+          '1078. UPDATED — Drop Plan is rendered in the same page-level row as the Back link ("Back to Onboarding Progress"), entirely outside any .table-container-card'
+        );
+      }
+
+      // 1078b. NEW — Back to Onboarding Employees stays left-aligned and Drop Plan sits far right, via a single flex row with justifyContent: space-between
+      assert(
+        onbDetailSrcFinal4.match(/display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0\.75rem', marginBottom: '1rem' \}\}>\s*\n\s*<Link to="\/onboarding\/employees"/),
+        '1078b. NEW — The page-level row uses display:flex + justifyContent:\'space-between\', with the Back <Link> as the first child (left) and the conditional Drop Plan <button> as the second/last child (right) — a single reused row, not a duplicated one'
+      );
+
+      // 1079. UPDATED — Both Back to Onboarding Employees and Drop Plan share the SAME page content boundary as the cards below (both live directly inside .page-layout-container, no extra outer padding/inset was introduced for this row)
+      assert(
+        onbDetailSrcFinal4.match(/<div className="page-layout-container">\s*\n\s*\{\/\* Page-Level Navigation\/Action Row/),
+        '1079. UPDATED — The page-level action row is the first child directly inside .page-layout-container (the same wrapper the Header Summary Card and Plan Summary card use) — Back link and Drop Plan align to the exact same left/right content boundary as the cards below, not a custom inset'
+      );
 
       // 1080. The existing isActivePlanStatus() visibility rule is reused unchanged — no second/different eligibility rule was invented for the new location
       assert(
         onbDetailSrcFinal4.includes('planInstance && isActivePlanStatus(planInstance.derivedStatus)') &&
         (onbDetailSrcFinal4.match(/isActivePlanStatus\(planInstance\.derivedStatus\)/g) || []).length === 1,
-        '1080. NEW — Drop Plan\'s visibility is still gated by the single existing isActivePlanStatus(planInstance.derivedStatus) predicate (now referenced exactly once, at its new location) — no duplicate or alternate visibility rule was introduced'
+        '1080. Drop Plan\'s visibility is still gated by the single existing isActivePlanStatus(planInstance.derivedStatus) predicate (now referenced exactly once, at its new page-level location) — no duplicate or alternate visibility rule was introduced'
       );
 
       // 1081/1082. The Drop Plan handler and DropPlanModal wiring are completely unchanged — same onClick, same modal component, same props
       assert(
         onbDetailSrcFinal4.includes('onClick={() => setIsDropPlanModalOpen(true)}') && onbDetailSrcFinal4.includes('title="Drop onboarding plan"'),
-        '1081. NEW — REGRESSION: The Drop Plan button still calls the exact same setIsDropPlanModalOpen(true) handler — only its position in the JSX changed'
+        '1081. REGRESSION: The Drop Plan button still calls the exact same setIsDropPlanModalOpen(true) handler — only its position in the JSX changed again'
       );
       assert(
         onbDetailSrcFinal4.match(/<DropPlanModal\s*\n\s*isOpen=\{isDropPlanModalOpen\}\s*\n\s*onClose=\{\(\) => setIsDropPlanModalOpen\(false\)\}\s*\n\s*planInstance=\{planInstance\}\s*\n\s*employeeName=\{employee\.fullName\}\s*\n\s*onSuccess=\{handleDropPlanSuccess\}/),
-        '1082. NEW — REGRESSION: The same <DropPlanModal> is still rendered once at the bottom of the page with identical props (isOpen/onClose/planInstance/employeeName/onSuccess) — the confirmation modal itself was not duplicated or reimplemented'
+        '1082. REGRESSION: The same <DropPlanModal> is still rendered once at the bottom of the page with identical props (isOpen/onClose/planInstance/employeeName/onSuccess) — the confirmation modal itself was not duplicated or reimplemented'
       );
 
-      // 1083/1084. FUNCTIONAL: the visibility rule still correctly excludes Completed and Dropped plans
-      assert(!isActivePlanStatus(PLAN_INSTANCE_STATUS.COMPLETED), '1083. NEW — isActivePlanStatus(Completed) remains false — a Completed plan still shows no Drop Plan action in its new header location');
-      assert(!isActivePlanStatus(PLAN_INSTANCE_STATUS.DROPPED), '1084. NEW — isActivePlanStatus(Dropped) remains false — an already-Dropped plan still shows no Drop Plan action');
+      // 1083/1084. FUNCTIONAL: the visibility rule still correctly excludes Completed and Dropped plans, and includes In Progress/Needs Attention
+      assert(!isActivePlanStatus(PLAN_INSTANCE_STATUS.COMPLETED), '1083. isActivePlanStatus(Completed) remains false — a Completed plan still shows no Drop Plan action at its page-level location');
+      assert(!isActivePlanStatus(PLAN_INSTANCE_STATUS.DROPPED), '1084. isActivePlanStatus(Dropped) remains false — an already-Dropped plan still shows no Drop Plan action');
+      assert(isActivePlanStatus(PLAN_INSTANCE_STATUS.IN_PROGRESS) && isActivePlanStatus(PLAN_INSTANCE_STATUS.NEEDS_ATTENTION), '1084b. NEW — isActivePlanStatus() remains true for both In Progress and Needs Attention — Drop Plan is shown for both, exactly as required');
 
-      // 1085. No empty placeholder/blank row is left in the header when Drop Plan is hidden — it's a real conditional (&&), not a hidden/disabled element or fixed-height spacer
+      // 1085. UPDATED — No empty placeholder/blank row is left in the page-level row when Drop Plan is hidden — it's a real conditional (&&) that leaves the Back link as the row's only child, not a hidden/disabled element or fixed-height spacer
       assert(
         !onbDetailSrcFinal4.match(/Drop Plan[\s\S]{0,50}hidden\}|visibility:\s*'hidden'|opacity:\s*0[,}]/) &&
         onbDetailSrcFinal4.match(/\{planInstance && isActivePlanStatus\(planInstance\.derivedStatus\) && \(/),
-        '1085. NEW — Drop Plan is rendered via a genuine `&&` conditional (present or entirely absent from the DOM) — no hidden/disabled/opacity-0 placeholder is ever left in its place, so the header column collapses to just Anchor Start Date when Drop Plan doesn\'t apply'
+        '1085. UPDATED — Drop Plan is rendered via a genuine `&&` conditional (present or entirely absent from the DOM) — no hidden/disabled/opacity-0 placeholder is ever left in its place, so the page-level row collapses to just the Back link when Drop Plan doesn\'t apply, with no empty right-side gap'
       );
 
-      // 1086. The plan-summary status/percentage row remains clean after Drop Plan's removal — status badge and percentage are the only 2 children left, with no dangling empty conditional block where the button used to sit
+      // 1085b. NEW — Anchor Start Date has returned to its natural, simple top-right position in the employee header card — a plain 2-line block, no longer wrapped in a flex column alongside a conditional button
+      assert(
+        onbDetailSrcFinal4.match(/<div style=\{\{ textAlign: 'right' \}\}>\s*\n\s*<div style=\{\{ fontSize: '0\.785rem', color: 'var\(--text-muted\)' \}\}>Anchor Start Date<\/div>/),
+        '1085b. NEW — Anchor Start Date is back to its original simple `<div style={{ textAlign: \'right\' }}>` block directly inside the header card\'s top row — not nested inside the temporary flex column the previous (now-corrected) placement introduced'
+      );
+
+      // 1085c. NEW — No leftover spacing/wrapper artifacts remain in the employee header card from the previous (now-removed) in-card Drop Plan placement
+      assert(
+        !onbDetailSrcFinal4.match(/flexDirection: 'column', alignItems: 'flex-end', gap: '0\.6rem'/) &&
+        !stripComments(onbDetailSrcFinal4).match(/Right-side header column/),
+        '1085c. NEW — The flex-column wrapper (and its explanatory comment) that previously held Drop Plan above Anchor Start Date inside the header card has been fully removed, not merely emptied — no leftover spacing artifact or dead wrapper remains'
+      );
+
+      // 1086. The plan-summary status/percentage row remains clean — status badge and percentage are the only 2 children, with no dangling empty conditional block from any prior Drop Plan placement
       assert(
         onbDetailSrcFinal4.match(/\{planInstance\.progress\.progressPercentage\}%\s*\n\s*<\/span>\s*\n\s*<\/div>\s*\n\s*<\/div>/),
-        '1086. NEW — The plan-summary status row now ends cleanly right after the percentage span (status badge + percentage only) — no leftover empty conditional block or dangling wrapper from the removed Drop Plan button'
+        '1086. The plan-summary status row still ends cleanly right after the percentage span (status badge + percentage only) — no leftover empty conditional block or dangling wrapper from any earlier Drop Plan placement'
       );
 
-      // 1087. Responsive safety: the header's outer row wraps on narrow screens (flexWrap), consistent with (and not regressing) the mobile-wrapping fix from the previous onboarding task
+      // 1087. UPDATED — Responsive safety: the page-level row itself wraps on narrow screens (flexWrap), and the header card's own row (now simplified back to just identity + Anchor Start Date) also still wraps — no horizontal overflow risk was reintroduced by moving Drop Plan
       assert(
-        onbDetailSrcFinal4.match(/justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem'/),
-        '1087. NEW — The employee header card\'s outer row (identity block vs. the new Drop Plan + Anchor Start Date column) wraps via flexWrap: \'wrap\' at narrow widths, so the added Drop Plan button cannot reintroduce the horizontal-clipping bug fixed in the previous task'
+        onbDetailSrcFinal4.match(/justifyContent: 'space-between', flexWrap: 'wrap', gap: '0\.75rem', marginBottom: '1rem' \}\}>\s*\n\s*<Link/) &&
+        onbDetailSrcFinal4.match(/justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' \}\}>\s*\n\s*<div className="emp-identity-block"/),
+        '1087. UPDATED — Both the new page-level action row and the (now simplified) employee header card row wrap via flexWrap: \'wrap\' at narrow widths — Drop Plan cannot cause horizontal overflow or clipping at either location'
       );
 
       // --- REGRESSION (this task is layout-only; everything else must be byte-for-byte functionally identical) ---
@@ -7497,6 +7537,462 @@ export async function verifyStage18() {
       {
         const eligibleRegr2 = await onboardingService.getLaunchEligibleEmployees();
         assert(Array.isArray(eligibleRegr2), '1093. NEW — REGRESSION: getLaunchEligibleEmployees() still resolves correctly, unaffected by this layout-only task');
+      }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Final Button Styling Consistency Fix for Onboarding — Drop Plan (filled
+    // destructive) + Mark All as Complete (filled success)
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const onbDetailSrcFinal5 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const overdueTasksModalSrcFinal5 = fs.readFileSync(path.resolve('./src/components/onboarding/OverdueTasksModal.jsx'), 'utf-8');
+      const indexCssSrcFinal5 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // --- DROP PLAN: STYLING ONLY, PLACEMENT UNCHANGED ---
+
+      // 1094. UPDATED — Drop Plan retains its exact page-level placement — still in the same row as the Back link (wording later updated to "Back to Onboarding Progress")
+      {
+        const pageRowMatch = onbDetailSrcFinal5.match(/Page-Level Navigation\/Action Row[\s\S]*?Header Summary Card/);
+        const pageRowBlock = pageRowMatch ? pageRowMatch[0] : '';
+        assert(
+          pageRowBlock.includes('Back to Onboarding Progress') && pageRowBlock.includes('Drop Plan'),
+          '1094. UPDATED — Drop Plan retains its page-level placement, still rendered in the same row as the Back link ("Back to Onboarding Progress") — this task is styling-only'
+        );
+      }
+
+      // 1095. Drop Plan is still outside the employee information card
+      {
+        const headerCardMatch = onbDetailSrcFinal5.match(/Header Summary Card[\s\S]*?Warning Banners/);
+        const headerCardBlock = headerCardMatch ? headerCardMatch[0] : '';
+        assert(!headerCardBlock.includes('Drop Plan'), '1095. "Drop Plan" still does not appear anywhere inside the Header Summary Card block');
+      }
+
+      // 1096. Drop Plan is still outside the onboarding plan-summary card
+      assert(
+        !onbDetailSrcFinal5.match(/progressPercentage\}%\s*\n\s*<\/span>\s*\n\s*\{isActivePlanStatus/),
+        '1096. Drop Plan is still not rendered inside the plan-summary status row — it remains fully absent from the plan-summary action area'
+      );
+
+      // 1097. Drop Plan now uses a FILLED destructive/red treatment (.btn-danger) — not the previous white/outline-red .btn-secondary
+      {
+        const dropPlanBtnBlockMatch = onbDetailSrcFinal5.match(/<button\s*\n\s*type="button"\s*\n\s*className="btn-danger"\s*\n\s*title="Drop onboarding plan"[\s\S]{0,300}?<\/button>/);
+        const dropPlanBtnBlock = dropPlanBtnBlockMatch ? dropPlanBtnBlockMatch[0] : '';
+        assert(
+          dropPlanBtnBlockMatch &&
+          !dropPlanBtnBlock.includes('btn-secondary') &&
+          !dropPlanBtnBlock.includes("borderColor: '#FECACA'") &&
+          !dropPlanBtnBlock.includes("color: '#DC2626'"),
+          '1097. NEW — Drop Plan now uses className="btn-danger" (a filled destructive red button) — the old white-background/red-outline btn-secondary override (color: #DC2626 + borderColor: #FECACA on the button itself) is gone'
+        );
+      }
+      {
+        const btnDangerRuleMatch = indexCssSrcFinal5.match(/^\.btn-danger \{([^}]*)\}/m);
+        const btnDangerRule = btnDangerRuleMatch ? btnDangerRuleMatch[1] : '';
+        assert(
+          /background-color:\s*#DC2626/.test(btnDangerRule) && /color:\s*#FFFFFF/.test(btnDangerRule) && !/border:\s*1px/.test(btnDangerRule),
+          '1097b. NEW — .btn-danger itself is a genuinely FILLED button (solid #DC2626 background, white text, no border) — not an outline/ghost variant'
+        );
+      }
+
+      // 1098. Drop Plan's formatting matches the existing Add Task button pattern exactly (same display/alignItems/gap/padding/fontSize/flexShrink values)
+      {
+        const dropPlanStyleMatch = onbDetailSrcFinal5.match(/title="Drop onboarding plan"[\s\S]{0,150}style=\{\{ ([^}]*) \}\}/);
+        const addTaskStyleMatch = onbDetailSrcFinal5.match(/className="btn-primary"\s*\n\s*style=\{\{ ([^}]*) \}\}\s*\n\s*onClick=\{\(\) => setIsAddTaskModalOpen\(true\)\}/);
+        assert(Boolean(dropPlanStyleMatch) && Boolean(addTaskStyleMatch), '1098setup. Both Drop Plan\'s and Add Task\'s inline style blocks were located in source');
+        const dropPlanStyle = dropPlanStyleMatch ? dropPlanStyleMatch[1] : '';
+        const addTaskStyle = addTaskStyleMatch ? addTaskStyleMatch[1] : '';
+        assert(
+          dropPlanStyle.includes("display: 'inline-flex'") && dropPlanStyle.includes("alignItems: 'center'") &&
+          dropPlanStyle.includes("padding: '0.4rem 0.75rem'") && dropPlanStyle.includes("fontSize: '0.8rem'") && dropPlanStyle.includes('flexShrink: 0') &&
+          addTaskStyle.includes("padding: '0.4rem 0.75rem'") && addTaskStyle.includes("fontSize: '0.8rem'") && addTaskStyle.includes('flexShrink: 0'),
+          `1098. NEW — Drop Plan's padding/fontSize/flexShrink/display/alignItems now byte-for-byte match Add Task's (Drop Plan: "${dropPlanStyle}", Add Task: "${addTaskStyle}") — same visual density and structure, only the fill color differs`
+        );
+      }
+
+      // 1099/1100. Drop Plan's handler and visibility logic are completely unchanged by this styling-only task
+      assert(
+        onbDetailSrcFinal5.includes('onClick={() => setIsDropPlanModalOpen(true)}'),
+        '1099. REGRESSION: Drop Plan still calls the exact same setIsDropPlanModalOpen(true) handler — only its visual style changed'
+      );
+      assert(
+        onbDetailSrcFinal5.includes('planInstance && isActivePlanStatus(planInstance.derivedStatus)') &&
+        (onbDetailSrcFinal5.match(/isActivePlanStatus\(planInstance\.derivedStatus\)/g) || []).length === 1,
+        '1100. REGRESSION: Drop Plan\'s visibility is still gated by the single existing isActivePlanStatus(planInstance.derivedStatus) predicate — unchanged by this styling task'
+      );
+      assert(
+        onbDetailSrcFinal5.match(/<DropPlanModal\s*\n\s*isOpen=\{isDropPlanModalOpen\}\s*\n\s*onClose=\{\(\) => setIsDropPlanModalOpen\(false\)\}\s*\n\s*planInstance=\{planInstance\}\s*\n\s*employeeName=\{employee\.fullName\}\s*\n\s*onSuccess=\{handleDropPlanSuccess\}/),
+        '1100b. REGRESSION: The same <DropPlanModal> is still rendered with identical props — not duplicated or reimplemented'
+      );
+
+      // --- MARK ALL AS COMPLETE: STYLING ONLY, PLACEMENT UNCHANGED ---
+
+      // 1101. UPDATED — Mark All as Complete uses a FILLED green/success treatment (.btn-success) — not the previous neutral/white .btn-secondary. Its onClick target later changed from onRequestMarkAllComplete (opened a confirmation modal) to onMarkAllComplete (direct execution) — see checks 1105+.
+      assert(
+        overdueTasksModalSrcFinal5.match(/className="btn-success"\s*\n\s*style=\{\{ display: 'inline-flex', alignItems: 'center', gap: '0\.4rem', fontSize: '0\.8rem', padding: '0\.4rem 0\.75rem' \}\}\s*\n\s*onClick=\{onMarkAllComplete\}/),
+        '1101. UPDATED — "Mark All as Complete" uses className="btn-success" (a filled green success button) — the old neutral btn-secondary is gone, and its styling (padding/fontSize/gap) is untouched by the later removal of the confirmation step'
+      );
+
+      // 1102. The project's EXISTING success color token is reused (--status-active-text, the same green already used for Active/Completed/Accepted states) — not an invented new green
+      {
+        const btnSuccessRuleMatch = indexCssSrcFinal5.match(/^\.btn-success \{([^}]*)\}/m);
+        const btnSuccessRule = btnSuccessRuleMatch ? btnSuccessRuleMatch[1] : '';
+        const statusActiveTextMatch = indexCssSrcFinal5.match(/--status-active-text:\s*(#[0-9A-Fa-f]{6});/);
+        assert(
+          /background-color:\s*var\(--status-active-text\)/.test(btnSuccessRule) && /color:\s*#FFFFFF/.test(btnSuccessRule) && Boolean(statusActiveTextMatch),
+          `1102. NEW — .btn-success uses background-color: var(--status-active-text) — the project's pre-existing success token (currently ${statusActiveTextMatch ? statusActiveTextMatch[1] : 'missing'}, the same green already used for Active/Completed/Accepted pills elsewhere) — not a newly invented color value`
+        );
+      }
+      // 1102b. .btn-success is structurally the same shape as .btn-primary/.btn-danger (same padding/border-radius/font-size/font-weight/transition) — a genuine member of the same filled-button family, not a one-off
+      {
+        const btnPrimaryRuleMatch = indexCssSrcFinal5.match(/^\.btn-primary \{([^}]*)\}/m);
+        const btnSuccessRuleMatch2 = indexCssSrcFinal5.match(/^\.btn-success \{([^}]*)\}/m);
+        const normalize = (s) => (s || '').replace(/background-color:[^;]+;/, '').replace(/color:[^;]+;/, '').replace(/\s+/g, ' ').trim();
+        assert(
+          Boolean(btnPrimaryRuleMatch) && Boolean(btnSuccessRuleMatch2) && normalize(btnPrimaryRuleMatch[1]) === normalize(btnSuccessRuleMatch2[1]),
+          '1102b. NEW — .btn-success has the exact same padding/border/border-radius/font-size/font-weight/cursor/transition as .btn-primary (only the fill color differs) — it is a genuine, structurally consistent member of the app\'s filled-button system'
+        );
+      }
+
+      // 1103. Mark All as Complete remains right-aligned, in the exact same dedicated action row as before this task
+      assert(
+        overdueTasksModalSrcFinal5.match(/\{tasks\.length > 0 && \(\s*\n\s*<div style=\{\{ display: 'flex', justifyContent: 'flex-end', padding: '1rem 1\.5rem 0 1\.5rem' \}\}>/),
+        '1103. Mark All as Complete remains right-aligned (justifyContent: \'flex-end\') in the same dedicated bulk-action row — placement/alignment untouched by this styling-only task'
+      );
+
+      // 1104. Existing modal spacing (the 1rem/1.5rem action-row padding, and .modal-body's own unmodified 1.5rem padding) remains unchanged
+      assert(
+        overdueTasksModalSrcFinal5.includes("padding: '1rem 1.5rem 0 1.5rem'") && indexCssSrcFinal5.match(/^\.modal-body \{\s*\n\s*padding:\s*1\.5rem;/m),
+        '1104. The bulk-action row\'s spacing (1rem top / 1.5rem sides / 0 bottom) and .modal-body\'s own 1.5rem padding are both unchanged from the previous spacing-refinement task'
+      );
+
+      // 1105. UPDATED — OverdueTasksModal itself still never imports activityService/markCompleteMany directly (this styling-only task did not add a completion call to the component) — its button target (onRequestMarkAllComplete vs. onMarkAllComplete) is exercised by the later "no confirmation" task's own checks, not here
+      assert(
+        !stripComments(overdueTasksModalSrcFinal5).includes('activityService') && !overdueTasksModalSrcFinal5.includes('markCompleteMany'),
+        '1105. UPDATED — OverdueTasksModal still never calls activityService/markCompleteMany directly — this task only restyled the button, it never introduced a direct completion call inside the component'
+      );
+
+      // 1106. Still hidden entirely (not just disabled) when there are zero overdue tasks
+      assert(
+        overdueTasksModalSrcFinal5.match(/\{tasks\.length > 0 && \([\s\S]{0,650}Mark All as Complete/),
+        '1106. REGRESSION: "Mark All as Complete" remains conditionally rendered on tasks.length > 0 — still fully absent (not merely disabled) when there are zero overdue tasks'
+      );
+
+      // 1107. Individual per-task "Mark Complete" is completely untouched (still its own compact outline-green button, unchanged styling and handler)
+      assert(
+        overdueTasksModalSrcFinal5.includes("className=\"btn-compact-override\"") &&
+        overdueTasksModalSrcFinal5.includes("style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', backgroundColor: '#FFF', color: '#059669', borderColor: '#A7F3D0' }}") &&
+        overdueTasksModalSrcFinal5.includes('onClick={() => onMarkComplete(task.id)}'),
+        '1107. REGRESSION: Individual per-task "Mark Complete" buttons are completely unchanged (same btn-compact-override outline-green styling, same onMarkComplete(task.id) handler) — this task only restyled the BULK action'
+      );
+
+      // --- REGRESSION: NO ONBOARDING BUSINESS LOGIC CHANGED ---
+
+      // 1108. FUNCTIONAL REGRESSION: Drop Plan still correctly drops a plan and makes it non-active
+      {
+        const dbForStyleRegr = loadDatabase();
+        const droppedInstStyle = await onboardingService.dropPlanInstance('inst-002'); // Kevin Heng
+        assert(droppedInstStyle.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED, `1108. REGRESSION: dropPlanInstance() still correctly derives Dropped status (found ${droppedInstStyle.derivedStatus})`);
+        const activeIdsStyleRegr = await onboardingService.getActiveOnboardingEmployeeIds();
+        assert(!activeIdsStyleRegr.has('emp-014'), '1108b. REGRESSION: A Dropped plan is still correctly excluded from getActiveOnboardingEmployeeIds()');
+      }
+
+      // 1109. FUNCTIONAL REGRESSION: bulk overdue completion still works exactly as before
+      {
+        const dbForBulkStyleRegr = loadDatabase();
+        const nowIsoStyleRegr = new Date().toISOString();
+        const overdueActStyleRegr = { id: 'act-style-regr-overdue', typeId: 'act-type-1', title: 'Style Regr Overdue Task', description: '', employeeId: 'emp-013', assigneeId: 'emp-013', dueDate: addDaysToLocalDate(getTodayLocalDateString(), -3), completed: false, completedAt: null, completedBy: null, source: 'Onboarding', sourceEntityType: 'OnboardingTaskInstance', sourceEntityId: 'ti-style-regr', createdAt: nowIsoStyleRegr, createdBy: 'emp-003', updatedAt: nowIsoStyleRegr };
+        dbForBulkStyleRegr.activities = [overdueActStyleRegr, ...(dbForBulkStyleRegr.activities || [])];
+        saveDatabase(dbForBulkStyleRegr);
+        const overdueListStyleRegr = await activityService.getOverdueActivities();
+        const idsStyleRegr = overdueListStyleRegr.filter((a) => a.id === 'act-style-regr-overdue').map((a) => a.id);
+        await activityService.markCompleteMany(idsStyleRegr);
+        const afterBulkStyleRegr = await activityService.getById('act-style-regr-overdue');
+        assert(afterBulkStyleRegr.completed === true, '1109. REGRESSION: activityService.markCompleteMany() (bulk overdue completion) still works correctly after this styling-only task');
+      }
+
+      // 1110. FUNCTIONAL REGRESSION: plan composition/progress derivation and launch eligibility are unchanged
+      {
+        const scopeDefsStyleRegr = await onboardingService.getScopeTaskDefinitions();
+        const compositionStyleRegr = composeOnboardingTasks({ id: 'style-regr-check', directoryType: 'Employee', department: { id: 'dept-3', name: 'Software Engineering' } }, scopeDefsStyleRegr, '2026-08-15');
+        assert(compositionStyleRegr.counts.total === 11, `1110. REGRESSION: Plan composition logic is unchanged (Employee Universal+Department = 11, found ${compositionStyleRegr.counts.total})`);
+        const eligibleStyleRegr = await onboardingService.getLaunchEligibleEmployees();
+        assert(Array.isArray(eligibleStyleRegr), '1110b. REGRESSION: getLaunchEligibleEmployees() still resolves correctly, unaffected by this styling-only task');
+      }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Make "Mark All as Complete" Execute Immediately Without Confirmation Modal
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const overdueTasksModalSrcFinal6 = fs.readFileSync(path.resolve('./src/components/onboarding/OverdueTasksModal.jsx'), 'utf-8');
+      const onbEmployeesSrcFinal6 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeesPage.jsx'), 'utf-8');
+
+      // 1111. Mark All as Complete no longer opens any confirmation modal — MarkAllOverdueCompleteModal.jsx is gone, and nothing in the app still imports it
+      {
+        const modalFileExists = fs.existsSync(path.resolve('./src/components/onboarding/MarkAllOverdueCompleteModal.jsx'));
+        const anyImportRemains = onbEmployeesSrcFinal6.includes('MarkAllOverdueCompleteModal') || overdueTasksModalSrcFinal6.includes('MarkAllOverdueCompleteModal');
+        assert(!modalFileExists && !anyImportRemains, '1111. NEW — Mark All as Complete no longer opens a confirmation modal: MarkAllOverdueCompleteModal.jsx has been removed, and no file in the app still imports or references it');
+      }
+
+      // 1112. Clicking "Mark All as Complete" calls the bulk-complete flow directly — OverdueTasksModal's onClick is wired straight to the onMarkAllComplete prop, which OnboardingEmployeesPage wires straight to its real handler (no intermediate open-a-modal step)
+      assert(
+        overdueTasksModalSrcFinal6.includes('onClick={onMarkAllComplete}') &&
+        onbEmployeesSrcFinal6.includes('onMarkAllComplete={handleMarkAllOverdueComplete}') &&
+        !onbEmployeesSrcFinal6.match(/onMarkAllComplete=\{\(\) => set\w+\(true\)\}/),
+        '1112. NEW — "Mark All as Complete" calls the bulk-complete flow directly: the button\'s onClick is wired to onMarkAllComplete, which the parent maps straight to handleMarkAllOverdueComplete (not a state-setter that would open a modal)'
+      );
+
+      // 1113/1117. FUNCTIONAL: clicking triggers completion of exactly the currently-overdue Onboarding task set — a future task and an unrelated (non-Onboarding-sourced) activity are both left untouched
+      {
+        const today = getTodayLocalDateString();
+        const overdueDate = addDaysToLocalDate(today, -4);
+        const futureDate = addDaysToLocalDate(today, 12);
+        const nowIsoImmediate = new Date().toISOString();
+        const dbForImmediateTest = loadDatabase();
+
+        const overdueOnboardingAct = { id: 'act-immediate-overdue', typeId: 'act-type-1', title: 'Immediate Overdue Onboarding Task', description: '', employeeId: 'emp-013', assigneeId: 'emp-013', dueDate: overdueDate, completed: false, completedAt: null, completedBy: null, source: 'Onboarding', sourceEntityType: 'OnboardingTaskInstance', sourceEntityId: 'ti-immediate-1', createdAt: nowIsoImmediate, createdBy: 'emp-003', updatedAt: nowIsoImmediate };
+        const futureOnboardingAct = { id: 'act-immediate-future', typeId: 'act-type-1', title: 'Immediate Future Onboarding Task (not overdue)', description: '', employeeId: 'emp-013', assigneeId: 'emp-013', dueDate: futureDate, completed: false, completedAt: null, completedBy: null, source: 'Onboarding', sourceEntityType: 'OnboardingTaskInstance', sourceEntityId: 'ti-immediate-2', createdAt: nowIsoImmediate, createdBy: 'emp-003', updatedAt: nowIsoImmediate };
+        const unrelatedOverdueAct = { id: 'act-immediate-unrelated', typeId: 'act-type-1', title: 'Unrelated Overdue Manual Task', description: '', employeeId: 'emp-013', assigneeId: 'emp-013', dueDate: overdueDate, completed: false, completedAt: null, completedBy: null, source: 'Manual', sourceEntityType: null, sourceEntityId: null, createdAt: nowIsoImmediate, createdBy: 'emp-003', updatedAt: nowIsoImmediate };
+
+        dbForImmediateTest.activities = [overdueOnboardingAct, futureOnboardingAct, unrelatedOverdueAct, ...(dbForImmediateTest.activities || [])];
+        saveDatabase(dbForImmediateTest);
+
+        // This is exactly what OnboardingEmployeesPage.loadData() computes into `overdueTasks`,
+        // and exactly what handleMarkAllOverdueComplete() maps to IDs and completes — the same
+        // real production code path, not a re-derived approximation.
+        const overdueList = await activityService.getOverdueActivities();
+        const onboardingOverdueIds = overdueList.filter((a) => a.source === 'Onboarding').map((a) => a.id);
+        assert(onboardingOverdueIds.includes('act-immediate-overdue') && !onboardingOverdueIds.includes('act-immediate-future') && !onboardingOverdueIds.includes('act-immediate-unrelated'), '1113setup. NEW — Setup: the effective overdue-Onboarding set correctly includes only the genuinely overdue Onboarding activity, excluding the future one and the unrelated Manual-sourced one');
+
+        await activityService.markCompleteMany(onboardingOverdueIds);
+
+        const afterOverdue = await activityService.getById('act-immediate-overdue');
+        const afterFuture = await activityService.getById('act-immediate-future');
+        const afterUnrelated = await activityService.getById('act-immediate-unrelated');
+        assert(afterOverdue.completed === true, '1113. NEW — The currently-overdue Onboarding task is completed immediately');
+        assert(afterFuture.completed === false, '1114. NEW — The future, non-overdue Onboarding task remains completely untouched (still incomplete)');
+        assert(afterUnrelated.completed === false, '1115. NEW — The unrelated (non-Onboarding-sourced) overdue activity remains completely untouched (still incomplete) — bulk completion never crosses module boundaries');
+      }
+
+      resetDatabase();
+
+      // 1116. FUNCTIONAL: after completion, the effective overdue-Onboarding set for the affected activities shrinks immediately (no separate refresh step needed at the data layer — getOverdueActivities() always recomputes fresh)
+      {
+        const instBeforeImmediate = await onboardingService.getInstanceById('inst-001'); // Hannah
+        const incompleteTasksBefore = instBeforeImmediate.progress.tasks.filter((t) => !t.isCompleted);
+        const overdueBefore = await activityService.getOverdueActivities();
+        const hannahOverdueIdsBefore = overdueBefore.filter((a) => a.source === 'Onboarding' && a.employeeId === 'emp-013').map((a) => a.id);
+        assert(hannahOverdueIdsBefore.length > 0, `1116setup. NEW — Setup: Hannah has ${hannahOverdueIdsBefore.length} genuinely overdue onboarding activities in the seed data`);
+
+        await activityService.markCompleteMany(hannahOverdueIdsBefore);
+
+        const overdueAfter = await activityService.getOverdueActivities();
+        const hannahOverdueIdsAfter = overdueAfter.filter((a) => a.source === 'Onboarding' && a.employeeId === 'emp-013').map((a) => a.id);
+        assert(hannahOverdueIdsAfter.length === 0, `1116. NEW — Immediately after bulk-completing Hannah's overdue tasks, a fresh getOverdueActivities() call (the same one OnboardingEmployeesPage.loadData() uses) no longer returns any of them — the "list refreshes immediately" requirement is a direct consequence of this always-fresh computation, not a caching/reload mechanism`);
+
+        // 1117/1118/1119/1120: progress/status recalculate correctly, including the Needs Attention -> Completed transition when this clears the LAST incomplete tasks
+        const instAfterImmediate = await onboardingService.getInstanceById('inst-001');
+        assert(instAfterImmediate.progress.completedTasksCount === instBeforeImmediate.progress.completedTasksCount + hannahOverdueIdsBefore.length, `1117. NEW — Progress recalculates correctly: completedTasksCount increased by exactly the number of tasks just bulk-completed (${hannahOverdueIdsBefore.length})`);
+        assert(instAfterImmediate.derivedStatus !== PLAN_INSTANCE_STATUS.NEEDS_ATTENTION, `1118. NEW — Needs Attention recalculates correctly: with no overdue required tasks remaining, the plan is no longer Needs Attention (found ${instAfterImmediate.derivedStatus})`);
+        if (instAfterImmediate.progress.completedTasksCount === instAfterImmediate.progress.totalTasks) {
+          assert(instAfterImmediate.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED, `1119. NEW — Completed recalculates correctly: with every task now complete, the plan derives exactly Completed (found ${instAfterImmediate.derivedStatus})`);
+        } else {
+          assert(instAfterImmediate.derivedStatus === PLAN_INSTANCE_STATUS.IN_PROGRESS, `1119. NEW — With some tasks still incomplete but none overdue, the plan correctly derives In Progress (found ${instAfterImmediate.derivedStatus})`);
+        }
+      }
+
+      resetDatabase();
+
+      // 1120. FUNCTIONAL: rapid double-invocation of the bulk-complete handler cannot double-complete or error — markCompleteMany() is naturally idempotent per-ID (completing an already-completed activity just re-confirms completed: true), and the UI-level isMarkingAllComplete guard (checked below) is what actually prevents the second click from ever firing in the first place
+      {
+        const overdueForDoubleClick = await activityService.getOverdueActivities();
+        const idsForDoubleClick = overdueForDoubleClick.filter((a) => a.source === 'Onboarding').map((a) => a.id);
+        await activityService.markCompleteMany(idsForDoubleClick);
+        // Second call with the same (now-empty, since getOverdueActivities() would return none of them anymore) or even the same stale ID list must not throw or corrupt state
+        let doubleClickThrew = false;
+        try {
+          await activityService.markCompleteMany(idsForDoubleClick);
+        } catch (err) {
+          doubleClickThrew = true;
+        }
+        assert(!doubleClickThrew, '1120. NEW — Calling markCompleteMany() a second time with the same IDs (simulating what would happen if a click slipped through) does not throw — completing an already-completed activity is a safe, idempotent no-op');
+      }
+
+      // 1121. Rapid double-click cannot execute the bulk operation twice — the UI guard: isMarkingAllComplete disables the button, and the handler itself early-returns while already running
+      assert(
+        onbEmployeesSrcFinal6.match(/handleMarkAllOverdueComplete = async \(\) => \{\s*\n\s*if \(isMarkingAllComplete\) return;\s*\n\s*setIsMarkingAllComplete\(true\);/) &&
+        overdueTasksModalSrcFinal6.includes('disabled={isMarkingAllComplete}'),
+        '1121. NEW — Double-submission is prevented at two layers: handleMarkAllOverdueComplete() early-returns if already running (if (isMarkingAllComplete) return;), AND the button itself is disabled={isMarkingAllComplete} for the duration of the call — a rapid double-click cannot fire the bulk operation twice'
+      );
+
+      // 1122. A subtle loading state is shown while the operation runs (button label swaps to "Completing...") — not an elaborate loading UI
+      assert(
+        overdueTasksModalSrcFinal6.includes("{isMarkingAllComplete ? 'Completing...' : 'Mark All as Complete'}"),
+        '1122. NEW — While the bulk operation is running, the button\'s label swaps to "Completing..." (matching the existing Drop Plan/"Dropping..." convention) — a subtle loading indicator, not an elaborate new loading UI'
+      );
+
+      // 1123. Error handling: a failed bulk completion surfaces via the existing alert() pattern (the same one already used by the individual handleMarkTaskComplete right above it), preserves the overdue list (loadData() is only called on success), and re-enables the button via the finally block
+      assert(
+        onbEmployeesSrcFinal6.match(/catch \(err\) \{\s*\n\s*alert\(`Failed to complete overdue tasks: \$\{err\.message\}`\);\s*\n\s*\} finally \{\s*\n\s*setIsMarkingAllComplete\(false\);\s*\n\s*\}/),
+        '1123. NEW — On failure, handleMarkAllOverdueComplete() surfaces the error via alert() (the same existing pattern used by handleMarkTaskComplete, not a new notification framework) and re-enables the button in a finally block; loadData() (which would refresh/clear the overdue list) is only reached on the success path, so a failed attempt leaves the overdue list and task states untouched'
+      );
+
+      // 1124. Empty state and button disappearance: when zero overdue tasks remain, the existing "All onboarding tasks are on schedule!" message shows and the Mark All button is entirely absent (not just disabled)
+      assert(
+        overdueTasksModalSrcFinal6.includes('All onboarding tasks are on schedule!') &&
+        overdueTasksModalSrcFinal6.match(/\{tasks\.length === 0 \? \(/),
+        '1124. NEW — The existing empty-state message and its tasks.length === 0 conditional are unchanged — reached automatically once bulk completion clears the overdue list, with the Mark All button (a sibling tasks.length > 0 block) disappearing at the same time'
+      );
+
+      // 1125. Individual per-task "Mark Complete" is completely unchanged by this task
+      assert(
+        overdueTasksModalSrcFinal6.includes('className="btn-compact-override"') &&
+        overdueTasksModalSrcFinal6.includes("style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', backgroundColor: '#FFF', color: '#059669', borderColor: '#A7F3D0' }}") &&
+        overdueTasksModalSrcFinal6.includes('onClick={() => onMarkComplete(task.id)}') &&
+        onbEmployeesSrcFinal6.includes('onMarkComplete={handleMarkTaskComplete}'),
+        '1125. REGRESSION: Individual per-task "Mark Complete" buttons and their handleMarkTaskComplete wiring are completely unchanged — this task only touched the bulk action'
+      );
+
+      // 1126. Existing green styling/placement of the bulk button is unchanged — still .btn-success, still right-aligned in the same dedicated action row with the same spacing
+      assert(
+        overdueTasksModalSrcFinal6.includes('className="btn-success"') &&
+        overdueTasksModalSrcFinal6.match(/justifyContent: 'flex-end', padding: '1rem 1\.5rem 0 1\.5rem'/) &&
+        overdueTasksModalSrcFinal6.includes('<CheckCheck size={14} />'),
+        '1126. REGRESSION: The bulk button retains its filled-green .btn-success styling, CheckCheck icon, and right-aligned placement/spacing — this task removed only the confirmation step, not the visual design from the previous styling task'
+      );
+
+      // 1127. No onboarding regression: Delete Task, Add Task, Complete/Reopen, Drop Plan, and launch eligibility all remain fully functional
+      {
+        const instForRegrChecks = await onboardingService.getInstanceById('inst-001');
+        const taskToDeleteRegr = instForRegrChecks.progress.tasks.find((t) => !t.isCompleted);
+        if (taskToDeleteRegr) {
+          const afterDeleteRegr = await onboardingService.deleteTaskFromInstance('inst-001', taskToDeleteRegr.id);
+          assert(afterDeleteRegr.progress.totalTasks === instForRegrChecks.progress.totalTasks - 1, '1127a. NEW — REGRESSION: Delete Task still works correctly');
+        }
+        const afterAddRegr = await onboardingService.addTaskToInstance('inst-001', { title: 'Immediate-Complete Regression Check', description: '', relativeOffsetDays: 0 });
+        assert(afterAddRegr.progress.tasks.some((t) => t.currentTitle === 'Immediate-Complete Regression Check'), '1127b. NEW — REGRESSION: Add Task still works correctly');
+        const toggleTaskRegr = afterAddRegr.progress.tasks.find((t) => !t.isCompleted);
+        const doneRegr = await activityService.markComplete(toggleTaskRegr.activityId);
+        const reopenRegr = await activityService.reopen(toggleTaskRegr.activityId);
+        assert(doneRegr.completed === true && reopenRegr.completed === false, '1127c. NEW — REGRESSION: Complete/Reopen still work correctly');
+        const droppedRegr = await onboardingService.dropPlanInstance('inst-002');
+        assert(droppedRegr.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED, '1127d. NEW — REGRESSION: Drop Plan still works correctly');
+        const eligibleRegrFinal = await onboardingService.getLaunchEligibleEmployees();
+        assert(Array.isArray(eligibleRegrFinal), '1127e. NEW — REGRESSION: Launch eligibility still resolves correctly');
+      }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Rename Onboarding "Employees" Submenu to "Progress"
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const sidebarSrcFinal = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+      const headerSrcFinal = fs.readFileSync(path.resolve('./src/components/layout/Header.jsx'), 'utf-8');
+      const onbEmployeesSrcFinal7 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeesPage.jsx'), 'utf-8');
+      const onbDetailSrcFinal7 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const routerSrcFinal7 = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+
+      // 1128. MAIN sidebar section still contains "Employees" (the master workforce directory) — untouched by this task
+      {
+        const mainSectionMatch = sidebarSrcFinal.match(/MAIN Section \*\/\}[\s\S]*?PEOPLE Section/);
+        const mainSectionBlock = mainSectionMatch ? mainSectionMatch[0] : '';
+        assert(
+          mainSectionBlock.includes('to="/employees"') && mainSectionBlock.includes('<span>Employees</span>'),
+          '1128. MAIN sidebar section still contains an "Employees" nav item linking to /employees — the master workforce directory is unchanged by this task'
+        );
+      }
+
+      // 1129. Onboarding submenu now contains "Progress" as its first sublink, still pointing at the unchanged /onboarding/employees route
+      {
+        const onboardingSubmenuMatch = sidebarSrcFinal.match(/\{\/\* Onboarding \*\/\}[\s\S]*?\{\/\* Offboarding \*\/\}/);
+        const onboardingSubmenuBlock = onboardingSubmenuMatch ? onboardingSubmenuMatch[0] : '';
+        assert(
+          onboardingSubmenuBlock.match(/to="\/onboarding\/employees"[\s\S]{0,250}Progress/),
+          '1129. NEW — The Onboarding submenu\'s first sublink now reads "Progress" while still routing to the unchanged /onboarding/employees path'
+        );
+
+        // 1130. The old Onboarding submenu label "Employees" is gone from that submenu specifically (not a global word-ban — MAIN > Employees above is untouched)
+        assert(
+          !onboardingSubmenuBlock.includes('>Employees<'),
+          '1130. NEW — The old "Employees" label is gone from the Onboarding submenu specifically (checked only within the Onboarding submenu block, so MAIN > Employees is correctly unaffected)'
+        );
+
+        // 1131. "Plans" remains unchanged in the Onboarding submenu
+        assert(
+          onboardingSubmenuBlock.match(/to="\/onboarding\/plans"[\s\S]{0,250}Plans/),
+          '1131. The Onboarding submenu\'s "Plans" sublink is unchanged, still routing to /onboarding/plans'
+        );
+      }
+
+      // 1132. Main page heading is exactly "Onboarding Progress"
+      assert(onbEmployeesSrcFinal7.includes('>Onboarding Progress<'), '1132. The Onboarding Progress page\'s <h1> heading reads exactly "Onboarding Progress"');
+
+      // 1133. Subtitle remains the existing, still-accurate description — unchanged wording
+      assert(
+        onbEmployeesSrcFinal7.includes('View and track individual onboarding progress for employees and interns.'),
+        '1133. The page subtitle ("View and track individual onboarding progress for employees and interns.") is unchanged — it already read naturally for the renamed page'
+      );
+
+      // 1134. Breadcrumb display metadata: a single, path-scoped label override maps /onboarding/employees -> "Progress" — not a second/duplicated breadcrumb, and not a route rename
+      assert(
+        headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES\s*=\s*\{\s*\n\s*'\/onboarding\/employees':\s*'Progress',/) &&
+        headerSrcFinal.includes('BREADCRUMB_LABEL_OVERRIDES[url] || formatBreadcrumbText(segment)') &&
+        (headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES/g) || []).length >= 2,
+        '1134. NEW — Header.jsx defines a single path-keyed BREADCRUMB_LABEL_OVERRIDES entry (\'/onboarding/employees\' -> \'Progress\') consumed by the existing single breadcrumb generator — this is a display-metadata override, not a hardcoded second breadcrumb and not a route change'
+      );
+      // 1134b. The override is keyed by the FULL path, not the bare segment — so it can never leak into the unrelated top-level /employees directory's own breadcrumb
+      assert(
+        !headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES\s*=\s*\{\s*\n\s*'employees':/) && !headerSrcFinal.match(/'\/employees':\s*'Progress'/),
+        '1134b. NEW — The breadcrumb override is keyed by the full path \'/onboarding/employees\', never by the bare segment \'employees\' or by \'/employees\' — the MAIN > Employees directory breadcrumb is provably unaffected'
+      );
+
+      // 1135. Detail-page Back link says "Back to Onboarding Progress" in both render branches (normal state and the "Employee Not Found" fallback), destination route unchanged
+      assert(
+        (onbDetailSrcFinal7.match(/Back to Onboarding Progress/g) || []).length === 2 &&
+        !onbDetailSrcFinal7.includes('Back to Onboarding Employees') &&
+        (onbDetailSrcFinal7.match(/to="\/onboarding\/employees"/g) || []).length === 2,
+        '1135. NEW — Both Back-link render branches on the detail page (normal state and the "Employee Not Found" fallback) now read "Back to Onboarding Progress", each still navigating to the unchanged /onboarding/employees route'
+      );
+
+      // 1136. Existing onboarding route/navigation is intentionally preserved — /onboarding/employees was NOT renamed, and the index redirect still targets it
+      assert(
+        routerSrcFinal7.includes("{ path: 'employees', element: <OnboardingEmployeesPage /> }") &&
+        routerSrcFinal7.includes("{ path: 'employees/:employeeId', element: <OnboardingEmployeeDetailPage /> }") &&
+        routerSrcFinal7.includes("<Navigate to=\"/onboarding/employees\" replace />"),
+        '1136. NEW — The /onboarding/employees (and /onboarding/employees/:employeeId) routes, and the /onboarding index redirect that targets them, are byte-for-byte unchanged — this was a UI-label-only rename, no route migration was introduced'
+      );
+
+      // 1137. No onboarding functionality/business logic was touched by this wording-only task
+      {
+        const onboardingServiceSrcFinal7 = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+        const onboardingDomainSrcFinal7 = fs.readFileSync(path.resolve('./src/domain/onboardingDomain.js'), 'utf-8');
+        const activityServiceSrcFinal7 = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
+        assert(
+          onboardingServiceSrcFinal7.includes('async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = [], currentUserId') &&
+          onboardingDomainSrcFinal7.includes("DROPPED: 'Dropped'") &&
+          activityServiceSrcFinal7.includes('async markCompleteMany('),
+          '1137a. NEW — REGRESSION: onboardingService.js/onboardingDomain.js/activityService.js signatures and domain states are all unchanged — this task touched only UI wording (Sidebar/Header/page heading/back link)'
+        );
+
+        const scopeDefsWordingRegr = await onboardingService.getScopeTaskDefinitions();
+        const compositionWordingRegr = composeOnboardingTasks({ id: 'wording-regr-check', directoryType: 'Employee', department: { id: 'dept-3', name: 'Software Engineering' } }, scopeDefsWordingRegr, '2026-08-15');
+        assert(compositionWordingRegr.counts.total === 11, `1137b. NEW — REGRESSION: Plan composition is functionally unaffected (Employee Universal+Department = 11, found ${compositionWordingRegr.counts.total})`);
+
+        const eligibleWordingRegr = await onboardingService.getLaunchEligibleEmployees();
+        assert(Array.isArray(eligibleWordingRegr), '1137c. NEW — REGRESSION: Launch eligibility still resolves correctly');
       }
 
       resetDatabase();

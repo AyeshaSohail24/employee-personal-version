@@ -20,6 +20,16 @@ export default function Header({ toggleMobileSidebar }) {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
+  // Display-label overrides, keyed by the FULL accumulated path (never by bare segment text) so
+  // a route can read differently in the breadcrumb than its URL slug without ever affecting any
+  // other route that happens to share the same last segment — e.g. this does not touch the
+  // top-level /employees directory's own breadcrumb, only this one nested onboarding route.
+  // The URL itself (/onboarding/employees) is intentionally left unchanged; only this display
+  // label is remapped, so no route/link elsewhere needs to change.
+  const BREADCRUMB_LABEL_OVERRIDES = {
+    '/onboarding/employees': 'Progress',
+  };
+
   return (
     <header className="app-header">
       <div className="header-left">
@@ -39,17 +49,18 @@ export default function Header({ toggleMobileSidebar }) {
           {pathSegments.map((segment, index) => {
             const url = `/${pathSegments.slice(0, index + 1).join('/')}`;
             const isLast = index === pathSegments.length - 1;
+            const label = BREADCRUMB_LABEL_OVERRIDES[url] || formatBreadcrumbText(segment);
 
             return (
               <React.Fragment key={url}>
                 <ChevronRight size={14} style={{ color: 'var(--text-light)' }} />
                 {isLast ? (
                   <span className="breadcrumb-current">
-                    {formatBreadcrumbText(segment)}
+                    {label}
                   </span>
                 ) : (
                   <Link to={url} className="breadcrumb-item">
-                    {formatBreadcrumbText(segment)}
+                    {label}
                   </Link>
                 )}
               </React.Fragment>
