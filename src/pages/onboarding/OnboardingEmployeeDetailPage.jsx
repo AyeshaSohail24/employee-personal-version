@@ -12,13 +12,17 @@ import {
   RotateCcw,
   Eye,
   Plus,
+  Trash2,
+  XCircle,
 } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
 import { onboardingService } from '../../services/onboardingService.js';
 import { activityService } from '../../services/activityService.js';
-import { PLAN_INSTANCE_STATUS } from '../../domain/onboardingDomain.js';
+import { PLAN_INSTANCE_STATUS, isActivePlanStatus } from '../../domain/onboardingDomain.js';
 import LaunchPlanModal from '../../components/onboarding/LaunchPlanModal.jsx';
 import AddTaskModal from '../../components/onboarding/AddTaskModal.jsx';
+import DeleteOnboardingTaskModal from '../../components/onboarding/DeleteOnboardingTaskModal.jsx';
+import DropPlanModal from '../../components/onboarding/DropPlanModal.jsx';
 
 export default function OnboardingEmployeeDetailPage() {
   const { employeeId } = useParams();
@@ -27,6 +31,8 @@ export default function OnboardingEmployeeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+  const [taskPendingDelete, setTaskPendingDelete] = useState(null);
+  const [isDropPlanModalOpen, setIsDropPlanModalOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -49,6 +55,16 @@ export default function OnboardingEmployeeDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteTaskSuccess = async () => {
+    setTaskPendingDelete(null);
+    await loadData();
+  };
+
+  const handleDropPlanSuccess = async () => {
+    setIsDropPlanModalOpen(false);
+    await loadData();
   };
 
   const handleToggleTaskComplete = async (activityId, isCompleted) => {
@@ -102,7 +118,7 @@ export default function OnboardingEmployeeDetailPage() {
 
       {/* Header Summary Card */}
       <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
           <div className="emp-identity-block" style={{ gap: '1rem' }}>
             <div className="emp-avatar-circle" style={{ width: '48px', height: '48px', fontSize: '1.1rem', background: isFormerEmployee ? '#64748B' : undefined }}>
               {employee.photo || 'EM'}
@@ -122,11 +138,30 @@ export default function OnboardingEmployeeDetailPage() {
             </div>
           </div>
 
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>Anchor Start Date</div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-              <Calendar size={14} style={{ color: 'var(--color-primary)' }} />
-              <span>{currentStartDate || 'N/A'}</span>
+          {/* Right-side header column: Drop Plan (only while the plan is active — same
+              isActivePlanStatus() gate as before, just relocated) stacked directly above Anchor
+              Start Date. When Drop Plan isn't shown (no plan instance, or a Completed/Dropped
+              one), this is simply a single-child column — the `gap` only applies BETWEEN
+              children, so no empty placeholder or extra space is left behind. */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.6rem' }}>
+            {planInstance && isActivePlanStatus(planInstance.derivedStatus) && (
+              <button
+                type="button"
+                className="btn-secondary"
+                title="Drop onboarding plan"
+                onClick={() => setIsDropPlanModalOpen(true)}
+                style={{ color: '#DC2626', borderColor: '#FECACA', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
+              >
+                <XCircle size={14} />
+                <span>Drop Plan</span>
+              </button>
+            )}
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>Anchor Start Date</div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Calendar size={14} style={{ color: 'var(--color-primary)' }} />
+                <span>{currentStartDate || 'N/A'}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -173,7 +208,7 @@ export default function OnboardingEmployeeDetailPage() {
         <div>
           {/* Progress Overview Card */}
           <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
                   {planInstance.template ? planInstance.template.name : 'Onboarding Plan'}
@@ -183,7 +218,7 @@ export default function OnboardingEmployeeDetailPage() {
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                 <span
                   className="presence-badge"
                   style={
@@ -191,6 +226,8 @@ export default function OnboardingEmployeeDetailPage() {
                       ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0', padding: '0.3rem 0.75rem', fontSize: '0.815rem' }
                       : planInstance.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION
                       ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA', padding: '0.3rem 0.75rem', fontSize: '0.815rem' }
+                      : planInstance.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED
+                      ? { backgroundColor: '#F1F5F9', color: '#64748B', borderColor: '#CBD5E1', padding: '0.3rem 0.75rem', fontSize: '0.815rem' }
                       : { backgroundColor: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE', padding: '0.3rem 0.75rem', fontSize: '0.815rem' }
                   }
                 >
@@ -209,7 +246,11 @@ export default function OnboardingEmployeeDetailPage() {
                 style={{
                   width: `${planInstance.progress.progressPercentage}%`,
                   height: '100%',
-                  background: planInstance.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION ? '#EF4444' : '#129FA9',
+                  background: planInstance.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION
+                    ? '#EF4444'
+                    : planInstance.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED
+                    ? '#94A3B8'
+                    : '#129FA9',
                   transition: 'width 0.4s ease',
                 }}
               />
@@ -273,17 +314,28 @@ export default function OnboardingEmployeeDetailPage() {
                         {task.currentDueDate}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {act && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                          {act && (
+                            <button
+                              type="button"
+                              className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
+                              style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
+                              onClick={() => handleToggleTaskComplete(act.id, isDone)}
+                            >
+                              {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
+                              <span>{isDone ? 'Reopen' : 'Done'}</span>
+                            </button>
+                          )}
                           <button
                             type="button"
-                            className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
-                            style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
-                            onClick={() => handleToggleTaskComplete(act.id, isDone)}
+                            className="icon-btn icon-btn-danger"
+                            title="Delete task"
+                            aria-label="Delete task"
+                            onClick={() => setTaskPendingDelete(task)}
                           >
-                            {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
-                            <span>{isDone ? 'Reopen' : 'Done'}</span>
+                            <Trash2 size={13} />
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -311,6 +363,29 @@ export default function OnboardingEmployeeDetailPage() {
           planInstanceId={planInstance.id}
           employeeName={employee.fullName}
           onSuccess={() => loadData()}
+        />
+      )}
+
+      {/* Delete Task Modal (employee-specific plan instance only — reusable Plans configuration untouched) */}
+      {planInstance && (
+        <DeleteOnboardingTaskModal
+          isOpen={Boolean(taskPendingDelete)}
+          onClose={() => setTaskPendingDelete(null)}
+          planInstanceId={planInstance.id}
+          task={taskPendingDelete}
+          employeeName={employee.fullName}
+          onSuccess={handleDeleteTaskSuccess}
+        />
+      )}
+
+      {/* Drop Plan Modal (only ever opened while the plan is active) */}
+      {planInstance && (
+        <DropPlanModal
+          isOpen={isDropPlanModalOpen}
+          onClose={() => setIsDropPlanModalOpen(false)}
+          planInstance={planInstance}
+          employeeName={employee.fullName}
+          onSuccess={handleDropPlanSuccess}
         />
       )}
     </div>

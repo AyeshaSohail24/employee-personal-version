@@ -16,7 +16,24 @@ export const PLAN_INSTANCE_STATUS = {
   IN_PROGRESS: 'In Progress',
   NEEDS_ATTENTION: 'Needs Attention',
   COMPLETED: 'Completed',
+  // Terminal state for a plan intentionally stopped/cancelled before successful completion (via
+  // "Drop Plan"). Distinct from COMPLETED (successful finish) — both are non-active for
+  // duplicate-launch eligibility, but only COMPLETED represents success. See isActivePlanStatus().
+  DROPPED: 'Dropped',
 };
+
+/**
+ * Single source of truth for "is this plan instance currently active" — i.e. it can still block
+ * a duplicate launch, still contribute to overdue alerts/active summary counts, and can still be
+ * In Progress/Needs Attention. Both COMPLETED and DROPPED are non-active terminal states. Every
+ * call site that previously wrote `derivedStatus !== PLAN_INSTANCE_STATUS.COMPLETED` inline
+ * (onboardingService.getActiveOnboardingEmployeeIds(), the Onboarding Employees summary cards)
+ * now reuses this one predicate instead, so DROPPED can never be miscounted as active in one
+ * place but not another.
+ */
+export function isActivePlanStatus(status) {
+  return status !== PLAN_INSTANCE_STATUS.COMPLETED && status !== PLAN_INSTANCE_STATUS.DROPPED;
+}
 
 /**
  * Resolves the full onboarding history population: everyone who currently has, or has ever
@@ -371,6 +388,13 @@ export function derivePlanInstanceStatus(
   referenceDate = getTodayLocalDateString()
 ) {
   if (!planInstance) return PLAN_INSTANCE_STATUS.IN_PROGRESS;
+
+  // Dropped is a permanent terminal state — checked first, ahead of every other rule (including
+  // the Former-employee override below), so a dropped plan can never be resurrected into
+  // Needs Attention/In Progress by a later change in the employee's lifecycle status.
+  if (planInstance.droppedAt) {
+    return PLAN_INSTANCE_STATUS.DROPPED;
+  }
 
   if (employee && employee.status === 'Former') {
     return PLAN_INSTANCE_STATUS.NEEDS_ATTENTION;

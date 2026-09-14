@@ -14,9 +14,10 @@ import {
 import { employeeService } from '../../services/employeeService.js';
 import { onboardingService } from '../../services/onboardingService.js';
 import { activityService } from '../../services/activityService.js';
-import { PLAN_INSTANCE_STATUS, resolveAllOnboardingHistory } from '../../domain/onboardingDomain.js';
+import { PLAN_INSTANCE_STATUS, isActivePlanStatus, resolveAllOnboardingHistory } from '../../domain/onboardingDomain.js';
 import LaunchPlanModal from '../../components/onboarding/LaunchPlanModal.jsx';
 import OverdueTasksModal from '../../components/onboarding/OverdueTasksModal.jsx';
+import MarkAllOverdueCompleteModal from '../../components/onboarding/MarkAllOverdueCompleteModal.jsx';
 
 export default function OnboardingEmployeesPage() {
   const [employees, setEmployees] = useState([]);
@@ -27,6 +28,7 @@ export default function OnboardingEmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
   const [isOverdueModalOpen, setIsOverdueModalOpen] = useState(false);
+  const [isMarkAllOverdueModalOpen, setIsMarkAllOverdueModalOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -42,9 +44,17 @@ export default function OnboardingEmployeesPage() {
       setEmployees(allEmps);
       setInstances(allInsts);
 
-      // Fetch overdue activities that belong to Onboarding
+      // Fetch overdue activities that belong to Onboarding — and exclude any whose parent plan
+      // instance has been Dropped, since a Dropped plan must no longer contribute overdue
+      // alerts even if it still has incomplete task instances left over from before it was
+      // dropped.
       const overdues = await activityService.getOverdueActivities();
-      const onboardingOverdues = overdues.filter((a) => a.source === 'Onboarding');
+      const droppedActivityIds = new Set(
+        allInsts
+          .filter((i) => i.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED)
+          .flatMap((i) => i.taskInstances.map((ti) => ti.activityId))
+      );
+      const onboardingOverdues = overdues.filter((a) => a.source === 'Onboarding' && !droppedActivityIds.has(a.id));
       setOverdueTasks(onboardingOverdues);
     } catch (err) {
       console.error('Failed to load onboarding employees:', err);
@@ -53,10 +63,30 @@ export default function OnboardingEmployeesPage() {
     }
   };
 
-  const instanceMap = new Map(instances.map((i) => [i.employeeId, i]));
+  // Some employees may have more than one historical plan instance (e.g. Dropped/Completed
+  // followed by a replacement launch) — prefer the currently ACTIVE one for the table row, or
+  // else the most recently created one, rather than letting Map construction order pick
+  // whichever instance happens to be iterated last.
+  const instanceMap = new Map();
+  instances.forEach((inst) => {
+    const existing = instanceMap.get(inst.employeeId);
+    if (!existing) {
+      instanceMap.set(inst.employeeId, inst);
+      return;
+    }
+    const existingActive = isActivePlanStatus(existing.derivedStatus);
+    const currentActive = isActivePlanStatus(inst.derivedStatus);
+    if (currentActive && !existingActive) {
+      instanceMap.set(inst.employeeId, inst);
+    } else if (currentActive === existingActive) {
+      const existingTime = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
+      const currentTime = inst.createdAt ? new Date(inst.createdAt).getTime() : 0;
+      if (currentTime > existingTime) instanceMap.set(inst.employeeId, inst);
+    }
+  });
 
   // Summary card metrics — same calculations previously shown on the Onboarding Dashboard
-  const activeInstances = instances.filter((i) => i.derivedStatus !== PLAN_INSTANCE_STATUS.COMPLETED);
+  const activeInstances = instances.filter((i) => isActivePlanStatus(i.derivedStatus));
   const inProgressCount = instances.filter((i) => i.derivedStatus === PLAN_INSTANCE_STATUS.IN_PROGRESS).length;
   const needsAttentionCount = instances.filter((i) => i.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION).length;
   const completedCount = instances.filter((i) => i.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED).length;
@@ -82,6 +112,16 @@ export default function OnboardingEmployeesPage() {
     } catch (err) {
       alert(`Failed to complete task: ${err.message}`);
     }
+  };
+
+  // Captures the exact set of activity IDs currently shown in the Overdue Onboarding Tasks
+  // popup at confirm time, so "Mark All as Complete" only ever affects that same set — never a
+  // freshly re-derived list that could have drifted between opening the confirmation and
+  // confirming it.
+  const handleConfirmMarkAllOverdueComplete = async () => {
+    const idsToComplete = overdueTasks.map((t) => t.id);
+    await activityService.markCompleteMany(idsToComplete);
+    await loadData();
   };
 
   return (
@@ -337,6 +377,8 @@ export default function OnboardingEmployeesPage() {
                                 ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' }
                                 : inst.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION
                                 ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA' }
+                                : inst.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED
+                                ? { backgroundColor: '#F1F5F9', color: '#64748B', borderColor: '#CBD5E1' }
                                 : { backgroundColor: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' }
                             }
                           >
@@ -381,6 +423,15 @@ export default function OnboardingEmployeesPage() {
         onClose={() => setIsOverdueModalOpen(false)}
         tasks={overdueTasks}
         onMarkComplete={handleMarkTaskComplete}
+        onRequestMarkAllComplete={() => setIsMarkAllOverdueModalOpen(true)}
+      />
+
+      {/* Mark All Overdue Tasks Complete — bulk confirmation, stacked on top of the Overdue Tasks Modal */}
+      <MarkAllOverdueCompleteModal
+        isOpen={isMarkAllOverdueModalOpen}
+        onClose={() => setIsMarkAllOverdueModalOpen(false)}
+        onConfirm={handleConfirmMarkAllOverdueComplete}
+        count={overdueTasks.length}
       />
     </div>
   );

@@ -11,6 +11,7 @@ import {
   resolveOnboardingAnchorDate,
   composeOnboardingTasks,
   PLAN_INSTANCE_STATUS,
+  isActivePlanStatus,
 } from '../domain/onboardingDomain.js';
 import { departmentService } from './departmentService.js';
 import { resolveCurrentRecord, resolveNextRecord } from '../domain/employmentDomain.js';
@@ -654,6 +655,114 @@ export const onboardingService = {
   },
 
   /**
+   * Deletes ONE task from ONE employee's already-launched onboarding PlanInstance.
+   * Employee-specific only — mirrors addTaskToInstance()'s boundary: this only ever touches
+   * onboardingTaskInstances/activities for this one instance, and NEVER touches
+   * onboardingPlanTasks (the reusable Universal/Department Plans configuration under
+   * Onboarding > Plans). Other employees' launched instances and all future launches are
+   * completely unaffected. Progress/percentage/derivedStatus are never stored — they are
+   * recalculated fresh from the remaining task instances the next time this instance is read
+   * (getAllInstances()/getInstanceById()), so no separate recalculation step is needed here.
+   */
+  async deleteTaskFromInstance(planInstanceId, taskInstanceId, currentUserId = 'emp-001') {
+    const db = loadDatabase();
+    const planInstance = (db.onboardingPlanInstances || []).find((inst) => inst.id === planInstanceId);
+    if (!planInstance) {
+      throw new Error(`PlanInstance with ID "${planInstanceId}" not found.`);
+    }
+
+    const rawTaskInstances = db.onboardingTaskInstances || [];
+    const instanceTaskInstances = rawTaskInstances.filter((ti) => ti.planInstanceId === planInstanceId);
+    const targetTask = instanceTaskInstances.find((ti) => ti.id === taskInstanceId);
+    if (!targetTask) {
+      throw new Error(`Task with ID "${taskInstanceId}" was not found on this onboarding plan instance.`);
+    }
+
+    // An onboarding plan instance must always retain at least 1 task — deleting the final
+    // remaining task would leave 0 tasks, which calculatePlanProgress()/derivePlanInstanceStatus()
+    // would otherwise have to treat as a degenerate 0/0 case. Blocking here is the cleanest rule
+    // compatible with the existing domain model, rather than inventing special-cased 0-task
+    // status handling.
+    if (instanceTaskInstances.length <= 1) {
+      throw new Error('An onboarding plan must contain at least one task. Add another task before deleting this one.');
+    }
+
+    db.onboardingTaskInstances = rawTaskInstances.filter((ti) => ti.id !== taskInstanceId);
+    db.activities = (db.activities || []).filter((a) => a.id !== targetTask.activityId);
+    saveDatabase(db);
+
+    const employee = await employeeService.getById(planInstance.employeeId);
+    try {
+      await auditService.logAction(
+        currentUserId,
+        AUDIT_ACTIONS.ONBOARDING_TASK_DELETED || 'ONBOARDING_TASK_DELETED',
+        'PlanInstance',
+        planInstanceId,
+        `Deleted task "${targetTask.title}" from ${employee ? employee.fullName : planInstance.employeeId}'s onboarding plan instance (reusable Plans configuration untouched)`
+      );
+    } catch (err) {}
+
+    return this.getInstanceById(planInstanceId);
+  },
+
+  /**
+   * Drops (cancels) an active onboarding PlanInstance — an intentional stop before successful
+   * completion, distinct from COMPLETED. Sets `droppedAt`, the single field
+   * derivePlanInstanceStatus() checks (ahead of every other rule) to permanently derive
+   * PLAN_INSTANCE_STATUS.DROPPED going forward. Nothing is deleted: all task instances,
+   * activities (completed and incomplete), titles/descriptions, the anchor/launch dates, and the
+   * plan name remain exactly as they were — the instance stays fully readable as historical
+   * information. Dropped is non-active (see isActivePlanStatus()), so
+   * getActiveOnboardingEmployeeIds()/getLaunchEligibleEmployees() automatically stop counting it
+   * — no separate eligibility rule is introduced. The employee/intern's own lifecycle `status`
+   * field is intentionally never touched here; that transition stays a separate, later decision.
+   */
+  async dropPlanInstance(planInstanceId, currentUserId = 'emp-001') {
+    const db = loadDatabase();
+    const planInstances = db.onboardingPlanInstances || [];
+    const idx = planInstances.findIndex((inst) => inst.id === planInstanceId);
+    if (idx === -1) {
+      throw new Error(`PlanInstance with ID "${planInstanceId}" not found.`);
+    }
+
+    const planInstance = planInstances[idx];
+    const employee = await employeeService.getById(planInstance.employeeId);
+    const instTasks = (db.onboardingTaskInstances || []).filter((ti) => ti.planInstanceId === planInstanceId);
+    const rawActivities = db.activities || [];
+    const currentDerivedStatus = derivePlanInstanceStatus(planInstance, instTasks, rawActivities, employee);
+
+    if (currentDerivedStatus === PLAN_INSTANCE_STATUS.COMPLETED) {
+      throw new Error('A completed onboarding plan cannot be dropped — it remains a historical record of successful completion.');
+    }
+    if (currentDerivedStatus === PLAN_INSTANCE_STATUS.DROPPED) {
+      throw new Error('This onboarding plan has already been dropped.');
+    }
+
+    // Built via .map() into a brand-new array (never `planInstances[idx] = ...` in place) — the
+    // Node/no-localStorage storage fallback can hand back a live reference to the seed module's
+    // own array, and an in-place index write would permanently corrupt that shared singleton for
+    // the rest of the process (the same class of bug storageEngine.js's `notes` handling already
+    // guards against). A fresh array assigned to db.onboardingPlanInstances avoids that entirely.
+    const nowIso = new Date().toISOString();
+    db.onboardingPlanInstances = planInstances.map((inst) =>
+      inst.id === planInstanceId ? { ...inst, droppedAt: nowIso, droppedBy: currentUserId } : inst
+    );
+    saveDatabase(db);
+
+    try {
+      await auditService.logAction(
+        currentUserId,
+        AUDIT_ACTIONS.ONBOARDING_PLAN_DROPPED || 'ONBOARDING_PLAN_DROPPED',
+        'PlanInstance',
+        planInstanceId,
+        `Dropped onboarding plan for ${employee ? employee.fullName : planInstance.employeeId} — completed task history retained, employee lifecycle status unchanged`
+      );
+    } catch (err) {}
+
+    return this.getInstanceById(planInstanceId);
+  },
+
+  /**
    * Fetches all PlanInstances with derived workflow status and progress.
    */
   async getAllInstances(options = {}) {
@@ -714,7 +823,7 @@ export const onboardingService = {
     const instances = await this.getAllInstances();
     return new Set(
       instances
-        .filter((inst) => inst.derivedStatus !== PLAN_INSTANCE_STATUS.COMPLETED)
+        .filter((inst) => isActivePlanStatus(inst.derivedStatus))
         .map((inst) => inst.employeeId)
     );
   },

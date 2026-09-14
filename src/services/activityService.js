@@ -242,4 +242,19 @@ export const activityService = {
 
     return this.getById(id);
   },
+
+  /**
+   * Marks a specific SET of activities complete — e.g. "Mark All as Complete" in the Overdue
+   * Onboarding Tasks popup. Reuses markComplete() for every ID (the exact same single-activity
+   * completion path, including its onboarding/offboarding plan reconciliation), so there is no
+   * second, slightly-different bulk-completion rule — only the caller decides which IDs belong
+   * in the set (e.g. the popup's own current overdue list), never this method.
+   */
+  async markCompleteMany(ids = [], currentUserId = 'emp-001') {
+    const results = [];
+    for (const id of ids) {
+      results.push(await this.markComplete(id, currentUserId));
+    }
+    return results;
+  },
 };

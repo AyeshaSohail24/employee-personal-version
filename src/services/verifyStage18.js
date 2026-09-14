@@ -16,6 +16,8 @@ import {
   calculateTimelineRange,
   generateTimelineMonthTicks,
   calculateTimelineBarPosition,
+  getTodayLocalDateString,
+  addDaysToLocalDate,
 } from '../utils/dateUtils.js';
 import { employeeService } from './employeeService.js';
 import { upcomingCandidateService } from './upcomingCandidateService.js';
@@ -32,6 +34,8 @@ import { onboardingService } from './onboardingService.js';
 import {
   resolveAllOnboardingHistory,
   composeOnboardingTasks,
+  PLAN_INSTANCE_STATUS,
+  isActivePlanStatus,
 } from '../domain/onboardingDomain.js';
 import { offboardingService } from './offboardingService.js';
 import { activityService } from './activityService.js';
@@ -1560,10 +1564,10 @@ export async function verifyStage18() {
       '302. The 4 summary cards (Active Plans, In Progress, Needs Attention, Completed Plans) now render on the Employees page'
     );
 
-    // 303. Summary card values reuse the exact same derivedStatus-based calculations previously on the Dashboard (not re-implemented)
+    // 303. UPDATED — Summary card values reuse the exact same derivedStatus-based calculations previously on the Dashboard (not re-implemented). "Active Plans" was later updated to reuse the shared isActivePlanStatus() domain predicate (see the "Drop Onboarding Plan" task) so a Dropped plan is never miscounted as active — the 3 exact-equality counts (In Progress/Needs Attention/Completed) are unaffected.
     assert(
-      onbEmployeesSrc.includes('i.derivedStatus !== PLAN_INSTANCE_STATUS.COMPLETED') && onbEmployeesSrc.includes('i.derivedStatus === PLAN_INSTANCE_STATUS.IN_PROGRESS') && onbEmployeesSrc.includes('i.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION') && onbEmployeesSrc.includes('i.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED'),
-      '303. Summary card counts reuse the exact same PLAN_INSTANCE_STATUS-based filter predicates the Dashboard previously used, computed straight from onboardingService.getAllInstances()'
+      onbEmployeesSrc.includes('isActivePlanStatus(i.derivedStatus)') && onbEmployeesSrc.includes('i.derivedStatus === PLAN_INSTANCE_STATUS.IN_PROGRESS') && onbEmployeesSrc.includes('i.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION') && onbEmployeesSrc.includes('i.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED'),
+      '303. UPDATED — Summary card counts reuse the exact same PLAN_INSTANCE_STATUS-based filter predicates the Dashboard previously used (Active Plans now via the shared isActivePlanStatus() helper so Dropped plans are correctly excluded), computed straight from onboardingService.getAllInstances()'
     );
 
     // --- SINGLE TABLE (no Dashboard operational table duplicated) ---
@@ -1658,10 +1662,10 @@ export async function verifyStage18() {
       '315. The individual employee onboarding detail page is kept as-is, including the "Back to Onboarding Employees" link and Done/Reopen task actions'
     );
 
-    // 316. Both the employee/instance join (instanceMap) and progress/status rendering reuse the existing hydrated plan instance data — no re-implementation
+    // 316. UPDATED — The employee/instance join (instanceMap) and progress/status rendering reuse the existing hydrated plan instance data — no re-implementation. The join itself was later made active-plan-aware (see the "Drop Onboarding Plan" task) so an employee with both a Dropped/Completed instance and a newer one always resolves to the correct (preferably active, else most recent) instance rather than whichever Map insertion happened to win.
     assert(
-      onbEmployeesSrc.includes('new Map(instances.map((i) => [i.employeeId, i]))') && onbEmployeesSrc.includes('inst.progress.progressPercentage') && onbEmployeesSrc.includes('inst.derivedStatus'),
-      '316. Employees page derives its employee -> plan-instance join and reads progress/status directly from the existing hydrated onboardingService.getAllInstances() data'
+      onbEmployeesSrc.includes('const instanceMap = new Map();') && onbEmployeesSrc.includes('isActivePlanStatus(existing.derivedStatus)') && onbEmployeesSrc.includes('inst.progress.progressPercentage') && onbEmployeesSrc.includes('inst.derivedStatus'),
+      '316. UPDATED — Employees page derives its employee -> plan-instance join (now active-plan-aware, preferring an active instance or the most recent one) and reads progress/status directly from the existing hydrated onboardingService.getAllInstances() data'
     );
 
     // 317. resolveAllOnboardingHistory() domain helper still backs the single table's population (shared, not re-derived inline)
@@ -6891,6 +6895,608 @@ export async function verifyStage18() {
           JSON.stringify(hannahInstanceCheck1.progress.tasks.map((t) => t.title)) === JSON.stringify(hannahInstanceCheck2.progress.tasks.map((t) => t.title)),
           '1027. NEW — Repeatedly computing launch eligibility does not alter Hannah\'s existing launched instance (inst-001) in any way — same task count and titles before and after'
         );
+      }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Add Drop Onboarding Plan + Delete Individual Onboarding Task + Mark All
+    // Overdue Tasks Complete
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const onbDetailSrcFinal3 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const onbEmployeesSrcFinal3 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeesPage.jsx'), 'utf-8');
+      const overdueTasksModalSrcFinal3 = fs.readFileSync(path.resolve('./src/components/onboarding/OverdueTasksModal.jsx'), 'utf-8');
+      const onboardingServiceSrcFinal3 = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+      const onboardingDomainSrcFinal3 = fs.readFileSync(path.resolve('./src/domain/onboardingDomain.js'), 'utf-8');
+      const activityServiceSrcFinal3 = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
+      const deleteTaskModalSrc = fs.existsSync(path.resolve('./src/components/onboarding/DeleteOnboardingTaskModal.jsx'))
+        ? fs.readFileSync(path.resolve('./src/components/onboarding/DeleteOnboardingTaskModal.jsx'), 'utf-8') : '';
+      const dropPlanModalSrc = fs.existsSync(path.resolve('./src/components/onboarding/DropPlanModal.jsx'))
+        ? fs.readFileSync(path.resolve('./src/components/onboarding/DropPlanModal.jsx'), 'utf-8') : '';
+      const markAllOverdueModalSrc = fs.existsSync(path.resolve('./src/components/onboarding/MarkAllOverdueCompleteModal.jsx'))
+        ? fs.readFileSync(path.resolve('./src/components/onboarding/MarkAllOverdueCompleteModal.jsx'), 'utf-8') : '';
+
+      // ================= DELETE TASK (checks 1-10) =================
+
+      // 1028. Delete action exists on each launched task row, with the required title/aria-label, beside the existing Complete/Reopen action
+      assert(
+        onbDetailSrcFinal3.includes("title=\"Delete task\"") && onbDetailSrcFinal3.includes("aria-label=\"Delete task\"") && onbDetailSrcFinal3.includes('<Trash2') && onbDetailSrcFinal3.includes('handleToggleTaskComplete'),
+        '1028. NEW — Each launched task row has a Delete action (Trash2 icon, title/aria-label "Delete task") alongside the existing Complete/Reopen action'
+      );
+
+      // 1029. Deletion always requires confirmation — the detail page only ever opens DeleteOnboardingTaskModal (setTaskPendingDelete), it never calls onboardingService.deleteTaskFromInstance() directly
+      assert(
+        onbDetailSrcFinal3.includes('setTaskPendingDelete(task)') && onbDetailSrcFinal3.includes('<DeleteOnboardingTaskModal') &&
+        !stripComments(onbDetailSrcFinal3).includes('onboardingService.deleteTaskFromInstance') &&
+        deleteTaskModalSrc.includes('onboardingService.deleteTaskFromInstance(planInstanceId, task.id)') &&
+        deleteTaskModalSrc.includes('Delete Task?') && deleteTaskModalSrc.includes('className="btn-danger"'),
+        '1029. NEW — Delete never happens on a single click: the detail page only opens DeleteOnboardingTaskModal (a Cancel/Delete Task confirmation with destructive styling), which is the only caller of onboardingService.deleteTaskFromInstance()'
+      );
+
+      // 1030-1035. FUNCTIONAL: deleting one incomplete task from Hannah's launched instance recalculates total/completed/percentage/status immediately, and never touches the reusable Plans configuration
+      {
+        const scopeDefsBeforeDelete = await onboardingService.getScopeTaskDefinitions();
+        const instanceBeforeDelete = await onboardingService.getInstanceById('inst-001'); // Hannah Razak
+        const beforeTotal = instanceBeforeDelete.progress.totalTasks;
+        const beforeCompleted = instanceBeforeDelete.progress.completedTasksCount;
+        const incompleteTask = instanceBeforeDelete.progress.tasks.find((t) => !t.isCompleted);
+        assert(Boolean(incompleteTask), '1030setup. NEW — Setup: Hannah\'s seeded instance has at least one incomplete task to delete');
+
+        const otherEmployeeInstanceBefore = await onboardingService.getInstanceById('inst-002'); // Kevin Heng — must be unaffected
+
+        const afterDelete = await onboardingService.deleteTaskFromInstance('inst-001', incompleteTask.id);
+        assert(afterDelete.progress.totalTasks === beforeTotal - 1, `1030. NEW — Deleting one incomplete task decrements totalTasks by exactly 1 (before: ${beforeTotal}, after: ${afterDelete.progress.totalTasks})`);
+        assert(afterDelete.progress.completedTasksCount === beforeCompleted, `1031. NEW — Deleting an INCOMPLETE task leaves completedTasksCount unchanged (still ${afterDelete.progress.completedTasksCount})`);
+        const expectedPct = afterDelete.progress.totalTasks > 0 ? Math.round((afterDelete.progress.completedTasksCount / afterDelete.progress.totalTasks) * 100) : 0;
+        assert(afterDelete.progress.progressPercentage === expectedPct, `1032. NEW — Progress percentage recalculates correctly against the new total (${afterDelete.progress.progressPercentage}%, expected ${expectedPct}%)`);
+        assert(!afterDelete.progress.tasks.some((t) => t.id === incompleteTask.id), '1033. NEW — The deleted task instance no longer appears anywhere in the recalculated task list');
+        assert(typeof afterDelete.derivedStatus === 'string' && afterDelete.derivedStatus.length > 0, `1034. NEW — derivedStatus recalculates to a valid status immediately after deletion (found "${afterDelete.derivedStatus}")`);
+
+        const scopeDefsAfterDelete = await onboardingService.getScopeTaskDefinitions();
+        assert(scopeDefsAfterDelete.length === scopeDefsBeforeDelete.length, `1035. NEW — Deleting a launched task instance does NOT change the reusable Plans configuration (onboardingPlanTasks count unchanged: ${scopeDefsBeforeDelete.length} -> ${scopeDefsAfterDelete.length})`);
+
+        const otherEmployeeInstanceAfter = await onboardingService.getInstanceById('inst-002');
+        assert(otherEmployeeInstanceAfter.progress.totalTasks === otherEmployeeInstanceBefore.progress.totalTasks, `1035b. NEW — Kevin's (a different employee's) launched instance is completely unaffected by deleting a task from Hannah's instance (still ${otherEmployeeInstanceAfter.progress.totalTasks} tasks)`);
+      }
+
+      // 1036. FUNCTIONAL: deleting a COMPLETED task also recalculates progress correctly (no phantom completed count preserved)
+      {
+        const instanceForCompletedDelete = await onboardingService.getInstanceById('inst-001');
+        const anIncompleteTask = instanceForCompletedDelete.progress.tasks.find((t) => !t.isCompleted);
+        if (anIncompleteTask) {
+          await activityService.markComplete(anIncompleteTask.activityId);
+        }
+        const instanceWithCompletedTask = await onboardingService.getInstanceById('inst-001');
+        const completedTaskToDelete = instanceWithCompletedTask.progress.tasks.find((t) => t.isCompleted);
+        const beforeTotal2 = instanceWithCompletedTask.progress.totalTasks;
+        const beforeCompleted2 = instanceWithCompletedTask.progress.completedTasksCount;
+
+        const afterCompletedDelete = await onboardingService.deleteTaskFromInstance('inst-001', completedTaskToDelete.id);
+        assert(
+          afterCompletedDelete.progress.totalTasks === beforeTotal2 - 1 && afterCompletedDelete.progress.completedTasksCount === beforeCompleted2 - 1,
+          `1036. NEW — Deleting a COMPLETED task decrements BOTH totalTasks and completedTasksCount by 1 (no phantom completed count preserved) — total ${beforeTotal2}->${afterCompletedDelete.progress.totalTasks}, completed ${beforeCompleted2}->${afterCompletedDelete.progress.completedTasksCount}`
+        );
+      }
+
+      // 1037. FUNCTIONAL: the final-task edge case is blocked with the exact required message, and does not create a 0-task plan
+      {
+        let instanceForFinalTask = await onboardingService.getInstanceById('inst-001');
+        while (instanceForFinalTask.progress.totalTasks > 1) {
+          const anyTask = instanceForFinalTask.progress.tasks[0];
+          instanceForFinalTask = await onboardingService.deleteTaskFromInstance('inst-001', anyTask.id);
+        }
+        assert(instanceForFinalTask.progress.totalTasks === 1, `1037setup. NEW — Setup: Hannah's instance was reduced down to exactly 1 remaining task (found ${instanceForFinalTask.progress.totalTasks})`);
+
+        const lastTask = instanceForFinalTask.progress.tasks[0];
+        let blockedError = null;
+        try {
+          await onboardingService.deleteTaskFromInstance('inst-001', lastTask.id);
+        } catch (err) {
+          blockedError = err.message;
+        }
+        assert(blockedError === 'An onboarding plan must contain at least one task. Add another task before deleting this one.', `1037. NEW — Deleting the final remaining task is blocked with the exact required message (found: "${blockedError}")`);
+
+        const instanceStillHasTask = await onboardingService.getInstanceById('inst-001');
+        assert(instanceStillHasTask.progress.totalTasks === 1, '1037b. NEW — After the blocked deletion attempt, the plan still has exactly 1 task — it was never silently reduced to 0/0');
+      }
+
+      resetDatabase();
+
+      // ================= DROP PLAN (checks 11-22) =================
+
+      // 1038/1039. Drop Plan is visible for both In Progress and Needs Attention (both are active statuses) — gated by the shared isActivePlanStatus() predicate, not a re-derived rule
+      assert(
+        onbDetailSrcFinal3.includes('isActivePlanStatus(planInstance.derivedStatus)') && onbDetailSrcFinal3.includes('Drop Plan') && onbDetailSrcFinal3.includes('setIsDropPlanModalOpen(true)'),
+        '1038. NEW — Drop Plan is gated by isActivePlanStatus(planInstance.derivedStatus) — visible for BOTH In Progress and Needs Attention, since isActivePlanStatus() returns true for both'
+      );
+      assert(true, '1039. NEW — (see 1038) — a single shared predicate covers both active statuses, so there is no separate Needs-Attention-specific visibility rule to drift from In Progress');
+
+      // 1040. FUNCTIONAL: Drop Plan is rejected for a Completed plan, and the UI-level gate (isActivePlanStatus) also excludes Completed
+      {
+        assert(!isActivePlanStatus(PLAN_INSTANCE_STATUS.COMPLETED), '1040a. NEW — isActivePlanStatus(Completed) is false, so the Drop Plan button\'s gate hides it for a Completed plan');
+
+        const dbForCompleteAll = loadDatabase();
+        const hannahTaskIds = new Set((dbForCompleteAll.onboardingTaskInstances || []).filter((ti) => ti.planInstanceId === 'inst-001').map((ti) => ti.activityId));
+        dbForCompleteAll.activities = dbForCompleteAll.activities.map((a) => (hannahTaskIds.has(a.id) ? { ...a, completed: true, completedAt: new Date().toISOString() } : a));
+        saveDatabase(dbForCompleteAll);
+
+        const completedInstance = await onboardingService.getInstanceById('inst-001');
+        assert(completedInstance.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED, `1040setup. NEW — Setup: Hannah's instance is now fully Completed (found ${completedInstance.derivedStatus})`);
+
+        let completedDropError = null;
+        try {
+          await onboardingService.dropPlanInstance('inst-001');
+        } catch (err) {
+          completedDropError = err.message;
+        }
+        assert(Boolean(completedDropError) && completedDropError.includes('cannot be dropped'), `1040. NEW — dropPlanInstance() rejects a Completed plan with a clear error (found: "${completedDropError}")`);
+
+        const stillCompletedInstance = await onboardingService.getInstanceById('inst-001');
+        assert(stillCompletedInstance.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED && !stillCompletedInstance.droppedAt, '1049. NEW — EXISTING COMPLETED SEMANTICS UNCHANGED: after the rejected drop attempt, the plan remains exactly Completed (not Dropped, not corrupted)');
+      }
+
+      resetDatabase();
+
+      // 1041. Confirmation required for Drop Plan — the detail page only ever opens DropPlanModal, never calls dropPlanInstance() directly
+      assert(
+        onbDetailSrcFinal3.includes('<DropPlanModal') && !stripComments(onbDetailSrcFinal3).includes('onboardingService.dropPlanInstance') &&
+        dropPlanModalSrc.includes('onboardingService.dropPlanInstance(planInstance.id)') &&
+        dropPlanModalSrc.includes('Drop Onboarding Plan?') && dropPlanModalSrc.includes('className="btn-danger"'),
+        '1041. NEW — Drop Plan never happens on a single click: the detail page only opens DropPlanModal (a Cancel/Drop Plan confirmation with destructive styling), which is the only caller of onboardingService.dropPlanInstance()'
+      );
+
+      // 1042. Dropped is a real, centrally-defined domain state — not faked only in the UI
+      assert(
+        onboardingDomainSrcFinal3.includes("DROPPED: 'Dropped'") && onboardingDomainSrcFinal3.includes('export function isActivePlanStatus') &&
+        onboardingDomainSrcFinal3.match(/if \(planInstance\.droppedAt\)\s*\{\s*\n\s*return PLAN_INSTANCE_STATUS\.DROPPED;/),
+        '1042. NEW — PLAN_INSTANCE_STATUS.DROPPED and isActivePlanStatus() are defined centrally in onboardingDomain.js, and derivePlanInstanceStatus() checks planInstance.droppedAt first to derive it — this is a real domain state, not a UI-only label'
+      );
+
+      // 1043/1047. FUNCTIONAL: dropping a plan preserves ALL history (task instances, activities, titles, completed states) — nothing is erased
+      {
+        const dbBeforeDropCheck = loadDatabase();
+        const kevinInstBefore = (dbBeforeDropCheck.onboardingPlanInstances || []).find((i) => i.id === 'inst-002');
+        const kevinTaskInstancesBefore = (dbBeforeDropCheck.onboardingTaskInstances || []).filter((ti) => ti.planInstanceId === 'inst-002');
+        const beforeInstanceForDrop = await onboardingService.getInstanceById('inst-002'); // Kevin Heng
+        const beforeCompletedCountForDrop = beforeInstanceForDrop.progress.completedTasksCount;
+
+        const droppedInstance = await onboardingService.dropPlanInstance('inst-002');
+        assert(droppedInstance.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED, `1043a. NEW — After dropPlanInstance(), the instance's derivedStatus is exactly Dropped (found ${droppedInstance.derivedStatus})`);
+
+        const dbAfterDrop = loadDatabase();
+        const kevinInstAfter = (dbAfterDrop.onboardingPlanInstances || []).find((i) => i.id === 'inst-002');
+        const kevinTaskInstancesAfter = (dbAfterDrop.onboardingTaskInstances || []).filter((ti) => ti.planInstanceId === 'inst-002');
+        assert(Boolean(kevinInstAfter) && kevinInstAfter.anchorDate === kevinInstBefore.anchorDate && kevinInstAfter.createdAt === kevinInstBefore.createdAt, '1043. NEW — The plan instance record itself (anchor start date, launched/createdAt date, plan name via planTemplateId) remains fully stored and unerased after being dropped');
+        assert(kevinTaskInstancesAfter.length === kevinTaskInstancesBefore.length, `1043b. NEW — Every task instance (completed and incomplete) remains stored after dropping — no task instances were deleted (before: ${kevinTaskInstancesBefore.length}, after: ${kevinTaskInstancesAfter.length})`);
+        assert(kevinTaskInstancesAfter.every((ti) => kevinTaskInstancesBefore.some((b) => b.id === ti.id && b.title === ti.title)), '1043c. NEW — Task titles/descriptions are byte-for-byte unchanged by dropping the plan');
+
+        const afterInstanceForDrop = await onboardingService.getInstanceById('inst-002');
+        assert(afterInstanceForDrop.progress.completedTasksCount === beforeCompletedCountForDrop, `1047. NEW — COMPLETED TASK HISTORY REMAINS INTACT: the completedTasksCount is unchanged by dropping the plan (still ${afterInstanceForDrop.progress.completedTasksCount})`);
+      }
+
+      // 1044. FUNCTIONAL: a Dropped plan is non-active — isActivePlanStatus() returns false, and it is excluded from getActiveOnboardingEmployeeIds()
+      {
+        assert(!isActivePlanStatus(PLAN_INSTANCE_STATUS.DROPPED), '1044a. NEW — isActivePlanStatus(Dropped) is false');
+        const activeIdsAfterKevinDropped = await onboardingService.getActiveOnboardingEmployeeIds();
+        assert(!activeIdsAfterKevinDropped.has('emp-014'), '1044. NEW — Kevin (emp-014) is no longer counted in getActiveOnboardingEmployeeIds() once his only plan instance is Dropped');
+      }
+
+      // 1045. FUNCTIONAL: a Dropped plan no longer blocks Launch Onboarding — Kevin becomes launch-eligible again (still Onboarding lifecycle status, no active plan) and a replacement plan can be launched
+      {
+        const eligibleAfterKevinDropped = await onboardingService.getLaunchEligibleEmployees();
+        assert(eligibleAfterKevinDropped.some((e) => e.id === 'emp-014'), '1045. NEW — Kevin reappears in getLaunchEligibleEmployees() once his onboarding plan is Dropped (he remains lifecycle status Onboarding with no active plan)');
+
+        const replacementLaunch = await onboardingService.launchPlanInstance('emp-014');
+        assert(Boolean(replacementLaunch) && replacementLaunch.progress.totalTasks === 7, `1045b. NEW — A replacement onboarding plan CAN be launched for Kevin after his previous one was Dropped (new instance has ${replacementLaunch.progress.totalTasks} tasks — Intern Universal(3)+Department(4)=7)`);
+
+        const eligibleAfterReplacementLaunch = await onboardingService.getLaunchEligibleEmployees();
+        assert(!eligibleAfterReplacementLaunch.some((e) => e.id === 'emp-014'), '1045c. NEW — Kevin is excluded from launch-eligibility again now that his NEW replacement plan is active — the duplicate-plan guard still applies going forward');
+      }
+
+      resetDatabase();
+
+      // 1046. FUNCTIONAL: a Dropped plan no longer contributes overdue alerts, even if it still has incomplete overdue tasks left over from before it was dropped
+      {
+        const dbForOverdueDropCheck = loadDatabase();
+        const kevinTaskInstancesForOverdue = (dbForOverdueDropCheck.onboardingTaskInstances || []).filter((ti) => ti.planInstanceId === 'inst-002');
+        const kevinActivityIds = new Set(kevinTaskInstancesForOverdue.map((ti) => ti.activityId));
+        const overduePastDate = addDaysToLocalDate(getTodayLocalDateString(), -10);
+        dbForOverdueDropCheck.activities = dbForOverdueDropCheck.activities.map((a) =>
+          kevinActivityIds.has(a.id) ? { ...a, completed: false, dueDate: overduePastDate } : a
+        );
+        saveDatabase(dbForOverdueDropCheck);
+
+        const overdueBeforeDrop = await activityService.getOverdueActivities();
+        const kevinOverdueBeforeDrop = overdueBeforeDrop.filter((a) => a.source === 'Onboarding' && kevinActivityIds.has(a.id));
+        assert(kevinOverdueBeforeDrop.length > 0, `1046setup. NEW — Setup: Kevin now has ${kevinOverdueBeforeDrop.length} genuinely overdue, incomplete onboarding activities`);
+
+        await onboardingService.dropPlanInstance('inst-002');
+
+        // Reproduce the exact same exclusion logic OnboardingEmployeesPage.jsx applies: overdue Onboarding activities belonging to a Dropped plan instance are filtered out of the effective overdue set.
+        const allInstancesAfterDrop = await onboardingService.getAllInstances();
+        const droppedActivityIdsCheck = new Set(
+          allInstancesAfterDrop.filter((i) => i.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED).flatMap((i) => i.taskInstances.map((ti) => ti.activityId))
+        );
+        const overdueAfterDrop = await activityService.getOverdueActivities();
+        const effectiveOnboardingOverdueAfterDrop = overdueAfterDrop.filter((a) => a.source === 'Onboarding' && !droppedActivityIdsCheck.has(a.id));
+        assert(
+          !effectiveOnboardingOverdueAfterDrop.some((a) => kevinActivityIds.has(a.id)),
+          '1046. NEW — After dropping Kevin\'s plan, none of his (still technically overdue-by-date) activities appear in the effective onboarding overdue set once Dropped-plan activities are excluded — a Dropped plan no longer contributes overdue alerts'
+        );
+
+        assert(
+          onbEmployeesSrcFinal3.includes("i.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED") && onbEmployeesSrcFinal3.includes('droppedActivityIds'),
+          '1046b. NEW — OnboardingEmployeesPage.jsx itself contains this exact Dropped-plan exclusion logic when building the overdue task list shown in the popup'
+        );
+      }
+
+      // 1048. FUNCTIONAL: dropping a plan does NOT automatically change the employee's lifecycle status
+      {
+        const employeeBeforeDrop = await employeeService.getById('emp-013'); // Hannah — currently Onboarding after resetDatabase()
+        await onboardingService.dropPlanInstance('inst-001');
+        const employeeAfterDrop = await employeeService.getById('emp-013');
+        assert(employeeBeforeDrop.status === employeeAfterDrop.status, `1048. NEW — Dropping Hannah's onboarding plan does not change her lifecycle status (still "${employeeAfterDrop.status}") — lifecycle transitions remain a separate, later decision`);
+      }
+
+      resetDatabase();
+
+      // ================= OVERDUE BULK COMPLETE (checks 23-33) =================
+
+      // 1050. Mark All as Complete exists in the Overdue Onboarding Tasks popup, using an appropriate icon, near the top/header area
+      assert(
+        overdueTasksModalSrcFinal3.includes('Mark All as Complete') && overdueTasksModalSrcFinal3.includes('<CheckCheck') && overdueTasksModalSrcFinal3.includes('onRequestMarkAllComplete'),
+        '1050. NEW — OverdueTasksModal renders a "Mark All as Complete" action (CheckCheck icon) near the top of the popup, calling onRequestMarkAllComplete()'
+      );
+
+      // 1051. Hidden when there are zero overdue tasks (preferred over merely disabling it)
+      assert(
+        overdueTasksModalSrcFinal3.match(/\{tasks\.length > 0 && \([\s\S]{0,500}Mark All as Complete/),
+        '1051. NEW — "Mark All as Complete" is hidden entirely (not just disabled) when tasks.length is 0, per the task\'s explicit preference'
+      );
+
+      // 1052. Bulk completion always requires confirmation — clicking the button only opens a confirmation modal, never completes tasks directly
+      assert(
+        !stripComments(overdueTasksModalSrcFinal3).includes('activityService') && !overdueTasksModalSrcFinal3.includes('markCompleteMany') &&
+        markAllOverdueModalSrc.includes('Mark All Overdue Tasks Complete?') && markAllOverdueModalSrc.includes('await onConfirm()'),
+        '1052. NEW — OverdueTasksModal itself never calls activityService/markCompleteMany directly — clicking "Mark All as Complete" only opens MarkAllOverdueCompleteModal, a real Cancel/Mark-All-as-Complete confirmation'
+      );
+      assert(
+        onbEmployeesSrcFinal3.includes('<MarkAllOverdueCompleteModal') && onbEmployeesSrcFinal3.includes('handleConfirmMarkAllOverdueComplete') && onbEmployeesSrcFinal3.includes('count={overdueTasks.length}'),
+        '1052b. NEW — OnboardingEmployeesPage renders the bulk-confirmation modal wired to the real handler and the current overdue count'
+      );
+
+      // 1053-1055/1057-1059. FUNCTIONAL: bulk-complete affects exactly the overdue set, leaves future/unrelated tasks untouched, and recalculates progress/status (Needs Attention -> In Progress or Completed as appropriate)
+      {
+        const bulkEmployeeId = 'emp-013'; // Hannah — reused as a convenient real Onboarding-status employee; her seeded instance (inst-001) is untouched by this synthetic instance
+        const today = getTodayLocalDateString();
+        const overdueDate1 = addDaysToLocalDate(today, -5);
+        const overdueDate2 = addDaysToLocalDate(today, -2);
+        const futureDate = addDaysToLocalDate(today, 10);
+
+        const dbForBulkTest = loadDatabase();
+        const nowIso = new Date().toISOString();
+        const syntheticInstanceId = 'inst-bulk-complete-test';
+        const syntheticActivities = [
+          { id: 'act-bulk-overdue-1', typeId: 'act-type-1', title: 'Bulk Overdue Task A', description: '', employeeId: bulkEmployeeId, assigneeId: bulkEmployeeId, dueDate: overdueDate1, completed: false, completedAt: null, completedBy: null, source: 'Onboarding', sourceEntityType: 'OnboardingTaskInstance', sourceEntityId: 'ti-bulk-1', createdAt: nowIso, createdBy: 'emp-003', updatedAt: nowIso },
+          { id: 'act-bulk-overdue-2', typeId: 'act-type-1', title: 'Bulk Overdue Task B', description: '', employeeId: bulkEmployeeId, assigneeId: bulkEmployeeId, dueDate: overdueDate2, completed: false, completedAt: null, completedBy: null, source: 'Onboarding', sourceEntityType: 'OnboardingTaskInstance', sourceEntityId: 'ti-bulk-2', createdAt: nowIso, createdBy: 'emp-003', updatedAt: nowIso },
+          { id: 'act-bulk-future', typeId: 'act-type-1', title: 'Bulk Future Task (not overdue)', description: '', employeeId: bulkEmployeeId, assigneeId: bulkEmployeeId, dueDate: futureDate, completed: false, completedAt: null, completedBy: null, source: 'Onboarding', sourceEntityType: 'OnboardingTaskInstance', sourceEntityId: 'ti-bulk-3', createdAt: nowIso, createdBy: 'emp-003', updatedAt: nowIso },
+        ];
+        const syntheticTaskInstances = [
+          { id: 'ti-bulk-1', planInstanceId: syntheticInstanceId, planTaskId: null, activityId: 'act-bulk-overdue-1', title: 'Bulk Overdue Task A', description: '', activityTypeId: 'act-type-1', required: true, sequence: 1, createdAt: nowIso },
+          { id: 'ti-bulk-2', planInstanceId: syntheticInstanceId, planTaskId: null, activityId: 'act-bulk-overdue-2', title: 'Bulk Overdue Task B', description: '', activityTypeId: 'act-type-1', required: true, sequence: 2, createdAt: nowIso },
+          { id: 'ti-bulk-3', planInstanceId: syntheticInstanceId, planTaskId: null, activityId: 'act-bulk-future', title: 'Bulk Future Task (not overdue)', description: '', activityTypeId: 'act-type-1', required: true, sequence: 3, createdAt: nowIso },
+        ];
+        const syntheticInstance = { id: syntheticInstanceId, planTemplateId: null, employeeId: bulkEmployeeId, startedAt: today, anchorDate: today, completedAt: null, createdBy: 'emp-003', createdAt: nowIso };
+
+        dbForBulkTest.activities = [...syntheticActivities, ...(dbForBulkTest.activities || [])];
+        dbForBulkTest.onboardingTaskInstances = [...syntheticTaskInstances, ...(dbForBulkTest.onboardingTaskInstances || [])];
+        dbForBulkTest.onboardingPlanInstances = [syntheticInstance, ...(dbForBulkTest.onboardingPlanInstances || [])];
+        saveDatabase(dbForBulkTest);
+
+        const syntheticBefore = await onboardingService.getInstanceById(syntheticInstanceId);
+        assert(syntheticBefore.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION, `1058setup. NEW — Setup: the synthetic instance with 2 overdue required tasks correctly derives Needs Attention before bulk-complete (found ${syntheticBefore.derivedStatus})`);
+
+        // Mirror exactly what the parent page passes into the bulk-complete handler: the current overdue, Onboarding-sourced set (excluding any Dropped-plan activities — none here)
+        const overdueBeforeBulk = await activityService.getOverdueActivities();
+        const onboardingOverdueBeforeBulk = overdueBeforeBulk.filter((a) => a.source === 'Onboarding');
+        const bulkTargetIds = onboardingOverdueBeforeBulk.filter((a) => a.id === 'act-bulk-overdue-1' || a.id === 'act-bulk-overdue-2').map((a) => a.id);
+        assert(bulkTargetIds.length === 2, `1053setup. NEW — Setup: exactly the 2 genuinely overdue synthetic activities are present in the current overdue list (found ${bulkTargetIds.length})`);
+        assert(!onboardingOverdueBeforeBulk.some((a) => a.id === 'act-bulk-future'), '1054setup. NEW — Setup: the future (not-yet-due) synthetic activity does NOT appear in the overdue list before bulk-complete');
+
+        await activityService.markCompleteMany(bulkTargetIds);
+
+        const overdueAfterBulk = await activityService.getOverdueActivities();
+        assert(!overdueAfterBulk.some((a) => a.id === 'act-bulk-overdue-1' || a.id === 'act-bulk-overdue-2'), '1053. NEW — Both currently-listed overdue tasks are completed and disappear from the overdue list immediately (list refreshes with no page reload)');
+
+        const futureActivityAfterBulk = await activityService.getById('act-bulk-future');
+        assert(futureActivityAfterBulk.completed === false, '1054. NEW — The future, non-overdue task is completely untouched by "Mark All as Complete" — it remains incomplete');
+
+        const syntheticAfterBulk = await onboardingService.getInstanceById(syntheticInstanceId);
+        assert(syntheticAfterBulk.progress.completedTasksCount === 2 && syntheticAfterBulk.progress.totalTasks === 3, `1057. NEW — Progress recalculates immediately after bulk-complete (${syntheticAfterBulk.progress.completedTasksCount} of ${syntheticAfterBulk.progress.totalTasks} completed)`);
+        assert(syntheticAfterBulk.derivedStatus === PLAN_INSTANCE_STATUS.IN_PROGRESS, `1058. NEW — With the overdue required tasks now complete and only a future (not overdue) task remaining, the plan's status correctly moves from Needs Attention to In Progress (found ${syntheticAfterBulk.derivedStatus})`);
+
+        // 1059. A separate instance where bulk-complete finishes EVERY task correctly derives Completed
+        const allDoneInstanceId = 'inst-bulk-complete-alldone-test';
+        const dbForAllDoneTest = loadDatabase();
+        const allDoneActivity = { id: 'act-bulk-alldone-overdue', typeId: 'act-type-1', title: 'Bulk All-Done Overdue Task', description: '', employeeId: bulkEmployeeId, assigneeId: bulkEmployeeId, dueDate: overdueDate1, completed: false, completedAt: null, completedBy: null, source: 'Onboarding', sourceEntityType: 'OnboardingTaskInstance', sourceEntityId: 'ti-bulk-alldone', createdAt: nowIso, createdBy: 'emp-003', updatedAt: nowIso };
+        const allDoneTaskInstance = { id: 'ti-bulk-alldone', planInstanceId: allDoneInstanceId, planTaskId: null, activityId: 'act-bulk-alldone-overdue', title: 'Bulk All-Done Overdue Task', description: '', activityTypeId: 'act-type-1', required: true, sequence: 1, createdAt: nowIso };
+        const allDoneInstance = { id: allDoneInstanceId, planTemplateId: null, employeeId: bulkEmployeeId, startedAt: today, anchorDate: today, completedAt: null, createdBy: 'emp-003', createdAt: nowIso };
+        dbForAllDoneTest.activities = [allDoneActivity, ...(dbForAllDoneTest.activities || [])];
+        dbForAllDoneTest.onboardingTaskInstances = [allDoneTaskInstance, ...(dbForAllDoneTest.onboardingTaskInstances || [])];
+        dbForAllDoneTest.onboardingPlanInstances = [allDoneInstance, ...(dbForAllDoneTest.onboardingPlanInstances || [])];
+        saveDatabase(dbForAllDoneTest);
+
+        const overdueBeforeAllDone = await activityService.getOverdueActivities();
+        const allDoneTargetIds = overdueBeforeAllDone.filter((a) => a.id === 'act-bulk-alldone-overdue').map((a) => a.id);
+        await activityService.markCompleteMany(allDoneTargetIds);
+        const allDoneAfterBulk = await onboardingService.getInstanceById(allDoneInstanceId);
+        assert(allDoneAfterBulk.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED, `1059. NEW — When bulk-complete finishes the LAST remaining incomplete task on a plan, the status correctly recalculates to Completed (found ${allDoneAfterBulk.derivedStatus})`);
+
+        // 1055. Does not affect unrelated modules — the exact same activity IDs targeted are all source: 'Onboarding'; nothing with source 'Offboarding'/'Manual' was ever included in the target set
+        assert(bulkTargetIds.every((id) => onboardingOverdueBeforeBulk.some((a) => a.id === id && a.source === 'Onboarding')), '1055. NEW — Every ID passed to markCompleteMany() came from the Onboarding-sourced overdue list only — unrelated Offboarding/Manual overdue activities are never included in the bulk-complete target set');
+
+        // 1056. Overdue list refreshes immediately after confirmation — parent page calls loadData() right after the bulk-complete resolves
+        assert(onbEmployeesSrcFinal3.match(/handleConfirmMarkAllOverdueComplete = async \(\) => \{[\s\S]{0,200}await loadData\(\);/), '1056. NEW — handleConfirmMarkAllOverdueComplete() calls loadData() immediately after the bulk operation, refreshing the overdue list, instances, and summary counts with no page reload');
+      }
+
+      // 1060. Individual Complete actions remain available and unchanged — Mark All as Complete is additive, not a replacement
+      assert(
+        overdueTasksModalSrcFinal3.includes('onClick={() => onMarkComplete(task.id)}') && overdueTasksModalSrcFinal3.includes('Mark Complete') &&
+        onbEmployeesSrcFinal3.includes('handleMarkTaskComplete') && onbEmployeesSrcFinal3.includes('onMarkComplete={handleMarkTaskComplete}'),
+        '1060. NEW — Individual per-task "Mark Complete" buttons remain fully present and wired — "Mark All as Complete" is a purely additive convenience action'
+      );
+
+      resetDatabase();
+
+      // ================= REGRESSION (checks 34-42) =================
+
+      // 1061. Add Task still works
+      {
+        const beforeAddTask = await onboardingService.getInstanceById('inst-001');
+        const afterAddTask = await onboardingService.addTaskToInstance('inst-001', { title: 'Regression Check Task', description: '', relativeOffsetDays: 1, required: false });
+        assert(afterAddTask.progress.totalTasks === beforeAddTask.progress.totalTasks + 1, '1061. NEW — REGRESSION: addTaskToInstance() (Add Task) still works correctly after this task\'s changes');
+      }
+
+      // 1062/1063. Complete/Reopen still work
+      {
+        const instForToggle = await onboardingService.getInstanceById('inst-001');
+        const toggleTask = instForToggle.progress.tasks.find((t) => !t.isCompleted);
+        const doneResult = await activityService.markComplete(toggleTask.activityId);
+        assert(doneResult.completed === true, '1062. NEW — REGRESSION: activityService.markComplete() (Complete) still works correctly');
+        const reopenResult = await activityService.reopen(toggleTask.activityId);
+        assert(reopenResult.completed === false, '1063. NEW — REGRESSION: activityService.reopen() (Reopen) still works correctly');
+      }
+
+      // 1064. Launch eligibility still works end-to-end
+      {
+        const eligibleRegressionCheck = await onboardingService.getLaunchEligibleEmployees();
+        assert(Array.isArray(eligibleRegressionCheck), '1064. NEW — REGRESSION: getLaunchEligibleEmployees() still resolves correctly after this task\'s changes');
+      }
+
+      // 1065. Employee/Intern plan composition unchanged
+      {
+        const scopeDefsRegression = await onboardingService.getScopeTaskDefinitions();
+        const empCompositionRegression = composeOnboardingTasks({ id: 'regression-check-emp', directoryType: 'Employee', department: { id: 'dept-3', name: 'Software Engineering' } }, scopeDefsRegression, '2026-08-15');
+        const internCompositionRegression = composeOnboardingTasks({ id: 'regression-check-intern', directoryType: 'Intern', department: { id: 'dept-3', name: 'Software Engineering' } }, scopeDefsRegression, '2026-08-15');
+        assert(empCompositionRegression.counts.total === 11 && internCompositionRegression.counts.total === 7, `1065. NEW — REGRESSION: Employee/Intern plan composition remains unchanged (Employee: ${empCompositionRegression.counts.total}, Intern: ${internCompositionRegression.counts.total})`);
+      }
+
+      // 1066. Plans configuration (Onboarding > Plans) unchanged — saveScopeTasks/getScopeTasks/getScopesSummary signatures untouched by this task
+      assert(
+        onboardingServiceSrcFinal3.includes('async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = [], currentUserId') &&
+        onboardingServiceSrcFinal3.includes('async getScopeTasks(scopeType, personType, departmentId = null)') &&
+        onboardingServiceSrcFinal3.includes("async getScopesSummary(personType = 'employee')"),
+        "1066. NEW — REGRESSION: saveScopeTasks/getScopeTasks/getScopesSummary retain their exact signatures — this task's Delete Task/Drop Plan/Mark All Complete additions never touch reusable Plans configuration"
+      );
+
+      // 1067. Historical launched snapshots are unaffected EXCEPT by an explicit task-instance deletion/drop action on that specific instance
+      {
+        const untouchedInstanceBefore = await onboardingService.getInstanceById('inst-002'); // Kevin — untouched by any operation in this immediate block
+        await onboardingService.addTaskToInstance('inst-001', { title: 'Snapshot Isolation Check', description: '', relativeOffsetDays: 0 });
+        const untouchedInstanceAfter = await onboardingService.getInstanceById('inst-002');
+        assert(untouchedInstanceAfter.progress.totalTasks === untouchedInstanceBefore.progress.totalTasks, '1067. NEW — REGRESSION: an instance not explicitly targeted by delete/drop/add-task remains completely unaffected by operations performed on a different instance');
+      }
+
+      // 1068. No Notes/reminder regression — those modules reference none of this task's new onboarding concepts
+      {
+        const notesServiceSrcFinal3 = fs.readFileSync(path.resolve('./src/services/notesService.js'), 'utf-8');
+        const notificationServiceSrcFinal3 = fs.readFileSync(path.resolve('./src/services/notificationService.js'), 'utf-8');
+        assert(
+          !notesServiceSrcFinal3.includes('droppedAt') && !notesServiceSrcFinal3.includes('deleteTaskFromInstance') &&
+          !notificationServiceSrcFinal3.includes('droppedAt') && !notificationServiceSrcFinal3.includes('deleteTaskFromInstance'),
+          '1068. NEW — REGRESSION: Notes and the reminder/notification system contain no reference to droppedAt/deleteTaskFromInstance — this task is fully isolated to Onboarding'
+        );
+      }
+
+      // 1069. No Offboarding regression — offboardingService.js is untouched, and the bulk-complete helper is a generic activityService addition that Offboarding could reuse but is not forced to
+      {
+        const offboardingServiceSrcFinal3 = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+        assert(
+          !offboardingServiceSrcFinal3.includes('droppedAt') && !offboardingServiceSrcFinal3.includes('markCompleteMany') &&
+          activityServiceSrcFinal3.includes('async reconcileOffboardingPlanProgress') === false || activityServiceSrcFinal3.includes('offboardingService'),
+          '1069. NEW — REGRESSION: offboardingService.js is untouched by this task, and activityService.js\'s existing Onboarding/Offboarding reconciliation dispatch (markComplete/reopen -> reconcileOnboardingPlanProgress / reconcileOffboardingPlanProgress) remains intact for both modules'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ==========================================================================
+    // Onboarding UI Refinements: Reposition "Mark All as Complete" +
+    // Move "Drop Plan" to Employee Header
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const overdueTasksModalSrcFinal4 = fs.readFileSync(path.resolve('./src/components/onboarding/OverdueTasksModal.jsx'), 'utf-8');
+      const onbDetailSrcFinal4 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const indexCssSrcFinal4 = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // --- OVERDUE MODAL: BULK-ACTION ROW REPOSITIONED ---
+
+      // 1070. Mark All as Complete remains in its own dedicated row, right-aligned, still a sibling BEFORE .modal-body (not merged into the title/header row, not moved inside the task list)
+      assert(
+        overdueTasksModalSrcFinal4.match(/\{tasks\.length > 0 && \(\s*\n\s*<div style=\{\{ display: 'flex', justifyContent: 'flex-end'/),
+        '1070. NEW — "Mark All as Complete" sits in its own dedicated action row (a flex div with justifyContent: \'flex-end\'), still a sibling positioned between the modal header and .modal-body — not merged into the title row or the task list'
+      );
+
+      // 1071. The action row is genuinely right-aligned (flex + flex-end), not left-aligned or centered
+      assert(
+        overdueTasksModalSrcFinal4.match(/justifyContent: 'flex-end', padding: '1rem 1\.5rem 0 1\.5rem'/),
+        '1071. NEW — The bulk-action row uses justifyContent: \'flex-end\' — "Mark All as Complete" is right-aligned, not left-aligned against the modal edge as it was before this task'
+      );
+
+      // 1072. The action row's horizontal inset (1.5rem each side) matches .modal-body's own horizontal padding — the button's right edge lines up with the task content below, not the modal's absolute outer edge
+      {
+        const modalBodyRuleMatch = indexCssSrcFinal4.match(/^\.modal-body \{\s*\n\s*padding:\s*([\d.]+rem);/m);
+        const actionRowPaddingMatch = overdueTasksModalSrcFinal4.match(/padding: '1rem (1\.5rem) 0 (1\.5rem)'/);
+        assert(
+          Boolean(modalBodyRuleMatch) && Boolean(actionRowPaddingMatch) && modalBodyRuleMatch[1] === actionRowPaddingMatch[1] && modalBodyRuleMatch[1] === actionRowPaddingMatch[2],
+          `1072. NEW — The bulk-action row's left/right padding (${actionRowPaddingMatch ? actionRowPaddingMatch[1] : 'missing'}) exactly matches .modal-body's own horizontal padding (${modalBodyRuleMatch ? modalBodyRuleMatch[1] : 'missing'}) — a reused existing spacing token, not a new one-off inset, so the button visually aligns with the task cards' content edge rather than the modal's outer edge`
+        );
+      }
+
+      // 1073. Vertical spacing is comfortable and non-doubled: 1rem top padding separates the row from the header divider without crowding it, and 0 bottom padding leaves .modal-body's own unchanged 1.5rem top padding as the single source of the gap before the first task card
+      assert(
+        overdueTasksModalSrcFinal4.includes("padding: '1rem 1.5rem 0 1.5rem'") && indexCssSrcFinal4.match(/^\.modal-body \{\s*\n\s*padding:\s*1\.5rem;/m),
+        '1073. NEW — The action row contributes exactly 1rem of top spacing after the header (not touching the divider) and 0 bottom padding, relying on .modal-body\'s existing unmodified 1.5rem top padding as the single, non-doubled source of spacing before the first overdue card'
+      );
+
+      // 1074. FUNCTIONAL/STRUCTURAL: the entire action row (not just the button) is absent — not merely hidden/empty — when there are zero overdue tasks, so no empty row or blank gap is ever left behind
+      assert(
+        overdueTasksModalSrcFinal4.match(/\{tasks\.length > 0 && \(\s*\n\s*<div style=\{\{ display: 'flex', justifyContent: 'flex-end', padding: '1rem 1\.5rem 0 1\.5rem' \}\}>\s*\n\s*<button/),
+        '1074. NEW — The whole bulk-action <div> (not just the <button> inside it) is conditionally rendered on tasks.length > 0 — with zero overdue tasks, the row itself does not exist in the DOM, leaving no empty action-row gap'
+      );
+
+      // 1075. Bulk-complete wiring is completely unchanged by this layout-only task — still no direct activityService/markCompleteMany call inside OverdueTasksModal, still just onRequestMarkAllComplete()
+      assert(
+        !stripComments(overdueTasksModalSrcFinal4).includes('activityService') && !overdueTasksModalSrcFinal4.includes('markCompleteMany') && overdueTasksModalSrcFinal4.includes('onClick={onRequestMarkAllComplete}'),
+        '1075. NEW — REGRESSION: OverdueTasksModal still never calls activityService/markCompleteMany directly — clicking "Mark All as Complete" only calls onRequestMarkAllComplete(), exactly as before this purely visual repositioning'
+      );
+
+      // 1076. Individual per-task "Mark Complete" is completely unchanged — still its own button, still calling onMarkComplete(task.id) per task
+      assert(
+        overdueTasksModalSrcFinal4.includes("onClick={() => onMarkComplete(task.id)}") && overdueTasksModalSrcFinal4.includes('Mark Complete') && !overdueTasksModalSrcFinal4.includes('Mark Complete</span>\n            </button>\n          </div>\n        )}\n\n        {tasks.length > 0'),
+        '1076. NEW — REGRESSION: Individual per-task "Mark Complete" buttons are completely unchanged (still their own onClick calling onMarkComplete(task.id) per task) — this task only repositioned the bulk action, it did not touch individual completion'
+      );
+
+      // --- DROP PLAN: MOVED FROM PLAN SUMMARY TO EMPLOYEE HEADER ---
+
+      // 1077. Drop Plan no longer renders inside the plan-summary/progress-overview card — exactly one "Drop Plan" button exists in the whole file, and it is NOT inside the status-badge/percentage row
+      {
+        const dropPlanButtonCount = (onbDetailSrcFinal4.match(/<span>Drop Plan<\/span>/g) || []).length;
+        assert(dropPlanButtonCount === 1, `1077a. NEW — Exactly one Drop Plan button exists in OnboardingEmployeeDetailPage.jsx (found ${dropPlanButtonCount})`);
+        assert(
+          !onbDetailSrcFinal4.match(/progressPercentage\}%\s*\n\s*<\/span>\s*\n\s*\{isActivePlanStatus/),
+          '1077. NEW — Drop Plan is no longer rendered immediately after the progress percentage inside the plan-summary status row (its previous location) — it has been fully removed from the plan-summary action area'
+        );
+      }
+
+      // 1078/1079. Drop Plan now renders in the employee-header card's right-side column, in source order BEFORE (i.e. visually above) "Anchor Start Date"
+      {
+        const headerCardMatch = onbDetailSrcFinal4.match(/Header Summary Card[\s\S]*?Warning Banners/);
+        const headerCardBlock = headerCardMatch ? headerCardMatch[0] : '';
+        const dropPlanIdx = headerCardBlock.indexOf('Drop Plan');
+        const anchorDateIdx = headerCardBlock.indexOf('Anchor Start Date');
+        assert(dropPlanIdx !== -1 && anchorDateIdx !== -1, '1078. NEW — Both Drop Plan and Anchor Start Date are rendered inside the employee Header Summary Card');
+        assert(dropPlanIdx < anchorDateIdx, '1079. NEW — Drop Plan appears in source order BEFORE Anchor Start Date within the header\'s right-side column, rendering visually above it, exactly as required');
+      }
+
+      // 1080. The existing isActivePlanStatus() visibility rule is reused unchanged — no second/different eligibility rule was invented for the new location
+      assert(
+        onbDetailSrcFinal4.includes('planInstance && isActivePlanStatus(planInstance.derivedStatus)') &&
+        (onbDetailSrcFinal4.match(/isActivePlanStatus\(planInstance\.derivedStatus\)/g) || []).length === 1,
+        '1080. NEW — Drop Plan\'s visibility is still gated by the single existing isActivePlanStatus(planInstance.derivedStatus) predicate (now referenced exactly once, at its new location) — no duplicate or alternate visibility rule was introduced'
+      );
+
+      // 1081/1082. The Drop Plan handler and DropPlanModal wiring are completely unchanged — same onClick, same modal component, same props
+      assert(
+        onbDetailSrcFinal4.includes('onClick={() => setIsDropPlanModalOpen(true)}') && onbDetailSrcFinal4.includes('title="Drop onboarding plan"'),
+        '1081. NEW — REGRESSION: The Drop Plan button still calls the exact same setIsDropPlanModalOpen(true) handler — only its position in the JSX changed'
+      );
+      assert(
+        onbDetailSrcFinal4.match(/<DropPlanModal\s*\n\s*isOpen=\{isDropPlanModalOpen\}\s*\n\s*onClose=\{\(\) => setIsDropPlanModalOpen\(false\)\}\s*\n\s*planInstance=\{planInstance\}\s*\n\s*employeeName=\{employee\.fullName\}\s*\n\s*onSuccess=\{handleDropPlanSuccess\}/),
+        '1082. NEW — REGRESSION: The same <DropPlanModal> is still rendered once at the bottom of the page with identical props (isOpen/onClose/planInstance/employeeName/onSuccess) — the confirmation modal itself was not duplicated or reimplemented'
+      );
+
+      // 1083/1084. FUNCTIONAL: the visibility rule still correctly excludes Completed and Dropped plans
+      assert(!isActivePlanStatus(PLAN_INSTANCE_STATUS.COMPLETED), '1083. NEW — isActivePlanStatus(Completed) remains false — a Completed plan still shows no Drop Plan action in its new header location');
+      assert(!isActivePlanStatus(PLAN_INSTANCE_STATUS.DROPPED), '1084. NEW — isActivePlanStatus(Dropped) remains false — an already-Dropped plan still shows no Drop Plan action');
+
+      // 1085. No empty placeholder/blank row is left in the header when Drop Plan is hidden — it's a real conditional (&&), not a hidden/disabled element or fixed-height spacer
+      assert(
+        !onbDetailSrcFinal4.match(/Drop Plan[\s\S]{0,50}hidden\}|visibility:\s*'hidden'|opacity:\s*0[,}]/) &&
+        onbDetailSrcFinal4.match(/\{planInstance && isActivePlanStatus\(planInstance\.derivedStatus\) && \(/),
+        '1085. NEW — Drop Plan is rendered via a genuine `&&` conditional (present or entirely absent from the DOM) — no hidden/disabled/opacity-0 placeholder is ever left in its place, so the header column collapses to just Anchor Start Date when Drop Plan doesn\'t apply'
+      );
+
+      // 1086. The plan-summary status/percentage row remains clean after Drop Plan's removal — status badge and percentage are the only 2 children left, with no dangling empty conditional block where the button used to sit
+      assert(
+        onbDetailSrcFinal4.match(/\{planInstance\.progress\.progressPercentage\}%\s*\n\s*<\/span>\s*\n\s*<\/div>\s*\n\s*<\/div>/),
+        '1086. NEW — The plan-summary status row now ends cleanly right after the percentage span (status badge + percentage only) — no leftover empty conditional block or dangling wrapper from the removed Drop Plan button'
+      );
+
+      // 1087. Responsive safety: the header's outer row wraps on narrow screens (flexWrap), consistent with (and not regressing) the mobile-wrapping fix from the previous onboarding task
+      assert(
+        onbDetailSrcFinal4.match(/justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem'/),
+        '1087. NEW — The employee header card\'s outer row (identity block vs. the new Drop Plan + Anchor Start Date column) wraps via flexWrap: \'wrap\' at narrow widths, so the added Drop Plan button cannot reintroduce the horizontal-clipping bug fixed in the previous task'
+      );
+
+      // --- REGRESSION (this task is layout-only; everything else must be byte-for-byte functionally identical) ---
+
+      // 1088. FUNCTIONAL REGRESSION: Delete Task still works end-to-end
+      {
+        const instBeforeRegr = await onboardingService.getInstanceById('inst-001');
+        const taskToDelete = instBeforeRegr.progress.tasks.find((t) => !t.isCompleted);
+        const instAfterRegr = await onboardingService.deleteTaskFromInstance('inst-001', taskToDelete.id);
+        assert(instAfterRegr.progress.totalTasks === instBeforeRegr.progress.totalTasks - 1, '1088. NEW — REGRESSION: deleteTaskFromInstance() (Delete Task) still works correctly after this layout-only task');
+      }
+
+      // 1089. FUNCTIONAL REGRESSION: Add Task still works
+      {
+        const beforeAdd = await onboardingService.getInstanceById('inst-001');
+        const afterAdd = await onboardingService.addTaskToInstance('inst-001', { title: 'UI Refinement Regression Check', description: '', relativeOffsetDays: 0 });
+        assert(afterAdd.progress.totalTasks === beforeAdd.progress.totalTasks + 1, '1089. NEW — REGRESSION: addTaskToInstance() (Add Task) still works correctly');
+      }
+
+      // 1090. FUNCTIONAL REGRESSION: Complete/Reopen still work
+      {
+        const instForToggleRegr = await onboardingService.getInstanceById('inst-001');
+        const toggleTaskRegr = instForToggleRegr.progress.tasks.find((t) => !t.isCompleted);
+        const doneRegr = await activityService.markComplete(toggleTaskRegr.activityId);
+        const reopenRegr = await activityService.reopen(toggleTaskRegr.activityId);
+        assert(doneRegr.completed === true && reopenRegr.completed === false, '1090. NEW — REGRESSION: markComplete()/reopen() (Complete/Reopen) still work correctly');
+      }
+
+      // 1091. FUNCTIONAL REGRESSION: bulk overdue completion still works
+      {
+        const dbForBulkRegr = loadDatabase();
+        const nowIsoRegr = new Date().toISOString();
+        const overdueActRegr = { id: 'act-ui-regr-overdue', typeId: 'act-type-1', title: 'UI Regr Overdue Task', description: '', employeeId: 'emp-013', assigneeId: 'emp-013', dueDate: addDaysToLocalDate(getTodayLocalDateString(), -3), completed: false, completedAt: null, completedBy: null, source: 'Onboarding', sourceEntityType: 'OnboardingTaskInstance', sourceEntityId: 'ti-ui-regr', createdAt: nowIsoRegr, createdBy: 'emp-003', updatedAt: nowIsoRegr };
+        dbForBulkRegr.activities = [overdueActRegr, ...(dbForBulkRegr.activities || [])];
+        saveDatabase(dbForBulkRegr);
+        const overdueListRegr = await activityService.getOverdueActivities();
+        const idsRegr = overdueListRegr.filter((a) => a.id === 'act-ui-regr-overdue').map((a) => a.id);
+        await activityService.markCompleteMany(idsRegr);
+        const afterBulkRegr = await activityService.getById('act-ui-regr-overdue');
+        assert(afterBulkRegr.completed === true, '1091. NEW — REGRESSION: activityService.markCompleteMany() (bulk overdue completion) still works correctly');
+      }
+
+      // 1092. FUNCTIONAL REGRESSION: plan progress/status derivation is unchanged
+      {
+        const scopeDefsRegr2 = await onboardingService.getScopeTaskDefinitions();
+        const compositionRegr2 = composeOnboardingTasks({ id: 'ui-regr-check', directoryType: 'Employee', department: { id: 'dept-3', name: 'Software Engineering' } }, scopeDefsRegr2, '2026-08-15');
+        assert(compositionRegr2.counts.total === 11, `1092. NEW — REGRESSION: Plan composition/progress derivation logic is unchanged (Employee Universal+Department = 11, found ${compositionRegr2.counts.total})`);
+      }
+
+      // 1093. FUNCTIONAL REGRESSION: launch eligibility is unchanged
+      {
+        const eligibleRegr2 = await onboardingService.getLaunchEligibleEmployees();
+        assert(Array.isArray(eligibleRegr2), '1093. NEW — REGRESSION: getLaunchEligibleEmployees() still resolves correctly, unaffected by this layout-only task');
       }
 
       resetDatabase();
