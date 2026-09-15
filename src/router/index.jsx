@@ -9,6 +9,7 @@ import AllEmployeesPage from '../pages/employees/AllEmployeesPage';
 
 // Upcoming (Candidate / Offer Workflow) Page
 import UpcomingPage from '../pages/upcoming/UpcomingPage';
+import CandidateThreadPage from '../pages/upcoming/CandidateThreadPage';
 
 // Onboarding Pages
 import OnboardingEmployeesPage from '../pages/onboarding/OnboardingEmployeesPage';
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
 
       // Upcoming route (shortlisted candidate / offer workflow, pre-onboarding)
       { path: 'upcoming', element: <UpcomingPage /> },
+      { path: 'upcoming/:candidateId', element: <CandidateThreadPage /> },
 
       // Onboarding routes
       {

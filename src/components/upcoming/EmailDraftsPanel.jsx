@@ -1,29 +1,67 @@
-import React, { useEffect, useState } from 'react';
-import { RotateCcw, Save, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, RotateCcw, Save, CheckCircle2, Mail, Pencil, Plus, Search, X } from 'lucide-react';
 import { emailTemplateService } from '../../services/emailTemplateService.js';
+import { Select } from '../common/Select.jsx';
 
 const PLACEHOLDER_TOKENS = ['{{ApplicantName}}', '{{PositionName}}', '{{HiringEmployeeName}}'];
 
+const OFFER_PILL_STYLES = {
+  Paid: { bg: '#ECFDF5', color: '#059669' },
+  Unpaid: { bg: '#FEF3C7', color: '#D97706' },
+};
+
+const OFFER_TYPE_OPTIONS = [
+  { value: 'Paid', label: 'Paid' },
+  { value: 'Unpaid', label: 'Unpaid' },
+];
+
+/**
+ * Card-grid overview of every offer email draft, so HR can see what exists at a glance before
+ * committing to edit one. Clicking a card opens a focused, full-width editor for just that
+ * draft (name/offer type/subject/body + placeholder legend + Save/Reset) — replaces the old
+ * cramped sidebar-list-plus-editor split view. The "New Draft" button above the grid creates a
+ * blank draft and opens it straight into the editor.
+ */
 export default function EmailDraftsPanel() {
   const [templates, setTemplates] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [canReset, setCanReset] = useState(false);
+  const [name, setName] = useState('');
+  const [offerType, setOfferType] = useState('Paid');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [savedMessage, setSavedMessage] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [activeField, setActiveField] = useState('body');
+  const [search, setSearch] = useState('');
+  const subjectRef = useRef(null);
+  const bodyRef = useRef(null);
+
+  // Inserts a placeholder token at the cursor position in whichever field (Subject or Body) the
+  // user last focused — replacing any current selection, like a normal text edit — then restores
+  // focus and cursor position so multiple placeholders can be dropped in back-to-back.
+  const insertPlaceholder = (token) => {
+    const isSubject = activeField === 'subject';
+    const ref = isSubject ? subjectRef : bodyRef;
+    const value = isSubject ? subject : body;
+    const setValue = isSubject ? setSubject : setBody;
+    const el = ref.current;
+    const start = el ? el.selectionStart : value.length;
+    const end = el ? el.selectionEnd : value.length;
+    const newValue = `${value.slice(0, start)}${token}${value.slice(end)}`;
+    setValue(newValue);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const cursor = start + token.length;
+      el.setSelectionRange(cursor, cursor);
+    });
+  };
 
   const loadTemplates = async () => {
     setLoading(true);
     try {
-      const all = await emailTemplateService.getAll();
-      setTemplates(all);
-      const stillSelected = all.find((t) => t.id === selectedId);
-      const active = stillSelected || all[0];
-      if (active) {
-        setSelectedId(active.id);
-        setSubject(active.subject);
-        setBody(active.body);
-      }
+      setTemplates(await emailTemplateService.getAll());
     } finally {
       setLoading(false);
     }
@@ -31,79 +69,204 @@ export default function EmailDraftsPanel() {
 
   useEffect(() => { loadTemplates(); }, []);
 
-  const handleSelectTemplate = (tpl) => {
-    setSelectedId(tpl.id);
+  const editingTemplate = templates.find((t) => t.id === editingId) || null;
+
+  // Searches by draft name, subject, AND body content — not just the name — so a draft can be
+  // found by what it actually says, not only what it was called.
+  const filteredTemplates = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter((tpl) => (
+      (tpl.name || '').toLowerCase().includes(q)
+      || (tpl.subject || '').toLowerCase().includes(q)
+      || (tpl.body || '').toLowerCase().includes(q)
+    ));
+  }, [templates, search]);
+
+  const openEditor = async (tpl) => {
+    setEditingId(tpl.id);
+    setName(tpl.name);
+    setOfferType(tpl.offerType);
     setSubject(tpl.subject);
     setBody(tpl.body);
+    setSavedMessage('');
+    setCanReset(await emailTemplateService.hasDefault(tpl.id));
+  };
+
+  const handleAddDraft = async () => {
+    const created = await emailTemplateService.create({ name: 'New Draft', offerType: 'Paid', subject: '', body: '' });
+    await loadTemplates();
+    await openEditor(created);
+  };
+
+  const handleBack = () => {
+    setEditingId(null);
     setSavedMessage('');
   };
 
   const handleSave = async () => {
-    await emailTemplateService.update(selectedId, { subject, body });
+    await emailTemplateService.update(editingId, { name, offerType, subject, body });
+    await loadTemplates();
     setSavedMessage('Draft saved.');
     setTimeout(() => setSavedMessage(''), 2000);
   };
 
   const handleReset = async () => {
-    const restored = await emailTemplateService.resetToDefault(selectedId);
+    const restored = await emailTemplateService.resetToDefault(editingId);
+    setName(restored.name);
+    setOfferType(restored.offerType);
     setSubject(restored.subject);
     setBody(restored.body);
+    await loadTemplates();
     setSavedMessage('Reset to default.');
     setTimeout(() => setSavedMessage(''), 2000);
   };
 
   if (loading) {
-    return <div className="directory-table-card skeleton-box" style={{ height: '320px' }} />;
+    return <div className="directory-table-card skeleton-box" style={{ height: '220px' }} />;
+  }
+
+  if (editingTemplate) {
+    return (
+      <div>
+        <button type="button" className="email-draft-back-link" onClick={handleBack}>
+          <ArrowLeft size={14} /> Back to Drafts
+        </button>
+
+        <div className="email-draft-editor-card">
+          <div className="dept-card-grid" style={{ gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Draft Name</label>
+              <input type="text" className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Offer Type</label>
+              <Select
+                variant="filter"
+                value={offerType}
+                onChange={(e) => setOfferType(e.target.value)}
+                options={OFFER_TYPE_OPTIONS}
+              />
+            </div>
+          </div>
+
+          <div className="form-group" style={{ marginTop: '1rem' }}>
+            <label className="form-label">Subject</label>
+            <input
+              ref={subjectRef}
+              type="text"
+              className="form-input"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              onFocus={() => setActiveField('subject')}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Body</label>
+            <textarea
+              ref={bodyRef}
+              className="form-textarea email-body-textarea"
+              rows={16}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              onFocus={() => setActiveField('body')}
+            />
+          </div>
+
+          <div className="email-draft-placeholder-legend">
+            <span className="form-label" style={{ marginBottom: 0 }}>
+              Click to insert into {activeField === 'subject' ? 'Subject' : 'Body'}:
+            </span>
+            {PLACEHOLDER_TOKENS.map((token) => (
+              <button
+                key={token}
+                type="button"
+                className="placeholder-token-chip placeholder-token-chip-clickable"
+                onClick={() => insertPlaceholder(token)}
+                title={`Insert ${token} into ${activeField === 'subject' ? 'Subject' : 'Body'}`}
+              >
+                {token}
+              </button>
+            ))}
+          </div>
+
+          <div className="email-draft-editor-footer">
+            {savedMessage && (
+              <span className="sync-status-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                <CheckCircle2 size={14} /> {savedMessage}
+              </span>
+            )}
+            {canReset && (
+              <button type="button" className="btn-secondary" onClick={handleReset}>
+                <RotateCcw size={14} />
+                <span>Reset to Default</span>
+              </button>
+            )}
+            <button type="button" className="btn-primary" onClick={handleSave} disabled={!name.trim()}>
+              <Save size={14} />
+              <span>Save Draft</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="email-drafts-layout">
-      <div className="email-drafts-list-card">
-        {templates.map((tpl) => (
-          <button
-            key={tpl.id}
-            type="button"
-            className={`email-draft-list-item ${selectedId === tpl.id ? 'active' : ''}`}
-            onClick={() => handleSelectTemplate(tpl)}
-          >
-            {tpl.name}
-          </button>
-        ))}
-      </div>
-
-      <div className="email-draft-editor-card">
-        <div className="form-group">
-          <label className="form-label">Subject</label>
-          <input type="text" className="form-input" value={subject} onChange={(e) => setSubject(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Body</label>
-          <textarea className="form-textarea email-body-textarea" rows={16} value={body} onChange={(e) => setBody(e.target.value)} />
-        </div>
-
-        <div className="email-draft-placeholder-legend">
-          <span className="form-label" style={{ marginBottom: 0 }}>Available placeholders:</span>
-          {PLACEHOLDER_TOKENS.map((token) => (
-            <span key={token} className="placeholder-token-chip">{token}</span>
-          ))}
-        </div>
-
-        <div className="email-draft-editor-footer">
-          {savedMessage && (
-            <span className="sync-status-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-              <CheckCircle2 size={14} /> {savedMessage}
-            </span>
+    <div>
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem' }}>
+        <div className="toolbar-search-box">
+          <Search size={18} className="toolbar-search-icon" />
+          <input
+            type="text"
+            className="toolbar-search-input"
+            placeholder="Search drafts by name, subject, or content..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={search ? { paddingRight: '2.25rem' } : undefined}
+          />
+          {search && (
+            <button type="button" className="toolbar-search-clear-btn" onClick={() => setSearch('')} title="Clear search">
+              <X size={15} />
+            </button>
           )}
-          <button type="button" className="btn-secondary" onClick={handleReset}>
-            <RotateCcw size={14} />
-            <span>Reset to Default</span>
-          </button>
-          <button type="button" className="btn-primary" onClick={handleSave}>
-            <Save size={14} />
-            <span>Save Draft</span>
-          </button>
         </div>
+        <button type="button" className="btn-primary" style={{ flexShrink: 0 }} onClick={handleAddDraft}>
+          <Plus size={15} />
+          <span>New Draft</span>
+        </button>
       </div>
+
+      {filteredTemplates.length === 0 ? (
+        <div className="directory-empty-card">
+          <p className="empty-description">No drafts match &ldquo;{search}&rdquo;.</p>
+        </div>
+      ) : (
+        <div className="email-draft-card-grid">
+          {filteredTemplates.map((tpl) => {
+            const offerPill = OFFER_PILL_STYLES[tpl.offerType] || OFFER_PILL_STYLES.Paid;
+            return (
+              <div key={tpl.id} className="email-draft-card" onClick={() => openEditor(tpl)}>
+                <div className="email-draft-card-header">
+                  <span className="email-draft-card-name">{tpl.name}</span>
+                  <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>
+                    {tpl.offerType}
+                  </span>
+                </div>
+                <div className="email-draft-card-subject">
+                  <Mail size={12} style={{ marginRight: '0.3rem', verticalAlign: '-1px' }} />
+                  {tpl.subject || 'No subject yet'}
+                </div>
+                <div className="email-draft-card-snippet">{tpl.body || 'No content yet — click to write this draft.'}</div>
+                <div className="email-draft-card-footer">
+                  <Pencil size={13} />
+                  <span>Edit Draft</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

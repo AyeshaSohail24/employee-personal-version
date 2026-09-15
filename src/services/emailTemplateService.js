@@ -38,9 +38,9 @@ export const emailTemplateService = {
   },
 
   /**
-   * Updates a draft's subject/body.
+   * Updates a draft's name/offer type/subject/body.
    * @param {string} id
-   * @param {{ subject?: string, body?: string }} updateData
+   * @param {{ name?: string, offerType?: string, subject?: string, body?: string }} updateData
    * @returns {Promise<Object>}
    */
   async update(id, updateData) {
@@ -53,6 +53,8 @@ export const emailTemplateService = {
 
     templates[index] = {
       ...templates[index],
+      name: updateData.name !== undefined ? updateData.name : templates[index].name,
+      offerType: updateData.offerType !== undefined ? updateData.offerType : templates[index].offerType,
       subject: updateData.subject !== undefined ? updateData.subject : templates[index].subject,
       body: updateData.body !== undefined ? updateData.body : templates[index].body,
     };
@@ -60,6 +62,41 @@ export const emailTemplateService = {
     db.emailTemplates = templates;
     saveDatabase(db);
     return this.getById(id);
+  },
+
+  /**
+   * Creates a new, blank offer email draft (a custom addition to the library alongside the two
+   * seeded Paid/Unpaid defaults). Never wired automatically into candidateEmailService's send
+   * flow — getByOfferType() keeps resolving to whichever draft for that Offer Type comes first,
+   * so a new custom draft is purely a library entry HR can open and fill in until they decide
+   * what (if anything) it replaces.
+   * @param {{ name?: string, offerType?: string, subject?: string, body?: string }} [data]
+   * @returns {Promise<Object>}
+   */
+  async create(data = {}) {
+    const db = loadDatabase();
+    const templates = db.emailTemplates || [];
+    const newTemplate = {
+      id: `tpl-email-${Date.now()}`,
+      name: data.name || 'New Draft',
+      offerType: data.offerType || 'Paid',
+      subject: data.subject || '',
+      body: data.body || '',
+    };
+
+    db.emailTemplates = [...templates, newTemplate];
+    saveDatabase(db);
+    return this.getById(newTemplate.id);
+  },
+
+  /**
+   * Whether a draft has a seeded PoC default it can be reset back to (custom drafts created via
+   * create() do not, since there's nothing to reset them to).
+   * @param {string} id
+   * @returns {Promise<boolean>}
+   */
+  async hasDefault(id) {
+    return seedEmailTemplates.some((t) => t.id === id);
   },
 
   /**
