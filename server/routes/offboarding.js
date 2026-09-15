@@ -1,0 +1,63 @@
+import * as db from "../db/offboarding.js";
+import { RowNotFoundError } from "../db/crud.js";
+import { sendJson, NotFoundError } from "../http/errors.js";
+import { readJsonBody } from "../http/util.js";
+
+export const routes = {
+  "/offboarding/templates": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { templates: await db.listTemplates(ctx.url.searchParams.get("department_id") ?? undefined) });
+    },
+    async post(req, res, ctx) {
+      const body = await readJsonBody(req);
+      const id = await db.createTemplate(body);
+      sendJson(res, ctx.cid, 201, { template: await db.getTemplate(id) });
+    },
+  },
+  "/offboarding/templates/{id}": {
+    async get(req, res, ctx) {
+      const template = await db.getTemplate(ctx.params.id);
+      if (!template) throw new NotFoundError(`No offboarding template with id ${ctx.params.id}.`);
+      sendJson(res, ctx.cid, 200, { template });
+    },
+    async patch(req, res, ctx) {
+      const body = await readJsonBody(req);
+      try {
+        await db.updateTemplate(ctx.params.id, body);
+      } catch (error) {
+        if (error instanceof RowNotFoundError) throw new NotFoundError(error.message);
+        throw error;
+      }
+      sendJson(res, ctx.cid, 200, { template: await db.getTemplate(ctx.params.id) });
+    },
+  },
+  "/offboarding/instances": {
+    async post(req, res, ctx) {
+      const body = await readJsonBody(req);
+      const id = await db.launchInstance(body);
+      sendJson(res, ctx.cid, 201, {
+        instance: await db.getInstance(id),
+        taskInstances: await db.listInstanceTasks(id),
+      });
+    },
+  },
+  "/offboarding/instances/{id}": {
+    async get(req, res, ctx) {
+      const instance = await db.getInstance(ctx.params.id);
+      if (!instance) throw new NotFoundError(`No offboarding instance with id ${ctx.params.id}.`);
+      sendJson(res, ctx.cid, 200, { instance, taskInstances: await db.listInstanceTasks(ctx.params.id) });
+    },
+  },
+  "/offboarding/task-instances/{id}": {
+    async patch(req, res, ctx) {
+      const body = await readJsonBody(req);
+      try {
+        await db.setTaskInstanceCompleted(ctx.params.id, Boolean(body.completed));
+      } catch (error) {
+        if (error instanceof RowNotFoundError) throw new NotFoundError(error.message);
+        throw error;
+      }
+      sendJson(res, ctx.cid, 200, { taskInstance: await db.getTaskInstance(ctx.params.id) });
+    },
+  },
+};
