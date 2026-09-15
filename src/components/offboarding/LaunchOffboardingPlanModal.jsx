@@ -235,9 +235,9 @@ export default function LaunchOffboardingPlanModal({
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-end' }}>
               <div>
-                <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Employee Final Working Date</div>
+                <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Final Working Date</div>
                 <div style={{ fontSize: '0.9rem', fontWeight: 700, color: preview ? (preview.canonicalAnchorDate ? 'var(--text-main)' : '#DC2626') : 'var(--text-muted)' }}>
-                  {preview ? (preview.canonicalAnchorDate ? formatDateDisplay(preview.canonicalAnchorDate) : 'Not available') : 'Select an employee'}
+                  {preview ? (preview.canonicalAnchorDate ? formatDateDisplay(preview.canonicalAnchorDate) : 'Not available') : 'Select an employee or intern'}
                 </div>
               </div>
 

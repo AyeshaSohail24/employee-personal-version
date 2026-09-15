@@ -13,6 +13,7 @@ import {
   Eye,
   Plus,
   Trash2,
+  Pencil,
   XCircle,
 } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
@@ -21,6 +22,7 @@ import { activityService } from '../../services/activityService.js';
 import { PLAN_INSTANCE_STATUS, isActivePlanStatus } from '../../domain/onboardingDomain.js';
 import LaunchPlanModal from '../../components/onboarding/LaunchPlanModal.jsx';
 import AddTaskModal from '../../components/onboarding/AddTaskModal.jsx';
+import EditTaskModal from '../../components/onboarding/EditTaskModal.jsx';
 import DeleteOnboardingTaskModal from '../../components/onboarding/DeleteOnboardingTaskModal.jsx';
 import DropPlanModal from '../../components/onboarding/DropPlanModal.jsx';
 
@@ -31,6 +33,7 @@ export default function OnboardingEmployeeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+  const [taskPendingEdit, setTaskPendingEdit] = useState(null);
   const [taskPendingDelete, setTaskPendingDelete] = useState(null);
   const [isDropPlanModalOpen, setIsDropPlanModalOpen] = useState(false);
 
@@ -55,6 +58,11 @@ export default function OnboardingEmployeeDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditTaskSuccess = async () => {
+    setTaskPendingEdit(null);
+    await loadData();
   };
 
   const handleDeleteTaskSuccess = async () => {
@@ -329,6 +337,15 @@ export default function OnboardingEmployeeDetailPage() {
                           )}
                           <button
                             type="button"
+                            className="icon-btn"
+                            title="Edit task"
+                            aria-label="Edit task"
+                            onClick={() => setTaskPendingEdit(task)}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
                             className="icon-btn icon-btn-danger"
                             title="Delete task"
                             aria-label="Delete task"
@@ -364,6 +381,19 @@ export default function OnboardingEmployeeDetailPage() {
           planInstanceId={planInstance.id}
           employeeName={employee.fullName}
           onSuccess={() => loadData()}
+        />
+      )}
+
+      {/* Edit Task Modal (employee-specific plan instance only — reusable Plans configuration untouched) */}
+      {planInstance && (
+        <EditTaskModal
+          isOpen={Boolean(taskPendingEdit)}
+          onClose={() => setTaskPendingEdit(null)}
+          planInstanceId={planInstance.id}
+          task={taskPendingEdit}
+          employeeName={employee.fullName}
+          anchorDate={planInstance.anchorDate}
+          onSuccess={handleEditTaskSuccess}
         />
       )}
 

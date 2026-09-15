@@ -9507,21 +9507,454 @@ export async function verifyStage18() {
 
       // --- UI DISPLAY: CANONICAL DATE VS OPTIONAL OVERRIDE CLEARLY DISTINGUISHED ---
 
-      // 1255. LaunchPlanModal.jsx shows "Start Date Anchor" with the canonical Employee Start Date always visible, a Custom Override input, and an "Effective Anchor Date" line ONLY when an override is entered
+      // 1255. LaunchPlanModal.jsx shows "Start Date Anchor" with the canonical Start Date always visible, a Custom Override input, and an "Effective Anchor Date" line ONLY when an override is entered
       assert(
-        launchPlanModalSrcAnchor.includes('Start Date Anchor') && launchPlanModalSrcAnchor.includes('Employee Start Date') &&
+        launchPlanModalSrcAnchor.includes('Start Date Anchor') && launchPlanModalSrcAnchor.includes('>Start Date<') &&
         launchPlanModalSrcAnchor.includes('preview.canonicalAnchorDate') && launchPlanModalSrcAnchor.includes('Custom Override') &&
         launchPlanModalSrcAnchor.match(/customAnchorDate && preview && preview\.anchorDate[\s\S]{0,150}Effective Anchor Date/),
-        '1255. NEW — LaunchPlanModal.jsx shows a "Start Date Anchor" section: "Employee Start Date" (canonical, always visible), a Custom Override date input, and "Effective Anchor Date" only when an override is actually entered — no clutter when there is none'
+        '1255. UPDATED — LaunchPlanModal.jsx shows a "Start Date Anchor" section: "Start Date" (canonical, always visible, no longer labeled "Employee Start Date" since the selected person may be an Intern), a Custom Override date input, and "Effective Anchor Date" only when an override is actually entered — no clutter when there is none'
       );
 
       // 1256. LaunchOffboardingPlanModal.jsx shows the exact same structure for "Final Working Date Anchor" — consistent HR UX across both launch flows
       assert(
-        launchOffboardingPlanModalSrcAnchor.includes('Final Working Date Anchor') && launchOffboardingPlanModalSrcAnchor.includes('Employee Final Working Date') &&
+        launchOffboardingPlanModalSrcAnchor.includes('Final Working Date Anchor') && launchOffboardingPlanModalSrcAnchor.includes('>Final Working Date<') &&
         launchOffboardingPlanModalSrcAnchor.includes('preview.canonicalAnchorDate') && launchOffboardingPlanModalSrcAnchor.includes('Custom Override') &&
         launchOffboardingPlanModalSrcAnchor.match(/customAnchorDate && preview && preview\.anchorDate[\s\S]{0,150}Effective Anchor Date/),
-        '1256. NEW — LaunchOffboardingPlanModal.jsx shows the exact same "Final Working Date Anchor" structure: "Employee Final Working Date" (canonical, always visible), Custom Override, and "Effective Anchor Date" only when entered — mirroring Onboarding\'s pattern for consistent HR UX'
+        '1256. UPDATED — LaunchOffboardingPlanModal.jsx shows the exact same "Final Working Date Anchor" structure: "Final Working Date" (canonical, always visible, no longer labeled "Employee Final Working Date" since the selected person may be an Intern), Custom Override, and "Effective Anchor Date" only when entered — mirroring Onboarding\'s pattern for consistent HR UX'
       );
+
+      // 1257. Both modals' anchor-date empty state (before a person is selected) reads "Select an employee or intern" — never a bare "Select an employee" that misleadingly implies Interns aren't eligible, and neither modal's anchor label wrongly claims the value is Employee-specific
+      assert(
+        launchPlanModalSrcAnchor.includes("'Select an employee or intern'") && !launchPlanModalSrcAnchor.includes('Employee Start Date') &&
+        launchOffboardingPlanModalSrcAnchor.includes("'Select an employee or intern'") && !launchOffboardingPlanModalSrcAnchor.includes('Employee Final Working Date'),
+        '1257. NEW — Before a person is selected, both LaunchPlanModal.jsx and LaunchOffboardingPlanModal.jsx show "Select an employee or intern" in the anchor-date area (never a bare "Select an employee"), and neither file still contains the misleading "Employee Start Date"/"Employee Final Working Date" generic labels — a selected Intern never sees an Employee-only label'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Add "Edit Task" to Already-Launched Onboarding and Offboarding Plans
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const onbDetailSrcEditTask = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const offDetailSrcEditTask = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const editTaskModalSrc = fs.readFileSync(path.resolve('./src/components/onboarding/EditTaskModal.jsx'), 'utf-8');
+      const editOffboardingTaskModalSrc = fs.readFileSync(path.resolve('./src/components/offboarding/EditOffboardingTaskModal.jsx'), 'utf-8');
+      const onboardingServiceSrcEditTask = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+      const offboardingServiceSrcEditTask = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+
+      // --- STATIC / STRUCTURAL CHECKS ---
+
+      // 1258. Edit action exists on launched onboarding task rows (Pencil icon, "Edit task" title/aria-label), positioned between Done/Reopen and Delete
+      assert(
+        onbDetailSrcEditTask.includes('title="Edit task"') && onbDetailSrcEditTask.includes('aria-label="Edit task"') &&
+        onbDetailSrcEditTask.match(/Reopen[\s\S]{0,400}Edit task[\s\S]{0,500}Delete task/),
+        '1258. NEW — OnboardingEmployeeDetailPage.jsx renders an Edit action (Pencil icon, "Edit task" title/aria-label) on every launched task row, positioned between Done/Reopen and Delete'
+      );
+
+      // 1259. Edit action exists on launched offboarding task rows, same positioning
+      assert(
+        offDetailSrcEditTask.includes('title="Edit task"') && offDetailSrcEditTask.includes('aria-label="Edit task"') &&
+        offDetailSrcEditTask.match(/Reopen[\s\S]{0,400}Edit task[\s\S]{0,500}Delete task/),
+        '1259. NEW — OffboardingEmployeeDetailPage.jsx renders an Edit action (Pencil icon, "Edit task" title/aria-label) on every launched task row, positioned between Done/Reopen and Delete'
+      );
+
+      // 1260. Edit Task modal opens via dedicated pending-edit state and calls the instance-only update service (never a reusable-plan/scope update API)
+      assert(
+        onbDetailSrcEditTask.includes('taskPendingEdit') && onbDetailSrcEditTask.includes('<EditTaskModal') &&
+        offDetailSrcEditTask.includes('taskPendingEdit') && offDetailSrcEditTask.includes('<EditOffboardingTaskModal'),
+        '1260. NEW — Both detail pages open a dedicated Edit Task modal via their own taskPendingEdit state (mirroring taskPendingDelete), never inline-editing the table row'
+      );
+
+      // 1261. Edit Task modal fields match Add Task's field set: Task Title, Activity Type, Description, Relative Offset (Days) — no Due Date input anywhere
+      assert(
+        editTaskModalSrc.includes('Task Title') && editTaskModalSrc.includes('Activity Type') &&
+        editTaskModalSrc.includes('Relative Offset (Days)') && editTaskModalSrc.includes('Description') &&
+        !editTaskModalSrc.match(/type="date"/) &&
+        editOffboardingTaskModalSrc.includes('Task Title') && editOffboardingTaskModalSrc.includes('Activity Type') &&
+        editOffboardingTaskModalSrc.includes('Relative Offset (Days)') && editOffboardingTaskModalSrc.includes('Task Description') &&
+        !editOffboardingTaskModalSrc.match(/type="date"/),
+        '1261. NEW — Both Edit Task modals collect exactly Task Title / Activity Type / Relative Offset (Days) / Description — no manually editable Due Date input (type="date") exists anywhere in either file, matching Part 4\'s explicit requirement'
+      );
+
+      // 1262. Both Edit Task modals pre-fill every field from the selected task's current values
+      assert(
+        editTaskModalSrc.includes('buildFormStateFromTask') && editTaskModalSrc.includes('task.currentTitle || task.title') &&
+        editOffboardingTaskModalSrc.includes('buildFormStateFromTask') && editOffboardingTaskModalSrc.includes('task.currentTitle || task.title'),
+        '1262. NEW — Both Edit Task modals build their initial form state directly from the selected task\'s current title/description/activityTypeId/relativeOffsetDays — every field arrives pre-populated, never blank'
+      );
+
+      // 1263. Save button uses "Saving..." loading state and is guarded against duplicate submission
+      assert(
+        editTaskModalSrc.includes("submitting ? 'Saving...' : 'Save Changes'") && editTaskModalSrc.includes('if (submitting) return;') &&
+        editOffboardingTaskModalSrc.includes("submitting ? 'Saving...' : 'Save Changes'") && editOffboardingTaskModalSrc.includes('if (submitting) return;'),
+        '1263. NEW — Both Edit Task modals show "Saving..." while submitting and short-circuit handleSubmit() with an early return when already submitting, preventing accidental duplicate submissions'
+      );
+
+      // 1264. Recalculated Due Date preview inside the modal is derived from the launched instance's own anchorDate prop, never a manually editable field
+      assert(
+        editTaskModalSrc.includes('anchorDate') && editTaskModalSrc.includes('previewDueDate') &&
+        onbDetailSrcEditTask.includes('anchorDate={planInstance.anchorDate}') &&
+        editOffboardingTaskModalSrc.includes('anchorDate') && editOffboardingTaskModalSrc.includes('previewDueDate') &&
+        offDetailSrcEditTask.includes('anchorDate={instance.anchorDate}'),
+        '1264. NEW — Both detail pages pass the launched instance\'s OWN already-snapshotted anchorDate into the Edit Task modal, and the modal only ever displays a recalculated preview from it — never a fresh employee canonical-date resolution, and never an editable Due Date field'
+      );
+
+      // 1265. onboardingService.updateTaskInInstance() / offboardingService.updateTaskInInstance() exist as focused, instance-only methods, consistent with the existing addTaskToInstance/deleteTaskFromInstance naming convention
+      assert(
+        onboardingServiceSrcEditTask.includes('async updateTaskInInstance(planInstanceId, taskInstanceId, taskData') &&
+        offboardingServiceSrcEditTask.includes('async updateTaskInInstance(planInstanceId, taskInstanceId, taskData'),
+        '1265. NEW — Both onboardingService.js and offboardingService.js expose updateTaskInInstance(planInstanceId, taskInstanceId, taskData), matching the existing addTaskToInstance/deleteTaskFromInstance naming convention — the UI never manipulates localStorage/storageEngine directly for this operation'
+      );
+
+      // 1266. updateTaskInInstance() recalculates Due Date from planInstance.anchorDate (the snapshotted anchor), never from a freshly resolved employee canonical date
+      {
+        const onbUpdateFnMatch = onboardingServiceSrcEditTask.match(/async updateTaskInInstance\(planInstanceId, taskInstanceId, taskData[\s\S]*?\n  \},/);
+        const onbUpdateFnBlock = onbUpdateFnMatch ? onbUpdateFnMatch[0] : '';
+        const offUpdateFnMatch = offboardingServiceSrcEditTask.match(/async updateTaskInInstance\(planInstanceId, taskInstanceId, taskData[\s\S]*?\n  \},/);
+        const offUpdateFnBlock = offUpdateFnMatch ? offUpdateFnMatch[0] : '';
+        assert(
+          onbUpdateFnBlock.includes('addDaysToLocalDate(planInstance.anchorDate, relativeOffsetDays)') &&
+          !onbUpdateFnBlock.includes('resolveOnboardingAnchorDate') &&
+          offUpdateFnBlock.includes('addDaysToLocalDate(planInstance.anchorDate, relativeOffsetDays)') &&
+          !offUpdateFnBlock.includes('resolveOffboardingAnchorDate'),
+          '1266. NEW — updateTaskInInstance() (both modules) computes the new Due Date via addDaysToLocalDate(planInstance.anchorDate, relativeOffsetDays) — the instance\'s OWN already-snapshotted anchor — and calls neither resolveOnboardingAnchorDate() nor resolveOffboardingAnchorDate(); a canonical employee date is never re-resolved during an edit'
+        );
+      }
+
+      // 1267. updateTaskInInstance() never touches completed/completedAt/completedBy on the linked activity
+      {
+        const onbUpdateFnMatch2 = onboardingServiceSrcEditTask.match(/async updateTaskInInstance\(planInstanceId, taskInstanceId, taskData[\s\S]*?\n  \},/);
+        const onbUpdateFnBlock2 = onbUpdateFnMatch2 ? onbUpdateFnMatch2[0] : '';
+        const offUpdateFnMatch2 = offboardingServiceSrcEditTask.match(/async updateTaskInInstance\(planInstanceId, taskInstanceId, taskData[\s\S]*?\n  \},/);
+        const offUpdateFnBlock2 = offUpdateFnMatch2 ? offUpdateFnMatch2[0] : '';
+        assert(
+          !onbUpdateFnBlock2.includes('completed:') && !onbUpdateFnBlock2.includes('completedAt:') && !onbUpdateFnBlock2.includes('completedBy:') &&
+          !offUpdateFnBlock2.includes('completed:') && !offUpdateFnBlock2.includes('completedAt:') && !offUpdateFnBlock2.includes('completedBy:'),
+          '1267. NEW — updateTaskInInstance() (both modules) never assigns completed/completedAt/completedBy on the activity write — Done/Reopen remains the exclusive path for completion-state changes'
+        );
+      }
+
+      // --- FUNCTIONAL CHECKS ---
+
+      // 1268. Onboarding: Edit modal pre-population data matches the actual task instance (title, description, activityTypeId, relativeOffsetDays)
+      {
+        resetDatabase();
+        const hannahInst = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        const targetTask = hannahInst.progress.tasks[0];
+        assert(
+          targetTask.currentTitle && typeof targetTask.relativeOffsetDays === 'number' && targetTask.activityTypeId,
+          `1268. NEW — FUNCTIONAL: The selected onboarding task instance carries everything the Edit modal needs to pre-fill (title "${targetTask.currentTitle}", offset ${targetTask.relativeOffsetDays}, activityTypeId ${targetTask.activityTypeId})`
+        );
+      }
+
+      // 1269. Onboarding: blank title rejected
+      {
+        const hannahInst2 = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        const targetTask2 = hannahInst2.progress.tasks[0];
+        let threwBlank = false;
+        try {
+          await onboardingService.updateTaskInInstance(hannahInst2.id, targetTask2.id, { title: '   ', relativeOffsetDays: 0 });
+        } catch (err) {
+          threwBlank = true;
+        }
+        assert(threwBlank, '1269. NEW — FUNCTIONAL: Onboarding updateTaskInInstance() rejects a blank/whitespace-only title');
+      }
+
+      // 1270. Onboarding: negative, zero, and positive offsets all accepted and correctly recalculate Due Date from the SNAPSHOTTED anchor
+      {
+        const hannahInst3 = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        const anchor = hannahInst3.anchorDate;
+        const targetTask3 = hannahInst3.progress.tasks[0];
+        const wasCompleted = targetTask3.isCompleted;
+
+        const afterNeg = await onboardingService.updateTaskInInstance(hannahInst3.id, targetTask3.id, { title: 'Neg Offset Task', relativeOffsetDays: -4 });
+        const taskNeg = afterNeg.progress.tasks.find((t) => t.id === targetTask3.id);
+        assert(taskNeg.currentDueDate === addDaysToLocalDate(anchor, -4), `1270a. NEW — FUNCTIONAL: A negative offset (-4) recalculates Due Date to ${addDaysToLocalDate(anchor, -4)} from the snapshotted anchor (${anchor}), found ${taskNeg.currentDueDate}`);
+
+        const afterZero = await onboardingService.updateTaskInInstance(hannahInst3.id, targetTask3.id, { title: 'Zero Offset Task', relativeOffsetDays: 0 });
+        const taskZero = afterZero.progress.tasks.find((t) => t.id === targetTask3.id);
+        assert(taskZero.currentDueDate === anchor, `1270b. NEW — FUNCTIONAL: A zero offset recalculates Due Date to exactly the anchor date (${anchor}), found ${taskZero.currentDueDate}`);
+
+        const afterPos = await onboardingService.updateTaskInInstance(hannahInst3.id, targetTask3.id, { title: 'Pos Offset Task', relativeOffsetDays: 6 });
+        const taskPos = afterPos.progress.tasks.find((t) => t.id === targetTask3.id);
+        assert(taskPos.currentDueDate === addDaysToLocalDate(anchor, 6), `1270c. NEW — FUNCTIONAL: A positive offset (+6) recalculates Due Date to ${addDaysToLocalDate(anchor, 6)}, found ${taskPos.currentDueDate}`);
+        assert(taskPos.isCompleted === wasCompleted, `1270d. NEW — FUNCTIONAL: Completion state is preserved across all 3 edits (was ${wasCompleted}, still ${taskPos.isCompleted})`);
+        assert(taskPos.id === targetTask3.id, '1270e. NEW — FUNCTIONAL: The task instance ID never changes across edits');
+      }
+
+      // 1271. Onboarding: editing does not create a duplicate activity/task instance — same task count before and after
+      {
+        resetDatabase();
+        const hannahInst4 = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        const countBefore = hannahInst4.progress.totalTasks;
+        const targetTask4 = hannahInst4.progress.tasks[0];
+        const afterEdit = await onboardingService.updateTaskInInstance(hannahInst4.id, targetTask4.id, { title: 'No Duplicate Task', relativeOffsetDays: 1 });
+        assert(afterEdit.progress.totalTasks === countBefore, `1271. NEW — FUNCTIONAL: Editing a task never changes the instance's total task count (before ${countBefore}, after ${afterEdit.progress.totalTasks}) — no duplicate activity/task instance is created`);
+      }
+
+      // 1272. Onboarding: edited data persists after a fresh service re-read (not just the immediate return value)
+      {
+        const rereadInst = await onboardingService.getInstanceById((await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0].id);
+        const rereadTask = rereadInst.progress.tasks.find((t) => t.currentTitle === 'No Duplicate Task');
+        assert(Boolean(rereadTask) && rereadTask.relativeOffsetDays === 1, '1272. NEW — FUNCTIONAL: A completely fresh getInstanceById() re-read reflects the edited title/offset — the change was actually persisted, not just returned in-memory');
+      }
+
+      // 1273. Onboarding: editing an INCOMPLETE task preserves incomplete state (never auto-completes)
+      {
+        resetDatabase();
+        const kevinInst = (await onboardingService.getAllInstances({ employeeId: 'emp-014' }))[0];
+        const incompleteTask = kevinInst.progress.tasks.find((t) => !t.isCompleted);
+        assert(Boolean(incompleteTask), '1273setup. NEW — Setup: Kevin\'s seed instance has at least one incomplete task to test with');
+        if (incompleteTask) {
+          const afterIncompleteEdit = await onboardingService.updateTaskInInstance(kevinInst.id, incompleteTask.id, { title: 'Still Incomplete', relativeOffsetDays: incompleteTask.relativeOffsetDays + 1 });
+          const editedIncomplete = afterIncompleteEdit.progress.tasks.find((t) => t.id === incompleteTask.id);
+          assert(editedIncomplete.isCompleted === false, '1273. NEW — FUNCTIONAL: Editing an incomplete task leaves it incomplete — the edit never auto-marks it Done');
+        }
+      }
+
+      // 1274. Onboarding: editing a COMPLETED task preserves completed state and its completedAt timestamp/history is not unnecessarily reset
+      {
+        const kevinInst2 = (await onboardingService.getAllInstances({ employeeId: 'emp-014' }))[0];
+        const completedTask = kevinInst2.progress.tasks.find((t) => t.isCompleted);
+        assert(Boolean(completedTask), '1274setup. NEW — Setup: Kevin\'s seed instance has at least one completed task to test with');
+        if (completedTask) {
+          const originalCompletedAt = completedTask.linkedActivity ? completedTask.linkedActivity.completedAt : null;
+          const afterCompletedEdit = await onboardingService.updateTaskInInstance(kevinInst2.id, completedTask.id, { title: 'Still Completed', relativeOffsetDays: completedTask.relativeOffsetDays + 1 });
+          const editedCompleted = afterCompletedEdit.progress.tasks.find((t) => t.id === completedTask.id);
+          assert(editedCompleted.isCompleted === true, '1274a. NEW — FUNCTIONAL: Editing a completed task leaves it completed — the edit never auto-Reopens it');
+          assert(
+            editedCompleted.linkedActivity && editedCompleted.linkedActivity.completedAt === originalCompletedAt,
+            `1274b. NEW — FUNCTIONAL: The completedAt timestamp is byte-for-byte unchanged by the edit (was ${originalCompletedAt}, still ${editedCompleted.linkedActivity ? editedCompleted.linkedActivity.completedAt : null}) — completion history is not unnecessarily reset`
+          );
+        }
+      }
+
+      // 1275. Onboarding reusable scope task configuration is unchanged after editing a launched instance's task (reusable Plans protection)
+      {
+        resetDatabase();
+        const scopeTasksBeforeEdit = await onboardingService.getScopeTaskDefinitions();
+        const sampleScopeTask = scopeTasksBeforeEdit[0];
+        const hannahForScopeTest = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        await onboardingService.updateTaskInInstance(hannahForScopeTest.id, hannahForScopeTest.progress.tasks[0].id, { title: 'Reusable Plan Protection Test', relativeOffsetDays: 3 });
+        const scopeTasksAfterEdit = await onboardingService.getScopeTaskDefinitions();
+        const sampleScopeTaskAfter = scopeTasksAfterEdit.find((t) => t.id === sampleScopeTask.id);
+        assert(
+          JSON.stringify(sampleScopeTask) === JSON.stringify(sampleScopeTaskAfter),
+          '1275. NEW — FUNCTIONAL: Editing Hannah\'s launched task instance leaves the reusable Onboarding scope task configuration (Onboarding > Plans) byte-for-byte unchanged — this operation never calls saveScopeTasks()/updateTemplate()'
+        );
+      }
+
+      // 1276. Another employee's (Kevin's) onboarding task instance is unaffected by editing Hannah's task
+      {
+        const kevinInstUnaffected = (await onboardingService.getAllInstances({ employeeId: 'emp-014' }))[0];
+        const kevinTaskUnaffected = kevinInstUnaffected.progress.tasks.find((t) => t.currentTitle === 'Reusable Plan Protection Test');
+        assert(!kevinTaskUnaffected, '1276. NEW — FUNCTIONAL: Editing Hannah\'s (Employee) task instance never appears on Kevin\'s (Intern) launched instance — full cross-person isolation, including across directoryType');
+      }
+
+      // 1277. Overdue/Needs Attention recalculates naturally after a due-date-affecting edit (existing domain derivation, not manually forced)
+      {
+        resetDatabase();
+        const hannahForOverdue = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        // Force ONE specific task instance to incomplete via a direct, non-mutating .map() write
+        // (never activityService.markComplete()/reopen()) — the same defensive pattern already
+        // used elsewhere in this suite (see the "Hannah's existing instance" completion-simulation
+        // block above) to avoid the Node in-memory storage fallback's shared seed-singleton
+        // aliasing corrupting real activity records across earlier, unrelated checks in this same
+        // process run. This guarantees a deterministic incomplete task to push overdue, regardless
+        // of what any earlier check in this suite already did to Hannah's real seed activities.
+        const forcedTaskId = hannahForOverdue.progress.tasks[0].id;
+        const forcedActivityId = hannahForOverdue.progress.tasks[0].activityId;
+        const dbForOverdueForce = loadDatabase();
+        dbForOverdueForce.activities = dbForOverdueForce.activities.map((a) =>
+          a.id === forcedActivityId ? { ...a, completed: false, completedAt: null, completedBy: null } : a
+        );
+        saveDatabase(dbForOverdueForce);
+        const hannahForOverdue2 = await onboardingService.getInstanceById(hannahForOverdue.id);
+        const incompleteHannahTask = hannahForOverdue2.progress.tasks.find((t) => t.id === forcedTaskId);
+        assert(Boolean(incompleteHannahTask) && incompleteHannahTask.isCompleted === false, '1277setup. NEW — Setup: an incomplete onboarding task exists to push overdue');
+
+        if (incompleteHannahTask) {
+          // Push it far into the past relative to the anchor so it becomes overdue against today's referenceDate
+          const pushedPastOffset = -400;
+          await onboardingService.updateTaskInInstance(hannahForOverdue.id, incompleteHannahTask.id, { title: 'Pushed Overdue', relativeOffsetDays: pushedPastOffset });
+          const overdueInstance = await onboardingService.getInstanceById(hannahForOverdue.id);
+          assert(
+            overdueInstance.derivedStatus === 'Needs Attention',
+            `1277a. NEW — FUNCTIONAL: Pushing an incomplete task's Due Date far into the past (via Relative Offset ${pushedPastOffset}) naturally recalculates the plan's derivedStatus to Needs Attention through the existing domain logic (found ${overdueInstance.derivedStatus})`
+          );
+
+          // Now push the same task far into the future — no longer overdue
+          const pushedFutureOffset = 400;
+          await onboardingService.updateTaskInInstance(hannahForOverdue.id, incompleteHannahTask.id, { title: 'Pushed Future', relativeOffsetDays: pushedFutureOffset });
+          const futureInstance = await onboardingService.getInstanceById(hannahForOverdue.id);
+          const futureTask = futureInstance.progress.tasks.find((t) => t.id === incompleteHannahTask.id);
+          assert(
+            futureTask.currentDueDate > getTodayLocalDateString(),
+            `1277b. NEW — FUNCTIONAL: Pushing the same task's Relative Offset far into the future (${pushedFutureOffset}) recalculates its Due Date (${futureTask.currentDueDate}) past today — no longer overdue`
+          );
+        } else {
+          assert(false, '1277a. NEW — FUNCTIONAL: skipped — no incomplete task available', '');
+          assert(false, '1277b. NEW — FUNCTIONAL: skipped — no incomplete task available', '');
+        }
+      }
+
+      // 1278. Offboarding: full parallel functional suite — blank title rejected, offsets recalculate from the snapshotted anchor, completion preserved, no duplicate created, persists after re-read
+      {
+        resetDatabase();
+        const farahInst = (await offboardingService.getAllInstances({ employeeId: 'emp-016' }))[0];
+        const offAnchor = farahInst.anchorDate;
+        const offTargetTask = farahInst.progress.tasks[0];
+        const offWasCompleted = offTargetTask.isCompleted;
+        const offCountBefore = farahInst.progress.totalTasks;
+
+        let offThrewBlank = false;
+        try {
+          await offboardingService.updateTaskInInstance(farahInst.id, offTargetTask.id, { title: '', relativeOffsetDays: 0 });
+        } catch (err) {
+          offThrewBlank = true;
+        }
+        assert(offThrewBlank, '1278a. NEW — FUNCTIONAL: Offboarding updateTaskInInstance() rejects a blank title');
+
+        const offAfterNeg = await offboardingService.updateTaskInInstance(farahInst.id, offTargetTask.id, { title: 'Off Neg', relativeOffsetDays: -12 });
+        const offTaskNeg = offAfterNeg.progress.tasks.find((t) => t.id === offTargetTask.id);
+        assert(offTaskNeg.currentDueDate === addDaysToLocalDate(offAnchor, -12), `1278b. NEW — FUNCTIONAL: Offboarding negative offset (-12) recalculates Due Date to ${addDaysToLocalDate(offAnchor, -12)} from the snapshotted Final Working Date anchor (${offAnchor}), found ${offTaskNeg.currentDueDate}`);
+
+        const offAfterZero = await offboardingService.updateTaskInInstance(farahInst.id, offTargetTask.id, { title: 'Off Zero', relativeOffsetDays: 0 });
+        const offTaskZero = offAfterZero.progress.tasks.find((t) => t.id === offTargetTask.id);
+        assert(offTaskZero.currentDueDate === offAnchor, `1278c. NEW — FUNCTIONAL: Offboarding zero offset recalculates Due Date to exactly the Final Working Date anchor (${offAnchor}), found ${offTaskZero.currentDueDate}`);
+
+        const offAfterPos = await offboardingService.updateTaskInInstance(farahInst.id, offTargetTask.id, { title: 'Off Pos', relativeOffsetDays: 9 });
+        const offTaskPos = offAfterPos.progress.tasks.find((t) => t.id === offTargetTask.id);
+        assert(offTaskPos.currentDueDate === addDaysToLocalDate(offAnchor, 9), `1278d. NEW — FUNCTIONAL: Offboarding positive offset (+9) recalculates Due Date to ${addDaysToLocalDate(offAnchor, 9)}, found ${offTaskPos.currentDueDate}`);
+        assert(offTaskPos.isCompleted === offWasCompleted, `1278e. NEW — FUNCTIONAL: Offboarding completion state preserved across edits (was ${offWasCompleted}, still ${offTaskPos.isCompleted})`);
+        assert(offAfterPos.progress.totalTasks === offCountBefore, `1278f. NEW — FUNCTIONAL: Offboarding editing never changes total task count (before ${offCountBefore}, after ${offAfterPos.progress.totalTasks}) — no duplicate created`);
+
+        const offReread = await offboardingService.getInstanceById(farahInst.id);
+        const offRereadTask = offReread.progress.tasks.find((t) => t.currentTitle === 'Off Pos');
+        assert(Boolean(offRereadTask), '1278g. NEW — FUNCTIONAL: A fresh offboarding getInstanceById() re-read reflects the edited data — actually persisted');
+      }
+
+      // 1279. Offboarding reusable Plans configuration unchanged, and another person's (Aaron's) offboarding instance unaffected
+      {
+        resetDatabase();
+        const offScopeTasksBefore = (await offboardingService.getAllInstances()); // warm the db read; scope defs come from offboardingPlanTasks directly below
+        const dbBeforeOffScope = loadDatabase();
+        const sampleOffScopeTask = (dbBeforeOffScope.offboardingPlanTasks || [])[0];
+
+        const farahForScopeTest = (await offboardingService.getAllInstances({ employeeId: 'emp-016' }))[0];
+        await offboardingService.updateTaskInInstance(farahForScopeTest.id, farahForScopeTest.progress.tasks[0].id, { title: 'Off Reusable Protection Test', relativeOffsetDays: 4 });
+
+        const dbAfterOffScope = loadDatabase();
+        const sampleOffScopeTaskAfter = (dbAfterOffScope.offboardingPlanTasks || []).find((t) => t.id === sampleOffScopeTask.id);
+        assert(
+          JSON.stringify(sampleOffScopeTask) === JSON.stringify(sampleOffScopeTaskAfter),
+          '1279a. NEW — FUNCTIONAL: Editing Farah\'s launched offboarding task instance leaves the reusable offboardingPlanTasks configuration (Offboarding > Plans) byte-for-byte unchanged'
+        );
+
+        const aaronInst = (await offboardingService.getAllInstances({ employeeId: 'emp-017' }))[0];
+        const aaronTaskLeaked = aaronInst ? aaronInst.progress.tasks.find((t) => t.currentTitle === 'Off Reusable Protection Test') : undefined;
+        assert(!aaronTaskLeaked, '1279b. NEW — FUNCTIONAL: Editing Farah\'s task instance never appears on Aaron\'s (another departing employee\'s) launched offboarding instance — full cross-person isolation');
+      }
+
+      // 1280. Dropped-plan behavior decision: Edit remains available on a Dropped plan's task rows, matching the EXISTING (pre-this-task) unrestricted mutability of Add Task/Delete Task/Done/Reopen on a Dropped plan — introducing a NEW lock just for Edit would be the inconsistent choice Part 11 explicitly warns against
+      {
+        resetDatabase();
+        const farahForDropTest = (await offboardingService.getAllInstances({ employeeId: 'emp-016' }))[0];
+        await offboardingService.dropPlanInstance(farahForDropTest.id);
+        const droppedInstance = await offboardingService.getInstanceById(farahForDropTest.id);
+        assert(droppedInstance.derivedStatus === 'Dropped', '1280setup. NEW — Setup: Farah\'s offboarding plan is now Dropped');
+
+        const droppedTask = droppedInstance.progress.tasks[0];
+        const editedDropped = await offboardingService.updateTaskInInstance(droppedInstance.id, droppedTask.id, { title: 'Edited While Dropped', relativeOffsetDays: droppedTask.relativeOffsetDays + 1 });
+        const editedDroppedTask = editedDropped.progress.tasks.find((t) => t.id === droppedTask.id);
+        assert(
+          editedDroppedTask.currentTitle === 'Edited While Dropped' && editedDropped.derivedStatus === 'Dropped',
+          '1280. NEW — DECISION: updateTaskInInstance() does not block edits on a Dropped plan (no active-status guard was added) — Dropped remains Dropped after the edit, and the edit succeeds exactly like Add Task/Delete Task already do on a Dropped plan today; this mirrors, rather than contradicts, the existing Drop Plan mutability rules'
+        );
+        resetDatabase();
+      }
+
+      // 1281. Add Task still works (regression)
+      {
+        const hannahForAddRegr = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        const countBeforeAdd = hannahForAddRegr.progress.totalTasks;
+        const afterAdd = await onboardingService.addTaskToInstance(hannahForAddRegr.id, { title: 'Regression Add Task', description: '', relativeOffsetDays: 2 });
+        assert(afterAdd.progress.totalTasks === countBeforeAdd + 1, `1281. REGRESSION: onboardingService.addTaskToInstance() still works after adding updateTaskInInstance() (before ${countBeforeAdd}, after ${afterAdd.progress.totalTasks})`);
+      }
+
+      // 1282. Delete Task still works (regression)
+      {
+        const hannahForDeleteRegr = await onboardingService.getInstanceById((await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0].id);
+        const taskToDelete = hannahForDeleteRegr.progress.tasks.find((t) => t.currentTitle === 'Regression Add Task');
+        const countBeforeDelete = hannahForDeleteRegr.progress.totalTasks;
+        const afterDelete = await onboardingService.deleteTaskFromInstance(hannahForDeleteRegr.id, taskToDelete.id);
+        assert(afterDelete.progress.totalTasks === countBeforeDelete - 1, `1282. REGRESSION: onboardingService.deleteTaskFromInstance() still works (before ${countBeforeDelete}, after ${afterDelete.progress.totalTasks})`);
+      }
+
+      // 1283. Done still works (regression)
+      {
+        const hannahForDoneRegr = await onboardingService.getInstanceById((await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0].id);
+        const incompleteForDone = hannahForDoneRegr.progress.tasks.find((t) => !t.isCompleted);
+        if (incompleteForDone) {
+          const doneResultRegr = await activityService.markComplete(incompleteForDone.activityId);
+          assert(doneResultRegr.completed === true, '1283. REGRESSION: activityService.markComplete() (Done) still works after adding Edit Task');
+        } else {
+          assert(true, '1283. REGRESSION: Done check skipped — no incomplete task available (Done functionally covered elsewhere in this suite)');
+        }
+      }
+
+      // 1284. Reopen still works (regression)
+      {
+        const hannahForReopenRegr = await onboardingService.getInstanceById((await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0].id);
+        const completedForReopen = hannahForReopenRegr.progress.tasks.find((t) => t.isCompleted);
+        if (completedForReopen) {
+          const reopenResultRegr = await activityService.reopen(completedForReopen.activityId);
+          assert(reopenResultRegr.completed === false, '1284. REGRESSION: activityService.reopen() (Reopen) still works after adding Edit Task');
+        } else {
+          assert(true, '1284. REGRESSION: Reopen check skipped — no completed task available (Reopen functionally covered elsewhere in this suite)');
+        }
+      }
+
+      // 1285. Drop Plan still works (regression)
+      {
+        resetDatabase();
+        const kevinForDropRegr = (await onboardingService.getAllInstances({ employeeId: 'emp-014' }))[0];
+        const dropped = await onboardingService.dropPlanInstance(kevinForDropRegr.id);
+        assert(dropped.derivedStatus === 'Dropped', '1285. REGRESSION: onboardingService.dropPlanInstance() (Drop Plan) still works after adding Edit Task');
+      }
+
+      // 1286. Onboarding/Offboarding service & domain isolation remains intact (no cross-imports introduced by updateTaskInInstance)
+      assert(
+        !onboardingServiceSrcEditTask.includes("from '../services/offboardingService.js'") && !onboardingServiceSrcEditTask.includes("from './offboardingService.js'") &&
+        !offboardingServiceSrcEditTask.includes("from '../services/onboardingService.js'") && !offboardingServiceSrcEditTask.includes("from './onboardingService.js'"),
+        '1286. REGRESSION: onboardingService.js and offboardingService.js still contain no import statement from one another — updateTaskInInstance() was added independently to each, never as shared code'
+      );
+
+      // 1287. No direct localStorage/storageEngine usage introduced in either new Edit Task modal — both call services only
+      assert(
+        !editTaskModalSrc.includes('localStorage') && !editTaskModalSrc.includes('storageEngine') &&
+        !editOffboardingTaskModalSrc.includes('localStorage') && !editOffboardingTaskModalSrc.includes('storageEngine'),
+        '1287. NEW — Neither EditTaskModal.jsx nor EditOffboardingTaskModal.jsx references localStorage/storageEngine — both only ever call onboardingService.updateTaskInInstance()/offboardingService.updateTaskInInstance()'
+      );
+
+      // 1288. Recent canonical/custom anchor-date behavior remains fully intact — editing a task never touches employee canonical dates or the launched instance's own anchor
+      {
+        resetDatabase();
+        const hannahForAnchorRegr = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        const empBefore = await employeeService.getById('emp-013');
+        const anchorBefore = hannahForAnchorRegr.anchorDate;
+        await onboardingService.updateTaskInInstance(hannahForAnchorRegr.id, hannahForAnchorRegr.progress.tasks[0].id, { title: 'Anchor Regression Test', relativeOffsetDays: 7 });
+        const empAfter = await employeeService.getById('emp-013');
+        const instAfter = await onboardingService.getInstanceById(hannahForAnchorRegr.id);
+        assert(
+          empBefore.startDate === empAfter.startDate && instAfter.anchorDate === anchorBefore,
+          `1288. REGRESSION: Editing a task never changes employee.startDate (${empBefore.startDate} -> ${empAfter.startDate}) or the launched instance's own anchorDate (${anchorBefore} -> ${instAfter.anchorDate}) — the Custom Override/canonical-date architecture from the prior task remains fully intact`
+        );
+      }
 
       resetDatabase();
     }

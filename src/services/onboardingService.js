@@ -672,6 +672,98 @@ export const onboardingService = {
   },
 
   /**
+   * Edits ONE task already on ONE employee's already-launched onboarding PlanInstance.
+   * Employee-specific only — mirrors addTaskToInstance()'s boundary: this only ever touches THIS
+   * task instance and its linked activity, and NEVER touches onboardingPlanTasks (the reusable
+   * Universal/Department Plans configuration), another employee's plan instance, or the
+   * employee's own canonical Start Date. The Due Date is never accepted as direct input — only
+   * relativeOffsetDays is editable, and the new Due Date is always recalculated from THIS
+   * instance's own already-snapshotted anchorDate (planInstance.anchorDate), never a freshly
+   * resolved employee canonical date — so an edit here can never disagree with the anchor the
+   * rest of this plan was launched against, even if the employee's canonical Start Date has since
+   * changed. Completion state (completed/completedAt/completedBy) on the linked activity is
+   * never touched — editing task details is a distinct operation from Done/Reopen. The task's id,
+   * planInstanceId, activityId, planTaskId, assignmentRule/originallyResolvedAssigneeId,
+   * required, sequence and createdAt all stay exactly as they were — no new task/activity record
+   * is ever created for an edit.
+   */
+  async updateTaskInInstance(planInstanceId, taskInstanceId, taskData = {}, currentUserId = 'emp-001') {
+    if (!taskData.title || !taskData.title.trim()) {
+      throw new Error('Task title is required.');
+    }
+
+    const relativeOffsetDays = parseInt(taskData.relativeOffsetDays, 10);
+    if (Number.isNaN(relativeOffsetDays)) {
+      throw new Error('Relative Offset (Days) must be a valid number.');
+    }
+
+    const db = loadDatabase();
+    const planInstance = (db.onboardingPlanInstances || []).find((inst) => inst.id === planInstanceId);
+    if (!planInstance) {
+      throw new Error(`PlanInstance with ID "${planInstanceId}" not found.`);
+    }
+
+    const rawTaskInstances = db.onboardingTaskInstances || [];
+    const targetTask = rawTaskInstances.find((ti) => ti.id === taskInstanceId && ti.planInstanceId === planInstanceId);
+    if (!targetTask) {
+      throw new Error(`Task with ID "${taskInstanceId}" was not found on this onboarding plan instance.`);
+    }
+
+    // Recalculated from THIS instance's own snapshotted anchor — never a freshly resolved
+    // employee canonical date, and the anchor itself is never modified by this operation.
+    const newDueDate = addDaysToLocalDate(planInstance.anchorDate, relativeOffsetDays);
+    const nowIso = new Date().toISOString();
+
+    const updatedTitle = taskData.title.trim();
+    const updatedDescription = (taskData.description || '').trim();
+    const updatedActivityTypeId = taskData.activityTypeId || targetTask.activityTypeId || 'act-type-1';
+
+    db.onboardingTaskInstances = rawTaskInstances.map((ti) =>
+      ti.id === taskInstanceId
+        ? {
+            ...ti,
+            title: updatedTitle,
+            description: updatedDescription,
+            activityTypeId: updatedActivityTypeId,
+            relativeOffsetDays,
+            originallyCalculatedDueDate: newDueDate,
+          }
+        : ti
+    );
+
+    // Only title/description/typeId/dueDate/updatedAt are touched — completed/completedAt/
+    // completedBy are deliberately left exactly as they were, so an edit can never silently
+    // complete or reopen a task.
+    db.activities = (db.activities || []).map((a) =>
+      a.id === targetTask.activityId
+        ? {
+            ...a,
+            title: updatedTitle,
+            description: updatedDescription,
+            typeId: updatedActivityTypeId,
+            dueDate: newDueDate,
+            updatedAt: nowIso,
+          }
+        : a
+    );
+
+    saveDatabase(db);
+
+    const employee = await employeeService.getById(planInstance.employeeId);
+    try {
+      await auditService.logAction(
+        currentUserId,
+        AUDIT_ACTIONS.ONBOARDING_TASK_UPDATED || 'ONBOARDING_TASK_UPDATED',
+        'PlanInstance',
+        planInstanceId,
+        `Edited task "${updatedTitle}" on ${employee ? employee.fullName : planInstance.employeeId}'s onboarding plan instance (reusable Plans configuration untouched)`
+      );
+    } catch (err) {}
+
+    return this.getInstanceById(planInstanceId);
+  },
+
+  /**
    * Deletes ONE task from ONE employee's already-launched onboarding PlanInstance.
    * Employee-specific only — mirrors addTaskToInstance()'s boundary: this only ever touches
    * onboardingTaskInstances/activities for this one instance, and NEVER touches

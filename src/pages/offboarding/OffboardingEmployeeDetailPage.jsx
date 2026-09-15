@@ -9,6 +9,7 @@ import {
   FileText,
   Plus,
   Trash2,
+  Pencil,
   XCircle,
 } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
@@ -17,6 +18,7 @@ import { activityService } from '../../services/activityService.js';
 import { OFFBOARDING_INSTANCE_STATUS, isActiveOffboardingPlanStatus } from '../../domain/offboardingDomain.js';
 import LaunchOffboardingPlanModal from '../../components/offboarding/LaunchOffboardingPlanModal.jsx';
 import AddOffboardingTaskModal from '../../components/offboarding/AddOffboardingTaskModal.jsx';
+import EditOffboardingTaskModal from '../../components/offboarding/EditOffboardingTaskModal.jsx';
 import DeleteOffboardingTaskModal from '../../components/offboarding/DeleteOffboardingTaskModal.jsx';
 import DropOffboardingPlanModal from '../../components/offboarding/DropOffboardingPlanModal.jsx';
 
@@ -32,6 +34,7 @@ export default function OffboardingEmployeeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+  const [taskPendingEdit, setTaskPendingEdit] = useState(null);
   const [taskPendingDelete, setTaskPendingDelete] = useState(null);
   const [isDropPlanModalOpen, setIsDropPlanModalOpen] = useState(false);
 
@@ -56,6 +59,11 @@ export default function OffboardingEmployeeDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditTaskSuccess = async () => {
+    setTaskPendingEdit(null);
+    await loadData();
   };
 
   const handleDeleteTaskSuccess = async () => {
@@ -304,6 +312,15 @@ export default function OffboardingEmployeeDetailPage() {
                             )}
                             <button
                               type="button"
+                              className="icon-btn"
+                              title="Edit task"
+                              aria-label="Edit task"
+                              onClick={() => setTaskPendingEdit(task)}
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              type="button"
                               className="icon-btn icon-btn-danger"
                               title="Delete task"
                               aria-label="Delete task"
@@ -339,6 +356,19 @@ export default function OffboardingEmployeeDetailPage() {
           planInstanceId={instance.id}
           employeeName={employee.fullName}
           onSuccess={() => loadData()}
+        />
+      )}
+
+      {/* Edit Task Modal (employee-specific plan instance only — reusable Plans configuration untouched) */}
+      {instance && (
+        <EditOffboardingTaskModal
+          isOpen={Boolean(taskPendingEdit)}
+          onClose={() => setTaskPendingEdit(null)}
+          planInstanceId={instance.id}
+          task={taskPendingEdit}
+          employeeName={employee.fullName}
+          anchorDate={instance.anchorDate}
+          onSuccess={handleEditTaskSuccess}
         />
       )}
 
