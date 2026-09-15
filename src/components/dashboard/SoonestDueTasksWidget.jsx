@@ -54,7 +54,7 @@ export default function SoonestDueTasksWidget() {
         <>
           <div
             className={expanded ? 'dashboard-widget-scroll-list' : undefined}
-            style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginTop: '0.4rem' }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '0.45rem' }}
           >
             {visible.map((notification) => (
               <button

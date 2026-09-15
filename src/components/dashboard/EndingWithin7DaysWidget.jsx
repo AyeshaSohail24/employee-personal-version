@@ -52,7 +52,7 @@ export default function EndingWithin7DaysWidget({ people = [], onViewProfile }) 
         <>
           <div
             className={expanded ? 'dashboard-widget-scroll-list' : undefined}
-            style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginTop: '0.4rem' }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '0.45rem' }}
           >
             {visiblePeople.map((person) => (
               <div
@@ -63,7 +63,7 @@ export default function EndingWithin7DaysWidget({ people = [], onViewProfile }) 
                   justifyContent: 'space-between',
                   flexWrap: 'wrap',
                   gap: '0.7rem',
-                  padding: '0.55rem 0.75rem',
+                  padding: '0.6rem 0.8rem',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--border-light)',
                   backgroundColor: 'var(--bg-subtle)',

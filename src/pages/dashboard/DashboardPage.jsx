@@ -106,14 +106,14 @@ export default function DashboardPage() {
         {personnelTypeSwitcher}
       </div>
 
-      {/* 1. Five Lifecycle Count Cards */}
+      {/* 1. Five Lifecycle Count Cards — information-only (no navigation/linkTo): these summarize
+          counts, they don't drill into Personnel. See Personnel module for detailed records. */}
       <div className="stat-cards-grid">
         <StatCard
           icon={Clock}
           title="Upcoming"
           value={metrics.upcomingCount}
           subtitle="Scheduled to start"
-          linkTo="/employees?status=Upcoming"
           badgeBg="#EFF6FF"
           badgeColor="#2563EB"
         />
@@ -123,7 +123,6 @@ export default function DashboardPage() {
           title="Onboarding"
           value={metrics.onboardingCount}
           subtitle="Currently onboarding"
-          linkTo="/employees?status=Onboarding"
           badgeBg="var(--color-primary-light)"
           badgeColor="var(--color-primary)"
         />
@@ -133,7 +132,6 @@ export default function DashboardPage() {
           title="Active"
           value={metrics.activeCount}
           subtitle="Currently active personnel"
-          linkTo="/employees?status=Active"
           badgeBg="#ECFDF5"
           badgeColor="#059669"
         />
@@ -143,7 +141,6 @@ export default function DashboardPage() {
           title="Offboarding"
           value={metrics.departingCount}
           subtitle="Currently in offboarding"
-          linkTo="/employees?status=Departing"
           badgeBg="#FFFBEB"
           badgeColor="#D97706"
         />
@@ -153,7 +150,6 @@ export default function DashboardPage() {
           title="Former"
           value={metrics.formerCount}
           subtitle="Historical personnel records"
-          linkTo="/employees?status=Former"
           badgeBg="#F1F5F9"
           badgeColor="#64748B"
         />

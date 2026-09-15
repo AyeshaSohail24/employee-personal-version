@@ -10718,14 +10718,18 @@ export async function verifyStage18() {
         '1344. NEW — EndingWithin7DaysWidget.jsx\'s empty state reads "Nobody is ending within the next 7 days.", and each populated row shows exactly person/Type · Department/End Date/days-remaining — nothing more'
       );
 
-      // 1345. Card links use the established /employees?status=X pattern for all 5 cards — no new route was invented
+      // 1345. SUPERSEDED by the "Make Lifecycle Cards Information-Only" task — the 5 lifecycle
+      // cards no longer link anywhere at all (that task removed linkTo/navigation entirely, per
+      // direct user request that these cards be summary-only, never a click-through to Personnel).
+      // This check now asserts the OPPOSITE of its original intent: no /employees?status=X linkTo
+      // usage remains anywhere in DashboardPage.jsx's lifecycle-card block.
       assert(
-        dashboardPageSrc.includes('linkTo="/employees?status=Upcoming"') &&
-        dashboardPageSrc.includes('linkTo="/employees?status=Onboarding"') &&
-        dashboardPageSrc.includes('linkTo="/employees?status=Active"') &&
-        dashboardPageSrc.includes('linkTo="/employees?status=Departing"') &&
-        dashboardPageSrc.includes('linkTo="/employees?status=Former"'),
-        '1345. NEW — All 5 lifecycle cards link via the existing established /employees?status=X pattern (Upcoming/Onboarding/Active/Departing/Former) — no new route was invented, and existing route compatibility (queryEmployees\' statusFilter) is reused as-is'
+        !dashboardPageSrc.includes('linkTo="/employees?status=Upcoming"') &&
+        !dashboardPageSrc.includes('linkTo="/employees?status=Onboarding"') &&
+        !dashboardPageSrc.includes('linkTo="/employees?status=Active"') &&
+        !dashboardPageSrc.includes('linkTo="/employees?status=Departing"') &&
+        !dashboardPageSrc.includes('linkTo="/employees?status=Former"'),
+        '1345. SUPERSEDED — None of the 5 lifecycle cards pass a linkTo prop anymore (was /employees?status=X for all 5) — they are information-only summary cards per direct user request, never a click-through to Personnel'
       );
 
       // 1346. Skeleton loading state matches the new 5-card + 2-widget layout (no stale 4-card / 2-column-grid skeleton left behind)
@@ -10893,25 +10897,30 @@ export async function verifyStage18() {
 
       // --- STAT CARD (lifecycle count cards) COMPACTING ---
 
-      // 1353. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-card no longer has a
-      // max-width or justify-self cap — this pairing was the actual root cause of the "narrow
-      // isolated tile with a huge empty gap" look (a 1fr grid column at normal desktop widths is
-      // 200-260px, but the card was capped at 150px and centered, leaving 40-55px of dead space on
-      // each side). Removing the cap lets each card fill its column naturally.
+      // 1353. UPDATED (Fix Actual 3+2 Layout Bug task) — STRUCTURAL: .stat-card never sets its own
+      // max-width or justify-self — width now comes entirely from the GRID's own FLUID column
+      // track (repeat(5, minmax(0, 1fr)), see check 1401), not from any per-card constraint or
+      // fixed-pixel grid column. Padding (0.95rem 0.85rem) coincidentally matches the prior
+      // fixed-column-era value, but was independently re-derived via Playwright as the horizontal
+      // padding needed for 5 fluid columns to keep fitting without wrapping down to ~1280px
+      // content width — see .stat-card-subtitle's own comment for the rest of that measurement.
       assert(
         !indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,400}max-width:/) &&
         !indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,400}justify-self:/) &&
-        indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,300}padding: 1rem 1\.1rem;/),
-        '1353. UPDATED — .stat-card has neither max-width nor justify-self anymore (both removed — this was the actual cause of the huge gaps between cards) and its padding was restored to a comfortable 1rem 1.1rem now that the card has real width to work with'
+        indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,300}padding: 0\.95rem 0\.85rem;/),
+        '1353. UPDATED — .stat-card has neither max-width nor justify-self (width comes from the grid\'s own fluid column track, never a fixed pixel value) and its padding is 0.95rem 0.85rem, empirically tuned so 5 fluid columns keep fitting down to ~1280px content width'
       );
 
-      // 1354. STRUCTURAL — the icon+label still share ONE row with the arrow (.stat-card-top-row/
-      // .stat-card-title-group), never a separate large icon row above the label — this keeps the
-      // card vertically compact even though it is now significantly wider.
+      // 1354. UPDATED (Make Lifecycle Cards Information-Only task) — the icon+label are still ONE
+      // compact row (.stat-card-title-group), never a separate large icon row above the label. The
+      // .stat-card-top-row wrapper that used to lay the arrow out against this row is gone (dead
+      // code once there was nothing left to lay out against) — .stat-card-title-group is now the
+      // card's own top-level element.
       assert(
-        statCardSrcCompact.includes('className="stat-card-top-row"') && statCardSrcCompact.includes('className="stat-card-title-group"') &&
-        !statCardSrcCompact.includes('className="stat-card-header"'),
-        '1354. StatCard.jsx still merges the icon, label, and arrow onto a single .stat-card-top-row (icon inside .stat-card-title-group next to the label) instead of the icon having its own large row above the label — keeps the card compact vertically while it grows wider horizontally'
+        statCardSrcCompact.includes('className="stat-card-title-group"') &&
+        !statCardSrcCompact.includes('className="stat-card-header"') &&
+        !statCardSrcCompact.includes('className="stat-card-top-row"'),
+        '1354. UPDATED — StatCard.jsx still keeps the icon and label on a single compact .stat-card-title-group row (never a separate large icon row above the label), and the old .stat-card-top-row wrapper is gone entirely now that there is no arrow left to lay out against it'
       );
 
       // 1355. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-card no longer forces a
@@ -10938,19 +10947,19 @@ export async function verifyStage18() {
         '1356. .stat-card-value/.stat-card-title/.stat-card-subtitle all still declare a real font-size, and the title keeps its overflow:hidden + text-overflow:ellipsis safety net for narrow viewports — even though at normal desktop widths (per Playwright measurement) no title or description needs to truncate/wrap anymore'
       );
 
-      // 1357. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-cards-grid uses
-      // minmax(0, 1fr) fluid equal-width columns (never a fixed px column width, never
-      // justify-content: space-between distributing narrow fixed-width cards), with responsive
-      // breakpoints still present so narrower viewports gracefully wrap to fewer columns instead
-      // of squeezing 5 cramped cards into one row. Breakpoints moved from 1300/900/500px to
-      // 1440/1000/480px, chosen empirically (via Playwright) as the widths where the PREVIOUS
-      // column count's card would first drop under the ~205px floor "Currently active personnel"
-      // needs to stay on one line — not arbitrary round numbers.
+      // 1357. SUPERSEDED (Fix Actual 3+2 Layout Bug task) — .stat-cards-grid's base (desktop) rule
+      // is no longer any fixed pixel column (150/175/190px were each tried across successive tasks)
+      // — it is now a genuinely fluid repeat(5, minmax(0, 1fr)), because a fixed column combined
+      // with ANY breakpoint threshold will always desync from some real, common browser width below
+      // that threshold, which is exactly what produced the reported 3-cards-then-2-cards bug.
+      // Breakpoints are now 1270px/640px/420px (empirically re-measured against the current fluid
+      // CSS — see checks 1401/1429/1439), not the old 1320/720/420 (or 1240/720/420 before that).
       assert(
         indexCssSrcCompact.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/) &&
-        !indexCssSrcCompact.includes('@media (max-width: 1300px)') &&
-        indexCssSrcCompact.includes('@media (max-width: 1440px)') && indexCssSrcCompact.includes('@media (max-width: 1000px)') && indexCssSrcCompact.includes('@media (max-width: 480px)'),
-        '1357. UPDATED — .stat-cards-grid renders 5 fluid equal columns (repeat(5, minmax(0, 1fr))) down to a 1440px breakpoint (was: wrapped to 3 columns as early as 1300px, then briefly 900px), with further empirically-measured breakpoints at 1000px and 480px — all 5 lifecycle cards stay on one line whenever there is genuinely enough room for their content, wrapping gracefully otherwise'
+        !indexCssSrcCompact.match(/grid-template-columns: repeat\(5, \d+px\)/) &&
+        !indexCssSrcCompact.includes('@media (max-width: 1320px)') && !indexCssSrcCompact.includes('@media (max-width: 1240px)') &&
+        indexCssSrcCompact.includes('@media (max-width: 1270px)') && indexCssSrcCompact.includes('@media (max-width: 640px)') && indexCssSrcCompact.includes('@media (max-width: 420px)'),
+        '1357. SUPERSEDED — .stat-cards-grid\'s desktop rule is now a genuinely fluid repeat(5, minmax(0, 1fr)) — never a fixed pixel column (150/175/190px all superseded) — with breakpoints at 1270px/640px/420px (empirically re-measured; was 1320/720/420, before that 1240/720/420, before that 1440/1000/480)'
       );
 
       // --- DASHBOARD WIDGET (Distribution + Ending) COMPACTING ---
@@ -10958,12 +10967,14 @@ export async function verifyStage18() {
       // 1358. UPDATED — .dashboard-widget / .widget-header padding and margin, reduced when a direct
       // user follow-up asked to "decrease the text and the size of 2 boxes below" (0.65rem 0.85rem /
       // 0.4rem), then INCREASED again by a later follow-up asking for more spacing "in and out of
-      // the cards" even as the text inside got smaller still (0.95rem 1.05rem / 0.55rem).
+      // the cards" (0.95rem 1.05rem / 0.55rem), then once more by the "Small Controlled
+      // Enlargement" task asking for both widgets to feel "slightly larger" (1.05rem 1.15rem /
+      // 0.65rem) — icon size and heading typography were deliberately left untouched that time.
       assert(
-        indexCssSrcCompact.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 0\.95rem 1\.05rem;/) &&
-        indexCssSrcCompact.match(/\.widget-header \{[\s\S]{0,150}margin-bottom: 0\.55rem;/) &&
+        indexCssSrcCompact.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 1\.05rem 1\.15rem;/) &&
+        indexCssSrcCompact.match(/\.widget-header \{[\s\S]{0,150}margin-bottom: 0\.65rem;/) &&
         !indexCssSrcCompact.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 1\.5rem;/),
-        '1358. UPDATED — .dashboard-widget\'s outer padding is now 0.95rem 1.05rem (was 1.5rem, then 1.1rem/1.25rem, then 0.85rem/1.1rem, then 0.65rem/0.85rem) and .widget-header\'s margin-bottom is now 0.55rem (was 1.25rem, then 0.75rem, then 0.5rem, then 0.4rem) — widened again per direct user request for more spacing around the smaller text inside'
+        '1358. UPDATED — .dashboard-widget\'s outer padding is now 1.05rem 1.15rem (was 1.5rem, then 1.1rem/1.25rem, then 0.85rem/1.1rem, then 0.65rem/0.85rem, then 0.95rem/1.05rem) and .widget-header\'s margin-bottom is now 0.65rem (was 1.25rem, then 0.75rem, then 0.5rem, then 0.4rem, then 0.55rem) — a moderate size increase per direct user request that both lower widgets felt slightly small'
       );
 
       // 1359. .widget-icon-badge reduced moderately (38px -> 32px -> 26px), matching the same "visible but not oversized" treatment as the stat-card icon
@@ -10990,32 +11001,38 @@ export async function verifyStage18() {
         '1361. UPDATED — .empty-widget-text\'s font-size is now 0.72rem (was 0.875rem, then 0.78rem) and its padding is 0.4rem 0 (was 2rem, then 0.6rem, then 0.4rem, then 0.3rem, back to 0.4rem) — smaller text with slightly more breathing room, matching the widgets\' later "increase spacing" follow-up'
       );
 
-      // 1362. UPDATED — DashboardPage.jsx's inter-section gap, and the Dashboard-scoped header's
-      // own scoped margin-bottom override (never touching the shared base .page-header rule other
-      // pages use). Went 0.65rem -> 0.75rem -> 1.75rem (per direct user request to "increase the
-      // spacing... so it looks natural") -> 2.25rem (a further direct user request to "increase
-      // spacing accordingly in and out of the cards with overall page as well").
+      // 1362. UPDATED — DashboardPage.jsx's inter-section gap (stat cards -> lower widgets), and
+      // the Dashboard-scoped header's own scoped margin-bottom override (never touching the shared
+      // base .page-header rule other pages use, which is why this remains a SEPARATE, scoped
+      // check rather than reusing .page-header's own margin-bottom). The inter-section gap went
+      // 0.65rem -> 0.75rem -> 1.75rem -> 2.25rem across several direct user requests for more
+      // overall page spacing. The header's own margin-bottom (subtitle -> card row) was a SEPARATE
+      // 0.3rem the whole time, until a later, more targeted request ("Personnel lifecycle
+      // counts..." sat too close to the cards) bumped just that one value to 0.7rem.
       assert(
         (dashboardPageSrcCompact.match(/marginTop: '2\.25rem'/g) || []).length === 1 &&
         !dashboardPageSrcCompact.includes("marginTop: '1.5rem'") && !dashboardPageSrcCompact.includes("marginTop: '1rem'") && !dashboardPageSrcCompact.includes("marginTop: '0.75rem'") && !dashboardPageSrcCompact.includes("marginTop: '1.75rem'") &&
-        indexCssSrcCompact.match(/\.dashboard-page-header \{[\s\S]{0,120}margin-bottom: 0\.3rem;/),
-        '1362. UPDATED — The gap between the 5 stat cards and the Ending Within 7 Days / Soonest Due Tasks row is now 2.25rem (was 1.5rem, then 1rem, then 0.65rem, then 0.75rem, then 1.75rem) — widened again per direct user request for more overall page spacing — and .dashboard-page-header still overrides margin-bottom to 0.3rem, scoped to Dashboard only'
+        indexCssSrcCompact.match(/\.dashboard-page-header \{[\s\S]{0,120}margin-bottom: 0\.7rem;/),
+        '1362. UPDATED — The gap between the 5 stat cards and the Ending Within 7 Days / Soonest Due Tasks row is 2.25rem (was 1.5rem, then 1rem, then 0.65rem, then 0.75rem, then 1.75rem), and .dashboard-page-header\'s own separate margin-bottom (subtitle -> card row) is now 0.7rem (was 0.3rem) — scoped to Dashboard only, never the shared base .page-header rule'
       );
 
-      // 1363. UPDATED (Fix KPI Card Proportions task) — DashboardSkeleton.jsx's loading placeholders.
-      // .stat-card no longer has a fixed height (see check 1355) — it now gets its height purely
-      // from padding + real content, but this skeleton div has NO content to size itself with, so
-      // it still needs an explicit inline height to approximate the real card's rendered height
-      // (rather than collapsing to just its padding). The 2 side-by-side widget placeholders
-      // (Ending Within 7 Days + Soonest Due Tasks) inside .dashboard-widgets-row remain 150px each.
+      // 1363. UPDATED (Small Controlled Enlargement task) — DashboardSkeleton.jsx's loading
+      // placeholders. .stat-card no longer has a fixed height (see check 1355) — it now gets its
+      // height purely from padding + real content, but this skeleton div has NO content to size
+      // itself with, so it still needs an explicit inline height to approximate the real card's
+      // rendered height (rather than collapsing to just its padding). The 2 side-by-side widget
+      // placeholders (Ending Within 7 Days + Soonest Due Tasks) inside .dashboard-widgets-row grew
+      // from 150px to 200px each, measured via Playwright against the real 2-item collapsed
+      // widget height (~198-213px) now that the widget itself is moderately larger.
       assert(
         dashboardSkeletonSrcCompact.match(/className="stat-card skeleton-box" style=\{\{ height: '\d+px' \}\}/) &&
-        (dashboardSkeletonSrcCompact.match(/height: '150px'/g) || []).length === 2 &&
+        (dashboardSkeletonSrcCompact.match(/height: '200px'/g) || []).length === 2 &&
+        !dashboardSkeletonSrcCompact.includes("height: '150px'") &&
         !dashboardSkeletonSrcCompact.includes("height: '95px'") &&
         !dashboardSkeletonSrcCompact.includes("height: '110px'") &&
         !dashboardSkeletonSrcCompact.includes("height: '120px'") && !dashboardSkeletonSrcCompact.includes("height: '160px'") && !dashboardSkeletonSrcCompact.includes("height: '220px'") &&
         dashboardSkeletonSrcCompact.includes('dashboard-widgets-row'),
-        '1363. UPDATED — DashboardSkeleton.jsx\'s 5 card placeholders carry an explicit inline height (approximating the real .stat-card\'s now content-driven, no-longer-fixed height, since the empty skeleton div has no content of its own to size itself with) and there are exactly 2 side-by-side 150px widget placeholders inside .dashboard-widgets-row (Ending Within 7 Days + Soonest Due Tasks)'
+        '1363. UPDATED — DashboardSkeleton.jsx\'s 5 card placeholders carry an explicit inline height (approximating the real .stat-card\'s content-driven height) and there are exactly 2 side-by-side 200px widget placeholders (was 150px) inside .dashboard-widgets-row (Ending Within 7 Days + Soonest Due Tasks), matching the widgets\' moderately larger real size'
       );
 
       // --- CSS SCOPE: compacted classes remain effectively Dashboard-only ---
@@ -11045,15 +11062,17 @@ export async function verifyStage18() {
 
       // --- REGRESSION: business logic/functionality unaffected by this purely-visual task ---
 
-      // 1365. All 5 StatCard titles, card links, the filter, and the Profile modal wiring are all still present — this was a density-only change, not a content/functionality change
+      // 1365. UPDATED — All 5 StatCard titles, the filter, and the Profile modal wiring are all
+      // still present (card LINKS are the one exception — removed entirely by the later "Make
+      // Lifecycle Cards Information-Only" task, per direct user request; see check 1345) — this
+      // task itself changed CSS/JSX density only, never content or behavior.
       assert(
         dashboardPageSrcCompact.match(/title="Upcoming"/) && dashboardPageSrcCompact.match(/title="Onboarding"/) &&
         dashboardPageSrcCompact.match(/title="Active"/) && dashboardPageSrcCompact.match(/title="Offboarding"/) &&
         dashboardPageSrcCompact.match(/title="Former"/) &&
-        dashboardPageSrcCompact.includes('linkTo="/employees?status=Upcoming"') && dashboardPageSrcCompact.includes('linkTo="/employees?status=Former"') &&
         dashboardPageSrcCompact.includes('view-switcher-group') &&
         dashboardPageSrcCompact.includes('<PersonnelProfileModal'),
-        '1365. REGRESSION: All 5 lifecycle card titles/links, the All/Employees/Interns filter, and the PersonnelProfileModal integration are all still present in DashboardPage.jsx exactly as before — this task changed CSS/JSX density only, never content or behavior'
+        '1365. UPDATED — All 5 lifecycle card titles, the All/Employees/Interns filter, and the PersonnelProfileModal integration are all still present in DashboardPage.jsx — card links are no longer asserted here since a later task removed them entirely (see check 1345)'
       );
 
       // 1366. No previously-removed Dashboard widget (New Joiners, Departing, Department/Organization Snapshot) returned during this compacting pass
@@ -11190,15 +11209,15 @@ export async function verifyStage18() {
         '1377. UPDATED — .stat-card still carries min-width: 0 (so a long nowrap title like OFFBOARDING can shrink/ellipsis instead of forcing its grid column — and therefore the whole row — wider than the container) and no longer carries any max-width cap, which was the actual source of the "narrow tile" regression this task fixes'
       );
 
-      // 1378. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-cards-grid uses fluid
-      // minmax(0, 1fr) equal-width columns (never a fixed px column width) with a modest gap, and
-      // is NEVER combined with justify-content: space-between anywhere on this element — that
-      // combination (small fixed-width items + space-between) is exactly the anti-pattern that
-      // produces "narrow isolated tiles with huge empty gaps," which this task explicitly forbids.
+      // 1378. SUPERSEDED (Fix Actual 3+2 Layout Bug task) — STRUCTURAL: .stat-cards-grid's desktop
+      // rule no longer uses ANY fixed column track (150/175/190px all superseded — see check 1357)
+      // — it is a fluid repeat(5, minmax(0, 1fr)) with an 0.85rem gap (was 0.65rem) and no
+      // justify-content: center (nothing left to center once the grid fills the row), and is still
+      // NEVER combined with justify-content: space-between.
       assert(
-        indexCssSrcSquare.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);\s*gap: 1\.1rem;\s*\}/) &&
-        !indexCssSrcSquare.match(/\.stat-cards-grid \{[^}]*space-between/),
-        '1378. UPDATED — .stat-cards-grid uses repeat(5, minmax(0, 1fr)) fluid equal-width columns with a 1.1rem gap (within the requested 1rem-1.25rem range) — never justify-content: space-between distributing small fixed-width cards, which is what previously produced the huge-gap look'
+        indexCssSrcSquare.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);\s*gap: 0\.85rem;/) &&
+        !(indexCssSrcSquare.match(/\.stat-cards-grid \{[^}]*\}/) || [''])[0].includes('space-between'),
+        '1378. SUPERSEDED — .stat-cards-grid\'s desktop rule is a fluid repeat(5, minmax(0, 1fr)) with an 0.85rem gap (was 0.65rem) and no justify-content at all (was center, before that unset) — never justify-content: space-between'
       );
 
       // 1379. .dashboard-widget (the shared class both Ending Within 7 Days and Soonest Due Tasks use) has min-width: 0 — without it, Soonest Due Tasks' nowrap task-row text forces its column wider than 1fr 1fr allows, starving Ending Within 7 Days down to a fraction of its fair share (an actual bug caught by measuring each widget's computed width, not just checking for page overflow)
@@ -11231,12 +11250,15 @@ export async function verifyStage18() {
         '1382. NEW — SoonestDueTasksWidget.jsx\'s row click handler is functionally identical to NotificationPanel.jsx\'s handleNotificationClick (markAsRead, then look up the note and navigate to /notes or /notes/archived with openNoteId) — no second, subtly-different click-through implementation'
       );
 
-      // 1383. UPDATED — DashboardSkeleton.jsx's loading state matches the new layout: 5 square stat-card skeletons (no explicit height — relies on the real .stat-card class's aspect-ratio) plus 2 side-by-side widget skeletons inside .dashboard-widgets-row, shrunk from 150px to 110px each to match the widgets' smaller scale
+      // 1383. UPDATED (Small Controlled Enlargement task) — DashboardSkeleton.jsx's loading state
+      // matches the current layout: 5 stat-card skeletons plus 2 side-by-side widget skeletons
+      // inside .dashboard-widgets-row, grown from 150px to 200px each to match the widgets'
+      // moderately larger scale.
       assert(
         (dashboardSkeletonSrcSquare.match(/\[1, 2, 3, 4, 5\]/) || []).length === 1 &&
         dashboardSkeletonSrcSquare.includes('dashboard-widgets-row') &&
-        (dashboardSkeletonSrcSquare.match(/<div className="dashboard-widget skeleton-box" style=\{\{ height: '150px' \}\} \/>/g) || []).length === 2,
-        '1383. UPDATED — DashboardSkeleton.jsx renders 5 stat-card placeholders (height comes from .stat-card\'s own fixed height: 105px, not an explicit skeleton height) and exactly 2 side-by-side 150px widget placeholders (was 150px, then 110px, back to 150px to match each widget\'s "latest 2 rows" default) inside .dashboard-widgets-row'
+        (dashboardSkeletonSrcSquare.match(/<div className="dashboard-widget skeleton-box" style=\{\{ height: '200px' \}\} \/>/g) || []).length === 2,
+        '1383. UPDATED — DashboardSkeleton.jsx renders 5 stat-card placeholders (height comes from .stat-card\'s own content-driven height, not a fixed skeleton value) and exactly 2 side-by-side 200px widget placeholders (was 150px, then 110px, then 150px, now 200px) inside .dashboard-widgets-row, matching each widget\'s moderately larger "latest 2 rows" default'
       );
 
       // 1384. FUNCTIONAL/REGRESSION: dashboardService's lifecycle counts and Ending Within 7 Days logic are completely untouched by this purely-visual layout task
@@ -11337,12 +11359,12 @@ export async function verifyStage18() {
         '1389. SUPERSEDED — .stat-card no longer has a max-width or justify-self cap (both removed by the later "Fix KPI Card Proportions" task, which diagnosed that exact pairing as the cause of the huge-gap regression) — the card now fills its fluid grid column instead of being capped and centered within it'
       );
 
-      // 1390. REGRESSION: shrinking the cards did not touch content, links, or the filter — still purely a size/CSS change
+      // 1390. UPDATED — shrinking the cards did not touch content or the filter — still purely a
+      // size/CSS change (card LINKS are no longer asserted here — removed entirely by a later task; see check 1345)
       assert(
         dashboardPageSrcSmaller.match(/title="Upcoming"/) && dashboardPageSrcSmaller.match(/title="Offboarding"/) &&
-        dashboardPageSrcSmaller.includes('linkTo="/employees?status=Former"') &&
         dashboardPageSrcSmaller.includes('view-switcher-group'),
-        '1390. REGRESSION: All 5 lifecycle card titles/links and the All/Employees/Interns filter are still present in DashboardPage.jsx exactly as before — shrinking the cards was a pure CSS size change, never a content change'
+        '1390. UPDATED — All 5 lifecycle card titles and the All/Employees/Interns filter are still present in DashboardPage.jsx exactly as before — shrinking the cards was a pure CSS size change, never a content change (links are no longer part of this assertion, since a later task removed them entirely)'
       );
 
       resetDatabase();
@@ -11358,42 +11380,44 @@ export async function verifyStage18() {
 
       const indexCssSrcFix = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
 
-      // 1391. SUPERSEDED by the "Fix KPI Card Proportions" task — that task removed the
-      // max-width: 150px cap entirely (see check 1389), which was the actual constraint this check
-      // used to work around by shrinking the icon/letter-spacing to the bare minimum. Now that the
-      // card is genuinely wide (no cap, fills its ~200-260px grid column), a normal letter-spacing
-      // and a normal icon size were restored — comfortable typography, not a squeeze-every-pixel
-      // workaround — and OFFBOARDING still doesn't truncate (confirmed via Playwright measurement).
+      // 1391. UPDATED AGAIN by the "Fix Actual 3+2 Layout Bug" task — icon size grew to 22px (was
+      // 18px) and letter-spacing widened to 0.02em (was 0.01em) as part of restoring the card's
+      // typography to a medium, proportionate scale now that width comes from a fluid grid instead
+      // of a fixed narrow column (see check 1437 for the full typography restoration).
+      // OFFBOARDING still doesn't truncate at any of the fluid card widths measured (1536-1280px
+      // content width, confirmed via Playwright measurement, not asserted here as a pixel regex).
       assert(
         indexCssSrcFix.match(/\.stat-card-title \{[\s\S]{0,150}letter-spacing: 0\.02em;/) &&
         indexCssSrcFix.match(/\.stat-card-icon \{\s*width: 22px;\s*height: 22px;/) &&
         !indexCssSrcFix.match(/\.stat-card \{[\s\S]{0,400}max-width:/),
-        '1391. SUPERSEDED — .stat-card-title\'s letter-spacing was restored to a normal 0.02em and .stat-card-icon grew back to 22px, now that .stat-card has no max-width cap at all (removed by the "Fix KPI Card Proportions" task) — OFFBOARDING no longer needs cramped typography to avoid truncating, since the card itself is now genuinely wide'
+        '1391. UPDATED — .stat-card-title\'s letter-spacing is now 0.02em (was 0.01em), and .stat-card-icon is now 22px (was 18px) — both restored to a medium scale now that the card\'s width comes from a fluid grid track, never a fixed narrow column'
       );
 
       // 1392. UPDATED — .dashboard-widget, .widget-header, .widget-title, .widget-subtitle, and
       // .widget-icon-badge all shrank together for the "decrease the text and the size of 2 boxes"
       // follow-up; a LATER direct user request ("increase spacing... in and out of the cards") then
-      // grew the widget's own padding/header margin back up again while the TEXT stayed small —
-      // smaller type, more generous surrounding space.
+      // grew the widget's own padding/header margin back up again while the TEXT stayed small; the
+      // "Small Controlled Enlargement" task grew padding once more (icon badge and typography
+      // deliberately left untouched, per that task's explicit "do not change icons/typography").
       assert(
-        indexCssSrcFix.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 0\.95rem 1\.05rem;/) &&
+        indexCssSrcFix.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 1\.05rem 1\.15rem;/) &&
         indexCssSrcFix.match(/\.widget-title \{\s*font-size: 0\.85rem;/) &&
         indexCssSrcFix.match(/\.widget-subtitle \{\s*font-size: 0\.65rem;/) &&
         indexCssSrcFix.match(/\.widget-icon-badge \{\s*width: 26px;\s*height: 26px;/) &&
-        indexCssSrcFix.match(/\.dashboard-widget-scroll-list \{\s*max-height: 180px;/),
-        '1392. UPDATED — .dashboard-widget\'s padding is 0.95rem 1.05rem (was 0.65rem/0.85rem), .widget-title is 0.85rem (was 0.92rem), .widget-subtitle is 0.65rem (was 0.7rem), .widget-icon-badge stayed 26px, and .dashboard-widget-scroll-list\'s max-height is 180px (was 155px) — smaller text with more generous surrounding padding, per a later direct user request'
+        indexCssSrcFix.match(/\.dashboard-widget-scroll-list \{\s*max-height: 195px;/),
+        '1392. UPDATED — .dashboard-widget\'s padding is now 1.05rem 1.15rem (was 0.65rem/0.85rem, then 0.95rem/1.05rem), .widget-title/.widget-subtitle/.widget-icon-badge are unchanged (0.85rem/0.65rem/26px, per direct user request not to touch icons or typography), and .dashboard-widget-scroll-list\'s max-height is 195px (was 180px) to keep roughly the same visible row count in the expanded view'
       );
 
-      // 1393. UPDATED — .dashboard-task-row (Soonest Due Tasks rows) padding grew again while its 3
-      // text sizes (title/message/time) shrank further — same "smaller text, more spacing" pattern
-      // as the widget container itself
+      // 1393. UPDATED — .dashboard-task-row (Soonest Due Tasks rows) padding grew again (0.55rem/
+      // 0.75rem -> 0.6rem/0.8rem, per the "Small Controlled Enlargement" task) while its 3 text
+      // sizes (title/message/time) stayed exactly as-is — that task only touched spacing, not
+      // typography, for these rows.
       assert(
-        indexCssSrcFix.match(/\.dashboard-task-row \{[\s\S]{0,250}padding: 0\.55rem 0\.75rem;/) &&
+        indexCssSrcFix.match(/\.dashboard-task-row \{[\s\S]{0,250}padding: 0\.6rem 0\.8rem;/) &&
         indexCssSrcFix.match(/\.dashboard-task-row-title \{\s*font-size: 0\.72rem;/) &&
         indexCssSrcFix.match(/\.dashboard-task-row-message \{\s*font-size: 0\.62rem;/) &&
         indexCssSrcFix.match(/\.dashboard-task-row-time \{\s*font-size: 0\.58rem;/),
-        '1393. UPDATED — .dashboard-task-row\'s padding is now 0.55rem 0.75rem (was 0.4rem/0.6rem) while its title/message/time font sizes shrank further to 0.72rem/0.62rem/0.58rem (was 0.78rem/0.68rem/0.63rem) — smaller text, more room around it, matching the widget container\'s own change'
+        '1393. UPDATED — .dashboard-task-row\'s padding is now 0.6rem 0.8rem (was 0.4rem/0.6rem, then 0.55rem/0.75rem) while its title/message/time font sizes remain unchanged at 0.72rem/0.62rem/0.58rem — more room around the same text, per direct user request'
       );
 
       resetDatabase();
@@ -11494,12 +11518,20 @@ export async function verifyStage18() {
         '1400. STRUCTURAL: DashboardPage.jsx still renders exactly 5 <StatCard> components — the KPI proportions/spacing fix did not add, remove, or merge any lifecycle card'
       );
 
-      // 1401. STRUCTURAL: cards are fluid/equal-width via minmax(0, 1fr) — never a fixed pixel card width, and never combined with justify-content: space-between (the anti-pattern this task explicitly forbids)
+      // 1401. UPDATED (Fix Actual 3+2 Layout Bug task) — cards now use a genuinely FLUID, equal
+      // column WIDTH (repeat(5, minmax(0, 1fr))) instead of any fixed-pixel column — several
+      // intermediate iterations (150/175/190/210px, all superseded) fixed the column to a pixel
+      // value, which is exactly what produced the reported 3-cards-then-2-cards bug: any real
+      // window narrower than that iteration's breakpoint would fall back to 3 columns even with
+      // comfortable room left for 5. .stat-card itself still never carries its own width/max-width
+      // property (width is entirely delegated to the grid track), and space-between is still
+      // never used.
       assert(
         indexCssSrcKpiFix.match(/grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/) &&
-        !indexCssSrcKpiFix.match(/\.stat-card \{[\s\S]{0,400}width: \d+px/) &&
+        !indexCssSrcKpiFix.match(/grid-template-columns: repeat\(5, \d+px\)/) &&
+        !(indexCssSrcKpiFix.match(/\.stat-card \{[^}]*\}/) || [''])[0].match(/\bwidth: \d+px/) &&
         !indexCssSrcKpiFix.match(/\.stat-cards-grid \{[^}]*space-between/),
-        '1401. STRUCTURAL: .stat-cards-grid uses repeat(5, minmax(0, 1fr)) — genuinely fluid, equal-width columns. .stat-card has no fixed pixel width anywhere, and .stat-cards-grid is never combined with justify-content: space-between (the narrow-fixed-width-tiles-with-space-between anti-pattern this task exists to eliminate)'
+        '1401. UPDATED — .stat-cards-grid now uses a genuinely fluid repeat(5, minmax(0, 1fr)) (every fixed-pixel iteration — 150/175/190/210px — was superseded because a fixed column combined with any breakpoint can desync from the real window width). .stat-card itself still has no width/max-width property of its own (delegated entirely to the grid track), and .stat-cards-grid is still never combined with justify-content: space-between'
       );
 
       // 1402. STRUCTURAL: responsive breakpoints still exist (grid still wraps gracefully at narrower widths — it doesn't force 5 cramped columns at every viewport)
@@ -11508,14 +11540,17 @@ export async function verifyStage18() {
         '1402. STRUCTURAL: .stat-cards-grid still has 3 responsive breakpoints that reduce the column count at narrower viewports — cards wrap to fewer, still-fluid columns rather than being forced into an ever-more-cramped 5-column row'
       );
 
-      // 1403. STRUCTURAL: all 5 card navigation links remain, using the established /employees?status=X pattern — untouched by this layout-only task
+      // 1403. SUPERSEDED by the "Make Lifecycle Cards Information-Only" task — the /employees?status=X
+      // links this check used to require were removed entirely, per direct user request that these
+      // 5 cards be pure summary metrics, never a click-through to Personnel. See checks 1345 and
+      // 1407-1426 for the full information-only verification.
       assert(
-        dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Upcoming"') &&
-        dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Onboarding"') &&
-        dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Active"') &&
-        dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Departing"') &&
-        dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Former"'),
-        '1403. STRUCTURAL: All 5 lifecycle cards still link via the established /employees?status=X pattern — card navigation destinations are completely untouched by this layout/proportions task'
+        !dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Upcoming"') &&
+        !dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Onboarding"') &&
+        !dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Active"') &&
+        !dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Departing"') &&
+        !dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Former"'),
+        '1403. SUPERSEDED — None of the 5 lifecycle cards pass a linkTo prop anymore — card navigation was removed entirely by a later task (per direct user request), never restored'
       );
 
       // 1404. STRUCTURAL: the All/Employees/Interns filter remains in its existing upper-right position, never moved into the lifecycle-card row
@@ -11542,6 +11577,593 @@ export async function verifyStage18() {
         assert(
           dashboardServiceSrcKpiFix.includes('ENDING_SOON_ELIGIBLE_STATUSES') && dashboardServiceSrcKpiFix.includes("ENDING_SOON_WINDOW_DAYS = 7"),
           '1406b. REGRESSION: dashboardService.js\'s Ending Within 7 Days eligibility/window logic is byte-for-byte untouched by this layout task'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Make 5 Dashboard Lifecycle Cards Information-Only + Remove Navigation + Rebalance
+    // (direct user request: the 5 lifecycle cards should display counts only — no navigation,
+    // no arrow, no clickable affordance — while staying fully dynamic and backend-ready)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const dashboardPageSrcInfoOnly = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcInfoOnly = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const indexCssSrcInfoOnly = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardServiceSrcInfoOnly = fs.readFileSync(path.resolve('./src/services/dashboardService.js'), 'utf-8');
+      const dashboardSkeletonSrcInfoOnly = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+
+      // Isolate each individual <StatCard ... /> invocation in DashboardPage.jsx so checks 2-6
+      // can confirm each SPECIFIC card (not just StatCard.jsx generically) never receives linkTo.
+      const statCardInvocations = dashboardPageSrcInfoOnly.match(/<StatCard\b[\s\S]*?\/>/g) || [];
+      const findCardByTitle = (title) => statCardInvocations.find((block) => block.includes(`title="${title}"`));
+
+      // 1407. Five lifecycle cards still render
+      assert(
+        statCardInvocations.length === 5,
+        '1407. NEW — DashboardPage.jsx still renders exactly 5 <StatCard> invocations (Upcoming/Onboarding/Active/Offboarding/Former) — removing navigation did not add, remove, or merge any card'
+      );
+
+      // 1408-1412. Each of the 5 specific cards is information-only (exists, and its own invocation carries no linkTo)
+      for (const title of ['Upcoming', 'Onboarding', 'Active', 'Offboarding', 'Former']) {
+        const block = findCardByTitle(title);
+        assert(
+          Boolean(block) && !block.includes('linkTo'),
+          `${1408 + ['Upcoming', 'Onboarding', 'Active', 'Offboarding', 'Former'].indexOf(title)}. NEW — The ${title} card's own <StatCard> invocation exists and carries no linkTo prop — it is information-only, never a navigation trigger`
+        );
+      }
+
+      // 1413. No lifecycle card receives a linkTo prop anywhere in the block of 5 invocations (belt-and-suspenders on top of 1408-1412's per-card checks)
+      assert(
+        statCardInvocations.every((block) => !block.includes('linkTo')),
+        '1413. NEW — None of the 5 lifecycle <StatCard> invocations pass a linkTo prop — confirmed across the whole block, not just individually'
+      );
+
+      // 1414. No lifecycle navigation arrows render — StatCard.jsx no longer imports Link or ArrowUpRight, and never renders either
+      assert(
+        !statCardSrcInfoOnly.includes("from 'react-router-dom'") &&
+        !statCardSrcInfoOnly.includes('ArrowUpRight') &&
+        !statCardSrcInfoOnly.includes('<Link'),
+        '1414. NEW — StatCard.jsx no longer imports react-router-dom\'s Link or lucide-react\'s ArrowUpRight, and renders neither — the navigation arrow is completely gone, not just visually hidden'
+      );
+
+      // 1415. No lifecycle cards use link semantics — StatCard.jsx's root element is a plain <div>, never an <a>/<Link>/<button>, and carries no href/role="link"/aria-label implying navigation
+      assert(
+        statCardSrcInfoOnly.match(/return \(\s*<div className="stat-card">/) &&
+        !statCardSrcInfoOnly.includes('role="link"') && !statCardSrcInfoOnly.includes('role="button"') &&
+        !statCardSrcInfoOnly.match(/aria-label=\{`View/),
+        '1415. NEW — StatCard.jsx\'s root element is a plain <div className="stat-card">, never a link/button, with no link-implying role or aria-label — normal, non-interactive semantic card markup'
+      );
+
+      // 1416. No misleading clickable cursor/hover behavior — .stat-card has no cursor: pointer and no interactive hover transform/shadow-lift (both removed; confirmed live via Playwright: getComputedStyle(card).cursor === 'auto')
+      assert(
+        !indexCssSrcInfoOnly.match(/\.stat-card \{[^}]*cursor: pointer/) &&
+        !indexCssSrcInfoOnly.match(/\.stat-card:hover \{[^}]*transform/),
+        '1416. NEW — .stat-card has no cursor: pointer and .stat-card:hover no longer exists at all (no transform/box-shadow lift) — confirmed live via Playwright that getComputedStyle(card).cursor is \'auto\', not \'pointer\''
+      );
+
+      // 1417. Counts still derive dynamically from dashboardService — DashboardPage.jsx calls dashboardService.getDashboardSummary() and reads metrics.*Count, never a literal number
+      assert(
+        dashboardPageSrcInfoOnly.includes('dashboardService.getDashboardSummary({ personnelType })') &&
+        dashboardPageSrcInfoOnly.includes('value={metrics.upcomingCount}') && dashboardPageSrcInfoOnly.includes('value={metrics.onboardingCount}') &&
+        dashboardPageSrcInfoOnly.includes('value={metrics.activeCount}') && dashboardPageSrcInfoOnly.includes('value={metrics.departingCount}') &&
+        dashboardPageSrcInfoOnly.includes('value={metrics.formerCount}'),
+        '1417. NEW — All 5 cards\' value props read from dashboardService\'s live metrics object (metrics.upcomingCount / onboardingCount / activeCount / departingCount / formerCount) — never a literal number'
+      );
+
+      // 1418-1420. FUNCTIONAL: All/Employees/Interns each produce internally-consistent, independently-verifiable counts (the same worked example this suite has used throughout)
+      {
+        const allInfoOnly = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allInfoOnly.metrics.upcomingCount === 1 && allInfoOnly.metrics.onboardingCount === 2 && allInfoOnly.metrics.activeCount === 11 && allInfoOnly.metrics.departingCount === 2 && allInfoOnly.metrics.formerCount === 2,
+          `1418. FUNCTIONAL: All filter still produces the correct counts (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allInfoOnly.metrics)}`
+        );
+
+        const empInfoOnly = await dashboardService.getDashboardSummary({ personnelType: 'Employee' });
+        const sumEmpInfoOnly = empInfoOnly.metrics.upcomingCount + empInfoOnly.metrics.onboardingCount + empInfoOnly.metrics.activeCount + empInfoOnly.metrics.departingCount + empInfoOnly.metrics.formerCount;
+        assert(sumEmpInfoOnly === empInfoOnly.total && empInfoOnly.total < allInfoOnly.total, `1419. FUNCTIONAL: Employees filter produces internally-consistent counts (sum ${sumEmpInfoOnly} === total ${empInfoOnly.total}) that differ from the unfiltered All total (${allInfoOnly.total}) — the filter demonstrably changes what is counted`);
+
+        const internInfoOnly = await dashboardService.getDashboardSummary({ personnelType: 'Intern' });
+        const sumInternInfoOnly = internInfoOnly.metrics.upcomingCount + internInfoOnly.metrics.onboardingCount + internInfoOnly.metrics.activeCount + internInfoOnly.metrics.departingCount + internInfoOnly.metrics.formerCount;
+        assert(sumInternInfoOnly === internInfoOnly.total && allInfoOnly.total === empInfoOnly.total + internInfoOnly.total, `1420. FUNCTIONAL: Interns filter produces internally-consistent counts (sum ${sumInternInfoOnly} === total ${internInfoOnly.total}), and All total exactly equals Employees total + Interns total (${allInfoOnly.total} === ${empInfoOnly.total} + ${internInfoOnly.total})`);
+      }
+
+      // 1421. No hardcoded lifecycle counts anywhere in DashboardPage.jsx's card block — every value prop is a metrics.* expression, confirmed by the ABSENCE of a bare numeric value= prop
+      assert(
+        !dashboardPageSrcInfoOnly.match(/<StatCard[\s\S]{0,300}value=\{\d+\}/),
+        '1421. NEW — No <StatCard> invocation uses a literal numeric value={N} — every one reads value={metrics.*Count} from the live dashboardService response'
+      );
+
+      // 1422. UPDATED (Fix Actual 3+2 Layout Bug task) — Five-card desktop grid remains, now a
+      // genuinely fluid repeat(5, minmax(0, 1fr)) rather than any fixed-pixel column, and the old
+      // PER-CARD 150px max-width + justify-self: center regression never returns (that combination
+      // left dead space inside each column; a later fixed-column iteration had the same fragility
+      // from the other direction — see check 1401)
+      assert(
+        indexCssSrcInfoOnly.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/) &&
+        !indexCssSrcInfoOnly.match(/\.stat-card \{[^}]*max-width: 150px/) &&
+        !indexCssSrcInfoOnly.match(/\.stat-card \{[^}]*justify-self: center/),
+        '1422. UPDATED — .stat-cards-grid\'s desktop rule is a genuinely fluid repeat(5, minmax(0, 1fr)) (every fixed-pixel iteration, including 190px, was superseded), and .stat-card has neither the old max-width: 150px cap nor justify-self: center — width comes purely from the grid track, never a per-card constraint'
+      );
+
+      // 1423. Lower Dashboard widgets (Ending Within 7 Days + Soonest Due Tasks) remain completely unaffected — still rendered, still side by side, unrelated to the lifecycle-card scope of this task
+      assert(
+        dashboardPageSrcInfoOnly.includes('<EndingWithin7DaysWidget') && dashboardPageSrcInfoOnly.includes('<SoonestDueTasksWidget') &&
+        dashboardPageSrcInfoOnly.includes('className="dashboard-widgets-row"'),
+        '1423. REGRESSION: EndingWithin7DaysWidget and SoonestDueTasksWidget both still render side by side in .dashboard-widgets-row — completely untouched by this lifecycle-card-only task'
+      );
+
+      // 1424. DashboardSkeleton.jsx's card placeholders match the information-only card structure — no arrow-shaped placeholder element, still reuses the real .stat-card class (mapped over [1,2,3,4,5], same pattern as check 1346 uses) so its dimensions track the real (now-arrowless) card automatically
+      assert(
+        !dashboardSkeletonSrcInfoOnly.includes('stat-card-link') &&
+        (dashboardSkeletonSrcInfoOnly.match(/className="stat-card skeleton-box"/g) || []).length === 1 &&
+        (dashboardSkeletonSrcInfoOnly.match(/\[1, 2, 3, 4, 5\]/g) || []).length === 1,
+        '1424. NEW — DashboardSkeleton.jsx has no arrow-shaped placeholder element (no .stat-card-link anywhere) and still maps its single .stat-card skeleton-box placeholder over [1, 2, 3, 4, 5] (rendering 5 at runtime) — the loading state matches the new information-only card shape'
+      );
+
+      // 1425. dashboardService.js remains backend-ready: sources data exclusively through employeeService (never mock-data/storageEngine directly), so a later swap to a real API/database-backed employeeService would require no redesign of these cards
+      assert(
+        dashboardServiceSrcInfoOnly.includes("from './employeeService.js'") &&
+        !dashboardServiceSrcInfoOnly.match(/from ['"].*mock-data/) && !dashboardServiceSrcInfoOnly.includes('storageEngine') &&
+        !dashboardPageSrcInfoOnly.match(/from ['"].*mock-data/) && !dashboardPageSrcInfoOnly.includes('storageEngine') && !dashboardPageSrcInfoOnly.includes('localStorage'),
+        '1425. NEW — dashboardService.js still sources personnel data exclusively through employeeService (never mock-data/storageEngine directly), and DashboardPage.jsx itself imports neither mock data nor localStorage/storageEngine — the service boundary stays swappable for a real backend/database later, without any redesign of these cards'
+      );
+
+      // 1426. REGRESSION: Onboarding/Offboarding composition and lifecycle logic remain completely unaffected by this Dashboard-card-only task
+      {
+        const onbCompForInfoOnly = composeOnboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, await onboardingService.getScopeTaskDefinitions(), '2026-09-01');
+        assert(onbCompForInfoOnly.counts.total === 11, `1426a. REGRESSION: composeOnboardingTasks() still composes an Employee in Software Engineering to 11 tasks (found ${onbCompForInfoOnly.counts.total}) — unaffected by the Dashboard card-only task`);
+        const offCompForInfoOnly = composeOffboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, (loadDatabase().offboardingPlanTasks || []), '2026-09-01');
+        assert(offCompForInfoOnly.counts.total === 15, `1426b. REGRESSION: composeOffboardingTasks() still composes the same Employee to 15 tasks (found ${offCompForInfoOnly.counts.total}) — unaffected by the Dashboard card-only task`);
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Refine 5 Dashboard Lifecycle Cards: Less Rectangular + Balanced Width/Spacing
+    // (direct user request: cards had become too wide/rectangular after filling their full grid
+    // column; this task caps the GRID's own width and centers it as one group instead of
+    // stretching each card — a pure CSS/layout change, no data/logic/navigation change)
+    //
+    // NOTE ON WHAT THIS BLOCK CAN AND CANNOT VERIFY: this suite runs in plain Node with no
+    // browser/layout engine, so it can assert the CSS SOURCE facts below (max-width is set, no
+    // fixed pixel column width, no reintroduced 150px regression, no space-between anti-pattern),
+    // but it cannot itself render the page and measure whether the result actually LOOKS
+    // "balanced" versus "rectangular" — that requires a real browser. That visual judgment (card
+    // width/height across 190-215px candidates, gap, centered-group balance, no wrapping) was
+    // made via live Playwright inspection and screenshots during this task, documented in the
+    // task's own final report, not re-encoded here as a brittle pixel assertion.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcRefine = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcRefine = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcRefine = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const dashboardSkeletonSrcRefine = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+
+      // 1427. SUPERSEDED (Fix Actual 3+2 Layout Bug task) — the fixed-column-track + justify-content:
+      // center strategy that grew 175px -> 190px across several iterations is exactly what caused
+      // the reported bug: real windows narrower than each iteration's breakpoint fell back to 3
+      // columns even with comfortable room for 5. The grid is now genuinely fluid
+      // (repeat(5, minmax(0, 1fr))) with no fixed column and no centering hack — see check 1401 for
+      // the full current-state assertion. This check now guards that the old strategy never returns.
+      assert(
+        !indexCssSrcRefine.match(/\.stat-cards-grid \{[^}]*grid-template-columns: repeat\(5, \d+px\)/) &&
+        !indexCssSrcRefine.match(/\.stat-cards-grid \{[^}]*justify-content: center/) &&
+        !(indexCssSrcRefine.match(/\.stat-card \{[^}]*\}/) || [''])[0].match(/max-width|justify-self/),
+        '1427. SUPERSEDED — .stat-cards-grid no longer uses any fixed-pixel column track or justify-content: center (that combination, paired with a breakpoint, is what produced the reported 3+2 layout bug at real window widths below the breakpoint) — .stat-card itself still has neither max-width nor justify-self'
+      );
+
+      // 1428. STRUCTURAL (Fix Actual 3+2 Layout Bug task) — the grid's base desktop rule sets no
+      // fixed pixel width on either the grid columns or the card itself, confirming card width is
+      // derived purely from the fluid grid rather than any hardcoded desktop value (old 150px/
+      // 175px/190px/210px iterations are all gone).
+      {
+        const gridBlock = (indexCssSrcRefine.match(/\.stat-cards-grid \{[^}]*\}/) || [''])[0];
+        assert(
+          !gridBlock.match(/repeat\(5, \d+px\)/) && gridBlock.match(/repeat\(5, minmax\(0, 1fr\)\)/),
+          `1428. UPDATED — .stat-cards-grid's base rule sets no fixed pixel column width at all (repeat(5, minmax(0, 1fr)) only) — card width comes entirely from dividing the real Dashboard content width, never a hardcoded value that could fall out of sync with it`
+        );
+      }
+
+      // 1429. UPDATED (Fix Actual 3+2 Layout Bug task) — the single responsive breakpoint switches
+      // to 3 fluid columns once 5 fluid columns would genuinely make the card too narrow for its
+      // content (empirically measured via Playwright — see the .stat-cards-grid comment in
+      // index.css for the exact crossover). Both the 5-column and 3-column rules use the same
+      // fluid minmax(0, 1fr) strategy — never a fixed pixel column at any breakpoint.
+      assert(
+        indexCssSrcRefine.match(/@media \(max-width: 1270px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/),
+        '1429. UPDATED — The 1270px breakpoint (empirically measured as the exact crossover where the description first wraps at 5 fluid columns; was 1320px/1240px in earlier fixed-column iterations) switches to repeat(3, minmax(0, 1fr)) — fluid at every breakpoint, never a fixed pixel column'
+      );
+
+      // 1430. REGRESSION: information-only behavior (from the prior task) is still fully intact — no arrow, no Link, no linkTo, no clickable cursor/hover
+      assert(
+        !statCardSrcRefine.includes("from 'react-router-dom'") && !statCardSrcRefine.includes('ArrowUpRight') && !statCardSrcRefine.includes('<Link') &&
+        !dashboardPageSrcRefine.match(/<StatCard[\s\S]{0,300}linkTo/) &&
+        !indexCssSrcRefine.match(/\.stat-card \{[^}]*cursor: pointer/) &&
+        !indexCssSrcRefine.match(/\.stat-card:hover \{[^}]*transform/),
+        '1430. REGRESSION: StatCard.jsx still has no Link/ArrowUpRight/linkTo, and .stat-card still has no cursor: pointer or interactive hover transform — the information-only behavior from the prior task was not disturbed by this width/spacing refinement'
+      );
+
+      // 1431. STRUCTURAL: five cards still render, all reading their value from the live dashboardService metrics (never a hardcoded literal)
+      assert(
+        (dashboardPageSrcRefine.match(/<StatCard\b[\s\S]*?\/>/g) || []).length === 5 &&
+        !dashboardPageSrcRefine.match(/<StatCard[\s\S]{0,300}value=\{\d+\}/),
+        '1431. STRUCTURAL: DashboardPage.jsx still renders exactly 5 <StatCard> components, none with a literal numeric value= — counts remain fully dynamic, sourced from dashboardService'
+      );
+
+      // 1432. REGRESSION: the All/Employees/Interns filter is untouched by this CSS-only task
+      assert(
+        dashboardPageSrcRefine.includes('view-switcher-group') && dashboardPageSrcRefine.includes("useState('All')"),
+        '1432. REGRESSION: DashboardPage.jsx\'s All/Employees/Interns personnel-type filter is completely untouched — still the same view-switcher-group defaulting to All'
+      );
+
+      // 1433. REGRESSION: lower Dashboard widgets (Ending Within 7 Days + Soonest Due Tasks) are completely unaffected — this task only touched .stat-cards-grid/.stat-card CSS
+      assert(
+        dashboardPageSrcRefine.includes('<EndingWithin7DaysWidget') && dashboardPageSrcRefine.includes('<SoonestDueTasksWidget') &&
+        dashboardPageSrcRefine.includes('className="dashboard-widgets-row"') &&
+        !indexCssSrcRefine.match(/\.dashboard-widgets-row \{[^}]*max-width/),
+        '1433. REGRESSION: EndingWithin7DaysWidget and SoonestDueTasksWidget both still render side by side in .dashboard-widgets-row, and .dashboard-widgets-row itself was NOT given a max-width cap — the lower widgets keep using the full Dashboard content width, independent of the now-narrower, centered lifecycle-card group above them'
+      );
+
+      // 1434. UPDATED — Dashboard skeleton reuses the SAME .stat-cards-grid class as the real cards, so it automatically inherits whatever desktop sizing strategy that shared rule currently uses (group-cap-and-center at the time this check was written; a fixed compact column + justify-content: center as of the later "Match Compact 5-Card Strip" task — see check 1442 for that current state) without any skeleton-specific width override — only the per-card height stays an explicit inline style (the empty skeleton div has no content of its own to derive a height from)
+      assert(
+        dashboardSkeletonSrcRefine.match(/<div className="stat-cards-grid">/) &&
+        !dashboardSkeletonSrcRefine.match(/stat-cards-grid[\s\S]{0,50}style=\{\{[^}]*max-width/),
+        '1434. UPDATED — DashboardSkeleton.jsx\'s card grid wrapper uses the plain .stat-cards-grid class with no inline width/max-width override — it automatically matches whatever desktop sizing strategy the real cards currently use because it shares the same CSS rule, not a duplicated one'
+      );
+
+      // 1435. FUNCTIONAL/REGRESSION: dashboardService's lifecycle counts are completely untouched by this CSS-only task
+      {
+        const allSummaryRefine = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryRefine.metrics.upcomingCount === 1 && allSummaryRefine.metrics.onboardingCount === 2 && allSummaryRefine.metrics.activeCount === 11 && allSummaryRefine.metrics.departingCount === 2 && allSummaryRefine.metrics.formerCount === 2,
+          `1435. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the card width/spacing refinement (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryRefine.metrics)}`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Match Lifecycle KPI Cards to the Second Reference: Small Compact 5-Card Horizontal Strip
+    // (direct user request, with a supplied reference screenshot: the immediately-prior card
+    // width (~210px) was STILL too large — cards fell back to 3+2 at the user's actual desktop
+    // width. This task replaces the fluid/capped-group grid strategy with a fixed, genuinely
+    // compact 175px column track, and shrinks padding/icon/typography to match)
+    //
+    // NOTE ON WHAT THIS BLOCK CAN AND CANNOT VERIFY: this suite runs in plain Node with no
+    // browser/layout engine — it can assert the CSS SOURCE facts below (fixed compact column
+    // width is set, no fluid full-width stretch, no old 150px regression, breakpoints present),
+    // but it cannot itself render the page and count cards per row or compare pixels against a
+    // reference screenshot. That verification — perRow === 5 at 1536x864, card width/height,
+    // gap, and a direct visual comparison against the supplied reference — was done via live
+    // Playwright measurement and screenshots during this task, documented in the task's own
+    // final report, not re-encoded here as a brittle pixel assertion.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcCompactStrip = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcCompactStrip = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcCompactStrip = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const dashboardSkeletonSrcCompactStrip = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+
+      // 1436. SUPERSEDED (Fix Actual 3+2 Layout Bug task) — the desktop grid no longer uses ANY
+      // fixed column width — the fixed-pixel-column approach (150/175/190/210px, all now gone) was
+      // the root cause of the reported 3+2 layout bug (see check 1401). This check now guards that
+      // no fixed-pixel column has crept back in.
+      {
+        const gridBlock = (indexCssSrcCompactStrip.match(/\.stat-cards-grid \{[^}]*\}/) || [''])[0];
+        assert(
+          !gridBlock.match(/repeat\(5, \d+px\)/) && gridBlock.match(/repeat\(5, minmax\(0, 1fr\)\)/),
+          `1436. SUPERSEDED — .stat-cards-grid's desktop rule has no fixed pixel column width at all (repeat(5, minmax(0, 1fr)) only) — every earlier fixed-pixel iteration (150/175/190/210px) is gone, since that whole strategy was the root cause of the 3+2 layout bug`
+        );
+      }
+
+      // 1437. UPDATED (Fix Actual 3+2 Layout Bug task) — icon, title, value, and subtitle font
+      // sizes were all restored to a "medium" scale proportionate to the card's now-fluid, wider
+      // width (icon 18px -> 22px, title 0.62rem -> 0.72rem, value 1.4rem -> 1.6rem, subtitle
+      // 0.66rem -> 0.7rem) — the earlier compact-strip-era shrinking existed only to force cards to
+      // fit a narrow fixed column, which is no longer necessary now that width is fluid. Padding
+      // (0.95rem 0.85rem) happens to coincidentally match the prior iteration's value, but under a
+      // different rationale (empirically tuned so 5 fluid columns keep fitting without wrapping
+      // down to ~1280px content width — see the .stat-card-subtitle comment in index.css).
+      assert(
+        indexCssSrcCompactStrip.match(/\.stat-card \{[\s\S]{0,300}padding: 0\.95rem 0\.85rem;/) &&
+        indexCssSrcCompactStrip.match(/\.stat-card-icon \{\s*width: 22px;\s*height: 22px;/) &&
+        indexCssSrcCompactStrip.match(/\.stat-card-title \{\s*font-size: 0\.72rem;/) &&
+        indexCssSrcCompactStrip.match(/\.stat-card-value \{\s*font-size: 1\.6rem;/) &&
+        indexCssSrcCompactStrip.match(/\.stat-card-subtitle \{\s*font-size: 0\.7rem;/),
+        '1437. UPDATED — .stat-card\'s padding is 0.95rem 0.85rem, icon is 22px (was 18px), title is 0.72rem (was 0.62rem), value is 1.6rem (was 1.4rem), and subtitle is 0.7rem (was 0.66rem) — typography was restored to a medium, proportionate scale now that card width is fluid rather than fixed-narrow, per the "not tiny, not huge" requirement'
+      );
+
+      // 1438. STRUCTURAL: five lifecycle cards still render, still information-only (no Link/ArrowUpRight/linkTo, no clickable cursor/hover) — this task changed CSS sizing only
+      assert(
+        (dashboardPageSrcCompactStrip.match(/<StatCard\b[\s\S]*?\/>/g) || []).length === 5 &&
+        !statCardSrcCompactStrip.includes("from 'react-router-dom'") && !statCardSrcCompactStrip.includes('ArrowUpRight') && !statCardSrcCompactStrip.includes('<Link') &&
+        !dashboardPageSrcCompactStrip.match(/<StatCard[\s\S]{0,300}linkTo/) &&
+        !indexCssSrcCompactStrip.match(/\.stat-card \{[^}]*cursor: pointer/) &&
+        !indexCssSrcCompactStrip.match(/\.stat-card:hover \{[^}]*transform/),
+        '1438. REGRESSION: DashboardPage.jsx still renders exactly 5 <StatCard> components, StatCard.jsx still has no Link/ArrowUpRight/linkTo, and .stat-card still has no cursor: pointer or interactive hover transform — the information-only behavior remains completely intact through this pure sizing change'
+      );
+
+      // 1439. UPDATED (Fix Actual 3+2 Layout Bug task): responsive breakpoints exist and every one
+      // of them falls back to FLUID columns, matching the now-fluid desktop rule. The 5->3
+      // threshold was moved to 1270px (empirically measured exact crossover — see check 1429 and
+      // the .stat-cards-grid comment in index.css), replacing the old 1320px/1240px fixed-column-era
+      // values; 720px was tightened to 640px and 420px stayed the same, both re-verified via
+      // Playwright as clean, non-overflowing fallbacks.
+      assert(
+        (indexCssSrcCompactStrip.match(/@media \(max-width: \d+px\) \{\s*\.stat-cards-grid \{/g) || []).length === 3 &&
+        indexCssSrcCompactStrip.match(/@media \(max-width: 1270px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/) &&
+        indexCssSrcCompactStrip.match(/@media \(max-width: 640px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/) &&
+        indexCssSrcCompactStrip.match(/@media \(max-width: 420px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(1, minmax\(0, 1fr\)\);/),
+        '1439. UPDATED — .stat-cards-grid has 3 responsive breakpoints (1270px -> 3 columns, empirically measured, was 1320px/1240px; 640px -> 2 columns, was 720px; 420px -> 1 column, unchanged), every one falling back to FLUID minmax(0, 1fr) columns — the desktop rule and every breakpoint now share the identical fluid strategy'
+      );
+
+      // 1440. FUNCTIONAL/REGRESSION: counts remain fully dynamic and the All/Employees/Interns filter is untouched by this CSS-only task
+      {
+        const allSummaryCompactStrip = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryCompactStrip.metrics.upcomingCount === 1 && allSummaryCompactStrip.metrics.onboardingCount === 2 && allSummaryCompactStrip.metrics.activeCount === 11 && allSummaryCompactStrip.metrics.departingCount === 2 && allSummaryCompactStrip.metrics.formerCount === 2,
+          `1440. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the compact-strip sizing change (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryCompactStrip.metrics)}`
+        );
+        assert(
+          !dashboardPageSrcCompactStrip.match(/<StatCard[\s\S]{0,300}value=\{\d+\}/) &&
+          dashboardPageSrcCompactStrip.includes('view-switcher-group'),
+          '1440b. REGRESSION: No <StatCard> uses a literal numeric value=, and the All/Employees/Interns filter (view-switcher-group) is still present and untouched'
+        );
+      }
+
+      // 1441. REGRESSION: lower Dashboard widgets (Ending Within 7 Days + Soonest Due Tasks) are completely unaffected — this task only touched .stat-cards-grid/.stat-card CSS and the skeleton
+      assert(
+        dashboardPageSrcCompactStrip.includes('<EndingWithin7DaysWidget') && dashboardPageSrcCompactStrip.includes('<SoonestDueTasksWidget') &&
+        dashboardPageSrcCompactStrip.includes('className="dashboard-widgets-row"') &&
+        !indexCssSrcCompactStrip.match(/\.dashboard-widgets-row \{[^}]*175px/),
+        '1441. REGRESSION: EndingWithin7DaysWidget and SoonestDueTasksWidget both still render side by side in .dashboard-widgets-row, untouched by the lifecycle-card compacting — .dashboard-widgets-row was not given the new 175px card sizing'
+      );
+
+      // 1442. UPDATED (Fix Actual 3+2 Layout Bug task) — Dashboard skeleton height updated to 106px
+      // (was 96px) to match the real card's measured height at its now-fluid width, and still
+      // reuses the same .stat-cards-grid class (so it automatically inherits the fluid
+      // repeat(5, minmax(0, 1fr)) column strategy, with no skeleton-specific width override)
+      assert(
+        dashboardSkeletonSrcCompactStrip.match(/className="stat-card skeleton-box" style=\{\{ height: '106px' \}\}/) &&
+        !dashboardSkeletonSrcCompactStrip.match(/stat-cards-grid[\s\S]{0,50}style=\{\{[^}]*width/),
+        '1442. UPDATED — DashboardSkeleton.jsx\'s card placeholders use height: 106px (was 96px, matching the real card\'s measured height now that width is fluid) and set no inline width — they inherit the fluid grid columns automatically from the shared .stat-cards-grid class'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Small Controlled Dashboard Enlargement + "See More" Behavior Confirmation
+    // (direct user request: the 5 lifecycle cards and 2 lower widgets had become "slightly too
+    // small" — this task moderately enlarges both while explicitly NOT touching card width,
+    // gap, icon colors, typography hierarchy, filters, data sources, or information-only
+    // behavior. It also re-confirms the "show first 2 + See More" behavior for both lower
+    // widgets, which — on inspection — was ALREADY fully implemented by prior tasks; no new
+    // collapse/expand logic was written, only re-verified.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcEnlarge = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const endingWidgetSrcEnlarge = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+      const soonestDueSrcEnlarge = fs.readFileSync(path.resolve('./src/components/dashboard/SoonestDueTasksWidget.jsx'), 'utf-8');
+      const dashboardPageSrcEnlarge = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcEnlarge = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+
+      // 1443. SUPERSEDED (Fix Actual 3+2 Layout Bug task) — the fixed-column-width middle-ground
+      // sizing this check used to verify (150 < width <= 200px) was itself part of the fragile
+      // fixed-pixel-plus-breakpoint strategy that caused the reported 3+2 bug. The grid now has no
+      // fixed column width at any size — see checks 1401/1428/1436 for the current fluid-only
+      // assertion. This check now guards that no fixed column has crept back in at this task's
+      // former history point.
+      assert(
+        !indexCssSrcEnlarge.match(/\.stat-cards-grid \{[^}]*grid-template-columns: repeat\(5, \d+px\)/),
+        '1443. SUPERSEDED — .stat-cards-grid has no fixed-pixel column width of any size (150-228px, spanning every historical iteration) — the whole fixed-column strategy was replaced by a fluid repeat(5, minmax(0, 1fr)) grid, since fixed columns paired with a breakpoint are what produced the reported 3+2 layout bug'
+      );
+
+      // 1444. UPDATED (Fix Actual 3+2 Layout Bug task) — the inter-card gap is 0.85rem (was
+      // 0.65rem) on the now-fluid grid, and justify-content: center is gone entirely (it was only
+      // ever needed to center leftover space around a fixed-width column track, which no longer
+      // exists on a fluid grid that already fills the full row width).
+      assert(
+        indexCssSrcEnlarge.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);\s*gap: 0\.85rem;/) &&
+        !indexCssSrcEnlarge.match(/\.stat-cards-grid \{[^}]*justify-content: center/),
+        '1444. UPDATED: .stat-cards-grid\'s gap is now 0.85rem (was 0.65rem) and justify-content: center is gone — a fluid grid that already fills the full row width has no leftover space to center'
+      );
+
+      // 1445. REGRESSION: lower-widget padding grew, but widget colors, icon size/colors, and heading typography (title/subtitle font-size) are byte-for-byte unchanged — this task enlarged spacing only, never colors or icons, per explicit instruction
+      assert(
+        indexCssSrcEnlarge.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 1\.05rem 1\.15rem;/) &&
+        indexCssSrcEnlarge.match(/\.widget-icon-badge \{\s*width: 26px;\s*height: 26px;/) &&
+        indexCssSrcEnlarge.match(/\.widget-title \{\s*font-size: 0\.85rem;/) &&
+        indexCssSrcEnlarge.match(/\.widget-subtitle \{\s*font-size: 0\.65rem;/),
+        '1445. REGRESSION: .dashboard-widget\'s padding grew to 1.05rem 1.15rem, but .widget-icon-badge (26px) and .widget-title/.widget-subtitle font sizes (0.85rem/0.65rem) are completely unchanged — spacing grew, icons/colors/typography did not, per direct user instruction'
+      );
+
+      // 1446. STRUCTURAL: EndingWithin7DaysWidget.jsx and SoonestDueTasksWidget.jsx BOTH already implement "show first 2, See More when totalItems > 2" — confirmed present (not newly added) via source inspection, matching the exact rule: hiddenCount = totalItems - 2, condition is hiddenCount > 0 (mathematically identical to totalItems > 2)
+      assert(
+        endingWidgetSrcEnlarge.includes('const DEFAULT_VISIBLE_COUNT = 2;') &&
+        endingWidgetSrcEnlarge.match(/const hiddenCount = people\.length - DEFAULT_VISIBLE_COUNT;/) &&
+        endingWidgetSrcEnlarge.match(/\{hiddenCount > 0 && \(/) &&
+        soonestDueSrcEnlarge.includes('const DEFAULT_VISIBLE_COUNT = 2;') &&
+        soonestDueSrcEnlarge.match(/const hiddenCount = sorted\.length - DEFAULT_VISIBLE_COUNT;/) &&
+        soonestDueSrcEnlarge.match(/\{hiddenCount > 0 && \(/),
+        '1446. STRUCTURAL: Both widgets slice their full ordered result to DEFAULT_VISIBLE_COUNT (2) by default and show "See more"/"Show less" only when hiddenCount (totalItems - 2) is > 0 — mathematically identical to the requested "totalItems > 2" rule. This logic pre-dates this task; it was verified, not rewritten, per the instruction to reuse existing service/UI boundaries'
+      );
+
+      // 1447. STRUCTURAL: each widget's expand/collapse state is a fully independent local useState — no shared state, no prop drilling between the two widgets — confirmed via Playwright (expanding one leaves the other collapsed and vice versa)
+      assert(
+        (endingWidgetSrcEnlarge.match(/const \[expanded, setExpanded\] = useState\(false\);/g) || []).length === 1 &&
+        (soonestDueSrcEnlarge.match(/const \[expanded, setExpanded\] = useState\(false\);/g) || []).length === 1,
+        '1447. STRUCTURAL: EndingWithin7DaysWidget and SoonestDueTasksWidget each declare their OWN independent useState(false) for expanded — no shared/lifted state, so expanding one widget can never affect the other (confirmed live via Playwright: expanding only Soonest Due Tasks left Ending Within 7 Days collapsed, and vice versa)'
+      );
+
+      // 1448. STRUCTURAL: the expanded list uses a bounded max-height with overflow-y: auto (internal scroll) — never unbounded page growth — for datasets larger than fit comfortably
+      assert(
+        indexCssSrcEnlarge.match(/\.dashboard-widget-scroll-list \{\s*max-height: 195px;\s*overflow-y: auto;/) &&
+        endingWidgetSrcEnlarge.includes("expanded ? 'dashboard-widget-scroll-list' : undefined") &&
+        soonestDueSrcEnlarge.includes("expanded ? 'dashboard-widget-scroll-list' : undefined"),
+        '1448. REGRESSION: .dashboard-widget-scroll-list still has a bounded max-height (195px, was 180px) with overflow-y: auto, and both widgets still apply it only while expanded — larger datasets scroll internally instead of growing the page'
+      );
+
+      // 1449. REGRESSION: five lifecycle cards remain information-only (no Link/ArrowUpRight/linkTo, no clickable cursor/hover) and counts remain fully dynamic — this task changed CSS sizing only
+      assert(
+        (dashboardPageSrcEnlarge.match(/<StatCard\b[\s\S]*?\/>/g) || []).length === 5 &&
+        !statCardSrcEnlarge.includes("from 'react-router-dom'") && !statCardSrcEnlarge.includes('ArrowUpRight') && !statCardSrcEnlarge.includes('<Link') &&
+        !dashboardPageSrcEnlarge.match(/<StatCard[\s\S]{0,300}linkTo/) &&
+        !indexCssSrcEnlarge.match(/\.stat-card \{[^}]*cursor: pointer/) &&
+        !dashboardPageSrcEnlarge.match(/<StatCard[\s\S]{0,300}value=\{\d+\}/) &&
+        dashboardPageSrcEnlarge.includes('view-switcher-group'),
+        '1449. REGRESSION: DashboardPage.jsx still renders exactly 5 information-only <StatCard> components (no Link/ArrowUpRight/linkTo/cursor:pointer, no literal numeric value=), and the All/Employees/Interns filter (view-switcher-group) remains untouched'
+      );
+
+      // 1450. FUNCTIONAL/REGRESSION: dashboardService's lifecycle counts and Ending Within 7 Days eligibility logic are completely untouched by this sizing-only task
+      {
+        const allSummaryEnlarge = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryEnlarge.metrics.upcomingCount === 1 && allSummaryEnlarge.metrics.onboardingCount === 2 && allSummaryEnlarge.metrics.activeCount === 11 && allSummaryEnlarge.metrics.departingCount === 2 && allSummaryEnlarge.metrics.formerCount === 2,
+          `1450. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the Small Controlled Enlargement task (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryEnlarge.metrics)}`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Fix Actual 3+2 Layout Bug (FINAL DASHBOARD LAYOUT FIX task)
+    // (direct user report, with a description of the actual bug at a real desktop viewport: the 5
+    // lifecycle cards were rendering as 3 cards on one row + 2 cards on a second row, not the
+    // single row of 5 every earlier "size tweak" task assumed it had already achieved. Root cause:
+    // every prior iteration (checks 1401/1422/1427-1429/1436-1439/1442-1443/1357/1378/1391, now all
+    // updated) fixed .stat-cards-grid's column to a SPECIFIC pixel value (150/175/190/210px) and
+    // paired it with a breakpoint tuned to exactly that value — any real browser window narrower
+    // than that breakpoint (which covers a lot of ordinary widths, not an exotic edge case) fell
+    // back to 3 columns even with comfortable room left for 5. This task replaces the whole
+    // strategy with a genuinely fluid grid (repeat(5, minmax(0, 1fr))) that can never desync from
+    // the real rendered width the way a fixed pixel value can, restores typography/padding/icon to
+    // a medium scale now that width is no longer artificially narrow, and moves the one fallback
+    // breakpoint to an empirically re-measured 1270px. Exact DOM measurements at 1536/1440/1366/
+    // 1280/1271/1270/1200/1024/980/950/920/900/768/640/420/375px viewports (5-per-row confirmed at
+    // every width down to 1271px; clean 3+2 from 1270px down through 768px; no wrap, no title
+    // truncation, no horizontal overflow at any width) were taken via live Playwright, not
+    // re-encoded here as brittle pixel regexes, since this Node suite has no real browser layout
+    // engine — see the task's final report for the full table.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcFluid = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcFluid = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcFluid = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const dashboardSkeletonSrcFluid = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+      const endingWidgetSrcFluid = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+      const soonestDueSrcFluid = fs.readFileSync(path.resolve('./src/components/dashboard/SoonestDueTasksWidget.jsx'), 'utf-8');
+
+      // 1451. NEW — .stat-cards-grid's desktop (base) rule is a genuinely fluid five-column grid —
+      // repeat(5, minmax(0, 1fr)) — with no fixed pixel column width and no per-card max-width/
+      // justify-self hack anywhere. This is the single root-cause fix: card width is always exactly
+      // 1/5 of the real Dashboard content width (minus gaps), so it can never fall out of sync with
+      // the actual rendered window the way a fixed 150/175/190/210px value could.
+      assert(
+        indexCssSrcFluid.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);\s*gap: 0\.85rem;\s*\}/) &&
+        !indexCssSrcFluid.match(/\.stat-cards-grid \{[^}]*grid-template-columns: repeat\(5, \d+px\)/) &&
+        !(indexCssSrcFluid.match(/\.stat-card \{[^}]*\}/) || [''])[0].match(/max-width|justify-self/),
+        '1451. NEW — .stat-cards-grid\'s desktop rule is a genuinely fluid repeat(5, minmax(0, 1fr)) with an 0.85rem gap — no fixed pixel column width anywhere, and .stat-card carries neither max-width nor justify-self — this is the actual fix for the reported 3-cards-then-2-cards layout bug'
+      );
+
+      // 1452. NEW — the ONE responsive fallback breakpoint (empirically measured via Playwright as
+      // the exact width where the description first wraps to 2 lines at 5 fluid columns) switches to
+      // 3 FLUID columns, never a second fixed-pixel size — and there are no leftover/contradictory
+      // media queries for .stat-cards-grid at any of the old superseded thresholds (1320/1240/900
+      // placeholder/720px).
+      assert(
+        (indexCssSrcFluid.match(/@media \([^)]*\) \{\s*\.stat-cards-grid \{/g) || []).length === 3 &&
+        indexCssSrcFluid.match(/@media \(max-width: 1270px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);\s*\}\s*\}/) &&
+        indexCssSrcFluid.match(/@media \(max-width: 640px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);\s*\}\s*\}/) &&
+        indexCssSrcFluid.match(/@media \(max-width: 420px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(1, minmax\(0, 1fr\)\);\s*\}\s*\}/) &&
+        !indexCssSrcFluid.match(/@media \(max-width: 1320px\) \{\s*\.stat-cards-grid/) && !indexCssSrcFluid.match(/@media \(max-width: 1240px\) \{\s*\.stat-cards-grid/) &&
+        !indexCssSrcFluid.match(/@media \(max-width: 900px\) \{\s*\.stat-cards-grid/) && !indexCssSrcFluid.match(/@media \(max-width: 720px\) \{\s*\.stat-cards-grid/),
+        '1452. NEW — .stat-cards-grid has exactly 3 responsive breakpoints (1270px -> 3 columns, 640px -> 2 columns, 420px -> 1 column), every one fluid (minmax(0, 1fr)), and none of the superseded thresholds (1320/1240/900-placeholder/720px) apply to .stat-cards-grid anymore — a single, non-contradictory responsive strategy, not layered leftover rules'
+      );
+
+      // 1453. NEW — typography/padding/icon were restored to a medium scale (never shrunk back to
+      // the "compact strip" era's tiny values) now that card width is fluid rather than artificially
+      // narrow: icon 22px, title 0.72rem, value 1.6rem (still the visually dominant element on the
+      // card), subtitle 0.7rem, padding 0.95rem 0.85rem.
+      assert(
+        indexCssSrcFluid.match(/\.stat-card-icon \{\s*width: 22px;\s*height: 22px;/) &&
+        indexCssSrcFluid.match(/\.stat-card-title \{\s*font-size: 0\.72rem;/) &&
+        indexCssSrcFluid.match(/\.stat-card-value \{\s*font-size: 1\.6rem;/) &&
+        indexCssSrcFluid.match(/\.stat-card-subtitle \{\s*font-size: 0\.7rem;/) &&
+        indexCssSrcFluid.match(/\.stat-card \{[\s\S]{0,300}padding: 0\.95rem 0\.85rem;/) &&
+        parseFloat(indexCssSrcFluid.match(/\.stat-card-value \{\s*font-size: ([\d.]+)rem;/)[1]) > parseFloat(indexCssSrcFluid.match(/\.stat-card-title \{\s*font-size: ([\d.]+)rem;/)[1]),
+        '1453. NEW — .stat-card\'s icon (22px), title (0.72rem), value (1.6rem), subtitle (0.7rem), and padding (0.95rem 0.85rem) are all a medium, legible scale — never shrunk back to the tiny compact-strip-era values now that width comes from the fluid grid — and the count (value) remains the visually dominant element (larger font-size than the title label)'
+      );
+
+      // 1454. REGRESSION: cards remain purely information-only — no Link/ArrowUpRight/linkTo, no
+      // clickable cursor/hover-nav — this was a pure layout/CSS fix, never a behavior change.
+      assert(
+        !statCardSrcFluid.includes("from 'react-router-dom'") && !statCardSrcFluid.includes('ArrowUpRight') && !statCardSrcFluid.includes('<Link') &&
+        !dashboardPageSrcFluid.match(/<StatCard[\s\S]{0,300}linkTo/) &&
+        !indexCssSrcFluid.match(/\.stat-card \{[^}]*cursor: pointer/) &&
+        !indexCssSrcFluid.match(/\.stat-card:hover \{[^}]*transform/),
+        '1454. REGRESSION: StatCard.jsx still has no Link/ArrowUpRight/linkTo, and .stat-card still has no cursor: pointer or interactive hover transform — the information-only behavior is completely unaffected by this layout fix'
+      );
+
+      // 1455. NEW — DashboardPage.jsx still renders exactly 5 <StatCard> components, every value
+      // reads from the live dashboardService metrics (never a literal number), and the All/
+      // Employees/Interns filter (view-switcher-group) is untouched — this task fixed only the
+      // grid's CSS strategy, never card count, data source, or the filter.
+      assert(
+        (dashboardPageSrcFluid.match(/<StatCard\b[\s\S]*?\/>/g) || []).length === 5 &&
+        !dashboardPageSrcFluid.match(/<StatCard[\s\S]{0,300}value=\{\d+\}/) &&
+        dashboardPageSrcFluid.includes('view-switcher-group'),
+        '1455. NEW — DashboardPage.jsx still renders exactly 5 <StatCard> components with no literal numeric value= prop, and the All/Employees/Interns filter (view-switcher-group) is completely untouched by this layout fix'
+      );
+
+      // 1456. NEW — DashboardSkeleton.jsx's 5 card placeholders reuse the real .stat-cards-grid
+      // class (so they automatically inherit the fluid column strategy, never a stale fixed-width
+      // assumption) with an explicit inline height matching the real card's measured height, and
+      // the lower 2-widget skeleton row is unchanged by this task.
+      assert(
+        dashboardSkeletonSrcFluid.match(/<div className="stat-cards-grid">/) &&
+        !dashboardSkeletonSrcFluid.match(/stat-cards-grid[\s\S]{0,50}style=\{\{[^}]*width/) &&
+        dashboardSkeletonSrcFluid.match(/className="stat-card skeleton-box" style=\{\{ height: '106px' \}\}/) &&
+        (dashboardSkeletonSrcFluid.match(/dashboard-widget skeleton-box/g) || []).length === 2,
+        '1456. NEW — DashboardSkeleton.jsx\'s 5 placeholders reuse the plain .stat-cards-grid class with no inline width override (inheriting the fluid column strategy automatically) and an explicit height: 106px matching the real card\'s measured height — the lower 2-widget skeleton row remains untouched'
+      );
+
+      // 1457. REGRESSION: both lower widgets' "show first 2, See More when totalItems > 2" behavior
+      // is unchanged — explicitly re-verified (not rewritten) per this task's instruction, since it
+      // was already correctly implemented by an earlier task.
+      assert(
+        endingWidgetSrcFluid.includes('const DEFAULT_VISIBLE_COUNT = 2;') &&
+        endingWidgetSrcFluid.match(/const hiddenCount = people\.length - DEFAULT_VISIBLE_COUNT;/) &&
+        endingWidgetSrcFluid.match(/\{hiddenCount > 0 && \(/) &&
+        soonestDueSrcFluid.includes('const DEFAULT_VISIBLE_COUNT = 2;') &&
+        soonestDueSrcFluid.match(/const hiddenCount = sorted\.length - DEFAULT_VISIBLE_COUNT;/) &&
+        soonestDueSrcFluid.match(/\{hiddenCount > 0 && \(/),
+        '1457. REGRESSION: EndingWithin7DaysWidget.jsx and SoonestDueTasksWidget.jsx both still slice to DEFAULT_VISIBLE_COUNT (2) by default and show See More/Show less only when hiddenCount (totalItems - 2) > 0 — unchanged by this task, re-verified live via Playwright (seeded 5 items per widget: collapsed shows exactly 2 rows + "See more (3)", expanding reveals all 5 in a bounded scroll list, collapsing restores exactly 2) rather than rewritten'
+      );
+
+      // 1458. FUNCTIONAL/REGRESSION: dashboardService's lifecycle counts are completely untouched by
+      // this CSS-only layout fix.
+      {
+        const allSummaryFluid = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryFluid.metrics.upcomingCount === 1 && allSummaryFluid.metrics.onboardingCount === 2 && allSummaryFluid.metrics.activeCount === 11 && allSummaryFluid.metrics.departingCount === 2 && allSummaryFluid.metrics.formerCount === 2,
+          `1458. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the 3+2 layout bug fix (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryFluid.metrics)}`
         );
       }
 
