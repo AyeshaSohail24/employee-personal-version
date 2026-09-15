@@ -18,6 +18,7 @@ import {
   calculateTimelineBarPosition,
   getTodayLocalDateString,
   addDaysToLocalDate,
+  getDaysDifference,
 } from '../utils/dateUtils.js';
 import { employeeService } from './employeeService.js';
 import { upcomingCandidateService } from './upcomingCandidateService.js';
@@ -10604,6 +10605,945 @@ export async function verifyStage18() {
         !directoryContainerSrc.includes('localStorage') && !directoryContainerSrc.includes('storageEngine'),
         '1333. NEW — Neither EmployeeListView.jsx, EmployeeCardView.jsx, nor DirectoryPageContainer.jsx reference localStorage/storageEngine — all data still flows through employeeService'
       );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Simplify HR Dashboard + 5 Lifecycle Count Cards + Personnel Type Filter + "Ending Within 7 Days"
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const dashboardPageSrc = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const dashboardServiceSrc = fs.readFileSync(path.resolve('./src/services/dashboardService.js'), 'utf-8');
+      const endingWidgetSrc = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+      const dashboardSkeletonSrc = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+
+      // --- STATIC / STRUCTURAL CHECKS ---
+
+      // 1334. Five separate StatCard cards — Upcoming/Onboarding/Active/Offboarding/Former — never combined
+      assert(
+        dashboardPageSrc.match(/title="Upcoming"/) && dashboardPageSrc.match(/title="Onboarding"/) &&
+        dashboardPageSrc.match(/title="Active"/) && dashboardPageSrc.match(/title="Offboarding"/) &&
+        dashboardPageSrc.match(/title="Former"/) &&
+        (dashboardPageSrc.match(/<StatCard/g) || []).length === 5 &&
+        !dashboardPageSrc.includes('New Joiners'),
+        '1334. NEW — DashboardPage.jsx renders exactly 5 separate <StatCard> components titled Upcoming/Onboarding/Active/Offboarding/Former — Upcoming and Onboarding are no longer combined into one "New Joiners & Upcoming" card'
+      );
+
+      // 1335. metrics carries the 5 separate counts (upcomingCount/onboardingCount never merged into one newJoinersGroupCount)
+      assert(
+        dashboardServiceSrc.includes('upcomingCount: counts.Upcoming,') &&
+        dashboardServiceSrc.includes('onboardingCount: counts.Onboarding,') &&
+        !dashboardServiceSrc.includes('newJoinersGroupCount'),
+        '1335. NEW — dashboardService.js\'s metrics object exposes upcomingCount and onboardingCount as fully separate fields — the old combined newJoinersGroupCount no longer exists'
+      );
+
+      // 1336. The 3 removed widgets (New Joiners, Departing, Department/Organization Snapshot) are gone from disk and no longer imported by DashboardPage
+      assert(
+        !fs.existsSync(path.resolve('./src/components/dashboard/NewJoinersWidget.jsx')) &&
+        !fs.existsSync(path.resolve('./src/components/dashboard/DepartingWidget.jsx')) &&
+        !fs.existsSync(path.resolve('./src/components/dashboard/DepartmentSnapshotWidget.jsx')) &&
+        !dashboardPageSrc.includes('NewJoinersWidget') && !dashboardPageSrc.includes('DepartingWidget') && !dashboardPageSrc.includes('DepartmentSnapshotWidget'),
+        '1336. NEW — NewJoinersWidget.jsx, DepartingWidget.jsx, and DepartmentSnapshotWidget.jsx were removed entirely (genuinely unused after this cleanup, not shared elsewhere) — DashboardPage.jsx no longer imports or renders any of them'
+      );
+
+      // 1337. Dashboard renders exactly the 2 required sections and nothing else — no charts/recent activity/notes/attendance/recruitment/quick-actions were added
+      // (UPDATED — Workforce Lifecycle Distribution was later removed entirely at the user's direct
+      // request as redundant with the 5 lifecycle count cards above it; see the dedicated "Remove
+      // Workforce Lifecycle Distribution" check block further down for the removal itself.)
+      assert(
+        dashboardPageSrc.includes('stat-cards-grid') && dashboardPageSrc.includes('<EndingWithin7DaysWidget') && !dashboardPageSrc.includes('<LifecycleDistribution') &&
+        !dashboardPageSrc.match(/Recent Activit|Quick Action|Attendance|Recruitment|Birthday|Reminder/i),
+        '1337. UPDATED — DashboardPage.jsx\'s rendered content is exactly the 2 required areas (5 lifecycle cards, Ending Within 7 Days) — Workforce Lifecycle Distribution was removed as redundant, and no chart/recent-activity/notes/attendance/recruitment/quick-action/birthday section was added'
+      );
+
+      // 1338. All/Employees/Interns personnel-type filter uses the SAME segmented view-switcher-group/view-btn style already used elsewhere (e.g. Launch Plan modals) — not a new inconsistent filter
+      assert(
+        dashboardPageSrc.includes('view-switcher-group') && dashboardPageSrc.includes('view-btn') &&
+        dashboardPageSrc.match(/PERSONNEL_TYPE_OPTIONS = \[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},/) &&
+        dashboardPageSrc.includes("useState('All')"),
+        '1338. NEW — DashboardPage.jsx\'s All/Employees/Interns filter reuses the existing .view-switcher-group/.view-btn segmented control style, defaults to All, and is clearly a PERSONNEL TYPE filter (Employee/Intern), never a lifecycle status filter'
+      );
+
+      // 1339. dashboardService filters ONCE into a single `personnel` array, then derives counts/distribution/ending from that SAME array — never 3 separately-filtered datasets
+      {
+        const summaryFnMatch = dashboardServiceSrc.match(/async getDashboardSummary\([\s\S]*?\n  \},/);
+        const summaryFnBlock = summaryFnMatch ? summaryFnMatch[0] : '';
+        assert(
+          summaryFnBlock.match(/const personnel = personnelType === 'All'[\s\S]*?allEmployees\.filter/) &&
+          (summaryFnBlock.match(/personnel\s*\n?\s*\.\s*(forEach|filter|length)/g) || []).length >= 3,
+          '1339. NEW — dashboardService.getDashboardSummary() filters the hydrated employee list into ONE `personnel` array up front, then the lifecycle counts, the distribution, and the Ending Within 7 Days list are all derived from that SAME array — never 3 independently-filtered datasets that could drift apart'
+        );
+      }
+
+      // 1340. dashboardService.js does not import mock data directly — only employeeService (existing service/domain boundary preserved)
+      assert(
+        dashboardServiceSrc.includes("from './employeeService.js'") &&
+        !dashboardServiceSrc.match(/from ['"].*mock-data/) && !dashboardServiceSrc.includes('storageEngine'),
+        '1340. NEW — dashboardService.js sources personnel data exclusively through employeeService — it never imports mock-data or storageEngine directly'
+      );
+
+      // 1341. LifecycleDistribution.jsx no longer exists — removed entirely at the user's direct request
+      // as redundant with the 5 lifecycle count cards (each card already shows the count that the
+      // Distribution widget's bar/legend duplicated). This check originally validated the widget's
+      // personnelType-aware legend wording; it now guards that the removal was clean (component gone,
+      // no dangling import) rather than testing dead code.
+      assert(
+        !fs.existsSync(path.resolve('./src/components/dashboard/LifecycleDistribution.jsx')) &&
+        !dashboardPageSrc.includes('LifecycleDistribution'),
+        '1341. UPDATED — LifecycleDistribution.jsx has been deleted and DashboardPage.jsx no longer imports or references it anywhere (removed as redundant with the 5 lifecycle count cards, per direct user request)'
+      );
+
+      // 1342. Ending Within 7 Days eligibility is narrowly scoped to Active/Departing only (Upcoming/Onboarding/Former all deliberately excluded, with the reasoning documented in source)
+      assert(
+        dashboardServiceSrc.match(/ENDING_SOON_ELIGIBLE_STATUSES = \['Active', 'Departing'\]/) &&
+        dashboardServiceSrc.includes('ENDING_SOON_WINDOW_DAYS = 7'),
+        '1342. NEW — dashboardService.js scopes the Ending Within 7 Days eligibility to exactly [\'Active\', \'Departing\'] — Upcoming (not started), Onboarding (start of lifecycle, not end), and Former (historical, not a live signal) are all deliberately excluded'
+      );
+
+      // 1343. Ending Within 7 Days uses the canonical contractEndDate field — the SAME field the Personnel directory's own Dates column already uses — never a separate dashboard-only end date, offboarding plan override, or task due date
+      assert(
+        dashboardServiceSrc.includes('emp.contractEndDate') &&
+        !dashboardServiceSrc.match(/anchorDate|dueDate|originalEndDate|customAnchorDate/),
+        '1343. NEW — dashboardService.js resolves Ending Within 7 Days from employee.contractEndDate — the existing canonical field (matching EmployeeListView.jsx\'s own DATES column), never an Offboarding plan anchor/override or a task due date'
+      );
+
+      // 1344. Empty-state wording matches exactly, and rows show the required person/type/department/end-date/days-remaining information (not overstuffed)
+      assert(
+        endingWidgetSrc.includes('Nobody is ending within the next 7 days.') &&
+        endingWidgetSrc.includes('End Date') && endingWidgetSrc.match(/person\.directoryType\} · \{person\.department/) &&
+        endingWidgetSrc.includes("formatTimeRemaining"),
+        '1344. NEW — EndingWithin7DaysWidget.jsx\'s empty state reads "Nobody is ending within the next 7 days.", and each populated row shows exactly person/Type · Department/End Date/days-remaining — nothing more'
+      );
+
+      // 1345. Card links use the established /employees?status=X pattern for all 5 cards — no new route was invented
+      assert(
+        dashboardPageSrc.includes('linkTo="/employees?status=Upcoming"') &&
+        dashboardPageSrc.includes('linkTo="/employees?status=Onboarding"') &&
+        dashboardPageSrc.includes('linkTo="/employees?status=Active"') &&
+        dashboardPageSrc.includes('linkTo="/employees?status=Departing"') &&
+        dashboardPageSrc.includes('linkTo="/employees?status=Former"'),
+        '1345. NEW — All 5 lifecycle cards link via the existing established /employees?status=X pattern (Upcoming/Onboarding/Active/Departing/Former) — no new route was invented, and existing route compatibility (queryEmployees\' statusFilter) is reused as-is'
+      );
+
+      // 1346. Skeleton loading state matches the new 5-card + 2-widget layout (no stale 4-card / 2-column-grid skeleton left behind)
+      assert(
+        (dashboardSkeletonSrc.match(/\[1, 2, 3, 4, 5\]/) || []).length === 1 &&
+        !dashboardSkeletonSrc.includes('dashboard-content-grid'),
+        '1346. NEW — DashboardSkeleton.jsx renders 5 skeleton cards (not 4) and no longer renders the old 2-column dashboard-content-grid skeleton'
+      );
+
+      // 1347. Optional Profile access reuses the EXISTING PersonnelProfileModal — no second profile modal implementation was built
+      assert(
+        dashboardPageSrc.includes("import PersonnelProfileModal from '../../components/employees/PersonnelProfileModal'") &&
+        endingWidgetSrc.includes('onViewProfile') &&
+        !fs.existsSync(path.resolve('./src/components/dashboard/PersonnelProfileModal.jsx')),
+        '1347. NEW — DashboardPage.jsx imports and reuses the SAME PersonnelProfileModal the Personnel directory\'s View Profile action uses (via EndingWithin7DaysWidget\'s onViewProfile callback) — no second/duplicate profile modal was created under components/dashboard'
+      );
+
+      // --- FUNCTIONAL CHECKS ---
+
+      // 1348. FUNCTIONAL: All/Employee/Intern filters produce internally-consistent counts (5 cards sum to the distribution total, matching the task's own worked example)
+      {
+        const allSummary = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        const empSummary = await dashboardService.getDashboardSummary({ personnelType: 'Employee' });
+        const internSummary = await dashboardService.getDashboardSummary({ personnelType: 'Intern' });
+
+        const sumAll = allSummary.metrics.upcomingCount + allSummary.metrics.onboardingCount + allSummary.metrics.activeCount + allSummary.metrics.departingCount + allSummary.metrics.formerCount;
+        assert(sumAll === allSummary.total && allSummary.total === 18, `1348a. NEW — FUNCTIONAL: All filter — the 5 card counts sum to exactly the distribution total (${sumAll} === ${allSummary.total}, found 18 total personnel matching the seed data)`);
+        assert(allSummary.metrics.upcomingCount === 1 && allSummary.metrics.onboardingCount === 2 && allSummary.metrics.activeCount === 11 && allSummary.metrics.departingCount === 2 && allSummary.metrics.formerCount === 2, `1348b. NEW — FUNCTIONAL: All filter counts exactly match the task's own worked example (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummary.metrics)}`);
+
+        const sumEmp = empSummary.metrics.upcomingCount + empSummary.metrics.onboardingCount + empSummary.metrics.activeCount + empSummary.metrics.departingCount + empSummary.metrics.formerCount;
+        assert(sumEmp === empSummary.total, `1348c. NEW — FUNCTIONAL: Employees filter — the 5 card counts sum to the distribution total (${sumEmp} === ${empSummary.total})`);
+
+        const sumIntern = internSummary.metrics.upcomingCount + internSummary.metrics.onboardingCount + internSummary.metrics.activeCount + internSummary.metrics.departingCount + internSummary.metrics.formerCount;
+        assert(sumIntern === internSummary.total, `1348d. NEW — FUNCTIONAL: Interns filter — the 5 card counts sum to the distribution total (${sumIntern} === ${internSummary.total})`);
+
+        assert(allSummary.total === empSummary.total + internSummary.total, `1348e. NEW — FUNCTIONAL: All total exactly equals Employees total + Interns total (${allSummary.total} === ${empSummary.total} + ${internSummary.total})`);
+      }
+
+      // 1349. FUNCTIONAL: Distribution percentage denominator recalculates per filter (never the unfiltered All total), and is safe for a zero-result type
+      {
+        const empSummary2 = await dashboardService.getDashboardSummary({ personnelType: 'Employee' });
+        const internSummary2 = await dashboardService.getDashboardSummary({ personnelType: 'Intern' });
+        const empActive = empSummary2.lifecycleDistribution.find((d) => d.status === 'Active');
+        assert(empActive.percentage === Math.round((empActive.count / empSummary2.total) * 100), `1349a. NEW — FUNCTIONAL: Employees filter's Active percentage is computed against the Employees total (${empSummary2.total}), not the unfiltered All total — found ${empActive.count}/${empSummary2.total} = ${empActive.percentage}%`);
+
+        // Interns currently has 0 in several statuses — confirms 0% (never NaN%) with a safe denominator
+        const internFormer = internSummary2.lifecycleDistribution.find((d) => d.status === 'Former');
+        assert(internFormer.count === 0 && internFormer.percentage === 0 && !Number.isNaN(internFormer.percentage), `1349b. NEW — FUNCTIONAL: A zero-count lifecycle state within a filtered type resolves to a clean 0% (never NaN%) — found Interns/Former = ${internFormer.count} (${internFormer.percentage}%)`);
+
+        // Force an entirely zero-result type by temporarily reclassifying every current Intern
+        // to an Employee-normalizing employeeTypeId (identified via the hydrated
+        // directoryType — the same normalizeDirectoryType() logic the rest of the app uses —
+        // rather than guessing at raw employeeTypes[].name values, e.g. "Intern / Apprentice").
+        const hydratedForZero = await employeeService.getAll({ hydrate: true });
+        const internEmployeeIds = new Set(hydratedForZero.filter((e) => e.directoryType === 'Intern').map((e) => e.id));
+        const dbForZero = loadDatabase();
+        dbForZero.employees = dbForZero.employees.map((e) => (internEmployeeIds.has(e.id) ? { ...e, employeeTypeId: 'type-1' } : e));
+        saveDatabase(dbForZero);
+        const zeroInternSummary = await dashboardService.getDashboardSummary({ personnelType: 'Intern' });
+        const allPercentagesSafe = zeroInternSummary.lifecycleDistribution.every((d) => d.count === 0 && d.percentage === 0 && !Number.isNaN(d.percentage));
+        assert(zeroInternSummary.total === 0 && allPercentagesSafe && zeroInternSummary.endingWithin7Days.length === 0, `1349c. NEW — FUNCTIONAL: A personnel type with ZERO total records resolves every distribution percentage to a safe 0% (no divide-by-zero, no NaN, no broken progress bar) and an empty Ending Within 7 Days list (found total=${zeroInternSummary.total})`);
+        resetDatabase();
+      }
+
+      // 1350. FUNCTIONAL: Ending Within 7 Days — full boundary-condition suite (today/+1/+7 included, +8/past excluded, missing/invalid date safe, Former/Onboarding excluded, per-type filtering correct)
+      {
+        resetDatabase();
+        const today = getTodayLocalDateString();
+        const dbForEnding = loadDatabase();
+        dbForEnding.employees = dbForEnding.employees.map((e) => {
+          if (e.id === 'emp-004') return { ...e, contractEndDate: today }; // Marcus Tan, Active, Employee -> today (0 days)
+          if (e.id === 'emp-005') return { ...e, contractEndDate: addDaysToLocalDate(today, 1) }; // Priyanka Nair, Active -> +1
+          if (e.id === 'emp-016') return { ...e, contractEndDate: addDaysToLocalDate(today, 7) }; // Farah Mansor, Departing -> +7
+          if (e.id === 'emp-017') return { ...e, contractEndDate: addDaysToLocalDate(today, 8) }; // Aaron Kumar, Departing -> +8 (excluded)
+          if (e.id === 'emp-006') return { ...e, contractEndDate: addDaysToLocalDate(today, -1) }; // Lucas Fernandez, Active -> -1 (excluded)
+          if (e.id === 'emp-018') return { ...e, contractEndDate: addDaysToLocalDate(today, 2) }; // Daniel Lee, Former -> excluded (Former)
+          if (e.id === 'emp-014') return { ...e, contractEndDate: addDaysToLocalDate(today, 3) }; // Kevin Heng, Onboarding Intern -> excluded (Onboarding)
+          if (e.id === 'emp-007') return { ...e, contractEndDate: 'not-a-real-date' }; // Chloe Lim, Active -> invalid date, must not crash
+          if (e.id === 'emp-008') return { ...e, contractEndDate: null }; // Harith Zain, Active -> missing, excluded safely
+          return e;
+        });
+        saveDatabase(dbForEnding);
+
+        let ending;
+        try {
+          ending = (await dashboardService.getDashboardSummary({ personnelType: 'All' })).endingWithin7Days;
+        } catch (e) {
+          assert(false, `1350setup. NEW — FUNCTIONAL: getDashboardSummary() must not crash on invalid/missing contractEndDate values (threw: ${e.message})`);
+          ending = [];
+        }
+        assert(Array.isArray(ending), '1350setup. NEW — FUNCTIONAL: getDashboardSummary() does not crash with invalid/missing contractEndDate values present in the dataset');
+
+        const names = ending.map((p) => p.fullName);
+        assert(names.includes('Marcus Tan'), '1350a. NEW — FUNCTIONAL: A person ending TODAY (0 days) is included');
+        assert(names.includes('Priyanka Nair'), '1350b. NEW — FUNCTIONAL: A person ending in 1 day is included');
+        assert(names.includes('Farah Mansor'), '1350c. NEW — FUNCTIONAL: A person ending in exactly 7 days is included (inclusive upper bound)');
+        assert(!names.includes('Aaron Kumar'), '1350d. NEW — FUNCTIONAL: A person ending in 8 days is EXCLUDED (outside the 7-day window)');
+        assert(!names.includes('Lucas Fernandez'), '1350e. NEW — FUNCTIONAL: A person whose end date already passed (yesterday) is EXCLUDED');
+        assert(!names.includes('Daniel Lee'), '1350f. NEW — FUNCTIONAL: A Former person is EXCLUDED even though their (historical) end date falls in the window');
+        assert(!names.includes('Kevin Heng'), '1350g. NEW — FUNCTIONAL: An Onboarding person is EXCLUDED under the narrow eligibility rule (Active/Departing only)');
+        assert(!names.includes('Chloe Lim'), '1350h. NEW — FUNCTIONAL: An invalid contractEndDate value is safely excluded, not crashed on or fabricated into a fake match');
+        assert(!names.includes('Harith Zain'), '1350i. NEW — FUNCTIONAL: A missing (null) contractEndDate is safely excluded');
+
+        const empOnlyEnding = (await dashboardService.getDashboardSummary({ personnelType: 'Employee' })).endingWithin7Days;
+        assert(empOnlyEnding.every((p) => p.directoryType === 'Employee') && empOnlyEnding.some((p) => p.fullName === 'Marcus Tan'), '1350j. NEW — FUNCTIONAL: Employees filter includes matching Employees and excludes any Intern');
+        const internOnlyEnding = (await dashboardService.getDashboardSummary({ personnelType: 'Intern' })).endingWithin7Days;
+        assert(internOnlyEnding.every((p) => p.directoryType === 'Intern') && !internOnlyEnding.some((p) => p.fullName === 'Marcus Tan'), '1350k. NEW — FUNCTIONAL: Interns filter excludes matching Employees (found only: ' + internOnlyEnding.map((p) => p.fullName).join(', ') + ')');
+        const allEnding = (await dashboardService.getDashboardSummary({ personnelType: 'All' })).endingWithin7Days;
+        assert(allEnding.length === empOnlyEnding.length + internOnlyEnding.length, '1350l. NEW — FUNCTIONAL: All filter\'s Ending Within 7 Days list is exactly the union of the Employees-only and Interns-only lists');
+
+        resetDatabase();
+      }
+
+      // 1351. FUNCTIONAL: Ending Within 7 Days is sorted nearest-date-first, with a stable name A-Z tiebreak for equal end dates
+      {
+        resetDatabase();
+        const today2 = getTodayLocalDateString();
+        const dbForSort = loadDatabase();
+        dbForSort.employees = dbForSort.employees.map((e) => {
+          if (e.id === 'emp-004') return { ...e, contractEndDate: addDaysToLocalDate(today2, 5) }; // Marcus Tan
+          if (e.id === 'emp-005') return { ...e, contractEndDate: addDaysToLocalDate(today2, 2) }; // Priyanka Nair
+          if (e.id === 'emp-016') return { ...e, contractEndDate: addDaysToLocalDate(today2, 2) }; // Farah Mansor — same day as Priyanka, alphabetically AFTER
+          if (e.id === 'emp-006') return { ...e, contractEndDate: addDaysToLocalDate(today2, 0) }; // Lucas Fernandez
+          return e;
+        });
+        saveDatabase(dbForSort);
+        const sorted = (await dashboardService.getDashboardSummary({ personnelType: 'All' })).endingWithin7Days.map((p) => p.fullName);
+        assert(
+          JSON.stringify(sorted) === JSON.stringify(['Lucas Fernandez', 'Farah Mansor', 'Priyanka Nair', 'Marcus Tan']),
+          `1351. NEW — FUNCTIONAL: Ending Within 7 Days sorts nearest-date-first (0, then the two tied at 2 days ordered alphabetically Farah before Priyanka, then 5 days) — found ${JSON.stringify(sorted)}`
+        );
+        resetDatabase();
+      }
+
+      // 1352. REGRESSION: Onboarding/Offboarding composition and lifecycle logic remain completely unaffected by this Dashboard-scoped task
+      {
+        const onbCompForDashRegr = composeOnboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, await onboardingService.getScopeTaskDefinitions(), '2026-09-01');
+        assert(onbCompForDashRegr.counts.total === 11, `1352a. REGRESSION: composeOnboardingTasks() still composes an Employee in Software Engineering to 11 tasks (found ${onbCompForDashRegr.counts.total}) — unaffected by the Dashboard simplification`);
+        const offCompForDashRegr = composeOffboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, (loadDatabase().offboardingPlanTasks || []), '2026-09-01');
+        assert(offCompForDashRegr.counts.total === 15, `1352b. REGRESSION: composeOffboardingTasks() still composes the same Employee to 15 tasks (found ${offCompForDashRegr.counts.total}) — unaffected by the Dashboard simplification`);
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Compact HR Dashboard Layout to Minimize Desktop Scrolling
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcCompact = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcCompact = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcCompact = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const dashboardSkeletonSrcCompact = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+      const endingWidgetSrcCompact = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+
+      // Note: this suite runs in Node with no real browser layout engine, so it cannot measure
+      // actual rendered pixel heights — per this task's own explicit instruction not to write
+      // fragile pixel-value tests here, these checks instead assert the SPECIFIC compacted CSS
+      // values against their previously-documented (larger) values, which is a reliable,
+      // deterministic source-level signal that the density reduction actually happened. The real
+      // "does it fit at 1536x864 without scrolling" verification was done via live Playwright
+      // (see the task's final report), which this suite cannot reproduce.
+
+      // --- STAT CARD (lifecycle count cards) COMPACTING ---
+
+      // 1353. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-card no longer has a
+      // max-width or justify-self cap — this pairing was the actual root cause of the "narrow
+      // isolated tile with a huge empty gap" look (a 1fr grid column at normal desktop widths is
+      // 200-260px, but the card was capped at 150px and centered, leaving 40-55px of dead space on
+      // each side). Removing the cap lets each card fill its column naturally.
+      assert(
+        !indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,400}max-width:/) &&
+        !indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,400}justify-self:/) &&
+        indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,300}padding: 1rem 1\.1rem;/),
+        '1353. UPDATED — .stat-card has neither max-width nor justify-self anymore (both removed — this was the actual cause of the huge gaps between cards) and its padding was restored to a comfortable 1rem 1.1rem now that the card has real width to work with'
+      );
+
+      // 1354. STRUCTURAL — the icon+label still share ONE row with the arrow (.stat-card-top-row/
+      // .stat-card-title-group), never a separate large icon row above the label — this keeps the
+      // card vertically compact even though it is now significantly wider.
+      assert(
+        statCardSrcCompact.includes('className="stat-card-top-row"') && statCardSrcCompact.includes('className="stat-card-title-group"') &&
+        !statCardSrcCompact.includes('className="stat-card-header"'),
+        '1354. StatCard.jsx still merges the icon, label, and arrow onto a single .stat-card-top-row (icon inside .stat-card-title-group next to the label) instead of the icon having its own large row above the label — keeps the card compact vertically while it grows wider horizontally'
+      );
+
+      // 1355. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-card no longer forces a
+      // fixed height or aspect-ratio at all — height now comes from padding + natural content
+      // (icon/title row, count, description), with the grid's default align-items: stretch keeping
+      // all 5 cards equal height. This is "wider, not taller": nothing artificially inflates or
+      // fixes the card's vertical size anymore.
+      assert(
+        !indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,400}aspect-ratio/) &&
+        !(indexCssSrcCompact.match(/\.stat-card \{[^}]*\}/) || [''])[0].match(/\bheight:/) &&
+        indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,300}min-width: 0;/) &&
+        indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,300}justify-content: space-between;/),
+        '1355. UPDATED — .stat-card sets neither aspect-ratio nor a fixed height — its height is purely a function of padding + content (icon/title row, count, description), kept equal across all 5 cards by the grid\'s own row-stretch behavior. min-width: 0 (nowrap title can\'t overflow the grid) and justify-content: space-between (spreads the header row and body across the card) remain'
+      );
+
+      // 1356. STRUCTURAL — .stat-card-value/.stat-card-title/.stat-card-subtitle are all still
+      // styled with a real, legible font-size, and the title retains its ellipsis-truncation
+      // safety net (overflow: hidden + text-overflow: ellipsis) for any narrower viewport where it
+      // might ever be needed again, even though it no longer triggers at normal desktop widths.
+      assert(
+        indexCssSrcCompact.match(/\.stat-card-value \{\s*font-size: [\d.]+rem;/) &&
+        indexCssSrcCompact.match(/\.stat-card-title \{[\s\S]{0,200}overflow: hidden;[\s\S]{0,60}text-overflow: ellipsis;/) &&
+        indexCssSrcCompact.match(/\.stat-card-subtitle \{\s*font-size: [\d.]+rem;/),
+        '1356. .stat-card-value/.stat-card-title/.stat-card-subtitle all still declare a real font-size, and the title keeps its overflow:hidden + text-overflow:ellipsis safety net for narrow viewports — even though at normal desktop widths (per Playwright measurement) no title or description needs to truncate/wrap anymore'
+      );
+
+      // 1357. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-cards-grid uses
+      // minmax(0, 1fr) fluid equal-width columns (never a fixed px column width, never
+      // justify-content: space-between distributing narrow fixed-width cards), with responsive
+      // breakpoints still present so narrower viewports gracefully wrap to fewer columns instead
+      // of squeezing 5 cramped cards into one row. Breakpoints moved from 1300/900/500px to
+      // 1440/1000/480px, chosen empirically (via Playwright) as the widths where the PREVIOUS
+      // column count's card would first drop under the ~205px floor "Currently active personnel"
+      // needs to stay on one line — not arbitrary round numbers.
+      assert(
+        indexCssSrcCompact.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/) &&
+        !indexCssSrcCompact.includes('@media (max-width: 1300px)') &&
+        indexCssSrcCompact.includes('@media (max-width: 1440px)') && indexCssSrcCompact.includes('@media (max-width: 1000px)') && indexCssSrcCompact.includes('@media (max-width: 480px)'),
+        '1357. UPDATED — .stat-cards-grid renders 5 fluid equal columns (repeat(5, minmax(0, 1fr))) down to a 1440px breakpoint (was: wrapped to 3 columns as early as 1300px, then briefly 900px), with further empirically-measured breakpoints at 1000px and 480px — all 5 lifecycle cards stay on one line whenever there is genuinely enough room for their content, wrapping gracefully otherwise'
+      );
+
+      // --- DASHBOARD WIDGET (Distribution + Ending) COMPACTING ---
+
+      // 1358. UPDATED — .dashboard-widget / .widget-header padding and margin, reduced when a direct
+      // user follow-up asked to "decrease the text and the size of 2 boxes below" (0.65rem 0.85rem /
+      // 0.4rem), then INCREASED again by a later follow-up asking for more spacing "in and out of
+      // the cards" even as the text inside got smaller still (0.95rem 1.05rem / 0.55rem).
+      assert(
+        indexCssSrcCompact.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 0\.95rem 1\.05rem;/) &&
+        indexCssSrcCompact.match(/\.widget-header \{[\s\S]{0,150}margin-bottom: 0\.55rem;/) &&
+        !indexCssSrcCompact.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 1\.5rem;/),
+        '1358. UPDATED — .dashboard-widget\'s outer padding is now 0.95rem 1.05rem (was 1.5rem, then 1.1rem/1.25rem, then 0.85rem/1.1rem, then 0.65rem/0.85rem) and .widget-header\'s margin-bottom is now 0.55rem (was 1.25rem, then 0.75rem, then 0.5rem, then 0.4rem) — widened again per direct user request for more spacing around the smaller text inside'
+      );
+
+      // 1359. .widget-icon-badge reduced moderately (38px -> 32px -> 26px), matching the same "visible but not oversized" treatment as the stat-card icon
+      assert(
+        indexCssSrcCompact.match(/\.widget-icon-badge \{\s*width: 26px;\s*height: 26px;/),
+        '1359. UPDATED — .widget-icon-badge (both widgets\' icon container) shrank from 38px to 32px, then to 26px per a direct user follow-up asking for smaller widget boxes, consistent with the stat-card icon treatment'
+      );
+
+      // 1360. UPDATED — the Workforce Lifecycle Distribution widget (stacked bar + legend) that this
+      // compacting pass tightened was later removed entirely (see the "Remove Workforce Lifecycle
+      // Distribution" check block), so its CSS (.legend-item-card, .lifecycle-legend-grid, etc.) was
+      // deleted rather than kept as dead code. This check now guards that cleanup instead of asserting
+      // padding values on a widget that no longer exists.
+      assert(
+        !indexCssSrcCompact.includes('.legend-item-card') && !indexCssSrcCompact.includes('.lifecycle-legend-grid'),
+        '1360. UPDATED — .legend-item-card and .lifecycle-legend-grid (Workforce Lifecycle Distribution\'s legend styling) were removed from index.css along with the widget itself — no dead CSS left behind'
+      );
+
+      // 1361. UPDATED — Empty-state ("Nobody is ending within the next 7 days." / "Nothing due soon.") font-size shrank further, and padding grew back slightly as part of the later "increase spacing" follow-up
+      assert(
+        indexCssSrcCompact.match(/\.empty-widget-text \{[\s\S]{0,120}padding: 0\.4rem 0;/) &&
+        indexCssSrcCompact.match(/\.empty-widget-text \{[\s\S]{0,120}font-size: 0\.72rem;/) &&
+        !indexCssSrcCompact.match(/\.empty-widget-text \{[\s\S]{0,120}padding: 2rem 0;/),
+        '1361. UPDATED — .empty-widget-text\'s font-size is now 0.72rem (was 0.875rem, then 0.78rem) and its padding is 0.4rem 0 (was 2rem, then 0.6rem, then 0.4rem, then 0.3rem, back to 0.4rem) — smaller text with slightly more breathing room, matching the widgets\' later "increase spacing" follow-up'
+      );
+
+      // 1362. UPDATED — DashboardPage.jsx's inter-section gap, and the Dashboard-scoped header's
+      // own scoped margin-bottom override (never touching the shared base .page-header rule other
+      // pages use). Went 0.65rem -> 0.75rem -> 1.75rem (per direct user request to "increase the
+      // spacing... so it looks natural") -> 2.25rem (a further direct user request to "increase
+      // spacing accordingly in and out of the cards with overall page as well").
+      assert(
+        (dashboardPageSrcCompact.match(/marginTop: '2\.25rem'/g) || []).length === 1 &&
+        !dashboardPageSrcCompact.includes("marginTop: '1.5rem'") && !dashboardPageSrcCompact.includes("marginTop: '1rem'") && !dashboardPageSrcCompact.includes("marginTop: '0.75rem'") && !dashboardPageSrcCompact.includes("marginTop: '1.75rem'") &&
+        indexCssSrcCompact.match(/\.dashboard-page-header \{[\s\S]{0,120}margin-bottom: 0\.3rem;/),
+        '1362. UPDATED — The gap between the 5 stat cards and the Ending Within 7 Days / Soonest Due Tasks row is now 2.25rem (was 1.5rem, then 1rem, then 0.65rem, then 0.75rem, then 1.75rem) — widened again per direct user request for more overall page spacing — and .dashboard-page-header still overrides margin-bottom to 0.3rem, scoped to Dashboard only'
+      );
+
+      // 1363. UPDATED (Fix KPI Card Proportions task) — DashboardSkeleton.jsx's loading placeholders.
+      // .stat-card no longer has a fixed height (see check 1355) — it now gets its height purely
+      // from padding + real content, but this skeleton div has NO content to size itself with, so
+      // it still needs an explicit inline height to approximate the real card's rendered height
+      // (rather than collapsing to just its padding). The 2 side-by-side widget placeholders
+      // (Ending Within 7 Days + Soonest Due Tasks) inside .dashboard-widgets-row remain 150px each.
+      assert(
+        dashboardSkeletonSrcCompact.match(/className="stat-card skeleton-box" style=\{\{ height: '\d+px' \}\}/) &&
+        (dashboardSkeletonSrcCompact.match(/height: '150px'/g) || []).length === 2 &&
+        !dashboardSkeletonSrcCompact.includes("height: '95px'") &&
+        !dashboardSkeletonSrcCompact.includes("height: '110px'") &&
+        !dashboardSkeletonSrcCompact.includes("height: '120px'") && !dashboardSkeletonSrcCompact.includes("height: '160px'") && !dashboardSkeletonSrcCompact.includes("height: '220px'") &&
+        dashboardSkeletonSrcCompact.includes('dashboard-widgets-row'),
+        '1363. UPDATED — DashboardSkeleton.jsx\'s 5 card placeholders carry an explicit inline height (approximating the real .stat-card\'s now content-driven, no-longer-fixed height, since the empty skeleton div has no content of its own to size itself with) and there are exactly 2 side-by-side 150px widget placeholders inside .dashboard-widgets-row (Ending Within 7 Days + Soonest Due Tasks)'
+      );
+
+      // --- CSS SCOPE: compacted classes remain effectively Dashboard-only ---
+
+      // 1364. None of the compacted classes (.stat-card, .dashboard-widget, .widget-header, .widget-icon-badge, .legend-item-card, .empty-widget-text) are referenced by any Personnel/Onboarding/Offboarding/Notes component — compacting the Dashboard could not have accidentally compacted the rest of the application
+      {
+        const nonDashboardConsumers = [];
+        const classesToCheck = ['stat-card', 'dashboard-widget', 'widget-header', 'widget-icon-badge', 'legend-item-card', 'empty-widget-text'];
+        const scanDirs = ['./src/components/employees', './src/components/onboarding', './src/components/offboarding', './src/components/notes', './src/pages/employees', './src/pages/onboarding', './src/pages/offboarding', './src/pages/notes'];
+        for (const dir of scanDirs) {
+          if (!fs.existsSync(path.resolve(dir))) continue;
+          const files = fs.readdirSync(path.resolve(dir)).filter((f) => f.endsWith('.jsx'));
+          for (const file of files) {
+            const content = fs.readFileSync(path.resolve(dir, file), 'utf-8');
+            for (const cls of classesToCheck) {
+              if (content.includes(`"${cls}`) || content.includes(`'${cls}`) || content.includes(` ${cls}"`) || content.includes(` ${cls}'`)) {
+                nonDashboardConsumers.push(`${dir}/${file}:${cls}`);
+              }
+            }
+          }
+        }
+        assert(
+          nonDashboardConsumers.length === 0,
+          `1364. REGRESSION: No Personnel/Onboarding/Offboarding/Notes component references any of the compacted dashboard classes (${classesToCheck.join(', ')}) — compacting the Dashboard could not have accidentally changed padding/spacing anywhere else in the application (found: ${nonDashboardConsumers.join(', ') || 'none'})`
+        );
+      }
+
+      // --- REGRESSION: business logic/functionality unaffected by this purely-visual task ---
+
+      // 1365. All 5 StatCard titles, card links, the filter, and the Profile modal wiring are all still present — this was a density-only change, not a content/functionality change
+      assert(
+        dashboardPageSrcCompact.match(/title="Upcoming"/) && dashboardPageSrcCompact.match(/title="Onboarding"/) &&
+        dashboardPageSrcCompact.match(/title="Active"/) && dashboardPageSrcCompact.match(/title="Offboarding"/) &&
+        dashboardPageSrcCompact.match(/title="Former"/) &&
+        dashboardPageSrcCompact.includes('linkTo="/employees?status=Upcoming"') && dashboardPageSrcCompact.includes('linkTo="/employees?status=Former"') &&
+        dashboardPageSrcCompact.includes('view-switcher-group') &&
+        dashboardPageSrcCompact.includes('<PersonnelProfileModal'),
+        '1365. REGRESSION: All 5 lifecycle card titles/links, the All/Employees/Interns filter, and the PersonnelProfileModal integration are all still present in DashboardPage.jsx exactly as before — this task changed CSS/JSX density only, never content or behavior'
+      );
+
+      // 1366. No previously-removed Dashboard widget (New Joiners, Departing, Department/Organization Snapshot) returned during this compacting pass
+      assert(
+        !fs.existsSync(path.resolve('./src/components/dashboard/NewJoinersWidget.jsx')) &&
+        !fs.existsSync(path.resolve('./src/components/dashboard/DepartingWidget.jsx')) &&
+        !fs.existsSync(path.resolve('./src/components/dashboard/DepartmentSnapshotWidget.jsx')) &&
+        !dashboardPageSrcCompact.includes('NewJoinersWidget') && !dashboardPageSrcCompact.includes('DepartingWidget') && !dashboardPageSrcCompact.includes('DepartmentSnapshotWidget'),
+        '1366. REGRESSION: None of the previously-removed Dashboard widgets (New Joiners, Departing, Department/Organization Snapshot) came back during this compacting pass'
+      );
+
+      // 1367. FUNCTIONAL: dashboardService counts/filtering/ending-window logic is completely untouched by this visual task — same worked example as before
+      {
+        const allSummaryCompact = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryCompact.metrics.upcomingCount === 1 && allSummaryCompact.metrics.onboardingCount === 2 && allSummaryCompact.metrics.activeCount === 11 && allSummaryCompact.metrics.departingCount === 2 && allSummaryCompact.metrics.formerCount === 2,
+          `1367. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts as before this visual-only task (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryCompact.metrics)}`
+        );
+      }
+
+      // 1368. REGRESSION: Onboarding/Offboarding composition and lifecycle logic remain completely unaffected by this Dashboard-density-only task
+      {
+        const onbCompForCompactRegr = composeOnboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, await onboardingService.getScopeTaskDefinitions(), '2026-09-01');
+        assert(onbCompForCompactRegr.counts.total === 11, `1368a. REGRESSION: composeOnboardingTasks() still composes an Employee in Software Engineering to 11 tasks (found ${onbCompForCompactRegr.counts.total}) — unaffected by the Dashboard compacting task`);
+        const offCompForCompactRegr = composeOffboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, (loadDatabase().offboardingPlanTasks || []), '2026-09-01');
+        assert(offCompForCompactRegr.counts.total === 15, `1368b. REGRESSION: composeOffboardingTasks() still composes the same Employee to 15 tasks (found ${offCompForCompactRegr.counts.total}) — unaffected by the Dashboard compacting task`);
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Remove Workforce Lifecycle Distribution (redundant with the 5 lifecycle count cards)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const dashboardPageSrcNoDist = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const dashboardServiceSrcNoDist = fs.readFileSync(path.resolve('./src/services/dashboardService.js'), 'utf-8');
+      const dashboardSkeletonSrcNoDist = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+      const indexCssSrcNoDist = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1369. LifecycleDistribution.jsx is deleted, and DashboardPage.jsx no longer imports/destructures/renders it — direct user request, redundant with the 5 lifecycle count cards
+      assert(
+        !fs.existsSync(path.resolve('./src/components/dashboard/LifecycleDistribution.jsx')) &&
+        !dashboardPageSrcNoDist.includes('LifecycleDistribution') &&
+        !dashboardPageSrcNoDist.includes('lifecycleDistribution'),
+        '1369. NEW — LifecycleDistribution.jsx has been deleted, and DashboardPage.jsx no longer imports it, destructures lifecycleDistribution from the summary, or renders the widget — removed per direct user request as redundant with the 5 lifecycle count cards above it'
+      );
+
+      // 1370. DashboardSkeleton.jsx no longer has an orphaned placeholder for the removed Distribution
+      // widget. It later (Squarer Stat Cards + Soonest Due Tasks task) gained a SECOND
+      // .dashboard-widget skeleton-box for the new Soonest Due Tasks widget, so the count is 2
+      // (Ending Within 7 Days + Soonest Due Tasks), not 1 — this still confirms no 3rd/orphaned one.
+      assert(
+        !dashboardSkeletonSrcNoDist.includes("height: '95px'") &&
+        (dashboardSkeletonSrcNoDist.match(/dashboard-widget skeleton-box/g) || []).length === 2,
+        '1370. UPDATED — DashboardSkeleton.jsx\'s orphaned 95px Distribution placeholder is gone, and exactly 2 .dashboard-widget skeleton-box placeholders remain (Ending Within 7 Days + Soonest Due Tasks) — never a stale 3rd one'
+      );
+
+      // 1371. The dead legend/distribution CSS (.lifecycle-legend-grid, .legend-item-card, .legend-dot, .legend-info, .legend-label, .legend-count) was removed from index.css along with the widget — no orphaned dead CSS left behind
+      assert(
+        !indexCssSrcNoDist.includes('.lifecycle-legend-grid') &&
+        !indexCssSrcNoDist.includes('.legend-item-card') &&
+        !indexCssSrcNoDist.includes('.legend-dot') &&
+        !indexCssSrcNoDist.includes('.legend-info') &&
+        !indexCssSrcNoDist.includes('.legend-label') &&
+        !indexCssSrcNoDist.includes('.legend-count'),
+        '1371. NEW — index.css no longer defines .lifecycle-legend-grid/.legend-item-card/.legend-dot/.legend-info/.legend-label/.legend-count — this CSS became dead code once LifecycleDistribution.jsx was deleted, and was removed rather than left orphaned'
+      );
+
+      // 1372. The page subtitle no longer references "distribution" (was accurate when the widget existed, now stale) — the 5 cards + Ending Within 7 Days remain fully described
+      assert(
+        dashboardPageSrcNoDist.match(/Personnel lifecycle counts and upcoming end dates/g) &&
+        (dashboardPageSrcNoDist.match(/Personnel lifecycle counts and upcoming end dates/g) || []).length === 3 &&
+        !dashboardPageSrcNoDist.includes('Personnel lifecycle counts, distribution, and upcoming end dates'),
+        '1372. NEW — All 3 page-description occurrences (loading/error/loaded states) read "Personnel lifecycle counts and upcoming end dates" — the stale "distribution" reference is gone from all of them'
+      );
+
+      // 1373. dashboardService.js still computes and returns lifecycleDistribution — this data remains valid and is still covered by functional checks 1348-1349, even though no UI widget currently renders it; removing the widget did not require removing the underlying data derivation
+      assert(
+        dashboardServiceSrcNoDist.includes('lifecycleDistribution'),
+        '1373. REGRESSION: dashboardService.js still derives and returns lifecycleDistribution from getDashboardSummary() — the widget was removed from the UI, but the underlying data computation (still exercised by checks 1348-1349) was deliberately left intact rather than removed'
+      );
+
+      // 1374. FUNCTIONAL: removing the widget did not change the underlying lifecycle counts — same worked example as every prior Dashboard task
+      {
+        const allSummaryNoDist = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryNoDist.metrics.upcomingCount === 1 && allSummaryNoDist.metrics.onboardingCount === 2 && allSummaryNoDist.metrics.activeCount === 11 && allSummaryNoDist.metrics.departingCount === 2 && allSummaryNoDist.metrics.formerCount === 2,
+          `1374. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the Distribution widget removal (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryNoDist.metrics)}`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Squarer Stat Cards + Soonest Due Tasks (side by side with Ending Within 7 Days, both
+    // internally scrollable, whole Dashboard still fits one screen with NO page scroll)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const dashboardPageSrcSquare = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const indexCssSrcSquare = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const soonestDueSrc = fs.readFileSync(path.resolve('./src/components/dashboard/SoonestDueTasksWidget.jsx'), 'utf-8');
+      const endingWidgetSrcSquare = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+      const dashboardSkeletonSrcSquare = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+
+      // 1375. DashboardPage.jsx renders Ending Within 7 Days and the NEW Soonest Due Tasks widget SIDE BY SIDE inside .dashboard-widgets-row — never one stretched full-width bar
+      assert(
+        dashboardPageSrcSquare.includes("import SoonestDueTasksWidget from '../../components/dashboard/SoonestDueTasksWidget'") &&
+        dashboardPageSrcSquare.match(/dashboard-widgets-row"[\s\S]{0,200}<EndingWithin7DaysWidget[\s\S]{0,300}<SoonestDueTasksWidget/),
+        '1375. NEW — DashboardPage.jsx imports SoonestDueTasksWidget and renders it together with EndingWithin7DaysWidget inside the SAME .dashboard-widgets-row container — side by side, not stacked as one full-width bar'
+      );
+
+      // 1376. .dashboard-widgets-row is a true 2-column grid on desktop, collapsing to 1 column only on genuinely narrow (tablet/mobile) viewports
+      assert(
+        indexCssSrcSquare.match(/\.dashboard-widgets-row \{\s*display: grid;\s*grid-template-columns: 1fr 1fr;/) &&
+        indexCssSrcSquare.match(/@media \(max-width: 900px\) \{\s*\.dashboard-widgets-row \{\s*grid-template-columns: 1fr;/),
+        '1376. NEW — .dashboard-widgets-row is display:grid with grid-template-columns: 1fr 1fr (two genuinely equal-width cards, per direct user request "don\'t make them horizontal or stretched out"), collapsing to a single column only below 900px'
+      );
+
+      // 1377. UPDATED (Fix KPI Card Proportions task) — min-width: 0 remains on .stat-card,
+      // preventing the OFFBOARDING/ONBOARDING nowrap title from overflowing an evenly-divided
+      // 5-column grid at narrower desktop widths — this was an actual horizontal-overflow bug
+      // caught only by measuring computed widths, not just checking scrollHeight. It remains
+      // relevant even now that cards are much wider, since the grid still narrows at each
+      // responsive breakpoint (5/3/2/1 columns) and the guard costs nothing to keep.
+      assert(
+        indexCssSrcSquare.match(/\.stat-card \{[\s\S]{0,300}min-width: 0;/) &&
+        !indexCssSrcSquare.match(/\.stat-card \{[\s\S]{0,400}max-width:/),
+        '1377. UPDATED — .stat-card still carries min-width: 0 (so a long nowrap title like OFFBOARDING can shrink/ellipsis instead of forcing its grid column — and therefore the whole row — wider than the container) and no longer carries any max-width cap, which was the actual source of the "narrow tile" regression this task fixes'
+      );
+
+      // 1378. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-cards-grid uses fluid
+      // minmax(0, 1fr) equal-width columns (never a fixed px column width) with a modest gap, and
+      // is NEVER combined with justify-content: space-between anywhere on this element — that
+      // combination (small fixed-width items + space-between) is exactly the anti-pattern that
+      // produces "narrow isolated tiles with huge empty gaps," which this task explicitly forbids.
+      assert(
+        indexCssSrcSquare.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);\s*gap: 1\.1rem;\s*\}/) &&
+        !indexCssSrcSquare.match(/\.stat-cards-grid \{[^}]*space-between/),
+        '1378. UPDATED — .stat-cards-grid uses repeat(5, minmax(0, 1fr)) fluid equal-width columns with a 1.1rem gap (within the requested 1rem-1.25rem range) — never justify-content: space-between distributing small fixed-width cards, which is what previously produced the huge-gap look'
+      );
+
+      // 1379. .dashboard-widget (the shared class both Ending Within 7 Days and Soonest Due Tasks use) has min-width: 0 — without it, Soonest Due Tasks' nowrap task-row text forces its column wider than 1fr 1fr allows, starving Ending Within 7 Days down to a fraction of its fair share (an actual bug caught by measuring each widget's computed width, not just checking for page overflow)
+      assert(
+        indexCssSrcSquare.match(/\.dashboard-widget \{[\s\S]{0,200}min-width: 0;/),
+        '1379. NEW — .dashboard-widget has min-width: 0 so neither widget\'s internal nowrap text (e.g. a long Soonest Due Tasks row title) can force the .dashboard-widgets-row 1fr 1fr grid to size the two columns unequally — both widgets stay genuinely equal-width'
+      );
+
+      // 1380. UPDATED — Both widgets' row lists use the SAME .dashboard-widget-scroll-list class, which is bounded (max-height + overflow-y: auto) — this is what lets either widget hold many rows without growing the page itself, per direct user request ("can have a scroll bar (vertical)... overall also must fit in 1 page"). A later "See more" follow-up made this class conditional (only applied while expanded — see checks 1395-1397), so this check now looks for the conditional className expression rather than a literal static one.
+      assert(
+        indexCssSrcSquare.match(/\.dashboard-widget-scroll-list \{\s*max-height: \d+px;\s*overflow-y: auto;/) &&
+        endingWidgetSrcSquare.includes("expanded ? 'dashboard-widget-scroll-list' : undefined") &&
+        soonestDueSrc.includes("expanded ? 'dashboard-widget-scroll-list' : undefined"),
+        '1380. UPDATED — .dashboard-widget-scroll-list has a bounded max-height with overflow-y: auto, and BOTH EndingWithin7DaysWidget.jsx and SoonestDueTasksWidget.jsx apply it to their row list while expanded — either widget scrolls internally past that height instead of growing the page taller once "See more" is clicked'
+      );
+
+      // 1381. SoonestDueTasksWidget.jsx sources its data from the SAME useNotifications() context (unreadNotifications) the header Bell's NotificationPanel already uses — never a second/duplicate notification data source — and sorts soonest-due-first (ascending dueAt), which is the one meaningful difference from the Bell's own most-recently-created-first order
+      assert(
+        soonestDueSrc.includes("import { useNotifications } from '../../state/NotificationContext'") &&
+        soonestDueSrc.includes('unreadNotifications') &&
+        soonestDueSrc.match(/\.sort\(\(a, b\) => \(a\.dueAt \|\| ''\)\.localeCompare\(b\.dueAt \|\| ''\)\)/),
+        '1381. NEW — SoonestDueTasksWidget.jsx reuses the SAME useNotifications().unreadNotifications the header Bell dropdown displays (no second notification data source/type was invented) and sorts them soonest-due-first (ascending dueAt) rather than the Bell\'s most-recently-created-first order'
+      );
+
+      // 1382. Clicking a Soonest Due Tasks row reuses the EXACT SAME mark-as-read + navigate-to-note behavior as the Bell's NotificationPanel.jsx — no second click-through implementation
+      assert(
+        soonestDueSrc.includes('markAsRead(notification.id)') &&
+        soonestDueSrc.includes('notesService.getById(notification.noteId)') &&
+        soonestDueSrc.match(/navigate\(note\.isArchived \? '\/notes\/archived' : '\/notes', \{ state: \{ openNoteId: note\.id \} \}\)/),
+        '1382. NEW — SoonestDueTasksWidget.jsx\'s row click handler is functionally identical to NotificationPanel.jsx\'s handleNotificationClick (markAsRead, then look up the note and navigate to /notes or /notes/archived with openNoteId) — no second, subtly-different click-through implementation'
+      );
+
+      // 1383. UPDATED — DashboardSkeleton.jsx's loading state matches the new layout: 5 square stat-card skeletons (no explicit height — relies on the real .stat-card class's aspect-ratio) plus 2 side-by-side widget skeletons inside .dashboard-widgets-row, shrunk from 150px to 110px each to match the widgets' smaller scale
+      assert(
+        (dashboardSkeletonSrcSquare.match(/\[1, 2, 3, 4, 5\]/) || []).length === 1 &&
+        dashboardSkeletonSrcSquare.includes('dashboard-widgets-row') &&
+        (dashboardSkeletonSrcSquare.match(/<div className="dashboard-widget skeleton-box" style=\{\{ height: '150px' \}\} \/>/g) || []).length === 2,
+        '1383. UPDATED — DashboardSkeleton.jsx renders 5 stat-card placeholders (height comes from .stat-card\'s own fixed height: 105px, not an explicit skeleton height) and exactly 2 side-by-side 150px widget placeholders (was 150px, then 110px, back to 150px to match each widget\'s "latest 2 rows" default) inside .dashboard-widgets-row'
+      );
+
+      // 1384. FUNCTIONAL/REGRESSION: dashboardService's lifecycle counts and Ending Within 7 Days logic are completely untouched by this purely-visual layout task
+      {
+        const allSummarySquare = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummarySquare.metrics.upcomingCount === 1 && allSummarySquare.metrics.onboardingCount === 2 && allSummarySquare.metrics.activeCount === 11 && allSummarySquare.metrics.departingCount === 2 && allSummarySquare.metrics.formerCount === 2,
+          `1384. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the Squarer Stat Cards + Soonest Due Tasks layout task (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummarySquare.metrics)}`
+        );
+      }
+
+      // 1385. FUNCTIONAL: notificationService still generates note-reminder notifications exactly as before — SoonestDueTasksWidget is a new READ-ONLY view over this existing data, not a new write path
+      {
+        const notesBefore = (await notesService.getAll()).length;
+        await notificationService.checkDueReminders();
+        const notesAfter = (await notesService.getAll()).length;
+        assert(notesBefore === notesAfter, `1385. REGRESSION: notificationService.checkDueReminders() still never creates/deletes notes (found ${notesBefore} before, ${notesAfter} after) — Soonest Due Tasks only reads existing notification data, it doesn't introduce a new write path`);
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Center Stat Card Numbers + Widen Gap to Ending Within 7 Days / Soonest Due Tasks
+    // (direct user follow-up to the Squarer Stat Cards + Soonest Due Tasks task)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcCenter = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcCenter = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const dashboardSkeletonSrcCenter = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+      const statCardSrcCenter = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+
+      // 1386. UPDATED (Fix KPI Card Proportions task) — .stat-card-body was previously centered both
+      // horizontally AND vertically (per an earlier direct user request). This later, more
+      // authoritative formal task explicitly diagnosed that heavy centering as contributing to the
+      // "cramped/isolated tile" feeling and asked for a more natural, left-aligned KPI layout
+      // (label top, count middle, description bottom) instead — so .stat-card-body no longer
+      // centers its content; it reads top-to-bottom, left-aligned, like the reference.
+      assert(
+        statCardSrcCenter.includes('className="stat-card-body"') &&
+        indexCssSrcCenter.match(/\.stat-card-body \{\s*flex: 1;\s*display: flex;\s*flex-direction: column;\s*justify-content: center;\s*\}/) &&
+        !indexCssSrcCenter.match(/\.stat-card-body \{[^}]*align-items: center/) &&
+        !indexCssSrcCenter.match(/\.stat-card-body \{[^}]*text-align: center/),
+        '1386. UPDATED — .stat-card-body no longer centers its content horizontally (no align-items: center, no text-align: center) — the count and description now read naturally left-aligned beneath the icon/label/arrow row, per this task\'s explicit "prefer a more natural dashboard KPI alignment" instruction, superseding the earlier full-centering request'
+      );
+
+      // 1387. UPDATED — The gap between the 5 stat cards and the Ending Within 7 Days / Soonest Due Tasks row was widened to 1.75rem, then further to 2.25rem, in BOTH the real page and its loading skeleton (kept in sync), across two separate direct user requests for more spacing
+      assert(
+        (dashboardPageSrcCenter.match(/marginTop: '2\.25rem'/g) || []).length === 1 &&
+        (dashboardSkeletonSrcCenter.match(/marginTop: '2\.25rem'/g) || []).length === 1,
+        '1387. UPDATED — Both DashboardPage.jsx and DashboardSkeleton.jsx use marginTop: \'2.25rem\' for the gap above the Ending Within 7 Days / Soonest Due Tasks row (was 0.75rem, then 1.75rem) — widened again per direct user request for more overall page spacing, and the loading skeleton stays visually in sync with the real layout'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Widen Gap Between the Stat Card Number and its Subtitle Text
+    // (direct user follow-up: "increase the spacing between the number and text in the card")
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcNumGap = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1388. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-card-value still has its
+      // own margin AND .stat-card-subtitle keeps a non-zero margin-top, so the count and its
+      // description never sit flush against each other. Exact value intentionally not pinned here
+      // (it has already been re-tuned twice across follow-ups) — the structural fact that matters
+      // is that deliberate spacing exists between them, not the specific rem number.
+      assert(
+        indexCssSrcNumGap.match(/\.stat-card-value \{[\s\S]{0,150}margin: [\d.]+rem 0;/) &&
+        indexCssSrcNumGap.match(/\.stat-card-subtitle \{[\s\S]{0,150}margin-top: (?!0[;\s])[\d.]+rem;/),
+        '1388. UPDATED — .stat-card-value keeps its own vertical margin and .stat-card-subtitle keeps a non-zero margin-top, so the count and its description text always have deliberate breathing room between them rather than sitting flush together'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Make the 5 Stat Cards Even Smaller (direct user follow-up)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcSmaller = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcSmaller = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+
+      // 1389. SUPERSEDED by the later "Fix KPI Card Proportions" task — the max-width: 150px +
+      // justify-self: center cap this check used to require was later identified as the actual
+      // ROOT CAUSE of the "narrow isolated tile with huge empty gaps" visual bug, and was removed
+      // entirely. This check now asserts the opposite of its original intent: the cap must be GONE.
+      assert(
+        !indexCssSrcSmaller.match(/\.stat-card \{[\s\S]{0,400}max-width:/) &&
+        !indexCssSrcSmaller.match(/\.stat-card \{[\s\S]{0,400}justify-self:/),
+        '1389. SUPERSEDED — .stat-card no longer has a max-width or justify-self cap (both removed by the later "Fix KPI Card Proportions" task, which diagnosed that exact pairing as the cause of the huge-gap regression) — the card now fills its fluid grid column instead of being capped and centered within it'
+      );
+
+      // 1390. REGRESSION: shrinking the cards did not touch content, links, or the filter — still purely a size/CSS change
+      assert(
+        dashboardPageSrcSmaller.match(/title="Upcoming"/) && dashboardPageSrcSmaller.match(/title="Offboarding"/) &&
+        dashboardPageSrcSmaller.includes('linkTo="/employees?status=Former"') &&
+        dashboardPageSrcSmaller.includes('view-switcher-group'),
+        '1390. REGRESSION: All 5 lifecycle card titles/links and the All/Employees/Interns filter are still present in DashboardPage.jsx exactly as before — shrinking the cards was a pure CSS size change, never a content change'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Fix OFFBOARDING Title Cutoff + Shrink Ending Within 7 Days / Soonest Due Tasks
+    // (direct user follow-up: "the text Offboarding should not be cutoff... decrease the text
+    // and the size of 2 boxes below as well so there is ample amount also")
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcFix = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1391. SUPERSEDED by the "Fix KPI Card Proportions" task — that task removed the
+      // max-width: 150px cap entirely (see check 1389), which was the actual constraint this check
+      // used to work around by shrinking the icon/letter-spacing to the bare minimum. Now that the
+      // card is genuinely wide (no cap, fills its ~200-260px grid column), a normal letter-spacing
+      // and a normal icon size were restored — comfortable typography, not a squeeze-every-pixel
+      // workaround — and OFFBOARDING still doesn't truncate (confirmed via Playwright measurement).
+      assert(
+        indexCssSrcFix.match(/\.stat-card-title \{[\s\S]{0,150}letter-spacing: 0\.02em;/) &&
+        indexCssSrcFix.match(/\.stat-card-icon \{\s*width: 22px;\s*height: 22px;/) &&
+        !indexCssSrcFix.match(/\.stat-card \{[\s\S]{0,400}max-width:/),
+        '1391. SUPERSEDED — .stat-card-title\'s letter-spacing was restored to a normal 0.02em and .stat-card-icon grew back to 22px, now that .stat-card has no max-width cap at all (removed by the "Fix KPI Card Proportions" task) — OFFBOARDING no longer needs cramped typography to avoid truncating, since the card itself is now genuinely wide'
+      );
+
+      // 1392. UPDATED — .dashboard-widget, .widget-header, .widget-title, .widget-subtitle, and
+      // .widget-icon-badge all shrank together for the "decrease the text and the size of 2 boxes"
+      // follow-up; a LATER direct user request ("increase spacing... in and out of the cards") then
+      // grew the widget's own padding/header margin back up again while the TEXT stayed small —
+      // smaller type, more generous surrounding space.
+      assert(
+        indexCssSrcFix.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 0\.95rem 1\.05rem;/) &&
+        indexCssSrcFix.match(/\.widget-title \{\s*font-size: 0\.85rem;/) &&
+        indexCssSrcFix.match(/\.widget-subtitle \{\s*font-size: 0\.65rem;/) &&
+        indexCssSrcFix.match(/\.widget-icon-badge \{\s*width: 26px;\s*height: 26px;/) &&
+        indexCssSrcFix.match(/\.dashboard-widget-scroll-list \{\s*max-height: 180px;/),
+        '1392. UPDATED — .dashboard-widget\'s padding is 0.95rem 1.05rem (was 0.65rem/0.85rem), .widget-title is 0.85rem (was 0.92rem), .widget-subtitle is 0.65rem (was 0.7rem), .widget-icon-badge stayed 26px, and .dashboard-widget-scroll-list\'s max-height is 180px (was 155px) — smaller text with more generous surrounding padding, per a later direct user request'
+      );
+
+      // 1393. UPDATED — .dashboard-task-row (Soonest Due Tasks rows) padding grew again while its 3
+      // text sizes (title/message/time) shrank further — same "smaller text, more spacing" pattern
+      // as the widget container itself
+      assert(
+        indexCssSrcFix.match(/\.dashboard-task-row \{[\s\S]{0,250}padding: 0\.55rem 0\.75rem;/) &&
+        indexCssSrcFix.match(/\.dashboard-task-row-title \{\s*font-size: 0\.72rem;/) &&
+        indexCssSrcFix.match(/\.dashboard-task-row-message \{\s*font-size: 0\.62rem;/) &&
+        indexCssSrcFix.match(/\.dashboard-task-row-time \{\s*font-size: 0\.58rem;/),
+        '1393. UPDATED — .dashboard-task-row\'s padding is now 0.55rem 0.75rem (was 0.4rem/0.6rem) while its title/message/time font sizes shrank further to 0.72rem/0.62rem/0.58rem (was 0.78rem/0.68rem/0.63rem) — smaller text, more room around it, matching the widget container\'s own change'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Shorter Stat Cards + More Spacing + "See More" (show only latest 2 by default)
+    // (direct user follow-up: "decrease the height of the 5 cards... decrease the font size as
+    // well and increase spacing accordingly in and out of the cards with overall page as well,
+    // and add see more for both cards as in dashboard it should only show latest 2 only")
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcSeeMore = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const endingWidgetSrcSeeMore = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+      const soonestDueSrcSeeMore = fs.readFileSync(path.resolve('./src/components/dashboard/SoonestDueTasksWidget.jsx'), 'utf-8');
+
+      // 1394. SUPERSEDED by the "Fix KPI Card Proportions" task — that task removed the fixed
+      // height: 105px too (along with the max-width cap), so the card is neither pinned to a
+      // literal square NOR to any other fixed pixel height; height is purely content + padding
+      // driven now, kept equal across all 5 cards via the grid's default row-stretch behavior.
+      assert(
+        !indexCssSrcSeeMore.match(/\.stat-card \{[\s\S]{0,400}aspect-ratio/) &&
+        !(indexCssSrcSeeMore.match(/\.stat-card \{[^}]*\}/) || [''])[0].match(/\bheight:/),
+        '1394. SUPERSEDED — .stat-card no longer has aspect-ratio OR a fixed height at all — height now comes purely from padding + natural content (icon/title row, count, description), which is "wider, not taller" per the later "Fix KPI Card Proportions" task, rather than an arbitrary fixed pixel value'
+      );
+
+      // 1395. Both widgets default to showing only the latest/soonest 2 rows — EndingWithin7DaysWidget and SoonestDueTasksWidget both slice to a DEFAULT_VISIBLE_COUNT of 2 when not expanded
+      assert(
+        endingWidgetSrcSeeMore.includes('const DEFAULT_VISIBLE_COUNT = 2;') && endingWidgetSrcSeeMore.includes('people.slice(0, DEFAULT_VISIBLE_COUNT)') &&
+        soonestDueSrcSeeMore.includes('const DEFAULT_VISIBLE_COUNT = 2;') && soonestDueSrcSeeMore.includes('sorted.slice(0, DEFAULT_VISIBLE_COUNT)'),
+        '1395. NEW — EndingWithin7DaysWidget.jsx and SoonestDueTasksWidget.jsx both default (unexpanded) to showing only their first 2 items — since both lists are already sorted soonest-first, this is exactly the "latest 2" the user asked the Dashboard to show'
+      );
+
+      // 1396. A "See more (N)" / "Show less" toggle appears in BOTH widgets, driven by local expand/collapse state — only shown when there is actually more than 2 items to reveal
+      assert(
+        endingWidgetSrcSeeMore.match(/useState\(false\)/) && endingWidgetSrcSeeMore.includes('dashboard-widget-see-more') && endingWidgetSrcSeeMore.match(/hiddenCount > 0/) &&
+        soonestDueSrcSeeMore.match(/useState\(false\)/) && soonestDueSrcSeeMore.includes('dashboard-widget-see-more') && soonestDueSrcSeeMore.match(/hiddenCount > 0/) &&
+        indexCssSrcSeeMore.includes('.dashboard-widget-see-more'),
+        '1396. NEW — Both widgets render a "See more (N)" button (toggling to "Show less" once expanded) only when hiddenCount > 0 (i.e. more than 2 items exist) — a person/task list with exactly 2 or fewer items shows no such button, since there is nothing more to reveal'
+      );
+
+      // 1397. When expanded, both widgets reuse the SAME .dashboard-widget-scroll-list bounded/scrollable class already established for internal scrolling — no second "expanded list" implementation
+      assert(
+        endingWidgetSrcSeeMore.match(/expanded \? 'dashboard-widget-scroll-list' : undefined/) &&
+        soonestDueSrcSeeMore.match(/expanded \? 'dashboard-widget-scroll-list' : undefined/),
+        '1397. NEW — Both widgets apply the existing .dashboard-widget-scroll-list class ONLY while expanded (undefined otherwise) — the expanded "see more" view reuses the same bounded, internally-scrollable list styling, not a second/different implementation'
+      );
+
+      // 1398. FUNCTIONAL/REGRESSION: shrinking the stat cards, adding the See More toggle, and widening spacing did not change any underlying dashboardService counts
+      {
+        const allSummarySeeMore = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummarySeeMore.metrics.upcomingCount === 1 && allSummarySeeMore.metrics.onboardingCount === 2 && allSummarySeeMore.metrics.activeCount === 11 && allSummarySeeMore.metrics.departingCount === 2 && allSummarySeeMore.metrics.formerCount === 2,
+          `1398. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the shorter-cards/See-More layout task (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummarySeeMore.metrics)}`
+        );
+      }
+
+      // 1399. FUNCTIONAL: with more than 2 people ending within 7 days, EndingWithin7DaysWidget's underlying data (from dashboardService) still contains ALL of them in the correct nearest-date-first order — the widget only ever SLICES the display, it never asks the service for fewer records
+      {
+        resetDatabase();
+        const today3 = getTodayLocalDateString();
+        const dbForSeeMore = loadDatabase();
+        dbForSeeMore.employees = dbForSeeMore.employees.map((e) => {
+          if (e.id === 'emp-004') return { ...e, contractEndDate: today3 };
+          if (e.id === 'emp-005') return { ...e, contractEndDate: addDaysToLocalDate(today3, 1) };
+          if (e.id === 'emp-016') return { ...e, contractEndDate: addDaysToLocalDate(today3, 2) };
+          if (e.id === 'emp-006') return { ...e, contractEndDate: addDaysToLocalDate(today3, 3) };
+          return e;
+        });
+        saveDatabase(dbForSeeMore);
+        const endingList = (await dashboardService.getDashboardSummary({ personnelType: 'All' })).endingWithin7Days;
+        assert(endingList.length === 4, `1399. FUNCTIONAL: dashboardService still returns ALL 4 matching people (not pre-truncated to 2) when more than 2 are ending within 7 days — the "latest 2" limit is purely a display-layer slice in EndingWithin7DaysWidget, never a service-level truncation (found ${endingList.length})`);
+        resetDatabase();
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Fix Dashboard KPI Card Proportions and Spacing Using Reference Layout
+    // (formal task: cards were narrow fixed-width tiles with huge gaps between them; fix uses
+    // the available row width via a fluid 5-column grid, restores comfortable padding, and
+    // switches from centered to natural left-aligned KPI content — a pure layout/CSS task with
+    // NO changes to dashboard data, business logic, filters, routes, or widget functionality)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcKpiFix = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcKpiFix = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const dashboardServiceSrcKpiFix = fs.readFileSync(path.resolve('./src/services/dashboardService.js'), 'utf-8');
+
+      // 1400. STRUCTURAL: the five-card grid remains exactly 5 StatCard components — this task changed proportions/spacing only, never the number of cards
+      assert(
+        (dashboardPageSrcKpiFix.match(/<StatCard/g) || []).length === 5,
+        '1400. STRUCTURAL: DashboardPage.jsx still renders exactly 5 <StatCard> components — the KPI proportions/spacing fix did not add, remove, or merge any lifecycle card'
+      );
+
+      // 1401. STRUCTURAL: cards are fluid/equal-width via minmax(0, 1fr) — never a fixed pixel card width, and never combined with justify-content: space-between (the anti-pattern this task explicitly forbids)
+      assert(
+        indexCssSrcKpiFix.match(/grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/) &&
+        !indexCssSrcKpiFix.match(/\.stat-card \{[\s\S]{0,400}width: \d+px/) &&
+        !indexCssSrcKpiFix.match(/\.stat-cards-grid \{[^}]*space-between/),
+        '1401. STRUCTURAL: .stat-cards-grid uses repeat(5, minmax(0, 1fr)) — genuinely fluid, equal-width columns. .stat-card has no fixed pixel width anywhere, and .stat-cards-grid is never combined with justify-content: space-between (the narrow-fixed-width-tiles-with-space-between anti-pattern this task exists to eliminate)'
+      );
+
+      // 1402. STRUCTURAL: responsive breakpoints still exist (grid still wraps gracefully at narrower widths — it doesn't force 5 cramped columns at every viewport)
+      assert(
+        (indexCssSrcKpiFix.match(/@media \(max-width: \d+px\) \{\s*\.stat-cards-grid \{/g) || []).length === 3,
+        '1402. STRUCTURAL: .stat-cards-grid still has 3 responsive breakpoints that reduce the column count at narrower viewports — cards wrap to fewer, still-fluid columns rather than being forced into an ever-more-cramped 5-column row'
+      );
+
+      // 1403. STRUCTURAL: all 5 card navigation links remain, using the established /employees?status=X pattern — untouched by this layout-only task
+      assert(
+        dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Upcoming"') &&
+        dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Onboarding"') &&
+        dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Active"') &&
+        dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Departing"') &&
+        dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Former"'),
+        '1403. STRUCTURAL: All 5 lifecycle cards still link via the established /employees?status=X pattern — card navigation destinations are completely untouched by this layout/proportions task'
+      );
+
+      // 1404. STRUCTURAL: the All/Employees/Interns filter remains in its existing upper-right position, never moved into the lifecycle-card row
+      assert(
+        dashboardPageSrcKpiFix.includes('view-switcher-group') &&
+        dashboardPageSrcKpiFix.match(/page-header dashboard-page-header"[\s\S]{0,400}personnelTypeSwitcher/),
+        '1404. STRUCTURAL: The All/Employees/Interns filter (view-switcher-group) still renders inside the page header row, above and separate from .stat-cards-grid — never moved into the lifecycle-card row itself'
+      );
+
+      // 1405. STRUCTURAL: the lower Dashboard widgets (Ending Within 7 Days + Soonest Due Tasks) remain, and share the SAME outer wrapper as the lifecycle grid, so their left/right edges naturally align with the card row (no separate margin was introduced around either)
+      assert(
+        dashboardPageSrcKpiFix.includes('<EndingWithin7DaysWidget') && dashboardPageSrcKpiFix.includes('<SoonestDueTasksWidget') &&
+        dashboardPageSrcKpiFix.match(/<div className="dashboard-page-wrapper">[\s\S]*<div className="stat-cards-grid">[\s\S]*<div className="dashboard-widgets-row"/),
+        '1405. STRUCTURAL: EndingWithin7DaysWidget and SoonestDueTasksWidget both still render, and .stat-cards-grid and .dashboard-widgets-row are both direct children of the SAME .dashboard-page-wrapper (no extra per-section margin/wrapper was introduced), so their outer left/right edges align automatically — confirmed by Playwright measurement (both rows measured left=292/right=1504 at 1536px)'
+      );
+
+      // 1406. REGRESSION: dashboardService calculations, lifecycle counts, and the All/Employees/Interns filtering logic are completely untouched — this was a pure layout/CSS task
+      {
+        const allSummaryKpiFix = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryKpiFix.metrics.upcomingCount === 1 && allSummaryKpiFix.metrics.onboardingCount === 2 && allSummaryKpiFix.metrics.activeCount === 11 && allSummaryKpiFix.metrics.departingCount === 2 && allSummaryKpiFix.metrics.formerCount === 2,
+          `1406. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the KPI Card Proportions layout fix (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryKpiFix.metrics)}`
+        );
+        assert(
+          dashboardServiceSrcKpiFix.includes('ENDING_SOON_ELIGIBLE_STATUSES') && dashboardServiceSrcKpiFix.includes("ENDING_SOON_WINDOW_DAYS = 7"),
+          '1406b. REGRESSION: dashboardService.js\'s Ending Within 7 Days eligibility/window logic is byte-for-byte untouched by this layout task'
+        );
+      }
 
       resetDatabase();
     }

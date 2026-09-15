@@ -962,34 +962,74 @@ body {
    Dashboard UI & Component Layout CSS
    ========================================================================== */
 
-/* Stat Cards Grid */
+/* Stat Cards Grid — 5 lifecycle count cards (Upcoming/Onboarding/Active/Offboarding/Former).
+   UPDATED (Fix KPI Card Proportions task) — a previous iteration capped each card at
+   max-width: 150px and centered it in its grid column (justify-self: center), which is what
+   produced the "narrow isolated tile with a huge empty gap on both sides" look: at a normal
+   desktop width each of these 5 equal 1fr columns is 200-260px wide, so a 150px-capped card left
+   40-55px of dead space on EACH side, on top of the grid's own 1rem gap. Removing that cap (see
+   .stat-card below) is the actual fix — the grid itself (repeat(5, 1fr), never space-between) was
+   always fluid and correct; only the per-card max-width was fighting it. Gap widened slightly
+   (1rem -> 1.1rem) to sit centered in the requested 1rem-1.25rem "professional, modest" range.
+   Only genuinely narrow viewports (tablet/mobile, where the sidebar itself also collapses) drop
+   to fewer columns — cards still fill their column at every breakpoint, never a tiny fixed tile. */
 .stat-cards-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.25rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1.1rem;
 }
 
-@media (max-width: 1200px) {
+/* Breakpoints below were measured empirically with Playwright (rendered .stat-card-subtitle
+   height / .stat-card-title scrollWidth vs clientWidth at a sweep of viewport widths), not
+   guessed — the one-line "Currently active personnel" / "Historical personnel records" text
+   reliably needs a card >= ~205px wide at this font-size/padding, regardless of column count. A
+   naive 900px 5->3 breakpoint (measured at 1024px: only ~126px/card) reintroduced exactly the
+   wrapping/truncation this task exists to fix, so each threshold below is set where the PREVIOUS
+   column count's card width would first drop under that ~205px floor:
+   - 5 columns while width allows >= ~205px/card (down to ~1440px)
+   - 3 columns from 1440px down to ~1000px (card stays >= ~205px)
+   - 2 columns from 1000px down to ~480px (card stays >= ~205px; below 440px it started wrapping)
+   - 1 column below 480px, so mobile never squeezes a description to 2+ lines either */
+@media (max-width: 1440px) {
   .stat-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 1000px) {
   .stat-cards-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+@media (max-width: 480px) {
+  .stat-cards-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}
+
+/* KPI cards (UPDATED — Fix KPI Card Proportions task): max-width/justify-self removed so each
+   card fills its grid column naturally (width now comes from the available Dashboard content
+   width divided across 5 equal columns, not a magic-number cap) — WIDER, not taller. Height is no
+   longer a fixed pixel value either; the card is a grid item with the grid's default
+   align-items: stretch, so all 5 cards share the row's natural content height (driven by
+   padding + 3 short lines of left-aligned content) with no explicit height set at all. min-width:
+   0 is still required: without it, the ONBOARDING/OFFBOARDING title's white-space: nowrap forces
+   a min-content width wider than an evenly-divided 1fr column at narrower desktop widths,
+   overflowing the grid horizontally instead of letting the title ellipsis-truncate as intended.
+   .stat-card is effectively Dashboard-only (StatCard.jsx has no other consumer), so this is safe
+   to tighten/restyle directly without a wrapper scope. .stat-card-top-row still merges the icon +
+   label + arrow onto ONE row (icon never gets its own large vertical row). */
 .stat-card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 1.25rem;
+  padding: 1rem 1.1rem;
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  min-width: 0;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -998,30 +1038,49 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-.stat-card-header {
+.stat-card-top-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
+  gap: 0.5rem;
+}
+
+.stat-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 .stat-card-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius-md);
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-card-icon svg {
+  width: 13px;
+  height: 13px;
 }
 
 .stat-card-link {
   color: var(--text-muted);
-  padding: 0.35rem;
+  padding: 0.15rem;
   border-radius: var(--radius-sm);
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-card-link svg {
+  width: 13px;
+  height: 13px;
 }
 
 .stat-card-link:hover {
@@ -1029,62 +1088,220 @@ body {
   color: var(--color-primary);
 }
 
+/* UPDATED (Fix KPI Card Proportions task) — the card is wider now, so the title no longer needs
+   to be squeezed to the absolute minimum: font-size and letter-spacing were restored a step
+   (title still ellipsis-truncates as a safety net at narrow breakpoints, but at normal desktop
+   widths every title — including OFFBOARDING — now fits comfortably with room to spare). */
 .stat-card-title {
-  font-size: 0.825rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* UPDATED (Fix KPI Card Proportions task) — switched from centered to a natural LEFT-aligned KPI
+   layout (label+icon top, count middle, description bottom, all left-aligned) rather than
+   everything centered both horizontally and vertically. The heavy centering was part of why the
+   narrow cards felt cramped/isolated; left alignment reads as a coherent KPI group and matches
+   the reference layout's "top label / middle count / bottom description" structure. */
+.stat-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .stat-card-value {
-  font-size: 1.875rem;
+  font-size: 1.7rem;
   font-weight: 800;
   color: var(--color-navy-header);
-  line-height: 1.2;
-  margin: 0.25rem 0;
+  line-height: 1.15;
+  margin: 0.2rem 0;
 }
 
 .stat-card-subtitle {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
+  line-height: 1.3;
+  margin-top: 0.2rem;
 }
 
-/* Dashboard Widgets & Cards */
+/* Dashboard Widgets & Cards — .dashboard-widget/.widget-* are effectively Dashboard-only now
+   (only EndingWithin7DaysWidget.jsx and SoonestDueTasksWidget.jsx use them, since
+   LifecycleDistribution.jsx — a previous third consumer — was removed as redundant), so these
+   are safe to tighten directly. Padding/margins cut for the Compact HR Dashboard task; icon badge
+   reduced moderately to match the smaller stat-card icon treatment. */
+/* UPDATED — padding increased again per a direct user follow-up ("increase spacing... in and out
+   of the cards"), even though the text inside got smaller — more breathing room, smaller type. */
 .dashboard-widget {
   background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 1.5rem;
+  padding: 0.95rem 1.05rem;
   box-shadow: var(--shadow-sm);
+  min-width: 0;
 }
 
+/* NEW (Squarer Stat Cards + Soonest Due Tasks task) — Ending Within 7 Days and Soonest Due Tasks
+   now sit SIDE BY SIDE as two half-width cards instead of one full-width stretched bar, per
+   direct user request ("don't make Ending Within 7 Days AND Soonest Due Tasks horizontal or
+   stretched out"). Wraps to a single column on narrow viewports so neither card gets squeezed.
+   Gap widened (1rem -> 1.25rem) per a later direct user request for more spacing between them. */
+.dashboard-widgets-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .dashboard-widgets-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* UPDATED — this list is now only ever rendered while a widget is EXPANDED ("See more" clicked);
+   the default collapsed view renders just the latest/soonest 2 rows directly (no scroll needed at
+   all), per direct user request ("in dashboard it should only show latest 2 only"). Height grew
+   slightly (155px -> 180px) now that the shorter stat cards freed up vertical room on the page. */
+.dashboard-widget-scroll-list {
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+/* NEW — Soonest Due Tasks row (mirrors the visual weight of an Ending Within 7 Days row, but for
+   a notification rather than a person). Padding increased, per direct user request, alongside the
+   smaller text below. */
+.dashboard-task-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.dashboard-task-row:hover {
+  border-color: var(--color-primary);
+}
+
+.dashboard-task-row-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: #EFF6FF;
+  color: #2563EB;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dashboard-task-row-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.dashboard-task-row-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.dashboard-task-row-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-task-row-message {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-task-row-time {
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* NEW — "See more (N)" / "Show less" toggle shown under either widget's row list, only when there
+   are more than 2 items to reveal — per direct user request ("add see more for both cards as in
+   dashboard it should only show latest 2 only"). */
+.dashboard-widget-see-more {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: none;
+  border: none;
+  padding: 0.4rem 0;
+  margin-top: 0.5rem;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.dashboard-widget-see-more:hover {
+  text-decoration: underline;
+}
+
+/* UPDATED — the widget header (title/subtitle/icon badge) shrank along with the row list below,
+   per direct user request to decrease the text and size of these two boxes so the Dashboard reads
+   with more ample, proportionate spacing overall. Margin-bottom widened again (0.4rem -> 0.55rem)
+   per a later direct user request for more spacing in and out of the cards. */
 .widget-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.55rem;
 }
 
 .widget-title {
-  font-size: 1.1rem;
+  font-size: 0.85rem;
   font-weight: 700;
   color: var(--color-navy-header);
 }
 
 .widget-subtitle {
-  font-size: 0.825rem;
+  font-size: 0.65rem;
   color: var(--text-muted);
 }
 
 .widget-icon-badge {
-  width: 38px;
-  height: 38px;
+  width: 26px;
+  height: 26px;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.widget-icon-badge svg {
+  width: 13px;
+  height: 13px;
 }
 
 .widget-action-link {
@@ -1114,49 +1331,6 @@ body {
   .dashboard-content-grid {
     grid-template-columns: 1fr;
   }
-}
-
-/* Legend Grid for Lifecycle Distribution */
-.lifecycle-legend-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0.75rem;
-}
-
-@media (max-width: 768px) {
-  .lifecycle-legend-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.legend-item-card {
-  padding: 0.6rem 0.75rem;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.legend-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.legend-label {
-  font-size: 0.775rem;
-  font-weight: 700;
-}
-
-.legend-count {
-  font-size: 0.725rem;
-  color: var(--text-muted);
 }
 
 /* Widget Data Table */
@@ -1255,11 +1429,14 @@ body {
   white-space: nowrap;
 }
 
+/* Now used only by EndingWithin7DaysWidget.jsx's empty state — the old 2rem vertical padding
+   left a large blank area beneath a single sentence; compacted for the Compact HR Dashboard
+   task. */
 .empty-widget-text {
-  font-size: 0.875rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   text-align: center;
-  padding: 2rem 0;
+  padding: 0.4rem 0;
 }
 
 /* Department Snapshot Widget Rows */
@@ -1459,6 +1636,24 @@ body {
   .employees-page-header .header-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+}
+
+/* Dashboard header — same "wrap, then stack at narrow widths" pattern as
+   .employees-page-header above, so the title/description block and the
+   All/Employees/Interns filter never overlap or overflow at 375px. margin-bottom is
+   overridden here (scoped to Dashboard only, never the shared base .page-header rule other
+   pages use) as part of the Compact HR Dashboard density pass. */
+.dashboard-page-header {
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.3rem;
+}
+
+@media (max-width: 768px) {
+  .dashboard-page-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
