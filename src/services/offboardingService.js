@@ -9,6 +9,7 @@ import {
   calculateOffboardingProgress,
   reconcileOffboardingPlanInstanceCompletion,
   checkOffboardingEligibility,
+  resolveOffboardingAnchorDate,
   composeOffboardingTasks,
   isActiveOffboardingPlanStatus,
   OFFBOARDING_INSTANCE_STATUS,
@@ -368,6 +369,12 @@ export const offboardingService = {
    * historical record) every other offboarding entry point already uses. This is the SAME
    * function launchPlanInstance() calls below — the preview and the actual launch can never drift
    * apart because they share one code path and one set of inputs.
+   * UPDATED — also returns the employee's own canonical Final Working Date (canonicalAnchorDate,
+   * resolved with no override — display-only, never used for date math), alongside the effective
+   * anchor actually used to compose task due dates (anchorDate, the override when one is
+   * supplied). Both come from the ONE resolveOffboardingAnchorDate() function (called once
+   * directly for canonical, once indirectly via checkOffboardingEligibility() for effective) —
+   * a single source of resolution truth, not a second calculation path.
    */
   async previewOffboardingComposition(employeeId, customAnchorDate = null, referenceDate = getTodayLocalDateString()) {
     const db = loadDatabase();
@@ -376,6 +383,7 @@ export const offboardingService = {
 
     const records = await employmentRecordService.getAll();
     const existingInstances = db.offboardingPlanInstances || [];
+    const canonicalAnchorDate = resolveOffboardingAnchorDate(employee, records, null, referenceDate);
     const eligibility = checkOffboardingEligibility(employee, records, existingInstances, customAnchorDate, referenceDate);
 
     if (!eligibility.isEligible) {
@@ -384,6 +392,7 @@ export const offboardingService = {
         error: eligibility.reason,
         employee,
         anchorDate: null,
+        canonicalAnchorDate,
         tasks: [],
         personType: employee.directoryType === 'Intern' ? 'intern' : 'employee',
         typeScope: employee.directoryType === 'Intern' ? 'intern' : 'employee',
@@ -400,6 +409,7 @@ export const offboardingService = {
       error: composition.counts.total === 0 ? 'No offboarding tasks are configured for this employee.' : null,
       employee,
       anchorDate: eligibility.resolvedAnchorDate,
+      canonicalAnchorDate,
       ...composition,
     };
   },

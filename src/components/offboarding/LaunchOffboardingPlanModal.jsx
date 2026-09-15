@@ -222,30 +222,43 @@ export default function LaunchOffboardingPlanModal({
             <span className="form-hint">Only Active/Departing employees or interns without an active offboarding plan are eligible.</span>
           </div>
 
-          {/* Final Working Date Anchor & Custom Override */}
-          <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {/* Final Working Date Anchor & Custom Override — the employee's own canonical Final
+              Working Date is retrieved automatically; HR is never required to enter it manually.
+              Custom Override exists only for exceptional situations (e.g. a contract extension)
+              and never mutates the employee's stored record — it only changes the anchor
+              snapshotted onto this one launched plan instance. Mirrors Onboarding's Start Date
+              Anchor section exactly, for consistent HR UX across both launch flows. */}
+          <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid var(--border-light)', marginTop: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.65rem' }}>
               <Calendar size={18} style={{ color: 'var(--color-primary)' }} />
+              <span style={{ fontSize: '0.815rem', fontWeight: 600, color: 'var(--text-main)' }}>Final Working Date Anchor</span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-end' }}>
               <div>
-                <div style={{ fontSize: '0.815rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                  Final Working Date Anchor
-                </div>
-                <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
-                  {preview?.anchorDate ? `Resolved anchor date: ${formatDateDisplay(preview.anchorDate)}` : 'Select an employee to resolve their exit anchor date'}
+                <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Employee Final Working Date</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: preview ? (preview.canonicalAnchorDate ? 'var(--text-main)' : '#DC2626') : 'var(--text-muted)' }}>
+                  {preview ? (preview.canonicalAnchorDate ? formatDateDisplay(preview.canonicalAnchorDate) : 'Not available') : 'Select an employee'}
                 </div>
               </div>
-            </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <label style={{ fontSize: '0.785rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Custom Override:
-              </label>
-              <input
-                type="date"
-                style={{ padding: '0.35rem 0.5rem', fontSize: '0.815rem', border: '1px solid var(--border-light)', borderRadius: '6px', backgroundColor: '#FFF' }}
-                value={customAnchorDate}
-                onChange={(e) => setCustomAnchorDate(e.target.value)}
-              />
+              <div>
+                <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Custom Override
+                </label>
+                <input
+                  type="date"
+                  style={{ padding: '0.35rem 0.5rem', fontSize: '0.815rem', border: '1px solid var(--border-light)', borderRadius: '6px', backgroundColor: '#FFF' }}
+                  value={customAnchorDate}
+                  onChange={(e) => setCustomAnchorDate(e.target.value)}
+                />
+              </div>
+
+              {customAnchorDate && preview && preview.anchorDate && (
+                <div>
+                  <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Effective Anchor Date</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-primary)' }}>{formatDateDisplay(preview.anchorDate)}</div>
+                </div>
+              )}
             </div>
           </div>
 

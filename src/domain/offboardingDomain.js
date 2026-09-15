@@ -190,7 +190,7 @@ export function checkOffboardingEligibility(
   if (!resolvedAnchorDate) {
     return {
       isEligible: false,
-      reason: `Active employee ${employee.fullName} has no confirmed exit date on record. Please set a Final Working Date override to proceed.`,
+      reason: `${employee.fullName}'s Final Working Date is not available. Add a Final Working Date or provide a Custom Override before launching offboarding.`,
       resolvedAnchorDate: null,
     };
   }

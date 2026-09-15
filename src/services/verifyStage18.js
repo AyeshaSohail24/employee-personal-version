@@ -34,6 +34,7 @@ import { onboardingService } from './onboardingService.js';
 import {
   resolveAllOnboardingHistory,
   composeOnboardingTasks,
+  resolveOnboardingAnchorDate,
   PLAN_INSTANCE_STATUS,
   isActivePlanStatus,
 } from '../domain/onboardingDomain.js';
@@ -1717,7 +1718,13 @@ export async function verifyStage18() {
       const templates = await onboardingService.getAllTemplates();
       const activeTemplate = templates.find((t) => t.active !== false);
       if (candidateEmp && activeTemplate) {
-        const newInstance = await onboardingService.launchPlanInstance(candidateEmp.id, activeTemplate.id, {});
+        // UPDATED — launchPlanInstance() is composable-scope-based, not template-based; its 2nd
+        // positional param is now customAnchorDate (see the "Standardize Automatic Anchor Dates"
+        // task). Passing activeTemplate.id here (a leftover from the retired template-launch
+        // flow) would now be silently misinterpreted as a date override and corrupt the
+        // launched instance's task due dates rather than throwing — fixed to the correct,
+        // already-established 1-arg call used everywhere else in this suite.
+        const newInstance = await onboardingService.launchPlanInstance(candidateEmp.id);
         const postLaunchInstances = await onboardingService.getAllInstances();
         const found = postLaunchInstances.find((i) => i.id === newInstance.id);
         assert(Boolean(found) && found.employeeId === candidateEmp.id, '321. A newly launched onboarding plan immediately appears in onboardingService.getAllInstances() — the same source the Employees page reads from');
@@ -2665,13 +2672,13 @@ export async function verifyStage18() {
         const existingInstancesForNeutralEmp = await onboardingService.getAllInstances({ employeeId: onboardingEmpForNeutralPreview.id });
         const hasActiveInstanceAlready = existingInstancesForNeutralEmp.some((i) => i.derivedStatus !== 'Completed');
         if (!hasActiveInstanceAlready) {
-          const overrideAssigneeId = onboardingEmpForNeutralPreview.id;
-          const launched = await onboardingService.launchPlanInstance(
-            onboardingEmpForNeutralPreview.id,
-            neutralTpl.id,
-            { [reqTaskPreview.planTaskId]: overrideAssigneeId }
-          );
-          assert(Boolean(launched), '441. Launching a template containing a neutral (no assignment rule) task completes end-to-end without crashing once the required task is resolved via manual override');
+          // UPDATED — launchPlanInstance() is composable-scope-based, not template-based (its
+          // 2nd positional param is now customAnchorDate, per the "Standardize Automatic Anchor
+          // Dates" task); the manual per-task assignee override this check originally exercised
+          // was already retired along with Assignment Rule in an earlier task, so there is
+          // nothing left to pass here beyond the employee id — fixed to the correct 1-arg call.
+          const launched = await onboardingService.launchPlanInstance(onboardingEmpForNeutralPreview.id);
+          assert(Boolean(launched), '441. Launching still completes end-to-end for this employee via the current composable-scope launch flow (the retired manual-override mechanism this check originally exercised no longer exists)');
           assert(launched.progress.totalTasks >= 1, '441b. The launched instance has task instances created (the optional unresolved task may be safely omitted — existing pre-existing behavior — but the manually-resolved required task instance exists)');
           assert(launched.progress.requiredTasksCount >= 1 && typeof launched.progress.progressPercentage === 'number', '441c. Required-task progress is computed correctly for the launched neutral-assignment-rule plan');
 
@@ -2845,14 +2852,21 @@ export async function verifyStage18() {
         const existingInstForLaunchCheck = await onboardingService.getAllInstances({ employeeId: onboardingEmpForLaunchCheck.id });
         const hasActiveAlready = existingInstForLaunchCheck.some((i) => i.derivedStatus !== 'Completed');
         if (!hasActiveAlready) {
-          const launchedFree = await onboardingService.launchPlanInstance(onboardingEmpForLaunchCheck.id, freeTpl.id);
-          assert(Boolean(launchedFree), '460. launchPlanInstance() no longer throws for a template whose required task has no assignee — Launch Onboarding Plan works with employee + template alone');
-          assert(launchedFree.progress.totalTasks === 2, '461. BOTH the required and the optional task are created as task instances — the previous silent-omission of unresolved optional tasks is gone');
+          // UPDATED — launchPlanInstance() is composable-scope-based, not template-based (2nd
+          // positional param is now customAnchorDate, per the "Standardize Automatic Anchor
+          // Dates" task) — freeTpl is no longer a launchable argument at all (templates were
+          // retired from the launch flow entirely by an earlier task), so this now exercises a
+          // normal composed launch for the same employee instead. freeTpl itself is still
+          // exercised above via createTemplate() (checks 460's original template-creation half).
+          const launchedFree = await onboardingService.launchPlanInstance(onboardingEmpForLaunchCheck.id);
+          assert(Boolean(launchedFree), '460. launchPlanInstance() completes successfully via the current composable-scope flow (the retired assignment-free TEMPLATE-launch scenario this check originally covered no longer applies)');
+          assert(launchedFree.progress.totalTasks >= 1, '461. UPDATED — The launched instance has task instances created from the employee\'s composed scope tasks (the old "exactly 2 tasks from a manually-built template" expectation no longer applies now that templates aren\'t used for launch)');
 
-          // 462. Due date and required-task progress remain correct for this fully assignment-free plan
-          const reqTask = launchedFree.progress.tasks.find((t) => t.title === 'Free Required Task');
-          assert(reqTask.currentDueDate === addDaysCheckFn4(launchedFree.anchorDate, 1), '462. Due-date calculation remains correct for tasks in a fully assignment-free launched plan');
-          assert(launchedFree.progress.requiredTasksCount === 1 && typeof launchedFree.progress.progressPercentage === 'number', '462b. Required-task progress calculation remains correct');
+          // 462. UPDATED — Due date and progress remain correct for this launched plan. 'Free Required Task' no longer exists (it was a manually-built template task; templates aren't used
+          // for launch anymore) — re-pointed to the first composed task instead, generically.
+          const reqTask = launchedFree.progress.tasks[0];
+          assert(reqTask.currentDueDate === addDaysCheckFn4(launchedFree.anchorDate, reqTask.relativeOffsetDays), '462. Due-date calculation (anchorDate + relativeOffsetDays) remains correct for a composed launched plan');
+          assert(typeof launchedFree.progress.requiredTasksCount === 'number' && typeof launchedFree.progress.progressPercentage === 'number', '462b. Progress calculation remains correct');
 
           // 463. Done/Reopen still work on a task from a fully assignment-free plan
           const reqActivityId = reqTask.activityId;
@@ -6850,10 +6864,11 @@ export async function verifyStage18() {
         '1021. NEW — SCENARIO 10: The stale-selection effect is keyed on [typeFilter, onboardingEmployees] — a selection is safely cleared if the person no longer matches the filter OR is no longer present in the eligible-candidates list at all'
       );
 
-      // 1022. When selectedEmployeeId is cleared, the preview is also cleared — no misleading stale task preview can linger for a person who is no longer selectable
+      // 1022. UPDATED — When selectedEmployeeId is cleared, the preview is also cleared — no misleading stale task preview can linger for a person who is no longer selectable. The
+      // loadPreview() call was later extended (by the "Standardize Automatic Anchor Dates" task) to also pass customAnchorDate through — re-pointed here to that current call shape.
       assert(
-        launchPlanModalSrcFinal2.match(/if \(selectedEmployeeId\)\s*\{\s*\n\s*loadPreview\(selectedEmployeeId\);\s*\n\s*\}\s*else\s*\{\s*\n\s*setPreview\(null\);/),
-        '1022. NEW — SCENARIO 10: Preview state is derived from selectedEmployeeId via its own effect — clearing the selection (e.g. by the stale-selection guard) automatically clears the preview too, so no misleading task preview can linger for an ineligible person'
+        launchPlanModalSrcFinal2.match(/if \(selectedEmployeeId\)\s*\{\s*\n\s*loadPreview\(selectedEmployeeId, customAnchorDate\);\s*\n\s*\}\s*else\s*\{\s*\n\s*setPreview\(null\);/),
+        '1022. UPDATED — SCENARIO 10: Preview state is derived from selectedEmployeeId (and customAnchorDate) via its own effect — clearing the selection (e.g. by the stale-selection guard) automatically clears the preview too, so no misleading task preview can linger for an ineligible person'
       );
 
       // --- HELPER TEXT ---
@@ -9212,6 +9227,303 @@ export async function verifyStage18() {
         offProgressSrc3.match(/isNeedsAttn[\s\S]{0,60}\?\s*\{\s*backgroundColor:\s*'#FEF2F2',\s*color:\s*'#DC2626'/),
         '1235. REGRESSION: The Needs Attention status badge on the Offboarding Progress table still legitimately uses red styling — only the employee avatar\'s inline override was removed, no status/badge/warning logic was touched'
       );
+    }
+
+    // ==========================================================================
+    // Standardize Automatic Anchor Dates + Optional Custom Override for BOTH Onboarding and Offboarding
+    // ==========================================================================
+    {
+      resetDatabase();
+
+      const onboardingDomainSrcAnchor = fs.readFileSync(path.resolve('./src/domain/onboardingDomain.js'), 'utf-8');
+      const offboardingDomainSrcAnchor = fs.readFileSync(path.resolve('./src/domain/offboardingDomain.js'), 'utf-8');
+      const onboardingServiceSrcAnchor = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+      const offboardingServiceSrcAnchor = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+      const launchPlanModalSrcAnchor = fs.readFileSync(path.resolve('./src/components/onboarding/LaunchPlanModal.jsx'), 'utf-8');
+      const launchOffboardingPlanModalSrcAnchor = fs.readFileSync(path.resolve('./src/components/offboarding/LaunchOffboardingPlanModal.jsx'), 'utf-8');
+
+      // --- AUTOMATIC DATE RESOLUTION + OPTIONAL OVERRIDE (SOURCE) ---
+
+      // 1236. resolveOnboardingAnchorDate() now accepts an optional customAnchorDate, checked FIRST — mirroring resolveOffboardingAnchorDate()'s existing precedence pattern
+      assert(
+        onboardingDomainSrcAnchor.includes('export function resolveOnboardingAnchorDate(employee, records = [], customAnchorDate = null, referenceDate = getTodayLocalDateString())') &&
+        onboardingDomainSrcAnchor.match(/export function resolveOnboardingAnchorDate[\s\S]{0,200}if \(customAnchorDate && customAnchorDate\.trim\(\)\) \{/),
+        '1236. NEW — resolveOnboardingAnchorDate() now accepts an optional customAnchorDate override as its 3rd parameter, checked before any employment-record-derived source — mirroring resolveOffboardingAnchorDate()\'s existing precedence exactly'
+      );
+
+      // 1237. resolveOffboardingAnchorDate() already had this override — its signature/precedence is unchanged by this task (only the missing-date error message wording was updated — see 1247)
+      assert(
+        offboardingDomainSrcAnchor.includes('export function resolveOffboardingAnchorDate(') &&
+        offboardingDomainSrcAnchor.match(/resolveOffboardingAnchorDate\([\s\S]{0,60}employee,[\s\S]{0,30}records = \[\],[\s\S]{0,40}customAnchorDate = null,/),
+        '1237. REGRESSION: resolveOffboardingAnchorDate()\'s signature and override-first precedence are unchanged — it already supported this pattern before this task'
+      );
+
+      // 1238. previewOnboardingComposition() returns BOTH canonicalAnchorDate (no override) and anchorDate (effective, post-override) — a single resolution function called twice, not a second implementation
+      assert(
+        onboardingServiceSrcAnchor.includes('const canonicalAnchorDate = resolveOnboardingAnchorDate(employee, records, null, referenceDate);') &&
+        onboardingServiceSrcAnchor.includes('const anchorDate = resolveOnboardingAnchorDate(employee, records, customAnchorDate, referenceDate);') &&
+        onboardingServiceSrcAnchor.match(/canonicalAnchorDate,\s*tasks: \[\],/) &&
+        onboardingServiceSrcAnchor.match(/anchorDate,\s*canonicalAnchorDate,\s*\.\.\.composition,/),
+        '1238. NEW — previewOnboardingComposition() computes both canonicalAnchorDate (no override) and anchorDate (effective) via the SAME resolveOnboardingAnchorDate() function called with different inputs — one source of resolution truth, returned in both the valid and invalid-anchor response shapes'
+      );
+
+      // 1239. previewOffboardingComposition() returns BOTH canonicalAnchorDate and anchorDate the same way
+      assert(
+        offboardingServiceSrcAnchor.includes('const canonicalAnchorDate = resolveOffboardingAnchorDate(employee, records, null, referenceDate);') &&
+        offboardingServiceSrcAnchor.match(/anchorDate: eligibility\.resolvedAnchorDate,\s*canonicalAnchorDate,/),
+        '1239. NEW — previewOffboardingComposition() computes canonicalAnchorDate directly via resolveOffboardingAnchorDate() (no override) alongside the effective anchorDate resolved through checkOffboardingEligibility() — same single-source pattern as onboarding'
+      );
+
+      // --- OVERRIDE NEVER MUTATES THE EMPLOYEE RECORD (FUNCTIONAL) ---
+
+      // 1240. FUNCTIONAL — Launching onboarding with a custom override never mutates employee.startDate
+      {
+        resetDatabase();
+        const empBeforeOverride = await employeeService.getById('emp-014');
+        const startDateBefore = empBeforeOverride.startDate;
+        const kevinInstances = await onboardingService.getAllInstances({ employeeId: 'emp-014' });
+        if (kevinInstances.length > 0) await onboardingService.dropPlanInstance(kevinInstances[0].id);
+        const launchedWithOverride = await onboardingService.launchPlanInstance('emp-014', '2026-10-20', 'emp-001');
+        const empAfterOverride = await employeeService.getById('emp-014');
+        assert(
+          launchedWithOverride.anchorDate === '2026-10-20' && empAfterOverride.startDate === startDateBefore,
+          `1240. NEW — FUNCTIONAL: Launching with Custom Override 2026-10-20 snapshots that date onto the plan instance (found ${launchedWithOverride.anchorDate}), while employee.startDate remains exactly as it was before (${startDateBefore} -> ${empAfterOverride.startDate})`
+        );
+        resetDatabase();
+      }
+
+      // 1241. FUNCTIONAL — Launching offboarding with a custom override never mutates the employee's canonical Final Working Date fields (contractEndDate / employment record)
+      {
+        resetDatabase();
+        const empBeforeOverrideOff = await employeeService.getById('emp-005');
+        const contractEndBefore = empBeforeOverrideOff.contractEndDate;
+        const launchedOffWithOverride = await offboardingService.launchPlanInstance('emp-005', '2026-10-15', 'emp-001');
+        const empAfterOverrideOff = await employeeService.getById('emp-005');
+        assert(
+          launchedOffWithOverride.anchorDate === '2026-10-15' && empAfterOverrideOff.contractEndDate === contractEndBefore,
+          `1241. NEW — FUNCTIONAL: Launching offboarding with Custom Override 2026-10-15 snapshots that date onto the plan instance (found ${launchedOffWithOverride.anchorDate}), while employee.contractEndDate remains exactly as it was before (${contractEndBefore} -> ${empAfterOverrideOff.contractEndDate})`
+        );
+        resetDatabase();
+      }
+
+      // --- SINGLE EFFECTIVE-ANCHOR SOURCE OF TRUTH ---
+
+      // 1242. launchPlanInstance() (onboarding) passes customAnchorDate straight through to previewOnboardingComposition() — the exact same function that produced the preview HR just saw
+      {
+        const onbLaunchFnMatch = onboardingServiceSrcAnchor.match(/async launchPlanInstance\(employeeId, customAnchorDate = null, currentUserId[\s\S]*?\n  \},/);
+        const onbLaunchFnBlock = onbLaunchFnMatch ? onbLaunchFnMatch[0] : '';
+        assert(
+          Boolean(onbLaunchFnMatch) && onbLaunchFnBlock.includes('this.previewOnboardingComposition(employeeId, customAnchorDate)'),
+          '1242. NEW — launchPlanInstance() calls this.previewOnboardingComposition(employeeId, customAnchorDate) — preview and launch share one resolution call, so they can never calculate from two different anchors'
+        );
+      }
+
+      // 1243. launchPlanInstance() (offboarding) already resolved its anchor via checkOffboardingEligibility() inside the SAME function that previewOffboardingComposition() uses — unchanged by this task, confirmed still intact
+      {
+        const offLaunchFnMatch = offboardingServiceSrcAnchor.match(/async launchPlanInstance\(employeeId, customAnchorDate = null, currentUserId[\s\S]*?\n  \},/);
+        const offLaunchFnBlock = offLaunchFnMatch ? offLaunchFnMatch[0] : '';
+        assert(
+          Boolean(offLaunchFnMatch) && offLaunchFnBlock.includes('checkOffboardingEligibility(employee, records, existingInstances, customAnchorDate)'),
+          '1243. REGRESSION: launchPlanInstance() (offboarding) still resolves its anchor via checkOffboardingEligibility(employeeId, ..., customAnchorDate) — the exact same call previewOffboardingComposition() makes — unchanged by this task'
+        );
+      }
+
+      // 1244. FUNCTIONAL — Preview and launch resolve to the IDENTICAL effective anchor for both modules (no drift)
+      {
+        resetDatabase();
+        const kevinInstancesForDrift = await onboardingService.getAllInstances({ employeeId: 'emp-014' });
+        if (kevinInstancesForDrift.length > 0) await onboardingService.dropPlanInstance(kevinInstancesForDrift[0].id);
+        const onbPreviewDrift = await onboardingService.previewOnboardingComposition('emp-014', '2026-09-08');
+        const onbLaunchDrift = await onboardingService.launchPlanInstance('emp-014', '2026-09-08', 'emp-001');
+        assert(onbPreviewDrift.anchorDate === onbLaunchDrift.anchorDate, `1244a. NEW — FUNCTIONAL: Onboarding preview anchor (${onbPreviewDrift.anchorDate}) exactly matches the launched instance's anchor (${onbLaunchDrift.anchorDate}) — no drift`);
+
+        const offPreviewDrift = await offboardingService.previewOffboardingComposition('emp-010', '2026-11-01');
+        const offLaunchDrift = await offboardingService.launchPlanInstance('emp-010', '2026-11-01', 'emp-001');
+        assert(offPreviewDrift.anchorDate === offLaunchDrift.anchorDate, `1244b. NEW — FUNCTIONAL: Offboarding preview anchor (${offPreviewDrift.anchorDate}) exactly matches the launched instance's anchor (${offLaunchDrift.anchorDate}) — no drift`);
+        resetDatabase();
+      }
+
+      // --- MISSING CANONICAL DATE HANDLING ---
+
+      // 1245. FUNCTIONAL — Onboarding: no canonical Start Date + no override = blocked; + valid override = allowed
+      {
+        const noDateEmp = { id: 'synth-onb-nodate', fullName: 'No Date Employee', directoryType: 'Employee', department: null, status: 'Onboarding' };
+        const blockedResult = resolveOnboardingAnchorDate(noDateEmp, [], null);
+        const allowedResult = resolveOnboardingAnchorDate(noDateEmp, [], '2026-10-01');
+        assert(blockedResult === null, '1245a. NEW — FUNCTIONAL: An employee with no Start Date on record and no override resolves to null (blocks launch) — never silently guessed, never defaulted to today');
+        assert(allowedResult === '2026-10-01', '1245b. NEW — FUNCTIONAL: The SAME employee resolves correctly to the Custom Override date when one is supplied — canonical missing + valid override = launch allowed');
+      }
+
+      // 1246. FUNCTIONAL — Offboarding: no canonical Final Working Date + no override = blocked; + valid override = allowed (mirrors 1245 independently)
+      {
+        const noDateEmpOff = { id: 'synth-off-nodate', fullName: 'No Date Employee Off', directoryType: 'Employee', department: null, status: 'Active' };
+        const blockedResultOff = resolveOffboardingAnchorDate(noDateEmpOff, [], null);
+        const allowedResultOff = resolveOffboardingAnchorDate(noDateEmpOff, [], '2026-11-15');
+        assert(blockedResultOff === null, '1246a. REGRESSION: An employee with no Final Working Date on record and no override resolves to null (blocks launch) — offboarding\'s existing rule, unchanged');
+        assert(allowedResultOff === '2026-11-15', '1246b. REGRESSION: The SAME employee resolves correctly to the Custom Override date when one is supplied');
+      }
+
+      // 1247. Missing-date error messages match the required wording for both modules, surfaced through previewOnboardingComposition()/checkOffboardingEligibility()
+      {
+        const noDateEmp2 = { id: 'synth-onb-nodate-2', fullName: 'Msg Test Employee', directoryType: 'Employee', department: null, status: 'Onboarding' };
+        // previewOnboardingComposition requires a real employee via employeeService, so the message wording is verified directly against the service source instead of a live call
+        assert(
+          onboardingServiceSrcAnchor.includes("`${employee.fullName}'s Start Date is not available. Add a Start Date or provide a Custom Override before launching onboarding.`"),
+          '1247a. NEW — The onboarding missing-Start-Date message reads "<Employee>\'s Start Date is not available. Add a Start Date or provide a Custom Override before launching onboarding." — matching the required wording'
+        );
+        assert(
+          offboardingDomainSrcAnchor.includes("`${employee.fullName}'s Final Working Date is not available. Add a Final Working Date or provide a Custom Override before launching offboarding.`"),
+          '1247b. NEW — The offboarding missing-Final-Working-Date message reads "<Employee>\'s Final Working Date is not available. Add a Final Working Date or provide a Custom Override before launching offboarding." — matching the required wording'
+        );
+      }
+
+      // --- HISTORICAL SNAPSHOT PRESERVATION ---
+
+      // 1248. FUNCTIONAL — Onboarding: launching, then editing the employee's canonical employment record afterward, does NOT retroactively change the already-launched instance's anchor/task dates
+      {
+        resetDatabase();
+        const existingHannah = await onboardingService.getAllInstances({ employeeId: 'emp-013' });
+        if (existingHannah.length > 0 && isActivePlanStatus(existingHannah[0].derivedStatus)) {
+          await onboardingService.dropPlanInstance(existingHannah[0].id);
+        }
+        const launchedForSnapshot = await onboardingService.launchPlanInstance('emp-013', null, 'emp-001');
+        const originalAnchor = launchedForSnapshot.anchorDate;
+        const originalTaskDates = launchedForSnapshot.taskInstances.map((t) => t.originallyCalculatedDueDate);
+
+        const db = loadDatabase();
+        db.employmentRecords = db.employmentRecords.map((r) => (r.id === 'rec-013-1' ? { ...r, effectiveFrom: '2026-08-20' } : r));
+        saveDatabase(db);
+
+        const instanceAfterEdit = await onboardingService.getInstanceById(launchedForSnapshot.id);
+        const freshPreviewAfterEdit = await onboardingService.previewOnboardingComposition('emp-013');
+        assert(
+          instanceAfterEdit.anchorDate === originalAnchor &&
+          JSON.stringify(instanceAfterEdit.taskInstances.map((t) => t.originallyCalculatedDueDate)) === JSON.stringify(originalTaskDates),
+          `1248a. NEW — FUNCTIONAL: Editing Hannah's canonical employment record after launch leaves the ALREADY-LAUNCHED instance's anchor (${originalAnchor}) and every task due date byte-for-byte unchanged`
+        );
+        assert(
+          freshPreviewAfterEdit.canonicalAnchorDate === '2026-08-20',
+          `1248b. NEW — FUNCTIONAL: A FRESH preview for the same employee correctly picks up the NEW canonical date (2026-08-20, found ${freshPreviewAfterEdit.canonicalAnchorDate}) — the resolution logic itself is not frozen, only already-launched snapshots are`
+        );
+        resetDatabase();
+      }
+
+      // 1249. FUNCTIONAL — Offboarding: launching, then editing the employee's canonical record afterward, does NOT retroactively change the already-launched instance
+      {
+        resetDatabase();
+        const launchedOffForSnapshot = await offboardingService.launchPlanInstance('emp-005', '2026-11-30', 'emp-001');
+        const originalAnchorOff = launchedOffForSnapshot.anchorDate;
+        const originalTaskDatesOff = launchedOffForSnapshot.taskInstances.map((t) => t.originallyCalculatedDueDate);
+
+        const db2 = loadDatabase();
+        db2.employees = db2.employees.map((e) => (e.id === 'emp-005' ? { ...e, contractEndDate: '2027-03-01' } : e));
+        saveDatabase(db2);
+
+        const instanceAfterEditOff = await offboardingService.getInstanceById(launchedOffForSnapshot.id);
+        assert(
+          instanceAfterEditOff.anchorDate === originalAnchorOff &&
+          JSON.stringify(instanceAfterEditOff.taskInstances.map((t) => t.originallyCalculatedDueDate)) === JSON.stringify(originalTaskDatesOff),
+          `1249. NEW — FUNCTIONAL: Editing emp-005's contractEndDate after launch leaves the ALREADY-LAUNCHED offboarding instance's anchor (${originalAnchorOff}) and every task due date byte-for-byte unchanged`
+        );
+        resetDatabase();
+      }
+
+      // --- DROPPED + RELAUNCHED PLANS RESOLVE FRESH ---
+
+      // 1250. FUNCTIONAL — Onboarding: Drop, then change the employee's canonical Start Date, then relaunch — the new launch resolves the NEW canonical date, never reusing the dropped plan's anchor
+      {
+        resetDatabase();
+        const existingHannah1250 = await onboardingService.getAllInstances({ employeeId: 'emp-013' });
+        if (existingHannah1250.length > 0 && isActivePlanStatus(existingHannah1250[0].derivedStatus)) {
+          await onboardingService.dropPlanInstance(existingHannah1250[0].id);
+        }
+        const initialLaunch = await onboardingService.launchPlanInstance('emp-013', '2026-08-15', 'emp-001');
+        await onboardingService.dropPlanInstance(initialLaunch.id);
+
+        const db3 = loadDatabase();
+        db3.employmentRecords = db3.employmentRecords.map((r) => (r.id === 'rec-013-1' ? { ...r, effectiveFrom: '2026-08-25' } : r));
+        saveDatabase(db3);
+
+        const relaunchPreview = await onboardingService.previewOnboardingComposition('emp-013');
+        assert(
+          relaunchPreview.canonicalAnchorDate === '2026-08-25' && relaunchPreview.canonicalAnchorDate !== initialLaunch.anchorDate,
+          `1250. NEW — FUNCTIONAL: After Drop + a canonical Start Date change, a fresh preview resolves to the NEW date (2026-08-25, found ${relaunchPreview.canonicalAnchorDate}) — never reusing the dropped plan's original anchor (${initialLaunch.anchorDate})`
+        );
+        resetDatabase();
+      }
+
+      // 1251. FUNCTIONAL — Offboarding: same Drop + canonical-change + relaunch-resolves-fresh behavior
+      {
+        resetDatabase();
+        const initialLaunchOff = await offboardingService.launchPlanInstance('emp-005', '2026-09-30', 'emp-001');
+        await offboardingService.dropPlanInstance(initialLaunchOff.id);
+
+        const db4 = loadDatabase();
+        db4.employees = db4.employees.map((e) => (e.id === 'emp-005' ? { ...e, contractEndDate: '2026-12-10' } : e));
+        saveDatabase(db4);
+
+        const relaunchPreviewOff = await offboardingService.previewOffboardingComposition('emp-005');
+        assert(
+          relaunchPreviewOff.canonicalAnchorDate === '2026-12-10' && relaunchPreviewOff.canonicalAnchorDate !== initialLaunchOff.anchorDate,
+          `1251. NEW — FUNCTIONAL: After Drop + a canonical Final Working Date change, a fresh preview resolves to the NEW date (2026-12-10, found ${relaunchPreviewOff.canonicalAnchorDate}) — never reusing the dropped plan's original anchor (${initialLaunchOff.anchorDate})`
+        );
+        resetDatabase();
+      }
+
+      // --- TASK COMPOSITION UNCHANGED ---
+
+      // 1252. REGRESSION: Onboarding and Offboarding task composition (scope tasks, person-type isolation, department logic) are unaffected — only the anchor DATE resolution changed, never the task set itself
+      {
+        resetDatabase();
+        const empComp = await onboardingService.previewOnboardingComposition('emp-013');
+        assert(empComp.counts.universal >= 0 && typeof empComp.counts.total === 'number', '1252a. REGRESSION: composeOnboardingTasks() output shape (universal/department/total counts) is unchanged');
+
+        const offComp = await offboardingService.previewOffboardingComposition('emp-005', '2026-12-31');
+        assert(offComp.counts.universal === 11 && offComp.counts.department === 4 && offComp.counts.total === 15, `1252b. REGRESSION: composeOffboardingTasks() still composes Employee Universal(11) + Software Engineering(4) = 15 for emp-005 — task composition itself is completely unaffected by the anchor-date standardization (found universal=${offComp.counts.universal}, department=${offComp.counts.department}, total=${offComp.counts.total})`);
+        resetDatabase();
+      }
+
+      // --- ONBOARDING/OFFBOARDING ISOLATION ---
+
+      // 1253. Neither domain module imports from the other — resolveOnboardingAnchorDate() and resolveOffboardingAnchorDate() were extended completely independently
+      assert(
+        !onboardingDomainSrcAnchor.match(/import[\s\S]{0,200}from\s+['"][^'"]*offboardingDomain\.js['"]/) &&
+        !offboardingDomainSrcAnchor.match(/import[\s\S]{0,200}from\s+['"][^'"]*onboardingDomain\.js['"]/),
+        '1253. REGRESSION: onboardingDomain.js and offboardingDomain.js contain no actual import statement from one another — the two anchor-date resolution functions were extended with matching PATTERNS, never shared code'
+      );
+
+      // --- NO DIRECT LOCALSTORAGE ACCESS FROM LAUNCH COMPONENTS ---
+
+      // 1254. Neither Launch modal calls localStorage/storageEngine directly — both remain strictly behind the service boundary (onboardingService/offboardingService), ready for a future real backend to replace the underlying data source without any UI rewrite
+      {
+        const launchPlanModalCodeOnly = stripComments(launchPlanModalSrcAnchor);
+        const launchOffboardingPlanModalCodeOnly = stripComments(launchOffboardingPlanModalSrcAnchor);
+        assert(
+          !launchPlanModalCodeOnly.includes('localStorage.') && !launchPlanModalCodeOnly.includes("from '../../mock-data/storageEngine") &&
+          !launchOffboardingPlanModalCodeOnly.includes('localStorage.') && !launchOffboardingPlanModalCodeOnly.includes("from '../../mock-data/storageEngine"),
+          '1254. NEW — Neither LaunchPlanModal.jsx nor LaunchOffboardingPlanModal.jsx contains any actual localStorage/storageEngine usage in code (a documentation comment mentioning "storageEngine/localStorage" to explain this boundary is fine) — both only ever call onboardingService/offboardingService'
+        );
+      }
+
+      // --- UI DISPLAY: CANONICAL DATE VS OPTIONAL OVERRIDE CLEARLY DISTINGUISHED ---
+
+      // 1255. LaunchPlanModal.jsx shows "Start Date Anchor" with the canonical Employee Start Date always visible, a Custom Override input, and an "Effective Anchor Date" line ONLY when an override is entered
+      assert(
+        launchPlanModalSrcAnchor.includes('Start Date Anchor') && launchPlanModalSrcAnchor.includes('Employee Start Date') &&
+        launchPlanModalSrcAnchor.includes('preview.canonicalAnchorDate') && launchPlanModalSrcAnchor.includes('Custom Override') &&
+        launchPlanModalSrcAnchor.match(/customAnchorDate && preview && preview\.anchorDate[\s\S]{0,150}Effective Anchor Date/),
+        '1255. NEW — LaunchPlanModal.jsx shows a "Start Date Anchor" section: "Employee Start Date" (canonical, always visible), a Custom Override date input, and "Effective Anchor Date" only when an override is actually entered — no clutter when there is none'
+      );
+
+      // 1256. LaunchOffboardingPlanModal.jsx shows the exact same structure for "Final Working Date Anchor" — consistent HR UX across both launch flows
+      assert(
+        launchOffboardingPlanModalSrcAnchor.includes('Final Working Date Anchor') && launchOffboardingPlanModalSrcAnchor.includes('Employee Final Working Date') &&
+        launchOffboardingPlanModalSrcAnchor.includes('preview.canonicalAnchorDate') && launchOffboardingPlanModalSrcAnchor.includes('Custom Override') &&
+        launchOffboardingPlanModalSrcAnchor.match(/customAnchorDate && preview && preview\.anchorDate[\s\S]{0,150}Effective Anchor Date/),
+        '1256. NEW — LaunchOffboardingPlanModal.jsx shows the exact same "Final Working Date Anchor" structure: "Employee Final Working Date" (canonical, always visible), Custom Override, and "Effective Anchor Date" only when entered — mirroring Onboarding\'s pattern for consistent HR UX'
+      );
+
+      resetDatabase();
     }
 
     resetDatabase();

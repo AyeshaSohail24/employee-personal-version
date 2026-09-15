@@ -351,20 +351,29 @@ export const onboardingService = {
    * dates off the same anchor-date resolution used everywhere else in onboarding. This is the
    * SAME function launchPlanInstance() calls below — the preview and the actual launch can
    * never drift apart because they share one code path and one set of inputs.
+   * UPDATED — accepts an optional customAnchorDate override (mirroring offboarding's
+   * previewOffboardingComposition() exactly). Returns BOTH the employee's own canonical Start
+   * Date (canonicalAnchorDate, resolved with no override — display-only, never used for date
+   * math) and the effective anchor actually used to compose task due dates (anchorDate, which is
+   * the override when one is supplied). Computing both from the one resolveOnboardingAnchorDate()
+   * function (called twice with different inputs) keeps a single source of resolution truth
+   * rather than duplicating the precedence logic for display purposes.
    */
-  async previewOnboardingComposition(employeeId, referenceDate = getTodayLocalDateString()) {
+  async previewOnboardingComposition(employeeId, customAnchorDate = null, referenceDate = getTodayLocalDateString()) {
     const employee = await employeeService.getById(employeeId);
     if (!employee) throw new Error(`Employee with ID "${employeeId}" not found.`);
 
     const records = await employmentRecordService.getAll();
-    const anchorDate = resolveOnboardingAnchorDate(employee, records, referenceDate);
+    const canonicalAnchorDate = resolveOnboardingAnchorDate(employee, records, null, referenceDate);
+    const anchorDate = resolveOnboardingAnchorDate(employee, records, customAnchorDate, referenceDate);
 
     if (!anchorDate) {
       return {
         isValid: false,
-        error: `Employee ${employee.fullName} does not have a valid start date.`,
+        error: `${employee.fullName}'s Start Date is not available. Add a Start Date or provide a Custom Override before launching onboarding.`,
         employee,
         anchorDate: null,
+        canonicalAnchorDate,
         tasks: [],
         personType: employee.directoryType === 'Intern' ? 'intern' : 'employee',
         typeScope: employee.directoryType === 'Intern' ? 'intern' : 'employee',
@@ -381,6 +390,7 @@ export const onboardingService = {
       error: composition.counts.total === 0 ? 'No onboarding tasks are configured for this employee.' : null,
       employee,
       anchorDate,
+      canonicalAnchorDate,
       ...composition,
     };
   },
@@ -422,8 +432,15 @@ export const onboardingService = {
    * Creates a full SNAPSHOT of the currently-applicable tasks: later edits to Universal or
    * Department scopes never retroactively change an already-launched instance, because these
    * task-instance records are plain field-copies, never re-read live from onboardingPlanTasks.
+   * UPDATED — accepts an optional customAnchorDate override (mirroring offboarding's
+   * launchPlanInstance() signature exactly: employeeId, customAnchorDate, currentUserId). Passed
+   * straight through to previewOnboardingComposition() so the SAME effective-anchor resolution
+   * that produced the preview HR just saw is exactly what gets snapshotted — preview and launch
+   * can never calculate from two different dates. A Dropped-then-relaunched plan resolves its
+   * anchor fresh from the employee's CURRENT canonical Start Date (or a new override) — the old
+   * dropped instance's anchor is never reused, since this always re-resolves from scratch.
    */
-  async launchPlanInstance(employeeId, currentUserId = 'emp-001') {
+  async launchPlanInstance(employeeId, customAnchorDate = null, currentUserId = 'emp-001') {
     const db = loadDatabase();
     const employee = await employeeService.getById(employeeId);
     if (!employee) throw new Error(`Employee with ID "${employeeId}" not found.`);
@@ -443,7 +460,7 @@ export const onboardingService = {
       throw new Error(`Employee ${employee.fullName} already has an active onboarding plan (In Progress / Needs Attention).`);
     }
 
-    const preview = await this.previewOnboardingComposition(employeeId);
+    const preview = await this.previewOnboardingComposition(employeeId, customAnchorDate);
     if (!preview.isValid || preview.counts.total === 0) {
       throw new Error(preview.error || 'No onboarding tasks are configured for this employee.');
     }

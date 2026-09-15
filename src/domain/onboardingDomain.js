@@ -50,9 +50,18 @@ export function resolveAllOnboardingHistory(employees, instanceMap) {
 
 /**
  * Resolves the appropriate anchor start date for an onboarding plan instance.
+ * UPDATED — now accepts an optional customAnchorDate override, checked FIRST (ahead of every
+ * record-derived source), mirroring resolveOffboardingAnchorDate()'s exact precedence pattern —
+ * a manual HR-entered override (e.g. a delayed actual start) always wins over the employee's own
+ * stored start date. The override is never persisted back onto the employee record here; callers
+ * are responsible for snapshotting the resolved value onto the launched plan instance only.
  * Preserves effective-date rules strictly without weakening resolveCurrentRecord().
  */
-export function resolveOnboardingAnchorDate(employee, records = [], referenceDate = getTodayLocalDateString()) {
+export function resolveOnboardingAnchorDate(employee, records = [], customAnchorDate = null, referenceDate = getTodayLocalDateString()) {
+  if (customAnchorDate && customAnchorDate.trim()) {
+    return customAnchorDate.trim().slice(0, 10);
+  }
+
   if (!employee) return null;
 
   if (employee.status === 'Upcoming') {
@@ -167,13 +176,14 @@ export function generatePlanPreview({
   records = [],
   userAccounts = [],
   allEmployees = [],
+  customAnchorDate = null,
   referenceDate = getTodayLocalDateString(),
 }) {
   if (!template || !employee) {
     return { isValid: false, error: 'Missing template or target employee.' };
   }
 
-  const anchorDate = resolveOnboardingAnchorDate(employee, records, referenceDate);
+  const anchorDate = resolveOnboardingAnchorDate(employee, records, customAnchorDate, referenceDate);
   if (!anchorDate) {
     return { isValid: false, error: `Employee ${employee.fullName} does not have a valid start date.` };
   }

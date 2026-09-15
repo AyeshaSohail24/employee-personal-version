@@ -12,6 +12,7 @@ export default function LaunchPlanModal({
   const [onboardingEmployees, setOnboardingEmployees] = useState([]);
   const [typeFilter, setTypeFilter] = useState('all'); // 'all' | 'Employee' | 'Intern' — same normalization as Onboarding Employees
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(preselectedEmployeeId || '');
+  const [customAnchorDate, setCustomAnchorDate] = useState('');
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -46,11 +47,12 @@ export default function LaunchPlanModal({
 
   useEffect(() => {
     if (selectedEmployeeId) {
-      loadPreview(selectedEmployeeId);
+      loadPreview(selectedEmployeeId, customAnchorDate);
     } else {
       setPreview(null);
     }
-  }, [selectedEmployeeId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmployeeId, customAnchorDate]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -77,11 +79,11 @@ export default function LaunchPlanModal({
     }
   };
 
-  const loadPreview = async (empId) => {
+  const loadPreview = async (empId, anchorOverride) => {
     setPreviewLoading(true);
     setError(null);
     try {
-      const res = await onboardingService.previewOnboardingComposition(empId);
+      const res = await onboardingService.previewOnboardingComposition(empId, anchorOverride || null);
       setPreview(res);
     } catch (err) {
       setError(err.message);
@@ -94,6 +96,7 @@ export default function LaunchPlanModal({
   const resetState = () => {
     setSelectedEmployeeId(preselectedEmployeeId || '');
     setTypeFilter('all');
+    setCustomAnchorDate('');
     setPreview(null);
     setError(null);
     setLoading(false);
@@ -104,7 +107,7 @@ export default function LaunchPlanModal({
     setLoading(true);
     setError(null);
     try {
-      const newInst = await onboardingService.launchPlanInstance(selectedEmployeeId);
+      const newInst = await onboardingService.launchPlanInstance(selectedEmployeeId, customAnchorDate || null, 'emp-001');
       if (onSuccess) onSuccess(newInst);
       onClose();
     } catch (err) {
@@ -117,7 +120,8 @@ export default function LaunchPlanModal({
   if (!isOpen) return null;
 
   // Composed tasks are the same object the actual launch uses — Launch is only available once
-  // a valid, non-empty composition has been previewed for the selected employee.
+  // a valid, non-empty composition has been previewed for the selected employee (which also
+  // requires a resolved Start Date — from record or the custom override below).
   const canLaunch = Boolean(preview) && preview.isValid && preview.counts.total > 0 && !previewLoading;
 
   // Full eligibility (Onboarding lifecycle status AND no active onboarding plan) is already
@@ -219,6 +223,45 @@ export default function LaunchPlanModal({
             <span className="form-hint">Only employees/interns in Onboarding status without an active onboarding plan are eligible.</span>
           </div>
 
+          {/* Start Date Anchor & Custom Override — the employee's own canonical Start Date is
+              retrieved automatically; HR is never required to enter it manually. Custom Override
+              exists only for exceptional situations (e.g. a delayed actual start) and never
+              mutates the employee's stored startDate — it only changes the anchor snapshotted
+              onto this one launched plan instance. */}
+          <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid var(--border-light)', marginTop: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.65rem' }}>
+              <Calendar size={18} style={{ color: 'var(--color-primary)' }} />
+              <span style={{ fontSize: '0.815rem', fontWeight: 600, color: 'var(--text-main)' }}>Start Date Anchor</span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-end' }}>
+              <div>
+                <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Employee Start Date</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: preview ? (preview.canonicalAnchorDate ? 'var(--text-main)' : '#DC2626') : 'var(--text-muted)' }}>
+                  {preview ? (preview.canonicalAnchorDate || 'Not available') : 'Select an employee'}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Custom Override
+                </label>
+                <input
+                  type="date"
+                  style={{ padding: '0.35rem 0.5rem', fontSize: '0.815rem', border: '1px solid var(--border-light)', borderRadius: '6px', backgroundColor: '#FFF' }}
+                  value={customAnchorDate}
+                  onChange={(e) => setCustomAnchorDate(e.target.value)}
+                />
+              </div>
+
+              {customAnchorDate && preview && preview.anchorDate && (
+                <div>
+                  <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Effective Anchor Date</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-primary)' }}>{preview.anchorDate}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Preview Details */}
           {previewLoading && (
             <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -227,7 +270,7 @@ export default function LaunchPlanModal({
           )}
 
           {preview && !previewLoading && (
-            <div style={{ background: '#F8FAFC', borderRadius: '8px', padding: '1rem', border: '1px solid #E2E8F0' }}>
+            <div style={{ background: '#F8FAFC', borderRadius: '8px', padding: '1rem', border: '1px solid #E2E8F0', marginTop: '1rem' }}>
               {/* Summary Header */}
               <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1rem', background: '#FFF', padding: '0.85rem 1rem', borderRadius: '6px', border: '1px solid #E2E8F0', alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -272,9 +315,9 @@ export default function LaunchPlanModal({
                 </span>
               </div>
 
-              {preview.counts.total === 0 ? (
+              {!preview.isValid || preview.counts.total === 0 ? (
                 <div style={{ padding: '1.25rem', textAlign: 'center', color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600 }}>
-                  No onboarding tasks are configured for this employee.
+                  {preview.error || 'No onboarding tasks are configured for this employee.'}
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
