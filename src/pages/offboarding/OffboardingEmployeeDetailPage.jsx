@@ -61,6 +61,22 @@ export default function OffboardingEmployeeDetailPage() {
     }
   };
 
+  // A Dropped plan is a permanent historical record — task modification triggers/modals must
+  // stop being offered once instance.derivedStatus === DROPPED. Deliberately NOT gated on
+  // isActiveOffboardingPlanStatus() (which also excludes COMPLETED): Completed plans keep their
+  // existing, unrelated behavior — only DROPPED is a new read-only rule. Re-evaluated on every
+  // instance change (e.g. right after Drop Plan succeeds and loadData() refreshes), so a modal
+  // that happened to be open at the moment of transition can never linger open against a
+  // now-read-only plan.
+  useEffect(() => {
+    if (instance && instance.derivedStatus === OFFBOARDING_INSTANCE_STATUS.DROPPED) {
+      setIsAddTaskModalOpen(false);
+      setTaskPendingEdit(null);
+      setTaskPendingDelete(null);
+      setIsDropPlanModalOpen(false);
+    }
+  }, [instance]);
+
   const handleEditTaskSuccess = async () => {
     setTaskPendingEdit(null);
     await loadData();
@@ -111,6 +127,10 @@ export default function OffboardingEmployeeDetailPage() {
       </div>
     );
   }
+
+  // Dropped-only read-only gate — see the useEffect above for why this is intentionally narrower
+  // than isActiveOffboardingPlanStatus() (Completed plans are unaffected by this task).
+  const isDropped = Boolean(instance) && instance.derivedStatus === OFFBOARDING_INSTANCE_STATUS.DROPPED;
 
   return (
     <div className="page-layout-container">
@@ -251,15 +271,17 @@ export default function OffboardingEmployeeDetailPage() {
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
                 Offboarding Task Breakdown & Operational Status
               </h3>
-              <button
-                type="button"
-                className="btn-primary"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem', fontSize: '0.8rem', flexShrink: 0 }}
-                onClick={() => setIsAddTaskModalOpen(true)}
-              >
-                <Plus size={14} />
-                <span>Add Task</span>
-              </button>
+              {!isDropped && (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem', fontSize: '0.8rem', flexShrink: 0 }}
+                  onClick={() => setIsAddTaskModalOpen(true)}
+                >
+                  <Plus size={14} />
+                  <span>Add Task</span>
+                </button>
+              )}
             </div>
 
             <div style={{ overflowX: 'auto' }}>
@@ -298,37 +320,41 @@ export default function OffboardingEmployeeDetailPage() {
                           {task.currentDueDate}
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                            {act && (
+                          {isDropped ? (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>—</span>
+                          ) : (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                              {act && (
+                                <button
+                                  type="button"
+                                  className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
+                                  style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
+                                  onClick={() => handleToggleTaskComplete(act.id, isDone)}
+                                >
+                                  {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
+                                  <span>{isDone ? 'Reopen' : 'Done'}</span>
+                                </button>
+                              )}
                               <button
                                 type="button"
-                                className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
-                                style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
-                                onClick={() => handleToggleTaskComplete(act.id, isDone)}
+                                className="icon-btn"
+                                title="Edit task"
+                                aria-label="Edit task"
+                                onClick={() => setTaskPendingEdit(task)}
                               >
-                                {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
-                                <span>{isDone ? 'Reopen' : 'Done'}</span>
+                                <Pencil size={13} />
                               </button>
-                            )}
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              title="Edit task"
-                              aria-label="Edit task"
-                              onClick={() => setTaskPendingEdit(task)}
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-btn icon-btn-danger"
-                              title="Delete task"
-                              aria-label="Delete task"
-                              onClick={() => setTaskPendingDelete(task)}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
+                              <button
+                                type="button"
+                                className="icon-btn icon-btn-danger"
+                                title="Delete task"
+                                aria-label="Delete task"
+                                onClick={() => setTaskPendingDelete(task)}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -348,8 +374,8 @@ export default function OffboardingEmployeeDetailPage() {
         initialEmployeeId={employee.id}
       />
 
-      {/* Add Task Modal (employee-specific plan instance only) */}
-      {instance && (
+      {/* Add Task Modal (employee-specific plan instance only) — never offered for a Dropped plan */}
+      {instance && !isDropped && (
         <AddOffboardingTaskModal
           isOpen={isAddTaskModalOpen}
           onClose={() => setIsAddTaskModalOpen(false)}
@@ -359,8 +385,8 @@ export default function OffboardingEmployeeDetailPage() {
         />
       )}
 
-      {/* Edit Task Modal (employee-specific plan instance only — reusable Plans configuration untouched) */}
-      {instance && (
+      {/* Edit Task Modal (employee-specific plan instance only — reusable Plans configuration untouched) — never offered for a Dropped plan */}
+      {instance && !isDropped && (
         <EditOffboardingTaskModal
           isOpen={Boolean(taskPendingEdit)}
           onClose={() => setTaskPendingEdit(null)}
@@ -372,8 +398,8 @@ export default function OffboardingEmployeeDetailPage() {
         />
       )}
 
-      {/* Delete Task Modal (employee-specific plan instance only — reusable Plans configuration untouched) */}
-      {instance && (
+      {/* Delete Task Modal (employee-specific plan instance only — reusable Plans configuration untouched) — never offered for a Dropped plan */}
+      {instance && !isDropped && (
         <DeleteOffboardingTaskModal
           isOpen={Boolean(taskPendingDelete)}
           onClose={() => setTaskPendingDelete(null)}

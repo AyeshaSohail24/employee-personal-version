@@ -75,7 +75,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             onClick={closeMobile}
           >
             <Users className="nav-icon" size={18} />
-            <span>Employees</span>
+            <span>Personnel</span>
           </NavLink>
         </div>
 

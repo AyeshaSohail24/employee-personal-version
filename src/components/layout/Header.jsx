@@ -22,14 +22,16 @@ export default function Header({ toggleMobileSidebar }) {
 
   // Display-label overrides, keyed by the FULL accumulated path (never by bare segment text) so
   // a route can read differently in the breadcrumb than its URL slug without ever affecting any
-  // other route that happens to share the same last segment — e.g. this does not touch the
-  // top-level /employees directory's own breadcrumb, only these nested onboarding/offboarding
-  // routes. The URLs themselves (/onboarding/employees, /offboarding/departing,
-  // /offboarding/employees) are intentionally left unchanged; only these display labels are
-  // remapped, so no route/link elsewhere needs to change. '/offboarding/employees' covers the
-  // individual detail page's intermediate breadcrumb segment (e.g. Home > Offboarding > Progress
-  // > <name>), mirroring how '/onboarding/employees' already cascades into its own detail page.
+  // other route that happens to share the same last segment. The URLs themselves
+  // (/employees, /onboarding/employees, /offboarding/departing, /offboarding/employees) are
+  // intentionally left unchanged — only these display labels are remapped, so no route/link
+  // elsewhere needs to change. '/employees' now reads "Personnel" in the breadcrumb (the
+  // top-level workforce directory's user-facing rename), independent of the nested
+  // onboarding/offboarding overrides below. '/offboarding/employees' covers the individual
+  // detail page's intermediate breadcrumb segment (e.g. Home > Offboarding > Progress > <name>),
+  // mirroring how '/onboarding/employees' already cascades into its own detail page.
   const BREADCRUMB_LABEL_OVERRIDES = {
+    '/employees': 'Personnel',
     '/onboarding/employees': 'Progress',
     '/offboarding/departing': 'Progress',
     '/offboarding/employees': 'Progress',
@@ -81,7 +83,7 @@ export default function Header({ toggleMobileSidebar }) {
           <input
             type="text"
             className="search-input"
-            placeholder="Search employees, notes..."
+            placeholder="Search personnel, notes..."
             aria-label="Global Search"
           />
         </div>

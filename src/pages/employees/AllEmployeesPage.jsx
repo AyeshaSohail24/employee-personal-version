@@ -4,8 +4,8 @@ import DirectoryPageContainer from '../../components/employees/DirectoryPageCont
 export default function AllEmployeesPage() {
   return (
     <DirectoryPageContainer
-      title="All Employees"
-      description="Complete Rizurf workforce directory across all lifecycle statuses"
+      title="All Personnel"
+      description="Complete Rizurf personnel directory across all lifecycle statuses"
       baseLifecycleScope="All"
     />
   );

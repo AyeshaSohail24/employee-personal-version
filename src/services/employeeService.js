@@ -69,6 +69,75 @@ export const employeeService = {
   },
 
   /**
+   * Composes the combined "Profile" view for one person, keyed by their Personnel ID (employeeId,
+   * e.g. RZ-1017) — NOT by lifecycle status, so the same profile stays associated with them across
+   * Active/Departing/Former/etc. transitions. Currently composes entirely from the existing
+   * hydrated employee record (getById()); there is no separate `profile` field anywhere in the
+   * data model — every value here is read from the same structured fields the rest of the app
+   * already uses (personal identity fields on the raw employee record, department/position/mode
+   * from the hydrated record, etc.).
+   *
+   * education/application and links/documents are placeholders for data that will eventually be
+   * merged in from a separate application/shortlisting microapp (not connected yet) — every one
+   * of those fields is explicitly `null` here rather than a fabricated value, and the Profile UI
+   * renders `null` as a neutral "—". When that integration exists, only this one function needs
+   * to start merging in the additional source; the Profile UI and its section shape do not need
+   * to change.
+   *
+   * @param {string} id - internal employee.id (not the display Personnel ID string)
+   * @returns {Promise<Object|null>}
+   */
+  async getProfile(id) {
+    const employee = await this.getById(id);
+    if (!employee) return null;
+
+    return {
+      personnelId: employee.employeeId,
+      fullName: employee.fullName,
+      photo: employee.photo,
+      status: employee.status,
+      personal: {
+        firstName: employee.firstName || null,
+        lastName: employee.lastName || null,
+        email: employee.workEmail || null,
+        contactNumber: employee.workPhone || null,
+        // Not yet collected anywhere in the current data model — reserved for future intake.
+        nationality: null,
+      },
+      // Reserved for the future application/shortlisting microapp integration — none of this
+      // data exists in the current PoC model for any person, so every field is null (never
+      // fabricated), rendered as "—" by the Profile UI.
+      educationApplication: {
+        highestEducation: null,
+        university: null,
+        interestedPosition: null,
+        acquisitionChannel: null,
+        originalStartDate: null,
+        originalEndDate: null,
+        anythingElse: null,
+      },
+      // Reserved the same way — real values render as links when present, "—" otherwise.
+      links: {
+        linkedIn: null,
+        github: null,
+        resume: null,
+        portfolio: null,
+      },
+      employment: {
+        personnelId: employee.employeeId,
+        type: employee.directoryType || null,
+        position: employee.position ? employee.position.name : null,
+        department: employee.department ? employee.department.name : null,
+        workMode: employee.workMode || null,
+        salaryStatus: employee.allowance || null,
+        actualStartDate: employee.startDate || null,
+        actualEndDate: employee.contractEndDate || null,
+        status: employee.status || null,
+      },
+    };
+  },
+
+  /**
    * Retrieves employees filtered by lifecycle status.
    * @param {string} status
    * @param {Object} [options]

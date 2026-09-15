@@ -1824,7 +1824,7 @@ export async function verifyStage18() {
 
     // 334. "Add Task" button renders in the Task Breakdown section header row, right-aligned via a space-between flex row
     assert(
-      onbDetailSrc2.match(/Onboarding Task Breakdown & Operational Status[\s\S]{0,400}Add Task/) && onbDetailSrc2.includes("justifyContent: 'space-between'"),
+      onbDetailSrc2.match(/Onboarding Task Breakdown & Operational Status[\s\S]{0,550}Add Task/) && onbDetailSrc2.includes("justifyContent: 'space-between'"),
       '334. The "Add Task" button renders in the same header row as "Onboarding Task Breakdown & Operational Status", right-aligned via space-between'
     );
 
@@ -7931,13 +7931,13 @@ export async function verifyStage18() {
       const onbDetailSrcFinal7 = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
       const routerSrcFinal7 = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
 
-      // 1128. MAIN sidebar section still contains "Employees" (the master workforce directory) — untouched by this task
+      // 1128. UPDATED — MAIN sidebar section still contains a nav item linking to /employees (the master workforce/personnel directory) — untouched by THIS task (an unrelated Offboarding-navigation task); the visible label itself was legitimately renamed "Employees" -> "Personnel" by the later "Rename Employees Directory to Personnel" task (see checks 1307+), so this check now asserts the CURRENT correct label while still guarding the route/section structure
       {
         const mainSectionMatch = sidebarSrcFinal.match(/MAIN Section \*\/\}[\s\S]*?PEOPLE Section/);
         const mainSectionBlock = mainSectionMatch ? mainSectionMatch[0] : '';
         assert(
-          mainSectionBlock.includes('to="/employees"') && mainSectionBlock.includes('<span>Employees</span>'),
-          '1128. MAIN sidebar section still contains an "Employees" nav item linking to /employees — the master workforce directory is unchanged by this task'
+          mainSectionBlock.includes('to="/employees"') && mainSectionBlock.includes('<span>Personnel</span>'),
+          '1128. UPDATED — MAIN sidebar section still contains a nav item linking to /employees, now labeled "Personnel" (was "Employees" — legitimately renamed by a later task, not a regression from this one)'
         );
       }
 
@@ -7972,12 +7972,12 @@ export async function verifyStage18() {
         '1133. The page subtitle ("View and track individual onboarding progress for employees and interns.") is unchanged — it already read naturally for the renamed page'
       );
 
-      // 1134. Breadcrumb display metadata: a single, path-scoped label override maps /onboarding/employees -> "Progress" — not a second/duplicated breadcrumb, and not a route rename
+      // 1134. UPDATED — Breadcrumb display metadata: a path-scoped label override maps /onboarding/employees -> "Progress" — not a second/duplicated breadcrumb, and not a route rename. The original check required this to be the FIRST entry in BREADCRUMB_LABEL_OVERRIDES; a later task ("Rename Employees Directory to Personnel") legitimately added an earlier '/employees': 'Personnel' entry to the same object, so this now checks the entry exists anywhere in the map rather than requiring first-position
       assert(
-        headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES\s*=\s*\{\s*\n\s*'\/onboarding\/employees':\s*'Progress',/) &&
+        headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES\s*=\s*\{[\s\S]*?'\/onboarding\/employees':\s*'Progress',/) &&
         headerSrcFinal.includes('BREADCRUMB_LABEL_OVERRIDES[url] || formatBreadcrumbText(segment)') &&
         (headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES/g) || []).length >= 2,
-        '1134. NEW — Header.jsx defines a single path-keyed BREADCRUMB_LABEL_OVERRIDES entry (\'/onboarding/employees\' -> \'Progress\') consumed by the existing single breadcrumb generator — this is a display-metadata override, not a hardcoded second breadcrumb and not a route change'
+        '1134. UPDATED — Header.jsx\'s BREADCRUMB_LABEL_OVERRIDES still maps \'/onboarding/employees\' -> \'Progress\', consumed by the existing single breadcrumb generator — this is a display-metadata override, not a hardcoded second breadcrumb and not a route change (no longer required to be the object\'s first entry, since a later task added \'/employees\': \'Personnel\' ahead of it)'
       );
       // 1134b. The override is keyed by the FULL path, not the bare segment — so it can never leak into the unrelated top-level /employees directory's own breadcrumb
       assert(
@@ -8090,17 +8090,17 @@ export async function verifyStage18() {
         );
       }
 
-      // 1142. MAIN > Employees and Onboarding > Progress/Plans are completely unaffected by this Offboarding-only task
+      // 1142. UPDATED — MAIN > (workforce directory) and Onboarding > Progress/Plans are completely unaffected by this Offboarding-only task. The MAIN item's own label was legitimately renamed "Employees" -> "Personnel" by a LATER, unrelated task ("Rename Employees Directory to Personnel"); this check now asserts that current correct label instead of the original "Employees" text, while still guarding that route/section structure and the Onboarding submenu are untouched
       {
         const mainSectionMatchOff = sidebarSrcOff.match(/MAIN Section \*\/\}[\s\S]*?PEOPLE Section/);
         const mainSectionBlockOff = mainSectionMatchOff ? mainSectionMatchOff[0] : '';
         const onboardingSubmenuMatchOff = sidebarSrcOff.match(/\{\/\* Onboarding \*\/\}[\s\S]*?\{\/\* Offboarding \*\/\}/);
         const onboardingSubmenuBlockOff = onboardingSubmenuMatchOff ? onboardingSubmenuMatchOff[0] : '';
         assert(
-          mainSectionBlockOff.includes('to="/employees"') && mainSectionBlockOff.includes('<span>Employees</span>') &&
+          mainSectionBlockOff.includes('to="/employees"') && mainSectionBlockOff.includes('<span>Personnel</span>') &&
           onboardingSubmenuBlockOff.includes('to="/onboarding/employees"') && onboardingSubmenuBlockOff.match(/to="\/onboarding\/employees"[\s\S]{0,250}Progress/) &&
           onboardingSubmenuBlockOff.includes('to="/onboarding/plans"'),
-          '1142. REGRESSION: MAIN > Employees and Onboarding > Progress/Plans remain completely untouched by this Offboarding-scoped navigation task'
+          '1142. UPDATED — MAIN\'s /employees nav item (now labeled "Personnel") and Onboarding > Progress/Plans remain untouched by this Offboarding-scoped navigation task — the "Personnel" label itself came from a later, unrelated task'
         );
       }
 
@@ -8858,7 +8858,7 @@ export async function verifyStage18() {
 
       // 1206. Add Task button sits top-right of the task breakdown section, using the same visual pattern (btn-primary + Plus icon) as Onboarding's
       assert(
-        offDetailSrc2.match(/Offboarding Task Breakdown & Operational Status[\s\S]{0,400}<Plus size=\{14\} \/>[\s\S]{0,50}<span>Add Task<\/span>/),
+        offDetailSrc2.match(/Offboarding Task Breakdown & Operational Status[\s\S]{0,550}<Plus size=\{14\} \/>[\s\S]{0,50}<span>Add Task<\/span>/),
         '1206. NEW — Add Task button (btn-primary, Plus icon) sits directly top-right of the "Offboarding Task Breakdown & Operational Status" heading, matching Onboarding\'s exact placement/visual pattern'
       );
 
@@ -9860,7 +9860,12 @@ export async function verifyStage18() {
         assert(!aaronTaskLeaked, '1279b. NEW — FUNCTIONAL: Editing Farah\'s task instance never appears on Aaron\'s (another departing employee\'s) launched offboarding instance — full cross-person isolation');
       }
 
-      // 1280. Dropped-plan behavior decision: Edit remains available on a Dropped plan's task rows, matching the EXISTING (pre-this-task) unrestricted mutability of Add Task/Delete Task/Done/Reopen on a Dropped plan — introducing a NEW lock just for Edit would be the inconsistent choice Part 11 explicitly warns against
+      // 1280. SUPERSEDED DECISION — UPDATED: a later task ("Make Dropped Onboarding & Offboarding Plans Fully Read-Only")
+      // made Dropped plans fully read-only, overturning this check's original premise (that Edit
+      // stayed available on a Dropped plan, matching Add/Delete/Done/Reopen's then-unrestricted
+      // mutability). That mutability itself is what changed — Add/Delete/Done/Reopen are now ALSO
+      // blocked on a Dropped plan (see checks 1295-1300), so this assertion is updated to match the
+      // new, correct, currently-shipping business rule rather than left asserting stale behavior.
       {
         resetDatabase();
         const farahForDropTest = (await offboardingService.getAllInstances({ employeeId: 'emp-016' }))[0];
@@ -9869,11 +9874,15 @@ export async function verifyStage18() {
         assert(droppedInstance.derivedStatus === 'Dropped', '1280setup. NEW — Setup: Farah\'s offboarding plan is now Dropped');
 
         const droppedTask = droppedInstance.progress.tasks[0];
-        const editedDropped = await offboardingService.updateTaskInInstance(droppedInstance.id, droppedTask.id, { title: 'Edited While Dropped', relativeOffsetDays: droppedTask.relativeOffsetDays + 1 });
-        const editedDroppedTask = editedDropped.progress.tasks.find((t) => t.id === droppedTask.id);
+        let editRejected = false;
+        try {
+          await offboardingService.updateTaskInInstance(droppedInstance.id, droppedTask.id, { title: 'Edited While Dropped', relativeOffsetDays: droppedTask.relativeOffsetDays + 1 });
+        } catch (e) {
+          editRejected = e.message === 'This plan has been dropped and is read-only.';
+        }
         assert(
-          editedDroppedTask.currentTitle === 'Edited While Dropped' && editedDropped.derivedStatus === 'Dropped',
-          '1280. NEW — DECISION: updateTaskInInstance() does not block edits on a Dropped plan (no active-status guard was added) — Dropped remains Dropped after the edit, and the edit succeeds exactly like Add Task/Delete Task already do on a Dropped plan today; this mirrors, rather than contradicts, the existing Drop Plan mutability rules'
+          editRejected,
+          '1280. UPDATED — DECISION: updateTaskInInstance() now BLOCKS edits on a Dropped plan (Dropped is fully read-only per the later task) — this supersedes the original check\'s "Edit remains available while Dropped" premise, which was correct for its own task\'s scope but is no longer the shipping business rule'
         );
         resetDatabase();
       }
@@ -9959,6 +9968,646 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Make Dropped Onboarding & Offboarding Plans Fully Read-Only
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const onbDetailSrcDropped = fs.readFileSync(path.resolve('./src/pages/onboarding/OnboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const offDetailSrcDropped = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingEmployeeDetailPage.jsx'), 'utf-8');
+      const onboardingServiceSrcDropped = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+      const offboardingServiceSrcDropped = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+      const activityServiceSrcDropped = fs.readFileSync(path.resolve('./src/services/activityService.js'), 'utf-8');
+      const offDepartingSrcDropped = fs.readFileSync(path.resolve('./src/pages/offboarding/OffboardingDepartingPage.jsx'), 'utf-8');
+
+      // --- STATIC / STRUCTURAL CHECKS ---
+
+      // 1289. Onboarding detail page: isDropped is derived from derivedStatus === DROPPED specifically, never the broader isActivePlanStatus() (which would also wrongly hide actions on Completed plans)
+      assert(
+        onbDetailSrcDropped.includes('planInstance.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED') &&
+        onbDetailSrcDropped.includes('const isDropped ='),
+        '1289. NEW — OnboardingEmployeeDetailPage.jsx computes isDropped strictly from derivedStatus === PLAN_INSTANCE_STATUS.DROPPED — deliberately narrower than isActivePlanStatus(), so Completed plans are never accidentally caught by this new rule'
+      );
+
+      // 1290. Offboarding detail page: same isDropped derivation pattern
+      assert(
+        offDetailSrcDropped.includes('instance.derivedStatus === OFFBOARDING_INSTANCE_STATUS.DROPPED') &&
+        offDetailSrcDropped.includes('const isDropped ='),
+        '1290. NEW — OffboardingEmployeeDetailPage.jsx computes isDropped strictly from derivedStatus === OFFBOARDING_INSTANCE_STATUS.DROPPED — deliberately narrower than isActiveOffboardingPlanStatus(), so Completed plans are never accidentally caught by this new rule'
+      );
+
+      // 1291. Add Task button is gated by !isDropped in both detail pages
+      assert(
+        onbDetailSrcDropped.match(/\{!isDropped && \(\s*<button[\s\S]{0,450}Add Task/) &&
+        offDetailSrcDropped.match(/\{!isDropped && \(\s*<button[\s\S]{0,450}Add Task/),
+        '1291. NEW — The Add Task button is wrapped in {!isDropped && (...)} in both detail pages, never merely disabled'
+      );
+
+      // 1292. Action cell renders a neutral read-only placeholder (not buttons) when isDropped, in both detail pages — table structure/column count stays stable, no empty button containers
+      assert(
+        onbDetailSrcDropped.includes('{isDropped ? (') && onbDetailSrcDropped.match(/isDropped \? \(\s*<span[\s\S]{0,120}>—<\/span>/) &&
+        offDetailSrcDropped.includes('{isDropped ? (') && offDetailSrcDropped.match(/isDropped \? \(\s*<span[\s\S]{0,120}>—<\/span>/),
+        '1292. NEW — The Action column renders a neutral muted "—" placeholder for a Dropped plan\'s tasks instead of Done/Reopen/Edit/Delete buttons — the # / Task Title / Relative Timing / Due Date / Action table structure itself is completely unchanged, avoiding empty button containers or a conditionally-removed column'
+      );
+
+      // 1293. A useEffect resets any pending Add/Edit/Delete/Drop modal state the instant derivedStatus becomes DROPPED, in both detail pages — stale modal state can never linger open across the transition
+      assert(
+        onbDetailSrcDropped.match(/useEffect\(\(\) => \{\s*if \(planInstance && planInstance\.derivedStatus === PLAN_INSTANCE_STATUS\.DROPPED\) \{\s*setIsAddTaskModalOpen\(false\);\s*setTaskPendingEdit\(null\);\s*setTaskPendingDelete\(null\);\s*setIsDropPlanModalOpen\(false\);/) &&
+        offDetailSrcDropped.match(/useEffect\(\(\) => \{\s*if \(instance && instance\.derivedStatus === OFFBOARDING_INSTANCE_STATUS\.DROPPED\) \{\s*setIsAddTaskModalOpen\(false\);\s*setTaskPendingEdit\(null\);\s*setTaskPendingDelete\(null\);\s*setIsDropPlanModalOpen\(false\);/),
+        '1293. NEW — Both detail pages run a useEffect keyed on the plan instance that force-closes Add/Edit/Delete/Drop modal state the moment derivedStatus flips to Dropped, so a modal already open at that exact instant cannot remain open against a now-read-only plan'
+      );
+
+      // 1294. Add/Edit/Delete modal render blocks are gated by !isDropped (not just their trigger buttons) in both detail pages
+      assert(
+        onbDetailSrcDropped.match(/\{planInstance && !isDropped && \(\s*<AddTaskModal/) &&
+        onbDetailSrcDropped.match(/\{planInstance && !isDropped && \(\s*<EditTaskModal/) &&
+        onbDetailSrcDropped.match(/\{planInstance && !isDropped && \(\s*<DeleteOnboardingTaskModal/) &&
+        offDetailSrcDropped.match(/\{instance && !isDropped && \(\s*<AddOffboardingTaskModal/) &&
+        offDetailSrcDropped.match(/\{instance && !isDropped && \(\s*<EditOffboardingTaskModal/) &&
+        offDetailSrcDropped.match(/\{instance && !isDropped && \(\s*<DeleteOffboardingTaskModal/),
+        '1294. NEW — AddTaskModal/EditTaskModal/DeleteOnboardingTaskModal (and their Offboarding equivalents) are only ever rendered when !isDropped — for a Dropped plan the modal components themselves are never mounted, not merely hidden or Save-disabled'
+      );
+
+      // 1295. onboardingService.js: all 3 instance-mutation methods reject with the exact required wording when planInstance.droppedAt is set, checked before any other work
+      {
+        const onbAddFnMatch = onboardingServiceSrcDropped.match(/async addTaskToInstance\(planInstanceId, taskData[\s\S]*?\n  \},/);
+        const onbUpdateFnMatch = onboardingServiceSrcDropped.match(/async updateTaskInInstance\(planInstanceId, taskInstanceId, taskData[\s\S]*?\n  \},/);
+        const onbDeleteFnMatch = onboardingServiceSrcDropped.match(/async deleteTaskFromInstance\(planInstanceId, taskInstanceId, currentUserId[\s\S]*?\n  \},/);
+        const onbAddBlock = onbAddFnMatch ? onbAddFnMatch[0] : '';
+        const onbUpdateBlock = onbUpdateFnMatch ? onbUpdateFnMatch[0] : '';
+        const onbDeleteBlock = onbDeleteFnMatch ? onbDeleteFnMatch[0] : '';
+        const requiredMsg = "throw new Error('This plan has been dropped and is read-only.');";
+        assert(
+          onbAddBlock.includes('if (planInstance.droppedAt)') && onbAddBlock.includes(requiredMsg) &&
+          onbUpdateBlock.includes('if (planInstance.droppedAt)') && onbUpdateBlock.includes(requiredMsg) &&
+          onbDeleteBlock.includes('if (planInstance.droppedAt)') && onbDeleteBlock.includes(requiredMsg),
+          '1295. NEW — onboardingService.js\'s addTaskToInstance()/updateTaskInInstance()/deleteTaskFromInstance() all check planInstance.droppedAt and throw "This plan has been dropped and is read-only." before any other mutation-path work — a direct service call bypassing the UI is blocked exactly like the UI is'
+        );
+      }
+
+      // 1296. offboardingService.js: same 3-method guard
+      {
+        const offAddFnMatch = offboardingServiceSrcDropped.match(/async addTaskToInstance\(planInstanceId, taskData[\s\S]*?\n  \},/);
+        const offUpdateFnMatch = offboardingServiceSrcDropped.match(/async updateTaskInInstance\(planInstanceId, taskInstanceId, taskData[\s\S]*?\n  \},/);
+        const offDeleteFnMatch = offboardingServiceSrcDropped.match(/async deleteTaskFromInstance\(planInstanceId, taskInstanceId, currentUserId[\s\S]*?\n  \},/);
+        const offAddBlock = offAddFnMatch ? offAddFnMatch[0] : '';
+        const offUpdateBlock = offUpdateFnMatch ? offUpdateFnMatch[0] : '';
+        const offDeleteBlock = offDeleteFnMatch ? offDeleteFnMatch[0] : '';
+        const requiredMsg = "throw new Error('This plan has been dropped and is read-only.');";
+        assert(
+          offAddBlock.includes('if (planInstance.droppedAt)') && offAddBlock.includes(requiredMsg) &&
+          offUpdateBlock.includes('if (planInstance.droppedAt)') && offUpdateBlock.includes(requiredMsg) &&
+          offDeleteBlock.includes('if (planInstance.droppedAt)') && offDeleteBlock.includes(requiredMsg),
+          '1296. NEW — offboardingService.js\'s addTaskToInstance()/updateTaskInInstance()/deleteTaskFromInstance() all check planInstance.droppedAt and throw the same required message before any other mutation-path work'
+        );
+      }
+
+      // 1297. activityService.js: markComplete()/reopen() are both guarded by a narrowly-scoped isSourcePlanDropped() helper that only recognizes Onboarding/Offboarding task-instance-backed activities — never a global completion lock
+      assert(
+        activityServiceSrcDropped.includes('function isSourcePlanDropped(db, activity)') &&
+        activityServiceSrcDropped.includes("activity.sourceEntityType === 'OnboardingTaskInstance'") &&
+        activityServiceSrcDropped.includes("activity.sourceEntityType === 'OffboardingTaskInstance'") &&
+        activityServiceSrcDropped.match(/isSourcePlanDropped\(db, activities\[index\]\)\) \{\s*throw new Error\('This plan has been dropped and is read-only\.'\);/g)?.length >= 2 &&
+        !activityServiceSrcDropped.includes("import { onboardingService }") &&
+        !activityServiceSrcDropped.includes("import { offboardingService }"),
+        '1297. NEW — activityService.js gates markComplete()/reopen() with a local isSourcePlanDropped() helper that reads db.onboarding/offboardingTaskInstances + db.onboarding/offboardingPlanInstances directly (no static import of either service, avoiding new coupling) and only ever recognizes OnboardingTaskInstance/OffboardingTaskInstance-sourced activities — Manual and any other activity source are completely unaffected'
+      );
+
+      // 1298. OffboardingDepartingPage.jsx now excludes Dropped-plan activities from its overdue list, mirroring OnboardingEmployeesPage.jsx's pre-existing identical guard — without this, "Mark All as Complete" (a plain sequential loop, no per-item try/catch) could abort partway through on a Dropped-plan task mixed in with legitimate active ones
+      assert(
+        offDepartingSrcDropped.includes('droppedActivityIds') && offDepartingSrcDropped.includes('OFFBOARDING_INSTANCE_STATUS.DROPPED'),
+        '1298. NEW — OffboardingDepartingPage.jsx\'s loadData() now filters overdueTasks to exclude any activity whose owning plan instance is Dropped — closing a pre-existing asymmetry versus OnboardingEmployeesPage.jsx, so "Mark All as Complete" can never be interrupted by a newly-protected Dropped-plan task'
+      );
+
+      // --- FUNCTIONAL CHECKS ---
+
+      // 1299. Onboarding: dropping preserves progress exactly, and every mutation path (Add/Edit/Delete/Done/Reopen) is rejected with the exact required message, with zero effect on progress
+      {
+        resetDatabase();
+        let hannahBeforeDrop = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        // Force ONE task to incomplete via a direct, non-mutating .map() write (never
+        // activityService.markComplete()) before dropping — guarantees a genuinely droppable
+        // ("active") plan regardless of what any earlier check in this same long-running process
+        // already did to Hannah's real seed activities via the Node in-memory storage fallback's
+        // shared seed-singleton aliasing (the same defensive pattern used elsewhere in this file).
+        if (hannahBeforeDrop.derivedStatus === 'Completed') {
+          const hannahFirstActId = hannahBeforeDrop.progress.tasks[0].activityId;
+          const dbForHannahDropForce = loadDatabase();
+          dbForHannahDropForce.activities = dbForHannahDropForce.activities.map((a) =>
+            a.id === hannahFirstActId ? { ...a, completed: false, completedAt: null, completedBy: null } : a
+          );
+          saveDatabase(dbForHannahDropForce);
+          hannahBeforeDrop = await onboardingService.getInstanceById(hannahBeforeDrop.id);
+        }
+        const progressBefore = JSON.stringify(hannahBeforeDrop.progress);
+        const droppedHannah = await onboardingService.dropPlanInstance(hannahBeforeDrop.id);
+        assert(droppedHannah.derivedStatus === 'Dropped', '1299setup. NEW — Setup: Hannah\'s onboarding plan is now Dropped');
+        assert(JSON.stringify(droppedHannah.progress) === progressBefore, '1299a. NEW — FUNCTIONAL: Progress (completedTasksCount/totalTasks/progressPercentage/every task\'s completion state) is byte-for-byte identical immediately after Drop — nothing was reset, completed, or reopened by the transition itself');
+
+        const someTask = droppedHannah.progress.tasks[0];
+        const completedTask = droppedHannah.progress.tasks.find((t) => t.isCompleted);
+
+        let addErr = null, updateErr = null, deleteErr = null, doneErr = null, reopenErr = null;
+        try { await onboardingService.addTaskToInstance(droppedHannah.id, { title: 'X', relativeOffsetDays: 0 }); } catch (e) { addErr = e.message; }
+        try { await onboardingService.updateTaskInInstance(droppedHannah.id, someTask.id, { title: 'X', relativeOffsetDays: 1 }); } catch (e) { updateErr = e.message; }
+        try { await onboardingService.deleteTaskFromInstance(droppedHannah.id, someTask.id); } catch (e) { deleteErr = e.message; }
+        try { await activityService.markComplete(someTask.activityId); } catch (e) { doneErr = e.message; }
+        if (completedTask) {
+          try { await activityService.reopen(completedTask.activityId); } catch (e) { reopenErr = e.message; }
+        }
+
+        const REQUIRED = 'This plan has been dropped and is read-only.';
+        assert(addErr === REQUIRED, `1299b. NEW — FUNCTIONAL: Add Task rejected on Dropped onboarding plan with the exact required message (got: ${addErr})`);
+        assert(updateErr === REQUIRED, `1299c. NEW — FUNCTIONAL: Edit Task rejected on Dropped onboarding plan with the exact required message (got: ${updateErr})`);
+        assert(deleteErr === REQUIRED, `1299d. NEW — FUNCTIONAL: Delete Task rejected on Dropped onboarding plan with the exact required message (got: ${deleteErr})`);
+        assert(doneErr === REQUIRED, `1299e. NEW — FUNCTIONAL: Done (markComplete) rejected on Dropped onboarding plan task with the exact required message (got: ${doneErr})`);
+        assert(!completedTask || reopenErr === REQUIRED, `1299f. NEW — FUNCTIONAL: Reopen rejected on Dropped onboarding plan task with the exact required message (got: ${reopenErr})`);
+
+        const rereadHannah = await onboardingService.getInstanceById(droppedHannah.id);
+        assert(JSON.stringify(rereadHannah.progress) === progressBefore, '1299g. NEW — FUNCTIONAL: Progress remains byte-for-byte identical after every rejected mutation attempt — no partial update occurred before any throw');
+      }
+
+      // 1300. Offboarding: same full parallel functional suite
+      {
+        resetDatabase();
+        const farahBeforeDrop = (await offboardingService.getAllInstances({ employeeId: 'emp-016' }))[0];
+        const offProgressBefore = JSON.stringify(farahBeforeDrop.progress);
+        const droppedFarah = await offboardingService.dropPlanInstance(farahBeforeDrop.id);
+        assert(droppedFarah.derivedStatus === 'Dropped', '1300setup. NEW — Setup: Farah\'s offboarding plan is now Dropped');
+        assert(JSON.stringify(droppedFarah.progress) === offProgressBefore, '1300a. NEW — FUNCTIONAL: Offboarding progress is byte-for-byte identical immediately after Drop');
+
+        const offSomeTask = droppedFarah.progress.tasks[0];
+        const offCompletedTask = droppedFarah.progress.tasks.find((t) => t.isCompleted);
+
+        let offAddErr = null, offUpdateErr = null, offDeleteErr = null, offDoneErr = null, offReopenErr = null;
+        try { await offboardingService.addTaskToInstance(droppedFarah.id, { title: 'X', relativeOffsetDays: 0 }); } catch (e) { offAddErr = e.message; }
+        try { await offboardingService.updateTaskInInstance(droppedFarah.id, offSomeTask.id, { title: 'X', relativeOffsetDays: 1 }); } catch (e) { offUpdateErr = e.message; }
+        try { await offboardingService.deleteTaskFromInstance(droppedFarah.id, offSomeTask.id); } catch (e) { offDeleteErr = e.message; }
+        try { await activityService.markComplete(offSomeTask.activityId); } catch (e) { offDoneErr = e.message; }
+        if (offCompletedTask) {
+          try { await activityService.reopen(offCompletedTask.activityId); } catch (e) { offReopenErr = e.message; }
+        }
+
+        const REQUIRED = 'This plan has been dropped and is read-only.';
+        assert(offAddErr === REQUIRED, `1300b. NEW — FUNCTIONAL: Add Task rejected on Dropped offboarding plan (got: ${offAddErr})`);
+        assert(offUpdateErr === REQUIRED, `1300c. NEW — FUNCTIONAL: Edit Task rejected on Dropped offboarding plan (got: ${offUpdateErr})`);
+        assert(offDeleteErr === REQUIRED, `1300d. NEW — FUNCTIONAL: Delete Task rejected on Dropped offboarding plan (got: ${offDeleteErr})`);
+        assert(offDoneErr === REQUIRED, `1300e. NEW — FUNCTIONAL: Done rejected on Dropped offboarding plan task (got: ${offDoneErr})`);
+        assert(!offCompletedTask || offReopenErr === REQUIRED, `1300f. NEW — FUNCTIONAL: Reopen rejected on Dropped offboarding plan task (got: ${offReopenErr})`);
+
+        const rereadFarah = await offboardingService.getInstanceById(droppedFarah.id);
+        assert(JSON.stringify(rereadFarah.progress) === offProgressBefore, '1300g. NEW — FUNCTIONAL: Offboarding progress remains byte-for-byte identical after every rejected mutation attempt');
+      }
+
+      // 1301. REGRESSION: Completed (not Dropped) plans are UNAFFECTED by this task — Reopen remains available on a completed task, exactly as before
+      {
+        resetDatabase();
+        const kevinInst = (await onboardingService.getAllInstances({ employeeId: 'emp-014' }))[0];
+        const completedKevinTask = kevinInst.progress.tasks.find((t) => t.isCompleted);
+        assert(Boolean(completedKevinTask), '1301setup. NEW — Setup: Kevin\'s seed instance has a completed task to test Reopen against (plan status itself is unrelated — this check is about task-level Reopen availability, not plan-level Completed status)');
+        if (completedKevinTask) {
+          const reopened = await activityService.reopen(completedKevinTask.activityId);
+          assert(reopened.completed === false, '1301. REGRESSION: activityService.reopen() still succeeds on a completed task whose plan is NOT Dropped — the new isSourcePlanDropped() guard only blocks Dropped plans, never Completed ones, preserving the existing "Reopen allowed on completed tasks" business rule untouched');
+        }
+      }
+
+      // 1302. Onboarding relaunch: new instance gets a different ID, old Dropped instance remains stored/unchanged, new plan resolves its own fresh anchor via current canonical/override logic
+      {
+        resetDatabase();
+        let hannahForRelaunch = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        // See check 1299's identical guard for why this is needed.
+        if (hannahForRelaunch.derivedStatus === 'Completed') {
+          const actId = hannahForRelaunch.progress.tasks[0].activityId;
+          const dbForce = loadDatabase();
+          dbForce.activities = dbForce.activities.map((a) => (a.id === actId ? { ...a, completed: false, completedAt: null, completedBy: null } : a));
+          saveDatabase(dbForce);
+          hannahForRelaunch = await onboardingService.getInstanceById(hannahForRelaunch.id);
+        }
+        const droppedForRelaunch = await onboardingService.dropPlanInstance(hannahForRelaunch.id);
+        const droppedProgressSnapshot = JSON.stringify(droppedForRelaunch.progress);
+
+        const eligibleAfterDrop = await onboardingService.getLaunchEligibleEmployees();
+        assert(eligibleAfterDrop.some((e) => e.id === 'emp-013'), '1302a. NEW — FUNCTIONAL: Hannah becomes eligible for a fresh Onboarding launch again immediately after Drop');
+
+        const relaunchedHannah = await onboardingService.launchPlanInstance('emp-013', '2026-10-01');
+        assert(relaunchedHannah.id !== droppedForRelaunch.id, `1302b. NEW — FUNCTIONAL: The relaunch creates a NEW instance ID (${relaunchedHannah.id}), never reusing the dropped instance's ID (${droppedForRelaunch.id})`);
+        assert(relaunchedHannah.anchorDate === '2026-10-01', `1302c. NEW — FUNCTIONAL: The new instance resolves its anchor via the current launch logic (Custom Override honored: ${relaunchedHannah.anchorDate})`);
+
+        const oldAfterRelaunch = await onboardingService.getInstanceById(droppedForRelaunch.id);
+        assert(oldAfterRelaunch.derivedStatus === 'Dropped', '1302d. NEW — FUNCTIONAL: The OLD dropped instance is still stored and still derives Dropped after the new plan was launched');
+        assert(JSON.stringify(oldAfterRelaunch.progress) === droppedProgressSnapshot, '1302e. NEW — FUNCTIONAL: The OLD dropped instance\'s task history/progress is completely unchanged by the relaunch — its task instances were never reused or overwritten');
+        assert(oldAfterRelaunch.anchorDate === droppedForRelaunch.anchorDate, '1302f. NEW — FUNCTIONAL: The OLD dropped instance\'s own anchor snapshot is unchanged — the new launch never rewrites a prior instance\'s anchor');
+
+        const allHannahInstances = await onboardingService.getAllInstances({ employeeId: 'emp-013' });
+        assert(allHannahInstances.length === 2, `1302g. NEW — FUNCTIONAL: Both instances (dropped + new) are returned by getAllInstances() for this employee (found ${allHannahInstances.length})`);
+        assert(allHannahInstances[0].id === relaunchedHannah.id, '1302h. NEW — FUNCTIONAL: The newly-launched instance is prepended to the front of the array (new instances are unshifted, never appended) — this is exactly why the detail page (which renders instances[0]) shows the NEW plan by default after a relaunch, while the dropped one becomes instances[1]');
+      }
+
+      // 1303. Offboarding relaunch: same full parallel behavior
+      {
+        resetDatabase();
+        const farahForRelaunch = (await offboardingService.getAllInstances({ employeeId: 'emp-016' }))[0];
+        const offDroppedForRelaunch = await offboardingService.dropPlanInstance(farahForRelaunch.id);
+        const offDroppedProgressSnapshot = JSON.stringify(offDroppedForRelaunch.progress);
+
+        const offEligibleAfterDrop = await offboardingService.getLaunchEligibleEmployees();
+        assert(offEligibleAfterDrop.some((e) => e.id === 'emp-016'), '1303a. NEW — FUNCTIONAL: Farah becomes eligible for a fresh Offboarding launch again immediately after Drop');
+
+        const relaunchedFarah = await offboardingService.launchPlanInstance('emp-016', '2026-11-05');
+        assert(relaunchedFarah.id !== offDroppedForRelaunch.id, `1303b. NEW — FUNCTIONAL: The relaunch creates a NEW instance ID (${relaunchedFarah.id}), never reusing the dropped instance's ID (${offDroppedForRelaunch.id})`);
+        assert(relaunchedFarah.anchorDate === '2026-11-05', `1303c. NEW — FUNCTIONAL: The new instance resolves its anchor via the current launch logic (Custom Override honored: ${relaunchedFarah.anchorDate})`);
+
+        const offOldAfterRelaunch = await offboardingService.getInstanceById(offDroppedForRelaunch.id);
+        assert(offOldAfterRelaunch.derivedStatus === 'Dropped', '1303d. NEW — FUNCTIONAL: The OLD dropped offboarding instance is still stored and still derives Dropped after the new plan was launched');
+        assert(JSON.stringify(offOldAfterRelaunch.progress) === offDroppedProgressSnapshot, '1303e. NEW — FUNCTIONAL: The OLD dropped offboarding instance\'s task history/progress is completely unchanged by the relaunch');
+        assert(offOldAfterRelaunch.anchorDate === offDroppedForRelaunch.anchorDate, '1303f. NEW — FUNCTIONAL: The OLD dropped offboarding instance\'s own anchor snapshot is unchanged by the relaunch');
+
+        const allFarahInstances = await offboardingService.getAllInstances({ employeeId: 'emp-016' });
+        assert(allFarahInstances.length === 2, `1303g. NEW — FUNCTIONAL: Both instances (dropped + new) are returned by getAllInstances() for this employee (found ${allFarahInstances.length})`);
+        assert(allFarahInstances[0].id === relaunchedFarah.id, '1303h. NEW — FUNCTIONAL: The newly-launched offboarding instance is prepended to the front of the array, exactly like Onboarding');
+      }
+
+      // 1304. Reusable scope tasks and employee canonical dates are unaffected by Drop + rejected mutations + relaunch (both modules)
+      {
+        resetDatabase();
+        const scopeTasksBefore = await onboardingService.getScopeTaskDefinitions();
+        const sampleScopeTask = scopeTasksBefore[0];
+        const empBefore = await employeeService.getById('emp-013');
+
+        let hannahForCanonicalTest = (await onboardingService.getAllInstances({ employeeId: 'emp-013' }))[0];
+        // See check 1299's identical guard for why this is needed.
+        if (hannahForCanonicalTest.derivedStatus === 'Completed') {
+          const actId2 = hannahForCanonicalTest.progress.tasks[0].activityId;
+          const dbForce2 = loadDatabase();
+          dbForce2.activities = dbForce2.activities.map((a) => (a.id === actId2 ? { ...a, completed: false, completedAt: null, completedBy: null } : a));
+          saveDatabase(dbForce2);
+          hannahForCanonicalTest = await onboardingService.getInstanceById(hannahForCanonicalTest.id);
+        }
+        const droppedCanonical = await onboardingService.dropPlanInstance(hannahForCanonicalTest.id);
+        try { await onboardingService.addTaskToInstance(droppedCanonical.id, { title: 'X', relativeOffsetDays: 0 }); } catch (e) {}
+        await onboardingService.launchPlanInstance('emp-013');
+
+        const scopeTasksAfter = await onboardingService.getScopeTaskDefinitions();
+        const sampleScopeTaskAfter = scopeTasksAfter.find((t) => t.id === sampleScopeTask.id);
+        const empAfter = await employeeService.getById('emp-013');
+
+        assert(JSON.stringify(sampleScopeTask) === JSON.stringify(sampleScopeTaskAfter), '1304a. NEW — FUNCTIONAL: The reusable Onboarding scope task configuration is byte-for-byte unchanged across Drop + a rejected Add attempt + a full relaunch');
+        assert(empBefore.startDate === empAfter.startDate, `1304b. NEW — FUNCTIONAL: employee.startDate is unchanged across the same sequence (${empBefore.startDate} -> ${empAfter.startDate})`);
+      }
+
+      // 1305. Onboarding/Offboarding lifecycle logic remains independent — no cross-imports introduced by this task, and the activityService guard reads plan data directly rather than importing either service
+      assert(
+        !onboardingServiceSrcDropped.includes("from '../services/offboardingService.js'") && !onboardingServiceSrcDropped.includes("from './offboardingService.js'") &&
+        !offboardingServiceSrcDropped.includes("from '../services/onboardingService.js'") && !offboardingServiceSrcDropped.includes("from './onboardingService.js'") &&
+        !onbDetailSrcDropped.includes("offboardingService") && !offDetailSrcDropped.includes("onboardingService.js'"),
+        '1305. REGRESSION: onboardingService.js/offboardingService.js still contain no import from one another, and neither detail page imports the other module\'s service — the Dropped-read-only rule was implemented independently in each module, never as shared cross-domain code'
+      );
+
+      // 1306. REGRESSION: Active-plan actions remain fully functional for BOTH modules — Add/Edit/Delete/Done/Reopen/Drop all still work exactly as before this task
+      {
+        resetDatabase();
+        // Onboarding — Kevin (emp-014) has an active seed instance
+        const kevinActive = (await onboardingService.getAllInstances({ employeeId: 'emp-014' }))[0];
+        const kevinCountBefore = kevinActive.progress.totalTasks;
+        const afterAdd = await onboardingService.addTaskToInstance(kevinActive.id, { title: 'Active Regr Add', relativeOffsetDays: 1 });
+        assert(afterAdd.progress.totalTasks === kevinCountBefore + 1, '1306a. REGRESSION: Add Task still works on an active onboarding plan');
+
+        const addedTask = afterAdd.progress.tasks.find((t) => t.currentTitle === 'Active Regr Add');
+        const afterEdit = await onboardingService.updateTaskInInstance(afterAdd.id, addedTask.id, { title: 'Active Regr Edited', relativeOffsetDays: 5 });
+        const editedTask = afterEdit.progress.tasks.find((t) => t.id === addedTask.id);
+        assert(editedTask.currentTitle === 'Active Regr Edited' && editedTask.currentDueDate === addDaysToLocalDate(afterEdit.anchorDate, 5), '1306b. REGRESSION: Edit Task still works and still recalculates Due Date from the launched instance\'s anchor on an active onboarding plan');
+
+        const beforeDoneTask = editedTask;
+        const doneResult = await activityService.markComplete(beforeDoneTask.activityId);
+        assert(doneResult.completed === true, '1306c. REGRESSION: Done still works on an active onboarding plan task');
+        const reopenResult = await activityService.reopen(beforeDoneTask.activityId);
+        assert(reopenResult.completed === false, '1306d. REGRESSION: Reopen still works on an active onboarding plan task');
+
+        const afterDelete = await onboardingService.deleteTaskFromInstance(afterEdit.id, addedTask.id);
+        assert(afterDelete.progress.totalTasks === kevinCountBefore, '1306e. REGRESSION: Delete Task still works and still leaves only the launched instance affected (count back to original)');
+
+        // Force ONE task to incomplete via a direct, non-mutating .map() write (never
+        // activityService.markComplete()) before testing Drop — the same defensive pattern used
+        // elsewhere in this suite to guarantee an "active" (droppable) plan regardless of what
+        // any earlier check in this same process already did to Kevin's real seed activities via
+        // the Node in-memory storage fallback's shared seed-singleton aliasing.
+        const kevinFirstTaskId = afterDelete.progress.tasks[0].activityId;
+        const dbForDropForce = loadDatabase();
+        dbForDropForce.activities = dbForDropForce.activities.map((a) =>
+          a.id === kevinFirstTaskId ? { ...a, completed: false, completedAt: null, completedBy: null } : a
+        );
+        saveDatabase(dbForDropForce);
+        const kevinReadyToDrop = await onboardingService.getInstanceById(afterDelete.id);
+
+        const droppedKevin = await onboardingService.dropPlanInstance(kevinReadyToDrop.id);
+        assert(droppedKevin.derivedStatus === 'Dropped', '1306f. REGRESSION: Drop Plan still works on an active onboarding plan');
+
+        // Offboarding — Aaron (emp-017) has an active seed instance
+        const aaronActive = (await offboardingService.getAllInstances({ employeeId: 'emp-017' }))[0];
+        const aaronCountBefore = aaronActive.progress.totalTasks;
+        const offAfterAdd = await offboardingService.addTaskToInstance(aaronActive.id, { title: 'Off Active Regr Add', relativeOffsetDays: 1 });
+        assert(offAfterAdd.progress.totalTasks === aaronCountBefore + 1, '1306g. REGRESSION: Add Task still works on an active offboarding plan');
+
+        const offAddedTask = offAfterAdd.progress.tasks.find((t) => t.currentTitle === 'Off Active Regr Add');
+        const offAfterEdit = await offboardingService.updateTaskInInstance(offAfterAdd.id, offAddedTask.id, { title: 'Off Active Regr Edited', relativeOffsetDays: 3 });
+        const offEditedTask = offAfterEdit.progress.tasks.find((t) => t.id === offAddedTask.id);
+        assert(offEditedTask.currentTitle === 'Off Active Regr Edited' && offEditedTask.currentDueDate === addDaysToLocalDate(offAfterEdit.anchorDate, 3), '1306h. REGRESSION: Edit Task still works and still recalculates Due Date from the launched instance\'s Final Working Date anchor on an active offboarding plan');
+
+        const offDoneResult = await activityService.markComplete(offEditedTask.activityId);
+        assert(offDoneResult.completed === true, '1306i. REGRESSION: Done still works on an active offboarding plan task');
+        const offReopenResult = await activityService.reopen(offEditedTask.activityId);
+        assert(offReopenResult.completed === false, '1306j. REGRESSION: Reopen still works on an active offboarding plan task');
+
+        const offAfterDelete = await offboardingService.deleteTaskFromInstance(offAfterEdit.id, offAddedTask.id);
+        assert(offAfterDelete.progress.totalTasks === aaronCountBefore, '1306k. REGRESSION: Delete Task still works on an active offboarding plan');
+
+        // Same defensive force-incomplete write as Kevin's onboarding half above, for the same
+        // reason — guarantees an "active" (droppable) plan regardless of prior real-activity state.
+        const aaronFirstTaskId = offAfterDelete.progress.tasks[0].activityId;
+        const dbForOffDropForce = loadDatabase();
+        dbForOffDropForce.activities = dbForOffDropForce.activities.map((a) =>
+          a.id === aaronFirstTaskId ? { ...a, completed: false, completedAt: null, completedBy: null } : a
+        );
+        saveDatabase(dbForOffDropForce);
+        const aaronReadyToDrop = await offboardingService.getInstanceById(offAfterDelete.id);
+
+        const droppedAaron = await offboardingService.dropPlanInstance(aaronReadyToDrop.id);
+        assert(droppedAaron.derivedStatus === 'Dropped', '1306l. REGRESSION: Drop Plan still works on an active offboarding plan');
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Rename Employees Directory to Personnel + Add Profile Column/View Profile + Fix ON-SITE Badge
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const sidebarSrcPersonnel = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+      const headerSrcPersonnel = fs.readFileSync(path.resolve('./src/components/layout/Header.jsx'), 'utf-8');
+      const allEmployeesPageSrc = fs.readFileSync(path.resolve('./src/pages/employees/AllEmployeesPage.jsx'), 'utf-8');
+      const directoryContainerSrc = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const createEmployeeModalSrcPersonnel = fs.readFileSync(path.resolve('./src/components/employees/CreateEmployeeModal.jsx'), 'utf-8');
+      const employeeListViewSrc = fs.readFileSync(path.resolve('./src/components/employees/EmployeeListView.jsx'), 'utf-8');
+      const employeeCardViewSrc = fs.readFileSync(path.resolve('./src/components/employees/EmployeeCardView.jsx'), 'utf-8');
+      const employeeTimelineViewSrc = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const personnelProfileModalSrc = fs.readFileSync(path.resolve('./src/components/employees/PersonnelProfileModal.jsx'), 'utf-8');
+      const employeeServiceSrcPersonnel = fs.readFileSync(path.resolve('./src/services/employeeService.js'), 'utf-8');
+      const routerSrcPersonnel = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+      const indexCssSrcPersonnel = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // --- STATIC / STRUCTURAL CHECKS ---
+
+      // 1307. Sidebar MAIN nav item for /employees now reads "Personnel"
+      assert(
+        sidebarSrcPersonnel.match(/to="\/employees"[\s\S]{0,250}<span>Personnel<\/span>/) &&
+        !sidebarSrcPersonnel.match(/to="\/employees"[\s\S]{0,250}<span>Employees<\/span>/),
+        '1307. NEW — Sidebar.jsx\'s /employees MAIN nav item now renders "Personnel" (was "Employees") — same route, same icon, no duplicate nav entry was added'
+      );
+
+      // 1308. Breadcrumb label override maps /employees -> "Personnel"
+      assert(
+        headerSrcPersonnel.match(/BREADCRUMB_LABEL_OVERRIDES = \{\s*'\/employees': 'Personnel',/),
+        '1308. NEW — Header.jsx\'s BREADCRUMB_LABEL_OVERRIDES maps \'/employees\' to \'Personnel\' — the breadcrumb reads Home > Personnel while the underlying route/URL stays exactly /employees'
+      );
+
+      // 1309. Global search placeholder updated
+      assert(
+        headerSrcPersonnel.includes('placeholder="Search personnel, notes..."') &&
+        !headerSrcPersonnel.includes('placeholder="Search employees, notes..."'),
+        '1309. NEW — Header.jsx\'s global search placeholder reads "Search personnel, notes..." — wording only, no new search functionality was implemented'
+      );
+
+      // 1310. Page heading/description say "All Personnel" / mention personnel directory
+      assert(
+        allEmployeesPageSrc.includes('title="All Personnel"') &&
+        allEmployeesPageSrc.match(/description="[^"]*personnel[^"]*"/i),
+        '1310. NEW — AllEmployeesPage.jsx passes title="All Personnel" and a personnel-worded description to DirectoryPageContainer'
+      );
+
+      // 1311. Result count text reads "N personnel" — never "N personnels" and never "N employees"
+      assert(
+        directoryContainerSrc.includes('`${baseCount} personnel`') &&
+        !directoryContainerSrc.includes('personnels') &&
+        directoryContainerSrc.includes('`${totalFilteredCount} of ${baseCount} personnel (Filtered)`'),
+        '1311. NEW — DirectoryPageContainer.jsx\'s resultCountText reads "N personnel" (both the unfiltered and "X of Y personnel (Filtered)" forms) — personnel is already collective, so no "-s" suffix is ever appended'
+      );
+
+      // 1312. Sync Personnel / Create Personnel button wording
+      assert(
+        directoryContainerSrc.includes("'Syncing...' : 'Sync Personnel'") &&
+        directoryContainerSrc.includes('<span>Create Personnel</span>'),
+        '1312. NEW — DirectoryPageContainer.jsx\'s header buttons read "Sync Personnel" and "Create Personnel" (was "Sync Employees" / "Create Employee")'
+      );
+
+      // 1313. Create Personnel modal: title + submit button say Personnel, subtitle uses inclusive employee-or-intern wording
+      assert(
+        createEmployeeModalSrcPersonnel.includes('<h3 className="modal-title">Create Personnel</h3>') &&
+        createEmployeeModalSrcPersonnel.includes("{isSubmitting ? 'Creating...' : 'Create Personnel'}") &&
+        createEmployeeModalSrcPersonnel.match(/modal-subtitle">[^<]*employee or intern[^<]*personnel[^<]*</),
+        '1313. NEW — CreateEmployeeModal.jsx\'s title and submit button read "Create Personnel", and its subtitle explicitly says "...employee or intern...personnel directory" — inclusive of both Type values, not just one'
+      );
+
+      // 1314. Type option values remain exactly Employee/Intern — never renamed to Personnel (Personnel is the umbrella directory, not a Type)
+      assert(
+        createEmployeeModalSrcPersonnel.match(/TYPE_OPTIONS = \[\s*\{ value: 'Employee', label: 'Employee' \},\s*\{ value: 'Intern', label: 'Intern' \},\s*\]/),
+        '1314. REGRESSION: CreateEmployeeModal.jsx\'s TYPE_OPTIONS is still exactly [Employee, Intern] — the Personnel rename never touched the Type classification'
+      );
+
+      // 1315. /employees route is unchanged — still maps to AllEmployeesPage, no breaking route migration
+      assert(
+        routerSrcPersonnel.includes("{ path: 'employees', element: <AllEmployeesPage /> }"),
+        '1315. REGRESSION: router/index.jsx still routes \'employees\' to <AllEmployeesPage /> unchanged — preserving route compatibility was preferred over introducing a /personnel migration for this task'
+      );
+
+      // 1316. List table: final PROFILE column added, ID still first, 10 columns total
+      assert(
+        employeeListViewSrc.match(/<th style=\{\{ width: '6%' \}\}>ID<\/th>/) &&
+        employeeListViewSrc.match(/<th[^>]*>PROFILE<\/th>\s*<\/tr>/) &&
+        (employeeListViewSrc.match(/<th style=/g) || []).length === 10,
+        '1316. NEW — EmployeeListView.jsx\'s table header keeps ID first and adds PROFILE as the FINAL column — exactly 10 <th> columns total (ID/NAME/DEPARTMENT/TYPE/MODE/DATES/SALARY/STATUS/DURATION/PROFILE)'
+      );
+
+      // 1317. Every list row has a "View Profile" action wired to onViewProfile(emp.id)
+      assert(
+        employeeListViewSrc.includes('onClick={() => onViewProfile && onViewProfile(emp.id)}') &&
+        employeeListViewSrc.includes('<span>View Profile</span>'),
+        '1317. NEW — EmployeeListView.jsx\'s PROFILE cell renders a "View Profile" button calling onViewProfile(emp.id) for every row — explicit wording, not a bare "View"'
+      );
+
+      // 1318. Card view also exposes View Profile (person-level action available consistently, not List-only)
+      assert(
+        employeeCardViewSrc.includes('onClick={() => onViewProfile && onViewProfile(emp.id)}') &&
+        employeeCardViewSrc.includes('<span>View Profile</span>'),
+        '1318. NEW — EmployeeCardView.jsx also renders a "View Profile" button per card, wired the same way as List view — Profile is not List-only'
+      );
+
+      // 1319. Timeline view decision: NOT force-fitted with a Profile control (documented decision, not silently missing) — Timeline has no existing action-area affordance per row to attach it to cleanly
+      assert(
+        !employeeTimelineViewSrc.includes('onViewProfile') && !employeeTimelineViewSrc.includes('PersonnelProfileModal') && !employeeTimelineViewSrc.includes('View Profile'),
+        '1319. NEW — DECISION: EmployeeTimelineView.jsx intentionally does NOT gain a View Profile control — its per-person row has no existing action-area affordance, and forcing one in would clutter the timeline bar layout; Profile remains reachable via List and Card views, which this task explicitly allows'
+      );
+
+      // 1320. PersonnelProfileModal is read-only — no Edit/Delete/Save/Upload controls, only Close
+      assert(
+        personnelProfileModalSrc.match(/onClick=\{onClose\}>\s*Close\s*<\/button>/) &&
+        !personnelProfileModalSrc.match(/Edit Profile|Delete Profile|Upload Resume|Save Changes|Save Profile/),
+        '1320. NEW — PersonnelProfileModal.jsx offers only a Close action — no Edit/Delete/Upload/Save control exists anywhere in the file, matching the explicit read-only requirement'
+      );
+
+      // 1321. PersonnelProfileModal sources data exclusively through employeeService.getProfile() — never localStorage/storageEngine directly in actual code (a documentation comment explaining this boundary is fine and expected, same convention as the rest of this suite)
+      {
+        const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+        const personnelProfileModalCodeOnly = stripComments(personnelProfileModalSrc);
+        assert(
+          personnelProfileModalSrc.includes('employeeService.getProfile(employeeId)') &&
+          !personnelProfileModalCodeOnly.includes('localStorage') && !personnelProfileModalCodeOnly.includes('storageEngine'),
+          '1321. NEW — PersonnelProfileModal.jsx calls employeeService.getProfile(employeeId) exclusively — its actual code (comments excluded) never references localStorage/storageEngine directly, preserving the existing service-layer boundary'
+        );
+      }
+
+      // 1322. Profile is organized into the 4 required sections, not one long unstructured form
+      assert(
+        personnelProfileModalSrc.includes('title="Personal Information"') &&
+        personnelProfileModalSrc.includes('title="Education & Application"') &&
+        personnelProfileModalSrc.includes('title="Links & Documents"') &&
+        personnelProfileModalSrc.includes('title="Employment / Internship Details"'),
+        '1322. NEW — PersonnelProfileModal.jsx renders exactly the 4 required sections: Personal Information, Education & Application, Links & Documents, Employment / Internship Details'
+      );
+
+      // 1323. getProfile() returns SEPARATE structured fields, never one giant "profile" string blob
+      assert(
+        employeeServiceSrcPersonnel.match(/async getProfile\(id\)[\s\S]*?personal: \{[\s\S]*?educationApplication: \{[\s\S]*?links: \{[\s\S]*?employment: \{/) &&
+        !employeeServiceSrcPersonnel.match(/profile:\s*["'`]/),
+        '1323. NEW — employeeService.getProfile() composes separate personal/educationApplication/links/employment objects from the existing structured employee fields — never a single monolithic profile string field'
+      );
+
+      // 1324. getProfile() never fabricates the future-microapp fields — every one is explicitly null in source, not a placeholder string pretending to be real data
+      assert(
+        employeeServiceSrcPersonnel.match(/nationality: null,/) &&
+        employeeServiceSrcPersonnel.match(/highestEducation: null,\s*university: null,\s*interestedPosition: null,\s*acquisitionChannel: null,\s*originalStartDate: null,\s*originalEndDate: null,\s*anythingElse: null,/) &&
+        employeeServiceSrcPersonnel.match(/linkedIn: null,\s*github: null,\s*resume: null,\s*portfolio: null,/),
+        '1324. NEW — Every future/microapp-sourced Profile field (nationality, all Education & Application fields, all Links & Documents fields) is explicitly null in employeeService.getProfile() — never a fabricated placeholder value'
+      );
+
+      // 1325. .status-pill gained white-space: nowrap — the actual root-cause fix for ON-SITE wrapping onto two lines
+      assert(
+        indexCssSrcPersonnel.match(/\.status-pill \{[\s\S]{0,700}white-space: nowrap;/),
+        '1325. NEW — .status-pill (shared by MODE/TYPE/SALARY/STATUS pills across List and Card view) now has white-space: nowrap — "On-site" can never wrap onto two lines ("ON-" / "SITE") again, and the fix is at the shared pill class, not a MODE-column-specific hack'
+      );
+
+      // 1326. Directory table sizing fix uses min-width (NOT table-layout: fixed) — preserves the existing "wrapper scrolls horizontally at narrow viewports" behavior instead of squeezing columns unreadably
+      assert(
+        indexCssSrcPersonnel.includes('.directory-table-card .widget-table {') &&
+        indexCssSrcPersonnel.match(/\.directory-table-card \.widget-table \{\s*min-width: 1080px;/) &&
+        !indexCssSrcPersonnel.match(/\.directory-table-card \.widget-table \{\s*table-layout: fixed;/),
+        '1326. NEW — The Personnel directory table\'s desktop-width fix uses min-width (scoped to .directory-table-card, never the narrower Dashboard widget tables), NOT table-layout: fixed — fixed layout was tried and found to break the existing mobile horizontal-scroll behavior by force-squeezing every column into the viewport instead of scrolling'
+      );
+
+      // --- FUNCTIONAL CHECKS ---
+
+      // 1327. FUNCTIONAL: getProfile() returns real existing data for a real person, correctly mapped into the right sections
+      {
+        const aaronForProfile = await employeeService.getById('emp-017');
+        assert(Boolean(aaronForProfile), '1327setup. NEW — Setup: emp-017 (Aaron Kumar) resolves via the existing employeeService.getById()');
+        const profile = await employeeService.getProfile('emp-017');
+        assert(
+          profile.personnelId === aaronForProfile.employeeId &&
+          profile.personal.firstName === aaronForProfile.firstName &&
+          profile.personal.lastName === aaronForProfile.lastName &&
+          profile.personal.email === aaronForProfile.workEmail &&
+          profile.personal.contactNumber === aaronForProfile.workPhone,
+          `1327a. NEW — FUNCTIONAL: getProfile('emp-017').personal matches the real hydrated employee record exactly (personnelId ${profile.personnelId}, ${profile.personal.firstName} ${profile.personal.lastName}, ${profile.personal.email})`
+        );
+        assert(
+          profile.employment.personnelId === aaronForProfile.employeeId &&
+          profile.employment.type === aaronForProfile.directoryType &&
+          profile.employment.workMode === aaronForProfile.workMode &&
+          profile.employment.salaryStatus === aaronForProfile.allowance &&
+          profile.employment.actualStartDate === aaronForProfile.startDate &&
+          profile.employment.status === aaronForProfile.status &&
+          profile.employment.department === (aaronForProfile.department ? aaronForProfile.department.name : null) &&
+          profile.employment.position === (aaronForProfile.position ? aaronForProfile.position.name : null),
+          `1327b. NEW — FUNCTIONAL: getProfile('emp-017').employment correctly reflects the real hydrated department/position/workMode/salary/dates/status (found type=${profile.employment.type}, dept=${profile.employment.department}, mode=${profile.employment.workMode}, salary=${profile.employment.salaryStatus}, status=${profile.employment.status})`
+        );
+      }
+
+      // 1328. FUNCTIONAL: future/microapp fields are null for a REAL seed employee too (not fabricated even for someone with a rich real record)
+      {
+        const profileForFabricationCheck = await employeeService.getProfile('emp-001');
+        assert(
+          profileForFabricationCheck.personal.nationality === null &&
+          profileForFabricationCheck.educationApplication.university === null &&
+          profileForFabricationCheck.educationApplication.highestEducation === null &&
+          profileForFabricationCheck.links.linkedIn === null &&
+          profileForFabricationCheck.links.github === null &&
+          profileForFabricationCheck.links.resume === null,
+          '1328. NEW — FUNCTIONAL: getProfile(\'emp-001\') (Tariq Ibrahim, a fully-populated real seed record) still returns null for every future/microapp field — richness of the existing record never causes any of these to be guessed or fabricated'
+        );
+      }
+
+      // 1329. FUNCTIONAL: the Profile stays associated with the person's id/Personnel ID across a lifecycle status change — never tied to status
+      {
+        const empBeforeStatusChange = await employeeService.getById('emp-016');
+        const profileBeforeStatusChange = await employeeService.getProfile('emp-016');
+        const originalStatus = empBeforeStatusChange.status;
+
+        const db = loadDatabase();
+        db.employees = db.employees.map((e) => (e.id === 'emp-016' ? { ...e, status: 'Former' } : e));
+        saveDatabase(db);
+
+        const profileAfterStatusChange = await employeeService.getProfile('emp-016');
+        assert(
+          profileAfterStatusChange.personnelId === profileBeforeStatusChange.personnelId &&
+          profileAfterStatusChange.personal.email === profileBeforeStatusChange.personal.email &&
+          profileAfterStatusChange.employment.status === 'Former',
+          `1329. NEW — FUNCTIONAL: emp-016's Profile (personnelId ${profileAfterStatusChange.personnelId}) survives a lifecycle status change (${originalStatus} -> Former) with the same identity/personal data intact — only employment.status itself updates to reflect the new lifecycle status, confirming the profile belongs to the Personnel ID, not to a status`
+        );
+        resetDatabase();
+      }
+
+      // 1330. REGRESSION: queryEmployees() filtering/sorting/search is completely unaffected by this task
+      {
+        const internResults = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Intern', sortBy: 'name-asc' });
+        assert(
+          internResults.employees.length > 0 && internResults.employees.every((e) => e.directoryType === 'Intern'),
+          `1330a. REGRESSION: queryEmployees({ typeFilter: 'Intern' }) still returns only Interns (found ${internResults.employees.length})`
+        );
+        const searchResults = await employeeService.queryEmployees({ baseLifecycleScope: 'All', search: 'Aaron' });
+        assert(
+          searchResults.employees.length === 1 && searchResults.employees[0].fullName.includes('Aaron'),
+          `1330b. REGRESSION: queryEmployees({ search: 'Aaron' }) still filters correctly (found ${searchResults.employees.length})`
+        );
+      }
+
+      // 1331. REGRESSION: MODE_PILL_STYLES / SALARY_PILL_STYLES keys are unchanged (On-site/Remote/Hybrid, Paid/Unpaid) — only nowrap CSS was added, not a data-model rename
+      assert(
+        employeeListViewSrc.includes("'On-site': { bg:") && employeeListViewSrc.includes('Remote: { bg:') && employeeListViewSrc.includes('Hybrid: { bg:') &&
+        employeeListViewSrc.includes('Paid: { bg:') && employeeListViewSrc.includes('Unpaid: { bg:'),
+        '1331. REGRESSION: EmployeeListView.jsx\'s MODE_PILL_STYLES (On-site/Remote/Hybrid) and SALARY_PILL_STYLES (Paid/Unpaid) keys are unchanged — the ON-SITE fix was CSS-only (white-space: nowrap), never a data/value rename'
+      );
+
+      // 1332. REGRESSION: Onboarding/Offboarding composition and lifecycle logic are completely unaffected by this Personnel-directory-scoped task
+      {
+        const onbCompForRegr = composeOnboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, await onboardingService.getScopeTaskDefinitions(), '2026-09-01');
+        assert(onbCompForRegr.counts.total === 11, `1332a. REGRESSION: composeOnboardingTasks() still composes an Employee in Software Engineering to 11 tasks (found ${onbCompForRegr.counts.total}) — unaffected by the Personnel directory rename`);
+        const offCompForRegr = composeOffboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, (loadDatabase().offboardingPlanTasks || []), '2026-09-01');
+        assert(offCompForRegr.counts.total === 15, `1332b. REGRESSION: composeOffboardingTasks() still composes the same Employee to 15 tasks (found ${offCompForRegr.counts.total}) — unaffected by the Personnel directory rename`);
+      }
+
+      // 1333. No direct localStorage/storageEngine usage was introduced in any of the touched directory components
+      assert(
+        !employeeListViewSrc.includes('localStorage') && !employeeListViewSrc.includes('storageEngine') &&
+        !employeeCardViewSrc.includes('localStorage') && !employeeCardViewSrc.includes('storageEngine') &&
+        !directoryContainerSrc.includes('localStorage') && !directoryContainerSrc.includes('storageEngine'),
+        '1333. NEW — Neither EmployeeListView.jsx, EmployeeCardView.jsx, nor DirectoryPageContainer.jsx reference localStorage/storageEngine — all data still flows through employeeService'
+      );
+
+      resetDatabase();
+    }
+
     resetDatabase();
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
@@ -9973,4 +10622,5 @@ export async function verifyStage18() {
 if (process.argv[1] && process.argv[1].includes('verifyStage18.js')) {
   verifyStage18();
 }
+
 

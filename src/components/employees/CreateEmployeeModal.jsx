@@ -109,7 +109,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSubmit }) {
       });
       onClose();
     } catch (err) {
-      setErrors({ form: err.message || 'Failed to create employee.' });
+      setErrors({ form: err.message || 'Failed to create personnel record.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -129,8 +129,8 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSubmit }) {
               <UserPlus size={20} />
             </div>
             <div>
-              <h3 className="modal-title">Create Employee</h3>
-              <p className="modal-subtitle">Add a new employee or intern to the Rizurf workforce directory</p>
+              <h3 className="modal-title">Create Personnel</h3>
+              <p className="modal-subtitle">Add a new employee or intern to the Rizurf personnel directory</p>
             </div>
           </div>
           <button type="button" className="modal-close-btn" onClick={onClose}>
@@ -337,7 +337,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSubmit }) {
               Cancel
             </button>
             <button type="submit" className="btn-primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create Employee'}
+              {isSubmitting ? 'Creating...' : 'Create Personnel'}
             </button>
           </div>
         </form>

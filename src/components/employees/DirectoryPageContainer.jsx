@@ -13,10 +13,11 @@ import EmployeeTimelineView from './EmployeeTimelineView';
 import DirectoryEmptyState from './DirectoryEmptyState';
 import DirectorySkeleton from './DirectorySkeleton';
 import CreateEmployeeModal from './CreateEmployeeModal';
+import PersonnelProfileModal from './PersonnelProfileModal';
 
 export default function DirectoryPageContainer({
-  title = 'Employee Directory',
-  description = 'Browse, filter, and manage Rizurf workforce records',
+  title = 'Personnel Directory',
+  description = 'Browse, filter, and manage Rizurf personnel records',
   baseLifecycleScope = 'All',
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -110,7 +111,7 @@ export default function DirectoryPageContainer({
     try {
       await employeeService.syncEmployees();
       await fetchEmployees();
-      setSyncMessage('Employee data refreshed');
+      setSyncMessage('Personnel data refreshed');
     } catch (err) {
       console.error('Failed to sync employees:', err);
       setSyncMessage('Sync failed — please try again');
@@ -127,6 +128,11 @@ export default function DirectoryPageContainer({
     await employeeService.createDirectoryEmployee(employeeData, initialRecordData);
     await fetchEmployees();
   };
+
+  // View Profile — a single modal instance shared by List/Card view, keyed by the selected
+  // person's id, so the same profile UI/data-loading path is used regardless of which view
+  // triggered it.
+  const [profileEmployeeId, setProfileEmployeeId] = useState(null);
 
   // Reset interactive filters & clear URL query parameters without overriding route baseLifecycleScope!
   const handleResetFilters = () => {
@@ -149,11 +155,12 @@ export default function DirectoryPageContainer({
     allowanceFilter !== 'All' ||
     sortBy !== 'name-asc';
 
-  // Result count formatting
+  // Result count formatting — "personnel" is already collective/plural, so it reads correctly
+  // for any count (1 personnel, 18 personnel) without an "-s" suffix.
   const resultCountText =
     totalFilteredCount === baseCount
-      ? `${baseCount} ${baseCount === 1 ? 'employee' : 'employees'}`
-      : `${totalFilteredCount} of ${baseCount} employees (Filtered)`;
+      ? `${baseCount} personnel`
+      : `${totalFilteredCount} of ${baseCount} personnel (Filtered)`;
 
   return (
     <div className="directory-page-wrapper">
@@ -173,7 +180,7 @@ export default function DirectoryPageContainer({
             disabled={isSyncing}
           >
             <RefreshCw size={15} className={isSyncing ? 'icon-spin' : undefined} />
-            <span>{isSyncing ? 'Syncing...' : 'Sync Employees'}</span>
+            <span>{isSyncing ? 'Syncing...' : 'Sync Personnel'}</span>
           </button>
           <button
             type="button"
@@ -181,7 +188,7 @@ export default function DirectoryPageContainer({
             onClick={() => setIsCreateOpen(true)}
           >
             <Plus size={15} />
-            <span>Create Employee</span>
+            <span>Create Personnel</span>
           </button>
         </div>
       </div>
@@ -233,19 +240,26 @@ export default function DirectoryPageContainer({
         ) : employees.length === 0 ? (
           <DirectoryEmptyState onResetFilters={handleResetFilters} />
         ) : viewMode === 'list' ? (
-          <EmployeeListView employees={employees} />
+          <EmployeeListView employees={employees} onViewProfile={setProfileEmployeeId} />
         ) : viewMode === 'card' ? (
-          <EmployeeCardView employees={employees} />
+          <EmployeeCardView employees={employees} onViewProfile={setProfileEmployeeId} />
         ) : (
           <EmployeeTimelineView employees={employees} />
         )}
       </div>
 
-      {/* Create Employee Modal */}
+      {/* Create Personnel Modal */}
       <CreateEmployeeModal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onSubmit={handleCreateSubmit}
+      />
+
+      {/* Personnel Profile Modal — shared by List/Card view */}
+      <PersonnelProfileModal
+        isOpen={Boolean(profileEmployeeId)}
+        onClose={() => setProfileEmployeeId(null)}
+        employeeId={profileEmployeeId}
       />
     </div>
   );

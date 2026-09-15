@@ -47,6 +47,34 @@ function enrichActivityItem(activity, employeeMap = new Map(), typeMap = new Map
   };
 }
 
+/**
+ * Narrow, activityService-local guard: true only when this activity is backed by an Onboarding
+ * or Offboarding task instance whose OWNING plan instance has been Dropped. Reads
+ * db.onboarding/offboardingTaskInstances + db.onboarding/offboardingPlanInstances directly (the
+ * same loadDatabase() snapshot markComplete()/reopen() already hold) rather than importing
+ * onboardingService/offboardingService — those two services already dynamically import EACH
+ * OTHER's module for progress reconciliation below, and adding a THIRD static/dynamic import here
+ * just to ask "is this dropped?" would be unnecessary coupling for a single boolean field lookup.
+ * Every other activity source (Manual, or any future non-plan source) is completely untouched —
+ * this never disables completion for anything outside a Dropped Onboarding/Offboarding plan.
+ */
+function isSourcePlanDropped(db, activity) {
+  if (!activity) return false;
+  if (activity.sourceEntityType === 'OnboardingTaskInstance') {
+    const ti = (db.onboardingTaskInstances || []).find((t) => t.id === activity.sourceEntityId);
+    if (!ti) return false;
+    const inst = (db.onboardingPlanInstances || []).find((p) => p.id === ti.planInstanceId);
+    return Boolean(inst && inst.droppedAt);
+  }
+  if (activity.sourceEntityType === 'OffboardingTaskInstance') {
+    const ti = (db.offboardingTaskInstances || []).find((t) => t.id === activity.sourceEntityId);
+    if (!ti) return false;
+    const inst = (db.offboardingPlanInstances || []).find((p) => p.id === ti.planInstanceId);
+    return Boolean(inst && inst.droppedAt);
+  }
+  return false;
+}
+
 export const activityService = {
   /**
    * Fetches all registered ActivityTypes.
@@ -155,6 +183,10 @@ export const activityService = {
       throw new Error(`Activity with ID "${id}" not found.`);
     }
 
+    if (isSourcePlanDropped(db, activities[index])) {
+      throw new Error('This plan has been dropped and is read-only.');
+    }
+
     const nowIso = new Date().toISOString();
     activities[index] = {
       ...activities[index],
@@ -203,6 +235,10 @@ export const activityService = {
 
     if (index === -1) {
       throw new Error(`Activity with ID "${id}" not found.`);
+    }
+
+    if (isSourcePlanDropped(db, activities[index])) {
+      throw new Error('This plan has been dropped and is read-only.');
     }
 
     const nowIso = new Date().toISOString();

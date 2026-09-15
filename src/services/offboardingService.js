@@ -592,6 +592,15 @@ export const offboardingService = {
     if (!planInstance) {
       throw new Error(`PlanInstance with ID "${planInstanceId}" not found.`);
     }
+    // droppedAt is the SAME field deriveOffboardingInstanceStatus() checks first (ahead of every
+    // other rule) to derive OFFBOARDING_INSTANCE_STATUS.DROPPED — checking it directly here is
+    // equivalent to "derivedStatus === DROPPED" without needing to load taskInstances/activities
+    // just to derive it. A Dropped plan is a permanent historical record: this guard runs before
+    // any mutation, so a caller that bypasses the UI (a direct service call) is blocked exactly
+    // like the UI is.
+    if (planInstance.droppedAt) {
+      throw new Error('This plan has been dropped and is read-only.');
+    }
 
     const employee = await employeeService.getById(planInstance.employeeId);
     if (!employee) {
@@ -700,6 +709,12 @@ export const offboardingService = {
     if (!planInstance) {
       throw new Error(`PlanInstance with ID "${planInstanceId}" not found.`);
     }
+    // See addTaskToInstance()'s identical guard for why droppedAt is checked directly. Runs
+    // before any read/parse of the target task, so a Dropped plan's task is never even located
+    // for mutation, let alone partially updated.
+    if (planInstance.droppedAt) {
+      throw new Error('This plan has been dropped and is read-only.');
+    }
 
     const rawTaskInstances = db.offboardingTaskInstances || [];
     const targetTask = rawTaskInstances.find((ti) => ti.id === taskInstanceId && ti.planInstanceId === planInstanceId);
@@ -774,6 +789,10 @@ export const offboardingService = {
     const planInstance = (db.offboardingPlanInstances || []).find((inst) => inst.id === planInstanceId);
     if (!planInstance) {
       throw new Error(`PlanInstance with ID "${planInstanceId}" not found.`);
+    }
+    // See addTaskToInstance()'s identical guard for why droppedAt is checked directly.
+    if (planInstance.droppedAt) {
+      throw new Error('This plan has been dropped and is read-only.');
     }
 
     const rawTaskInstances = db.offboardingTaskInstances || [];

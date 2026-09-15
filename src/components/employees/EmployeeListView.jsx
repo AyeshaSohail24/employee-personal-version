@@ -1,4 +1,5 @@
 import React from 'react';
+import { Eye } from 'lucide-react';
 import { formatDateDisplay, calculateDurationProgress } from '../../utils/dateUtils.js';
 
 const STATUS_PILL_STYLES = {
@@ -51,22 +52,23 @@ function DurationCell({ startDate, contractEndDate }) {
   );
 }
 
-export default function EmployeeListView({ employees = [] }) {
+export default function EmployeeListView({ employees = [], onViewProfile }) {
   return (
     <div className="directory-table-card">
       <div className="widget-table-wrapper">
         <table className="widget-table">
           <thead>
             <tr>
-              <th style={{ width: '8%' }}>ID</th>
-              <th style={{ width: '18%' }}>NAME</th>
-              <th style={{ width: '14%' }}>DEPARTMENT</th>
+              <th style={{ width: '6%' }}>ID</th>
+              <th style={{ width: '17%' }}>NAME</th>
+              <th style={{ width: '12%' }}>DEPARTMENT</th>
               <th style={{ width: '9%' }}>TYPE</th>
-              <th style={{ width: '9%' }}>MODE</th>
-              <th style={{ width: '13%' }}>DATES</th>
-              <th style={{ width: '9%' }}>SALARY</th>
-              <th style={{ width: '8%' }}>STATUS</th>
-              <th style={{ width: '12%' }}>DURATION</th>
+              <th style={{ width: '8%' }}>MODE</th>
+              <th style={{ width: '10%' }}>DATES</th>
+              <th style={{ width: '7%' }}>SALARY</th>
+              <th style={{ width: '10%' }}>STATUS</th>
+              <th style={{ width: '10%' }}>DURATION</th>
+              <th style={{ width: '11%' }}>PROFILE</th>
             </tr>
           </thead>
           <tbody>
@@ -87,7 +89,7 @@ export default function EmployeeListView({ employees = [] }) {
                   </td>
 
                   {/* 2. NAME (+ email underneath) */}
-                  <td>
+                  <td style={{ overflow: 'hidden' }}>
                     <div className="table-user-cell">
                       <div
                         className="table-avatar"
@@ -95,9 +97,9 @@ export default function EmployeeListView({ employees = [] }) {
                       >
                         {emp.photo}
                       </div>
-                      <div>
-                        <div className="table-user-name">{emp.fullName}</div>
-                        <div className="table-user-email" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="table-user-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.fullName}</div>
+                        <div className="table-user-email" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {emp.workEmail}
                         </div>
                       </div>
@@ -150,6 +152,19 @@ export default function EmployeeListView({ employees = [] }) {
                   {/* 9. DURATION */}
                   <td>
                     <DurationCell startDate={emp.startDate} contractEndDate={emp.contractEndDate} />
+                  </td>
+
+                  {/* 10. PROFILE */}
+                  <td>
+                    <button
+                      type="button"
+                      className="btn-compact-override"
+                      style={{ whiteSpace: 'nowrap' }}
+                      onClick={() => onViewProfile && onViewProfile(emp.id)}
+                    >
+                      <Eye size={12} />
+                      <span>View Profile</span>
+                    </button>
                   </td>
                 </tr>
               );

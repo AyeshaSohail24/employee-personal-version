@@ -1164,6 +1164,26 @@ body {
   overflow-x: auto;
 }
 
+/* Personnel directory table only (scoped via .directory-table-card, never the narrower
+   Dashboard widget tables that also use .widget-table). A fixed min-width — NOT
+   table-layout: fixed — keeps the existing "table scrolls horizontally inside
+   .widget-table-wrapper at narrow viewports" behavior fully intact: table-layout: fixed would
+   instead force every column into a tiny fraction of a narrow (e.g. 375px) viewport, garbling
+   text into overlapping fragments rather than letting the wrapper scroll. With plain auto
+   layout + this min-width, the table only ever shrinks down to 1080px (where its content,
+   including the new PROFILE column, comfortably fits at the tuned <th> width percentages below)
+   before the wrapper takes over with its existing overflow-x: auto scroll. Slightly tighter cell
+   padding reclaims just enough horizontal room for the 10th column at normal desktop width
+   without compressing any column's content to the point of collision. */
+.directory-table-card .widget-table {
+  min-width: 1080px;
+}
+
+.directory-table-card .widget-table th,
+.directory-table-card .widget-table td {
+  padding: 0.7rem 0.55rem;
+}
+
 .widget-table {
   width: 100%;
   border-collapse: collapse;
@@ -1227,6 +1247,12 @@ body {
   font-size: 0.725rem;
   font-weight: 700;
   text-transform: uppercase;
+  /* Every status-pill value (On-site, Remote, Hybrid, Employee, Intern, Paid, Unpaid, lifecycle
+     statuses, ...) is a short single/hyphenated word never intended to wrap — without this, a
+     narrow column (e.g. MODE) can force "On-site" onto two lines ("ON-" / "SITE"), making that
+     one badge visibly taller than every other pill on the same row. The pill still sizes to its
+     own content (inline-block, no fixed width), so this does not force columns wider. */
+  white-space: nowrap;
 }
 
 .empty-widget-text {

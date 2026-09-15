@@ -43,10 +43,17 @@ export default function OffboardingDepartingPage() {
       const allInsts = await offboardingService.getAllInstances();
       setInstances(allInsts);
 
-      // Fetch overdue activities that belong to Offboarding — same source-filtered query the old
-      // Dashboard used, just now surfaced through the popup pattern instead of an inline panel.
+      // Fetch overdue activities that belong to Offboarding — and exclude any whose parent plan
+      // instance has been Dropped, since a Dropped plan must no longer contribute overdue alerts
+      // (or be reachable via "Mark All as Complete") even if it still has incomplete task
+      // instances left over from before it was dropped. Mirrors Onboarding's identical guard.
       const overdues = await activityService.getOverdueActivities();
-      const offboardingOverdues = overdues.filter((a) => a.source === 'Offboarding');
+      const droppedActivityIds = new Set(
+        allInsts
+          .filter((i) => i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.DROPPED)
+          .flatMap((i) => i.taskInstances.map((ti) => ti.activityId))
+      );
+      const offboardingOverdues = overdues.filter((a) => a.source === 'Offboarding' && !droppedActivityIds.has(a.id));
       setOverdueTasks(offboardingOverdues);
     } catch (err) {
       console.error('Failed to load offboarding progress data:', err);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, Calendar, Mail } from 'lucide-react';
+import { Building2, Calendar, Mail, Eye } from 'lucide-react';
 import { formatDateDisplay, calculateDurationProgress } from '../../utils/dateUtils.js';
 
 const STATUS_PILL_STYLES = {
@@ -32,7 +32,7 @@ const DURATION_FILL_CLASS = {
   completed: 'duration-bar-fill completed',
 };
 
-export default function EmployeeCardView({ employees = [] }) {
+export default function EmployeeCardView({ employees = [], onViewProfile }) {
   return (
     <div className="employee-card-grid">
       {employees.map((emp) => {
@@ -66,6 +66,15 @@ export default function EmployeeCardView({ employees = [] }) {
                 <Mail size={14} className="detail-icon" />
                 <span className="detail-text" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{emp.workEmail}</span>
               </div>
+              <button
+                type="button"
+                className="btn-compact-override"
+                style={{ marginTop: '0.5rem' }}
+                onClick={() => onViewProfile && onViewProfile(emp.id)}
+              >
+                <Eye size={12} />
+                <span>View Profile</span>
+              </button>
             </div>
 
             {/* BODY: Department, Type, Mode */}
