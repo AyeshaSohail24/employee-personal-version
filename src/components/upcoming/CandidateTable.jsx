@@ -1,16 +1,11 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Check, X, RotateCcw, Undo2 } from 'lucide-react';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
 
 const OFFER_PILL_STYLES = {
   Paid: { bg: '#ECFDF5', color: '#059669' },
   Unpaid: { bg: '#FEF3C7', color: '#D97706' },
-};
-
-const EMAIL_STATUS_PILL_STYLES = {
-  Pending: { bg: '#F1F5F9', color: '#475569' },
-  Sent: { bg: '#EFF6FF', color: '#2563EB' },
-  Replied: { bg: '#E6F7F8', color: '#0E848D' },
 };
 
 const RESPONSE_PILL_STYLES = {
@@ -23,28 +18,34 @@ function toIsoDate(isoTimestamp) {
   return isoTimestamp ? isoTimestamp.slice(0, 10) : null;
 }
 
-function CandidateIdentity({ candidate }) {
+function CandidateIdentity({ candidate, isUnreadReply }) {
   return (
-    <div>
-      <div className="table-user-name">{candidate.fullName}</div>
-      <div className="table-user-email" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-        {candidate.email}
-      </div>
-    </div>
+    <>
+      {isUnreadReply && <span className="gmail-unread-dot" title="New reply — awaiting response" />}
+      <Link
+        to={`/upcoming/${candidate.id}`}
+        className="table-user-name gmail-name-link"
+        onClick={(e) => e.stopPropagation()}
+        title={`Open conversation with ${candidate.fullName}`}
+      >
+        {candidate.fullName}
+      </Link>
+      <span className="gmail-role-sep">·</span>
+      <span className="table-text-secondary">{candidate.email}</span>
+    </>
   );
 }
 
 function ActiveRowActions({ candidate, onAccept, onReject, onUndoAccept }) {
   if (candidate.responseStatus === 'Accepted') {
     return (
-      <div className="candidate-row-actions">
-        <span className="status-pill" style={RESPONSE_PILL_STYLES.Accepted}>Accepted</span>
+      <div className="candidate-row-actions gmail-row-actions">
         <button
           type="button"
           className="candidate-action-btn undo"
           title={`Undo Accept for ${candidate.fullName}`}
           aria-label={`Undo Accept for ${candidate.fullName}`}
-          onClick={() => onUndoAccept(candidate)}
+          onClick={(e) => { e.stopPropagation(); onUndoAccept(candidate); }}
         >
           <Undo2 size={14} />
         </button>
@@ -52,13 +53,13 @@ function ActiveRowActions({ candidate, onAccept, onReject, onUndoAccept }) {
     );
   }
   return (
-    <div className="candidate-row-actions">
+    <div className="candidate-row-actions gmail-row-actions">
       <button
         type="button"
         className="candidate-action-btn accept"
         title={`Accept ${candidate.fullName}`}
         aria-label={`Accept ${candidate.fullName}`}
-        onClick={() => onAccept(candidate.id)}
+        onClick={(e) => { e.stopPropagation(); onAccept(candidate.id); }}
       >
         <Check size={14} />
       </button>
@@ -67,7 +68,7 @@ function ActiveRowActions({ candidate, onAccept, onReject, onUndoAccept }) {
         className="candidate-action-btn reject"
         title={`Reject ${candidate.fullName}`}
         aria-label={`Reject ${candidate.fullName}`}
-        onClick={() => onReject(candidate)}
+        onClick={(e) => { e.stopPropagation(); onReject(candidate); }}
       >
         <X size={14} />
       </button>
@@ -90,14 +91,16 @@ export default function CandidateTable({
 
   return (
     <>
-      {/* Desktop table */}
-      <div className="directory-table-card candidate-table-desktop">
+      {/* Desktop table — dense, connected inbox-style list (Gmail pattern): flush rows with a
+          hairline divider only, whole-row hover highlight, and the trailing date cell swaps to
+          action icons on hover instead of showing a separate always-visible actions column. */}
+      <div className="gmail-table-card candidate-table-desktop">
         <div className="widget-table-wrapper">
-          <table className="widget-table">
+          <table className="widget-table gmail-table">
             <thead>
               <tr>
                 {mode === 'active' && (
-                  <th style={{ width: '4%' }}>
+                  <th className="gmail-checkbox-cell">
                     <input
                       type="checkbox"
                       aria-label="Select all visible candidates"
@@ -106,78 +109,77 @@ export default function CandidateTable({
                     />
                   </th>
                 )}
-                <th style={{ width: '20%' }}>CANDIDATE</th>
-                <th style={{ width: '15%' }}>POSITION</th>
-                <th style={{ width: '15%' }}>DEPARTMENT</th>
-                <th style={{ width: '10%' }}>OFFER TYPE</th>
-                <th style={{ width: '11%' }}>EMAIL STATUS</th>
-                {mode === 'active' ? (
-                  <>
-                    <th style={{ width: '13%' }}>RESPONSE</th>
-                    <th style={{ width: '10%' }}>SHORTLISTED</th>
-                  </>
-                ) : (
-                  <th style={{ width: '13%' }}>REJECTED DATE</th>
-                )}
-                <th style={{ width: '10%' }}>ACTIONS</th>
+                <th style={{ width: '26%' }}>Candidate</th>
+                <th style={{ width: '28%' }}>Role</th>
+                <th style={{ width: '12%' }}>Offer</th>
+                {mode === 'active' && <th style={{ width: '13%' }}>Response</th>}
+                <th className="gmail-date-header">{mode === 'active' ? 'Shortlisted' : 'Rejected'}</th>
               </tr>
             </thead>
             <tbody>
               {candidates.map((candidate) => {
                 const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_STYLES.Paid;
-                const emailPill = EMAIL_STATUS_PILL_STYLES[candidate.emailStatus] || EMAIL_STATUS_PILL_STYLES.Pending;
                 const responsePill = RESPONSE_PILL_STYLES[candidate.responseStatus] || RESPONSE_PILL_STYLES['Awaiting Response'];
+                const isSelected = selectedIds.has(candidate.id);
+                const isUnreadReply = mode === 'active' && candidate.emailStatus === 'Replied' && !candidate.notificationRead;
 
                 return (
-                  <tr key={candidate.id}>
+                  <tr
+                    key={candidate.id}
+                    className={`gmail-row ${isSelected ? 'gmail-row-selected' : ''} ${isUnreadReply ? 'gmail-row-unread' : ''}`}
+                  >
                     {mode === 'active' && (
-                      <td>
+                      <td className="gmail-checkbox-cell">
                         <input
                           type="checkbox"
                           aria-label={`Select ${candidate.fullName}`}
-                          checked={selectedIds.has(candidate.id)}
+                          checked={isSelected}
                           onChange={() => onToggleSelect(candidate.id)}
                         />
                       </td>
                     )}
-                    <td><CandidateIdentity candidate={candidate} /></td>
-                    <td><div className="table-text-main">{candidate.positionName}</div></td>
-                    <td><div className="table-text-secondary">{candidate.department ? candidate.department.name : 'Unassigned'}</div></td>
-                    <td>
+                    <td className="gmail-cell-truncate">
+                      <CandidateIdentity candidate={candidate} isUnreadReply={isUnreadReply} />
+                    </td>
+                    <td className="gmail-cell-truncate">
+                      <span className="table-text-main">{candidate.positionName}</span>
+                      <span className="gmail-role-sep">—</span>
+                      <span className="table-text-secondary">{candidate.department ? candidate.department.name : 'Unassigned'}</span>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
                       <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>
                         {candidate.offerType}
                       </span>
                     </td>
-                    <td>
-                      <span className="status-pill" style={{ backgroundColor: emailPill.bg, color: emailPill.color }}>
-                        {candidate.emailStatus}
-                      </span>
-                    </td>
-                    {mode === 'active' ? (
-                      <>
-                        <td>
+                    {mode === 'active' && (
+                      <td>
+                        {candidate.responseStatus === 'Awaiting Response' ? (
+                          <span className="table-text-secondary">—</span>
+                        ) : (
                           <span className="status-pill" style={{ backgroundColor: responsePill.bg, color: responsePill.color }}>
                             {candidate.responseStatus}
                           </span>
-                        </td>
-                        <td><div className="table-text-secondary">{formatDateDisplay(toIsoDate(candidate.shortlistedAt))}</div></td>
-                      </>
-                    ) : (
-                      <td><div className="table-text-secondary">{formatDateDisplay(toIsoDate(candidate.rejectedAt))}</div></td>
+                        )}
+                      </td>
                     )}
-                    <td>
+                    <td className="gmail-date-cell">
+                      <span className="gmail-date-text">
+                        {formatDateDisplay(toIsoDate(mode === 'active' ? candidate.shortlistedAt : candidate.rejectedAt))}
+                      </span>
                       {mode === 'active' ? (
                         <ActiveRowActions candidate={candidate} onAccept={onAccept} onReject={onReject} onUndoAccept={onUndoAccept} />
                       ) : (
-                        <button
-                          type="button"
-                          className="candidate-action-btn restore"
-                          title={`Restore ${candidate.fullName}`}
-                          aria-label={`Restore ${candidate.fullName} to Candidates`}
-                          onClick={() => onRestore(candidate.id)}
-                        >
-                          <RotateCcw size={14} />
-                        </button>
+                        <div className="candidate-row-actions gmail-row-actions">
+                          <button
+                            type="button"
+                            className="candidate-action-btn restore"
+                            title={`Restore ${candidate.fullName}`}
+                            aria-label={`Restore ${candidate.fullName} to Candidates`}
+                            onClick={(e) => { e.stopPropagation(); onRestore(candidate.id); }}
+                          >
+                            <RotateCcw size={14} />
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -192,7 +194,6 @@ export default function CandidateTable({
       <div className="candidate-card-grid">
         {candidates.map((candidate) => {
           const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_STYLES.Paid;
-          const emailPill = EMAIL_STATUS_PILL_STYLES[candidate.emailStatus] || EMAIL_STATUS_PILL_STYLES.Pending;
           const responsePill = RESPONSE_PILL_STYLES[candidate.responseStatus] || RESPONSE_PILL_STYLES['Awaiting Response'];
 
           return (
@@ -207,7 +208,13 @@ export default function CandidateTable({
                   />
                 )}
                 <div style={{ flex: 1 }}>
-                  <div className="table-user-name">{candidate.fullName}</div>
+                  <Link
+                    to={`/upcoming/${candidate.id}`}
+                    className="table-user-name gmail-name-link"
+                    title={`Open conversation with ${candidate.fullName}`}
+                  >
+                    {candidate.fullName}
+                  </Link>
                   <div className="table-user-email" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{candidate.email}</div>
                 </div>
               </div>
@@ -217,7 +224,6 @@ export default function CandidateTable({
                 <div className="detail-row"><span className="detail-text">{candidate.department ? candidate.department.name : 'Unassigned'}</span></div>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', margin: '0.4rem 0' }}>
                   <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>{candidate.offerType}</span>
-                  <span className="status-pill" style={{ backgroundColor: emailPill.bg, color: emailPill.color }}>{candidate.emailStatus}</span>
                   {mode === 'active' ? (
                     <span className="status-pill" style={{ backgroundColor: responsePill.bg, color: responsePill.color }}>{candidate.responseStatus}</span>
                   ) : (

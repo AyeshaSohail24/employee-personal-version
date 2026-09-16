@@ -65,6 +65,15 @@ This is a **PoC frontend that will later be connected to a real backend**. The s
 - Before any architectural change (new library, folder restructure, state management shift), explain the change and wait for confirmation — do not just make it.
 - Keep components small and reusable; do not build one large monolithic component per page.
 
+## Backend & authentication
+
+The app now has a real backend (`/server`) and real gateway-based authentication, built to the two Rizurf platform contracts in the repo root: `RIZURF_API_TEMPLATE.md` (API shape, SS-rules) and `MICROAPP_AUTH.md` (the gateway sign-in flow). Read both before touching `/server`.
+
+- **No local login, ever.** The gateway is the only place anyone signs in or out (SS-24). `/server/auth` implements the redirect → code exchange → signature-verified session flow — do not add a password field or a sign-out button anywhere.
+- **`/server` owns the app's own database** (`db/schema_employees.sql`) exclusively (SS-13). It never queries the Applicants or Interns databases directly — those are reached only through `/server/clients/*`, which trade a `client_credentials` grant for a scoped access token per call (SS-26).
+- **`src/services/*` stays the frontend's only calling convention.** Its functions now `fetch()` `/server`'s API (session cookie, `credentials: 'include'`) instead of reading `localStorage` — pages and components did not change, per the prime directive above.
+- **Every operation in `/server/openapi.js` declares real `security`, enforced, not advertised** (SS-6) — a route with no token/session gets `401`, not data.
+
 ## Explicitly out of scope for this PoC
 
-Real backend, real authentication, real payroll calculation, real attendance hardware, real email sending, IP/network/surveillance-based presence detection, permanent deletion of employee records through normal UI flows.
+Real payroll calculation, real attendance hardware, real email sending, IP/network/surveillance-based presence detection, permanent deletion of employee records through normal UI flows.

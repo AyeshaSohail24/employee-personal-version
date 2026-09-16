@@ -1,80 +1,132 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { List, LayoutGrid, Bell, Mail, Send, RefreshCw } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { RefreshCw, Search, X } from 'lucide-react';
 import { upcomingCandidateService } from '../../services/upcomingCandidateService.js';
+import { candidateEmailService } from '../../services/candidateEmailService.js';
 import { departmentService } from '../../services/departmentService.js';
-import CandidateSummaryCards from '../../components/upcoming/CandidateSummaryCards.jsx';
-import CandidateToolbar from '../../components/upcoming/CandidateToolbar.jsx';
+import { sortCandidates } from '../../domain/candidateDomain.js';
 import CandidateTable from '../../components/upcoming/CandidateTable.jsx';
-import SendEmailModal from '../../components/upcoming/SendEmailModal.jsx';
-import NotificationsPanel from '../../components/upcoming/NotificationsPanel.jsx';
-import EmailDraftsPanel from '../../components/upcoming/EmailDraftsPanel.jsx';
+import CandidateSearchResults from '../../components/upcoming/CandidateSearchResults.jsx';
 import DirectoryEmptyState from '../../components/employees/DirectoryEmptyState.jsx';
+import EmailDraftsPanel from '../../components/upcoming/EmailDraftsPanel.jsx';
+import { Select } from '../../components/common/Select.jsx';
+
+const PAGE_TABS = [
+  { key: 'messages', label: 'Messages' },
+  { key: 'drafts', label: 'Email Drafts' },
+];
+
+const SORT_FIELD_OPTIONS = [
+  { value: 'date', label: 'Shortlisted' },
+  { value: 'name', label: 'Name' },
+  { value: 'dept', label: 'Department' },
+];
+
+const SORT_DIRECTION_OPTIONS = [
+  { value: 'asc', label: 'Ascending' },
+  { value: 'desc', label: 'Descending' },
+];
+
+// An "unseen" candidate is one whose reply hasn't been reviewed yet (emailStatus 'Replied' with
+// notificationRead still false) — the same condition that drives the row highlight in
+// CandidateTable, so the tab and the highlight always agree on what counts as new/urgent.
+function isUnseen(candidate) {
+  return candidate.emailStatus === 'Replied' && !candidate.notificationRead;
+}
+
+const STATUS_TABS = [
+  { key: 'all', label: 'All', match: () => true },
+  { key: 'sent', label: 'Sent', match: (c) => c.emailStatus === 'Sent' },
+  { key: 'received', label: 'Received', match: (c) => c.emailStatus === 'Replied' },
+  { key: 'unseen', label: 'Unseen', match: isUnseen },
+];
 
 export default function UpcomingPage() {
-  const [activeTab, setActiveTab] = useState('candidates'); // 'candidates' | 'rejected' | 'drafts'
-
+  const [pageTab, setPageTab] = useState('messages');
   const [allCandidates, setAllCandidates] = useState([]);
-  const [candidates, setCandidates] = useState([]);
-  const [summary, setSummary] = useState({});
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [departments, setDepartments] = useState([]);
-
-  const [search, setSearch] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
-  const [offerType, setOfferType] = useState('All');
-  const [emailStatus, setEmailStatus] = useState('All');
-  const [responseStatus, setResponseStatus] = useState('All');
-
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [sendModalCandidates, setSendModalCandidates] = useState(null);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [statusTab, setStatusTab] = useState('all');
+  const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [sortField, setSortField] = useState('date');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [departments, setDepartments] = useState([]);
 
   useEffect(() => {
     departmentService.getAll({ withCount: false }).then(setDepartments).catch(() => {});
   }, []);
 
+  const fetchAll = useCallback(() => upcomingCandidateService.queryCandidates({ scope: 'active' }), []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const scope = activeTab === 'rejected' ? 'rejected' : 'active';
-      const [filtered, all, summaryData, unread] = await Promise.all([
-        upcomingCandidateService.queryCandidates({ scope, search, departmentId, offerType, emailStatus, responseStatus }),
-        upcomingCandidateService.getAll(),
-        upcomingCandidateService.getSummary(),
-        upcomingCandidateService.getUnreadReplyCount(),
-      ]);
-      setCandidates(filtered);
-      setAllCandidates(all);
-      setSummary(summaryData);
-      setUnreadCount(unread);
+      setAllCandidates(await fetchAll());
     } catch (err) {
       console.error('Failed to load Upcoming candidates:', err);
     } finally {
       setLoading(false);
     }
-  }, [activeTab, search, departmentId, offerType, emailStatus, responseStatus]);
+  }, [fetchAll]);
 
   useEffect(() => {
-    if (activeTab !== 'drafts') loadData();
-  }, [loadData, activeTab]);
+    loadData();
+  }, [loadData]);
 
-  // Selection never survives a tab switch or a filter-driven result change it no longer applies to
-  useEffect(() => {
-    setSelectedIds(new Set());
-  }, [activeTab]);
-
-  const handleResetFilters = () => {
-    setSearch('');
-    setDepartmentId('');
-    setOfferType('All');
-    setEmailStatus('All');
-    setResponseStatus('All');
+  // Manual refresh — reuses the same fetch as loadData() but never flips `loading`, so the
+  // table stays visible (only the icon spins) instead of flashing back to the skeleton.
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      setAllCandidates(await fetchAll());
+    } catch (err) {
+      console.error('Failed to refresh Upcoming candidates:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
-  const hasActiveFilters = Boolean(search.trim()) || Boolean(departmentId) || offerType !== 'All' || emailStatus !== 'All' || responseStatus !== 'All';
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [statusTab, departmentFilter]);
+
+  const unseenCount = useMemo(() => allCandidates.filter(isUnseen).length, [allCandidates]);
+
+  const candidates = useMemo(() => {
+    const tab = STATUS_TABS.find((t) => t.key === statusTab) || STATUS_TABS[0];
+    let filtered = allCandidates.filter(tab.match);
+
+    if (departmentFilter) {
+      filtered = filtered.filter((c) => c.department && c.department.id === departmentFilter);
+    }
+
+    return sortCandidates(filtered, `${sortField}-${sortDirection}`);
+  }, [allCandidates, statusTab, departmentFilter, sortField, sortDirection]);
+
+  const isSearchActive = search.trim().length > 0;
+
+  // Gmail-style search: matches name, email, AND full message content (subject/body across
+  // every sent/received message in each candidate's thread) via candidateEmailService, not just
+  // the fields on the candidate record — debounced since it fetches each candidate's thread.
+  useEffect(() => {
+    const q = search.trim();
+    if (!q) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return undefined;
+    }
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      candidateEmailService.searchCandidates(q)
+        .then(setSearchResults)
+        .catch((err) => console.error('Candidate search failed:', err))
+        .finally(() => setIsSearching(false));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const handleToggleSelect = (id) => {
     setSelectedIds((prev) => {
@@ -114,54 +166,6 @@ export default function UpcomingPage() {
     await loadData();
   };
 
-  const handleRestore = async (id) => {
-    await upcomingCandidateService.restoreCandidate(id);
-    await loadData();
-  };
-
-  const handleSync = async () => {
-    if (isSyncing) return;
-    setIsSyncing(true);
-    setSyncMessage('');
-    try {
-      await upcomingCandidateService.syncCandidates();
-      await loadData();
-      setSyncMessage('Candidate data refreshed');
-    } catch (err) {
-      setSyncMessage('Sync failed — please try again');
-    } finally {
-      setIsSyncing(false);
-      setTimeout(() => setSyncMessage(''), 2500);
-    }
-  };
-
-  const handleOpenSendSelected = () => {
-    const selected = candidates.filter((c) => selectedIds.has(c.id));
-    if (selected.length === 0) return;
-    setSendModalCandidates(selected);
-  };
-
-  const handleSendAllPending = () => {
-    const pending = candidates.filter((c) => c.emailStatus === 'Pending');
-    if (pending.length === 0) return;
-    if (!window.confirm(`Send ${pending.length} Pending Email${pending.length === 1 ? '' : 's'}?\n\nThis opens the review screen for all candidates whose Email Status is currently Pending. Already Sent or Replied candidates will not be resent.`)) {
-      return;
-    }
-    setSendModalCandidates(pending);
-  };
-
-  const handleSendComplete = async () => {
-    setSelectedIds(new Set());
-    await loadData();
-  };
-
-  const handleViewNotification = async (candidateId) => {
-    await upcomingCandidateService.markNotificationRead(candidateId);
-    await loadData();
-  };
-
-  const pendingCount = candidates.filter((c) => c.emailStatus === 'Pending').length;
-
   return (
     <div className="directory-page-wrapper">
       <div className="employees-page-header page-header">
@@ -169,127 +173,135 @@ export default function UpcomingPage() {
           <h1 className="page-title">Upcoming</h1>
           <p className="page-description">Shortlisted candidates and the pre-onboarding offer workflow</p>
         </div>
-        <div className="header-actions">
-          {syncMessage && <span className="sync-status-text">{syncMessage}</span>}
-          <button type="button" className="btn-secondary btn-header-action" onClick={handleSync} disabled={isSyncing}>
-            <RefreshCw size={15} className={isSyncing ? 'icon-spin' : undefined} />
-            <span>{isSyncing ? 'Syncing...' : 'Sync Candidates'}</span>
-          </button>
+      </div>
+
+      <div className="underline-tabs">
+        {PAGE_TABS.map((tab) => (
           <button
+            key={tab.key}
             type="button"
-            className="btn-secondary btn-header-action candidate-notification-btn"
-            onClick={() => setIsNotificationsOpen(true)}
+            className={`underline-tab-item ${pageTab === tab.key ? 'active' : ''}`}
+            onClick={() => setPageTab(tab.key)}
           >
-            <Bell size={15} />
-            <span>Replies</span>
-            {unreadCount > 0 && <span className="candidate-notification-badge">{unreadCount}</span>}
+            {tab.label}
           </button>
-          <button
-            type="button"
-            className="btn-secondary btn-header-action"
-            onClick={() => setActiveTab('drafts')}
-          >
-            <Mail size={15} />
-            <span>Email Drafts</span>
-          </button>
-          <button
-            type="button"
-            className="btn-primary btn-header-action"
-            onClick={handleOpenSendSelected}
-            disabled={activeTab !== 'candidates' || selectedIds.size === 0}
-            title={selectedIds.size === 0 ? 'Select at least one candidate' : undefined}
-          >
-            <Send size={15} />
-            <span>Send Email{selectedIds.size > 1 ? ` (${selectedIds.size})` : ''}</span>
-          </button>
+        ))}
+      </div>
+
+      {pageTab === 'drafts' ? (
+        <div style={{ marginTop: '1.25rem' }}>
+          <EmailDraftsPanel />
         </div>
+      ) : (
+      <>
+      <div className="toolbar-search-box" style={{ marginTop: '1.25rem' }}>
+        <Search size={18} className="toolbar-search-icon" />
+        <input
+          type="text"
+          className="toolbar-search-input"
+          placeholder="Search name, email, or message..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={isSearchActive ? { paddingRight: '2.25rem' } : undefined}
+        />
+        {isSearchActive && (
+          <button type="button" className="toolbar-search-clear-btn" onClick={() => setSearch('')} title="Clear search">
+            <X size={15} />
+          </button>
+        )}
       </div>
 
-      <CandidateSummaryCards summary={summary} loading={loading && allCandidates.length === 0} />
-
-      <div className="view-switcher-group candidate-tab-switcher">
-        <button className={`view-btn ${activeTab === 'candidates' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('candidates')}>
-          <List size={16} />
-          <span>Candidates</span>
-        </button>
-        <button className={`view-btn ${activeTab === 'rejected' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('rejected')}>
-          <LayoutGrid size={16} />
-          <span>Rejected</span>
-        </button>
-        <button className={`view-btn ${activeTab === 'drafts' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('drafts')}>
-          <Mail size={16} />
-          <span>Email Drafts</span>
-        </button>
-      </div>
-
-      {activeTab === 'drafts' ? (
-        <EmailDraftsPanel />
+      {isSearchActive ? (
+        <div style={{ marginTop: '1.25rem' }}>
+          {isSearching ? (
+            <div className="directory-table-card skeleton-box" style={{ height: '220px' }} />
+          ) : (
+            <CandidateSearchResults results={searchResults} query={search.trim()} />
+          )}
+        </div>
       ) : (
         <>
-          <CandidateToolbar
-            search={search}
-            onSearchChange={setSearch}
-            selectedDept={departmentId}
-            onDeptChange={setDepartmentId}
-            selectedOfferType={offerType}
-            onOfferTypeChange={setOfferType}
-            selectedEmailStatus={emailStatus}
-            onEmailStatusChange={setEmailStatus}
-            selectedResponse={responseStatus}
-            onResponseChange={setResponseStatus}
-            onResetFilters={handleResetFilters}
-            departments={departments}
-            showResponseFilter={activeTab === 'candidates'}
-            hasActiveFilters={hasActiveFilters}
-          />
-
-          {activeTab === 'candidates' && pendingCount > 0 && (
-            <div className="send-all-pending-row">
-              <span className="table-text-secondary">{pendingCount} candidate{pendingCount === 1 ? '' : 's'} with Pending emails</span>
-              <button type="button" className="btn-primary btn-header-action" onClick={handleSendAllPending}>
-                Send {pendingCount} Pending Email{pendingCount === 1 ? '' : 's'}
-              </button>
+          <div className="filters-group" style={{ marginTop: '1.25rem' }}>
+            <div className="filter-item">
+              <label htmlFor="cand-sort-field">Sort by:</label>
+              <Select
+                id="cand-sort-field"
+                variant="filter"
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value)}
+                options={SORT_FIELD_OPTIONS}
+              />
             </div>
-          )}
+            <div className="filter-item">
+              <label htmlFor="cand-sort-direction">Order:</label>
+              <Select
+                id="cand-sort-direction"
+                variant="filter"
+                value={sortDirection}
+                onChange={(e) => setSortDirection(e.target.value)}
+                options={SORT_DIRECTION_OPTIONS}
+              />
+            </div>
+            <div className="filter-item">
+              <label htmlFor="cand-dept-filter">Department:</label>
+              <Select
+                id="cand-dept-filter"
+                variant="filter"
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                placeholder="All Departments"
+                options={departments.map((d) => ({ value: d.id, label: d.name }))}
+              />
+            </div>
+          </div>
+
+          <div className="underline-tabs">
+            <button
+              type="button"
+              className="underline-tab-refresh-btn"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              title="Refresh candidates"
+            >
+              <RefreshCw size={15} className={isRefreshing ? 'icon-spin' : undefined} />
+            </button>
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                className={`underline-tab-item ${statusTab === tab.key ? 'active' : ''}`}
+                onClick={() => setStatusTab(tab.key)}
+              >
+                {tab.label}
+                {tab.key === 'unseen' && unseenCount > 0 && (
+                  <span className="underline-tab-badge">{unseenCount}</span>
+                )}
+              </button>
+            ))}
+          </div>
 
           <div style={{ marginTop: '1.25rem' }}>
             {loading ? (
               <div className="directory-table-card skeleton-box" style={{ height: '320px' }} />
             ) : candidates.length === 0 ? (
-              <DirectoryEmptyState
-                onResetFilters={handleResetFilters}
-                message={activeTab === 'rejected' ? 'No rejected candidates.' : 'No candidates match the current search or filter criteria.'}
-              />
+              <DirectoryEmptyState message="No candidates match the current search or filter criteria." />
             ) : (
               <CandidateTable
                 candidates={candidates}
-                mode={activeTab === 'rejected' ? 'rejected' : 'active'}
+                mode="active"
                 selectedIds={selectedIds}
                 onToggleSelect={handleToggleSelect}
                 onToggleSelectAll={handleToggleSelectAll}
                 onAccept={handleAccept}
                 onReject={handleReject}
                 onUndoAccept={handleUndoAccept}
-                onRestore={handleRestore}
               />
             )}
           </div>
         </>
       )}
-
-      <SendEmailModal
-        isOpen={Boolean(sendModalCandidates)}
-        onClose={() => setSendModalCandidates(null)}
-        candidates={sendModalCandidates || []}
-        onSent={handleSendComplete}
-      />
-
-      <NotificationsPanel
-        isOpen={isNotificationsOpen}
-        onClose={() => setIsNotificationsOpen(false)}
-        candidates={allCandidates}
-        onView={handleViewNotification}
-      />
+      </>
+      )}
     </div>
   );
 }

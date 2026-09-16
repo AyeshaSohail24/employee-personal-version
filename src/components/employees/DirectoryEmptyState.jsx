@@ -9,10 +9,12 @@ export default function DirectoryEmptyState({ onResetFilters, message = 'No empl
       </div>
       <h3 className="empty-title">No Employees Found</h3>
       <p className="empty-description">{message}</p>
-      <button className="empty-reset-btn" onClick={onResetFilters} type="button">
-        <RotateCcw size={16} />
-        <span>Reset Search & Filters</span>
-      </button>
+      {onResetFilters && (
+        <button className="empty-reset-btn" onClick={onResetFilters} type="button">
+          <RotateCcw size={16} />
+          <span>Reset Search & Filters</span>
+        </button>
+      )}
     </div>
   );
 }

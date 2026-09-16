@@ -159,3 +159,89 @@ export function calculateCandidateSummary(candidates = []) {
 export function countUnreadReplies(candidates = []) {
   return candidates.filter((c) => c.emailStatus === EMAIL_STATUS.REPLIED && !c.notificationRead).length;
 }
+
+/**
+ * Sorts candidates for the Upcoming directory table. Pure/non-mutating (returns a new array).
+ *
+ * @param {Array<Object>} candidates - Hydrated candidates (each with a `.department` reference)
+ * @param {string} sortBy - 'date-desc' (recent first, default) | 'date-asc' (oldest first) |
+ *   'name-asc' | 'name-desc' | 'dept-asc' | 'dept-desc'
+ * @returns {Array<Object>}
+ */
+export function sortCandidates(candidates = [], sortBy = 'date-desc') {
+  const sorted = [...candidates];
+
+  switch (sortBy) {
+    case 'date-asc':
+      sorted.sort((a, b) => (a.shortlistedAt || '').localeCompare(b.shortlistedAt || ''));
+      break;
+    case 'name-asc':
+      sorted.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+      break;
+    case 'name-desc':
+      sorted.sort((a, b) => (b.fullName || '').localeCompare(a.fullName || ''));
+      break;
+    case 'dept-asc':
+      sorted.sort((a, b) => (a.department?.name || '').localeCompare(b.department?.name || ''));
+      break;
+    case 'dept-desc':
+      sorted.sort((a, b) => (b.department?.name || '').localeCompare(a.department?.name || ''));
+      break;
+    case 'date-desc':
+    default:
+      sorted.sort((a, b) => (b.shortlistedAt || '').localeCompare(a.shortlistedAt || ''));
+      break;
+  }
+
+  return sorted;
+}
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Splits text into segments for highlighting a search query, Gmail-style — each segment is
+ * tagged `match: true` where it equals the query (case-insensitive) so the caller can wrap
+ * only those segments (e.g. in a `<mark>`), never sent through dangerouslySetInnerHTML.
+ *
+ * @param {string} text
+ * @param {string} query
+ * @returns {Array<{ text: string, match: boolean }>}
+ */
+export function splitByMatch(text = '', query = '') {
+  if (!text || !query || !query.trim()) return [{ text, match: false }];
+  const re = new RegExp(`(${escapeRegExp(query.trim())})`, 'ig');
+  return text.split(re).filter((part) => part !== '').map((part) => ({
+    text: part,
+    match: part.toLowerCase() === query.trim().toLowerCase(),
+  }));
+}
+
+/**
+ * Extracts a short, single-line snippet of `text` centered on the first occurrence of `query`
+ * (falling back to the start of the text when there's no match), for a Gmail-style search
+ * result preview line.
+ *
+ * @param {string} text
+ * @param {string} query
+ * @param {number} [radius=60] - characters of context kept on each side of the match
+ * @returns {string}
+ */
+export function buildMessageSnippet(text = '', query = '', radius = 60) {
+  if (!text) return '';
+  const flat = text.replace(/\s+/g, ' ').trim();
+  const q = query.trim().toLowerCase();
+  const idx = q ? flat.toLowerCase().indexOf(q) : -1;
+
+  if (idx === -1) {
+    return flat.length > radius * 2 ? `${flat.slice(0, radius * 2)}…` : flat;
+  }
+
+  const start = Math.max(0, idx - radius);
+  const end = Math.min(flat.length, idx + q.length + radius);
+  let snippet = flat.slice(start, end);
+  if (start > 0) snippet = `…${snippet}`;
+  if (end < flat.length) snippet = `${snippet}…`;
+  return snippet;
+}
