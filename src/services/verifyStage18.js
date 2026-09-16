@@ -51,6 +51,14 @@ import { activityService } from './activityService.js';
 import { dashboardService } from './dashboardService.js';
 import { notesService } from './notesService.js';
 import { notificationService } from './notificationService.js';
+import { formerService } from './formerService.js';
+import {
+  EXIT_TYPES,
+  OTHER_EXIT_TYPE,
+  isCustomExitTypeRequired,
+  isValidCustomExitType,
+  resolveExitTypeDisplay,
+} from '../domain/formerDomain.js';
 import { loadDatabase, saveDatabase, resetDatabase, migrateOnboardingScopesIfNeeded, migrateOnboardingPersonTypeIfNeeded } from '../mock-data/storageEngine.js';
 import fs from 'fs';
 import path from 'path';
@@ -13158,6 +13166,575 @@ export async function verifyStage18() {
           `1519. FUNCTIONAL: Software Engineering + Onboarding + Start Date: Newest sort still returns only correctly-matching results (found ${worstCaseWidth.employees.length}) — confirmed live under forced Inter rendering with zero text clipping, zero overflow, and a consistent 21px right-side gap at 1536/1440/1366px`
         );
       }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Former Personnel Module + Historical Record Page (new task: dedicated historical HR area
+    // for people whose lifecycle status is Former, built as a lifecycle-filtered VIEW over the
+    // SAME Personnel identity employeeService already owns — never a duplicate "formerEmployees"
+    // dataset. See src/services/formerService.js, src/domain/formerDomain.js,
+    // src/pages/former/*, src/components/former/*.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const sidebarSrcFormer = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+      const routerSrcFormer = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+      const storageEngineSrcFormer = fs.readFileSync(path.resolve('./src/mock-data/storageEngine.js'), 'utf-8');
+      const formerServiceSrc = fs.readFileSync(path.resolve('./src/services/formerService.js'), 'utf-8');
+      const historicalRecordPageSrc = fs.readFileSync(path.resolve('./src/pages/former/HistoricalRecordPage.jsx'), 'utf-8');
+      const indexCssSrcFormer = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1520. NEW — Sidebar has a flat "Former" NavLink (to="/former", no chevron/submenu) inside
+      // the PEOPLE section, positioned after Offboarding. UPDATED (People Sidebar Lifecycle Icons
+      // task, below): Former's icon is now UserX2 (Person + X, "this person has left"), not
+      // History — the People Icons task deliberately replaced it, so this check now asserts the
+      // current intended icon rather than the superseded one.
+      {
+        const peopleSectionMatch = sidebarSrcFormer.match(/PEOPLE Section[\s\S]*?WORK Section/);
+        const peopleSection = peopleSectionMatch ? peopleSectionMatch[0] : '';
+        const offboardingIdx = peopleSection.indexOf('Offboarding');
+        const formerIdx = peopleSection.indexOf('to="/former"');
+        assert(
+          sidebarSrcFormer.includes("import {") && sidebarSrcFormer.includes('UserX2') &&
+          formerIdx > -1 && offboardingIdx > -1 && formerIdx > offboardingIdx &&
+          peopleSection.includes('<UserX2') &&
+          !peopleSection.match(/to="\/former"[\s\S]{0,120}ChevronDown|ChevronDown[\s\S]{0,120}to="\/former"/),
+          '1520. UPDATED — Sidebar renders a flat "Former" NavLink (to="/former") inside the PEOPLE section, positioned after Offboarding, now using the UserX2 (Person + X) icon per the People Sidebar Lifecycle Icons task — never a chevron/submenu'
+        );
+      }
+
+      // 1521. NEW — Router defines both /former (directory) and /former/:employeeId (Historical
+      // Record) using the internal employee id, consistent with Personnel's own
+      // /employees/:employeeId pattern — never the RZ-#### display code.
+      assert(
+        routerSrcFormer.includes("{ path: 'former', element: <FormerPersonnelPage /> }") &&
+        routerSrcFormer.includes("{ path: 'former/:employeeId', element: <HistoricalRecordPage /> }"),
+        '1521. NEW — router/index.jsx defines both /former and /former/:employeeId routes, keyed by internal employeeId exactly like Personnel\'s /employees/:employeeId'
+      );
+
+      // 1522. NEW — Former is a lifecycle-filtered VIEW: getFormerDirectory() only ever returns
+      // employees whose CURRENT status is exactly 'Former' — never a person from any other
+      // lifecycle stage.
+      {
+        const dir = await formerService.getFormerDirectory({});
+        assert(
+          dir.employees.length > 0 && dir.employees.every((e) => e.status === 'Former'),
+          `1522. NEW — formerService.getFormerDirectory() returns only status === 'Former' employees (found ${dir.employees.length}, all Former: ${dir.employees.every((e) => e.status === 'Former')})`
+        );
+      }
+
+      // 1523. NEW — The Former directory's result count matches employeeService's own Former
+      // count exactly (baseCount is dynamic, sourced from the same query employeeService already
+      // supports for 'Former' — never a separately-maintained/hardcoded count).
+      {
+        const allEmployeesFormerCheck = await employeeService.getAll();
+        const realFormerCount = allEmployeesFormerCheck.filter((e) => e.status === 'Former').length;
+        const dirCount = await formerService.getFormerDirectory({});
+        assert(
+          dirCount.baseCount === realFormerCount && realFormerCount > 0,
+          `1523. NEW — Former directory's baseCount (${dirCount.baseCount}) exactly matches the live count of employees with status === 'Former' (${realFormerCount}) — dynamically computed, never hardcoded`
+        );
+      }
+
+      // 1524. NEW — Employees/Interns segmented filter works against the real directoryType field
+      // (both seeded Former people are Fixed-Term Contract -> directoryType 'Employee', so
+      // Interns correctly returns 0 rather than fabricating a Former intern just to test it).
+      {
+        const employeesOnly = await formerService.getFormerDirectory({ typeFilter: 'Employee' });
+        const internsOnly = await formerService.getFormerDirectory({ typeFilter: 'Intern' });
+        assert(
+          employeesOnly.employees.length === 2 && employeesOnly.employees.every((e) => e.directoryType === 'Employee') &&
+          internsOnly.employees.length === 0,
+          `1524. NEW — Employees filter returns both seeded Former people (${employeesOnly.employees.length}), Interns filter correctly returns 0 (no Former interns exist in seed data — never fabricated)`
+        );
+      }
+
+      // 1525. NEW — Search (Personnel ID / Name / Email / Department) narrows correctly, reusing
+      // employeeService.queryEmployees()'s existing search implementation.
+      {
+        const searchResult = await formerService.getFormerDirectory({ search: 'Daniel' });
+        assert(
+          searchResult.employees.length === 1 && searchResult.employees[0].id === 'emp-018',
+          `1525. NEW — Searching "Daniel" narrows the Former directory to exactly Daniel Lee (emp-018) (found ${searchResult.employees.length} results)`
+        );
+      }
+
+      // 1526. NEW — Sort By: Final Working Date Newest/Oldest (the two new sortBy values added
+      // additively to employeeService.queryEmployees()) produce correctly ordered results.
+      {
+        const newest = await formerService.getFormerDirectory({ sortBy: 'finalDate-desc' });
+        const oldest = await formerService.getFormerDirectory({ sortBy: 'finalDate-asc' });
+        assert(
+          newest.employees[0].contractEndDate >= newest.employees[newest.employees.length - 1].contractEndDate &&
+          oldest.employees[0].contractEndDate <= oldest.employees[oldest.employees.length - 1].contractEndDate,
+          '1526. NEW — Sort By "Final Working Date: Newest/Oldest" orders the Former directory correctly by contractEndDate'
+        );
+      }
+
+      // 1527. NEW — Historical Record composition: getHistoricalRecord() for a real Former person
+      // returns their employee identity, Exit Information (when recorded), Offboarding instance
+      // (when one exists), computed Total Tenure, and Lifecycle History — all from EXISTING
+      // services, never a fabricated/duplicate record.
+      {
+        const record018 = await formerService.getHistoricalRecord('emp-018');
+        assert(
+          record018 !== null && record018.employee.status === 'Former' && record018.employee.fullName === 'Daniel Lee' &&
+          record018.exitInfo?.exitType === 'Contract Ended' && EXIT_TYPES.includes(record018.exitInfo.exitType) &&
+          typeof record018.tenure === 'string' && Array.isArray(record018.lifecycleHistory) && record018.lifecycleHistory.length === 5,
+          `1527. NEW — getHistoricalRecord('emp-018') resolves Daniel Lee's identity, real seeded Exit Information (Contract Ended, a controlled EXIT_TYPES value), a computed Total Tenure string ("${record018?.tenure}"), and a 5-stage Lifecycle History array`
+        );
+      }
+
+      // 1528. NEW — getHistoricalRecord() for a real employee who is genuinely NOT Former (e.g.
+      // emp-001, Active in seed data) returns null — a non-Former person can never render as a
+      // historical record just because the route was visited directly.
+      {
+        const activeEmp = await employeeService.getById('emp-001');
+        const nonFormerRecord = await formerService.getHistoricalRecord('emp-001');
+        assert(
+          activeEmp !== null && activeEmp.status !== 'Former' && nonFormerRecord === null,
+          `1528. NEW — getHistoricalRecord('emp-001') returns null because emp-001's real status is "${activeEmp?.status}", not Former — confirms a non-Former employee can never resolve as a Historical Record`
+        );
+      }
+
+      // 1529. NEW — getHistoricalRecord() for a completely invalid/nonexistent id also returns
+      // null, backing the "Former Record Not Found" state for both cases identically.
+      {
+        const invalidRecord = await formerService.getHistoricalRecord('emp-does-not-exist-999');
+        assert(invalidRecord === null, '1529. NEW — getHistoricalRecord() for a nonexistent employee id returns null, exactly like a real-but-non-Former id');
+      }
+
+      // 1530. NEW — Documents are stored as metadata tied to the correct Personnel ID (internal
+      // employee id) — never mixed up across people, and never claiming real file-byte storage
+      // that doesn't exist in this PoC (see formerService.addDocument()'s own doc comment).
+      {
+        const newDoc = await formerService.addDocument('emp-009', {
+          title: 'Test Reference Letter',
+          documentType: 'Reference Letter',
+          fileName: 'reference.pdf',
+          fileSize: 12345,
+          documentDate: '2026-06-01',
+          description: 'Verification-only test document',
+        });
+        const docsFor009 = await formerService.getDocuments('emp-009');
+        const docsFor018 = await formerService.getDocuments('emp-018');
+        assert(
+          newDoc.employeeId === 'emp-009' && docsFor009.some((d) => d.id === newDoc.id) &&
+          !docsFor018.some((d) => d.id === newDoc.id) && !('fileBytes' in newDoc) && !('fileData' in newDoc),
+          '1530. NEW — A document added for emp-009 is retrievable under emp-009\'s own Personnel ID, does NOT appear under a different person (emp-018), and stores metadata (title/type/fileName/size/date/description) only — never fabricated file-byte storage'
+        );
+      }
+
+      // 1531. NEW — HR Notes reuse the EXISTING Notes module (notesService), never a duplicate
+      // notes system: a note added via formerService.addNoteForPersonnel() is retrievable both
+      // through the Former-scoped lookup AND through the main Notes module's own default getAll()
+      // call, and is correctly excluded from a different person's Former-scoped lookup.
+      {
+        const newNote = await formerService.addNoteForPersonnel('emp-009', {
+          title: 'Verification Test Note',
+          content: 'Created by verifyStage18 to confirm Notes architecture reuse.',
+          category: 'Employee',
+        });
+        const notesFor009 = await formerService.getNotesForPersonnel('emp-009');
+        const notesFor018 = await formerService.getNotesForPersonnel('emp-018');
+        const allMainNotes = await notesService.getAll({ scope: 'my' });
+        assert(
+          newNote.relatedEmployeeId === 'emp-009' &&
+          notesFor009.some((n) => n.id === newNote.id) &&
+          !notesFor018.some((n) => n.id === newNote.id) &&
+          allMainNotes.some((n) => n.id === newNote.id),
+          '1531. NEW — A note added from Former for emp-009 carries relatedEmployeeId, is retrievable for emp-009 (not emp-018), and is also visible through the main Notes module\'s own notesService.getAll() — proving reuse, not duplication, of the existing Notes system'
+        );
+      }
+
+      // 1532. NEW — Regression: notesService.getAll() with no relatedEmployeeId (every pre-
+      // existing caller — My Notes/Pinned/Archived) is completely unaffected by the new field;
+      // notes with no relatedEmployeeId (null, the default for every note created before this
+      // task existed) still return normally.
+      {
+        const unscopedNotes = await notesService.getAll({ scope: 'my' });
+        assert(
+          unscopedNotes.length > 0 && unscopedNotes.some((n) => n.relatedEmployeeId === null || n.relatedEmployeeId === undefined),
+          '1532. NEW — REGRESSION: notesService.getAll() with no relatedEmployeeId filter still returns every note, including pre-existing notes whose relatedEmployeeId is null — the additive field never narrows unrelated callers'
+        );
+      }
+
+      // 1533. NEW — No duplicate Former dataset: storageEngine.js never defines a
+      // "formerEmployees"/"formerInterns" array — Former's only genuinely new storage is the two
+      // small satellite collections (formerExitRecords, employeeDocuments), both keyed by
+      // employeeId back to the SAME Employee identity employeeService owns. formerService.js
+      // itself never imports employee seed data directly — personnel identity is read exclusively
+      // through employeeService.
+      assert(
+        !storageEngineSrcFormer.includes('formerEmployees') && !storageEngineSrcFormer.includes('formerInterns') &&
+        storageEngineSrcFormer.includes('formerExitRecords') && storageEngineSrcFormer.includes('employeeDocuments') &&
+        formerServiceSrc.includes("from './employeeService.js'") &&
+        !formerServiceSrc.includes('seedEmployees') && !formerServiceSrc.includes('seedInterns'),
+        '1533. NEW — No duplicate "formerEmployees"/"formerInterns" dataset exists anywhere in storageEngine.js; formerService.js reads personnel identity exclusively through employeeService.js, never importing employee seed data directly — Former is structurally a view, not a copy'
+      );
+
+      // 1534. NEW — Offboarding Record integration reuses the EXISTING offboarding system
+      // (offboardingService.getAllInstances), never a second offboarding data store, and the
+      // Historical Record page only renders "View Completed Offboarding" (linking to the
+      // EXISTING /offboarding/employees/:employeeId route) when a real completed instance exists.
+      assert(
+        formerServiceSrc.includes("from './offboardingService.js'") &&
+        formerServiceSrc.includes('offboardingService.getAllInstances') &&
+        historicalRecordPageSrc.includes('/offboarding/employees/${employee.id}') &&
+        historicalRecordPageSrc.includes('isOffboardingCompleted &&'),
+        '1534. NEW — Offboarding Record section is built entirely from offboardingService.getAllInstances() (the existing offboarding system) and only links to the existing /offboarding/employees/:employeeId route when a real completed instance exists — never a duplicated offboarding record or a dead-end "Launch Plan" prompt for a Former person'
+      );
+
+      // 1535. NEW — Editing restrictions are honored: no "Delete Former Record", "Delete
+      // Personnel", or Former -> Active / Rehire / Re-engage affordance exists anywhere in the
+      // Former module's source. The only edit surface is the small, explicitly-scoped Exit
+      // Information edit (Exit Type + Exit Remarks only).
+      {
+        const editExitModalSrc = fs.readFileSync(path.resolve('./src/components/former/EditExitInfoModal.jsx'), 'utf-8');
+        const formerDirSrcForDeleteCheck = historicalRecordPageSrc + editExitModalSrc + formerServiceSrc;
+        assert(
+          !/delete.{0,30}former.{0,20}record/i.test(formerDirSrcForDeleteCheck) &&
+          !/rehire|re-?engage/i.test(formerDirSrcForDeleteCheck) &&
+          !formerServiceSrc.includes("status: 'Active'") && !formerServiceSrc.includes('status = \'Active\'') &&
+          !historicalRecordPageSrc.includes("status: 'Active'"),
+          '1535. NEW — No Delete Former Record / Delete Personnel / Rehire / Re-engage / casual Former->Active affordance exists anywhere in the Former module\'s source — the only edit surface is Edit Exit Information (Exit Type + Exit Remarks only)'
+        );
+      }
+
+      // 1536. NEW — Personnel integration regression: employeeService.queryEmployees() with
+      // baseLifecycleScope 'All' (the existing Personnel directory) still surfaces Former people
+      // exactly as before — Former was added as an ADDITIONAL lifecycle-specific view, never a
+      // removal from Personnel's own directory.
+      {
+        const allPersonnelRegr = await employeeService.queryEmployees({ baseLifecycleScope: 'All' });
+        const formerInPersonnel = allPersonnelRegr.employees.filter((e) => e.status === 'Former');
+        assert(
+          formerInPersonnel.length === 2 && formerInPersonnel.some((e) => e.id === 'emp-009') && formerInPersonnel.some((e) => e.id === 'emp-018'),
+          `1536. NEW — REGRESSION: Personnel's own "All" directory (employeeService.queryEmployees({baseLifecycleScope:'All'})) still includes both Former people (found ${formerInPersonnel.length}) — Former remains a visible part of Personnel, never removed`
+        );
+      }
+
+      // 1537. NEW — Responsive CSS: .former-filters-group uses the same overflow-safe
+      // minmax(0, <fr>) grid-track strategy (root-caused and fixed earlier in this file for
+      // .personnel-filters-group) — no fixed-pixel floor that could force the toolbar wider than
+      // its card at any viewport, plus explicit breakpoints down to 1 column on mobile.
+      {
+        const formerGridBlock = (indexCssSrcFormer.match(/\.former-filters-group \{[^}]*\}/) || [''])[0];
+        assert(
+          formerGridBlock.includes('minmax(0, 1fr)') && formerGridBlock.includes('width: 100%') &&
+          indexCssSrcFormer.includes('@media (max-width: 640px)') && indexCssSrcFormer.match(/\.former-filters-group \{\s*grid-template-columns: repeat\(2/),
+          '1537. NEW — .former-filters-group uses minmax(0, 1fr) tracks (never a fixed pixel floor) and has explicit tablet/mobile breakpoints, mirroring the overflow-safe strategy already verified for Personnel\'s own filter grid'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Former Module — Rename "View Historical Record" -> "View Record" + "Specify Exit Type"
+    // for Other (small targeted refinement on top of the Former module above: no routing/
+    // filtering/section/architecture changes, just the DETAILS action wording and a proper way
+    // to record WHAT an "Other" exit actually was, instead of overloading Exit Remarks for it.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const formerListViewSrcRename = fs.readFileSync(path.resolve('./src/components/former/FormerListView.jsx'), 'utf-8');
+      const historicalRecordPageSrcRename = fs.readFileSync(path.resolve('./src/pages/former/HistoricalRecordPage.jsx'), 'utf-8');
+      const editExitInfoModalSrcRename = fs.readFileSync(path.resolve('./src/components/former/EditExitInfoModal.jsx'), 'utf-8');
+      const formerServiceSrcRename = fs.readFileSync(path.resolve('./src/services/formerService.js'), 'utf-8');
+      const formerDomainSrcRename = fs.readFileSync(path.resolve('./src/domain/formerDomain.js'), 'utf-8');
+      const formerToolbarSrcRename = fs.readFileSync(path.resolve('./src/components/former/FormerToolbar.jsx'), 'utf-8');
+
+      // 1538. NEW — The Former directory's DETAILS action reads "View Record" (not "View
+      // Historical Record" anywhere), still targets /former/:employeeId via the same <Link>/icon,
+      // and no duplicate directory/card action using the old wording exists anywhere in the app.
+      assert(
+        formerListViewSrcRename.includes('<span>View Record</span>') &&
+        !formerListViewSrcRename.includes('View Historical Record') &&
+        formerListViewSrcRename.includes('to={`/former/${emp.id}`}') &&
+        formerListViewSrcRename.includes('<History size={12} />') &&
+        !fs.readFileSync(path.resolve('./src/pages/former/FormerPersonnelPage.jsx'), 'utf-8').includes('View Historical Record'),
+        '1538. NEW — Former directory DETAILS action now reads "View Record" (old "View Historical Record" wording removed everywhere in the Former UI), unchanged route (/former/:employeeId) and icon'
+      );
+
+      // 1539. NEW — The destination page's own title is untouched: HistoricalRecordPage.jsx still
+      // renders "Historical Record" as its heading — only the directory's ACTION label changed,
+      // never the destination page's descriptive title.
+      assert(
+        historicalRecordPageSrcRename.includes('>Historical Record<'),
+        '1539. NEW — HistoricalRecordPage.jsx\'s own page heading is still exactly "Historical Record" — renaming the directory action never touched the destination page\'s title'
+      );
+
+      // 1540. NEW — formerDomain.js defines OTHER_EXIT_TYPE = 'Other' and
+      // isCustomExitTypeRequired() is true only for 'Other', false for every predefined type,
+      // null, and empty string.
+      {
+        assert(
+          OTHER_EXIT_TYPE === 'Other' &&
+          isCustomExitTypeRequired('Other') === true &&
+          isCustomExitTypeRequired('Contract Ended') === false &&
+          isCustomExitTypeRequired('Resignation') === false &&
+          isCustomExitTypeRequired('Internship Completed') === false &&
+          isCustomExitTypeRequired('Termination') === false &&
+          isCustomExitTypeRequired(null) === false &&
+          isCustomExitTypeRequired('') === false,
+          '1540. NEW — isCustomExitTypeRequired() returns true ONLY for exitType === "Other" — every predefined type (Internship Completed/Contract Ended/Resignation/Termination) and null/empty stay false'
+        );
+      }
+
+      // 1541. NEW — isValidCustomExitType() requires a non-whitespace value when exitType is
+      // 'Other' (a value containing only spaces is treated as empty), and is always valid
+      // (never blocks Save) for any non-Other exitType regardless of customExitType content.
+      {
+        assert(
+          isValidCustomExitType('Other', '') === false &&
+          isValidCustomExitType('Other', '   ') === false &&
+          isValidCustomExitType('Other', 'Mutual Separation') === true &&
+          isValidCustomExitType('Resignation', '') === true &&
+          isValidCustomExitType('Resignation', 'irrelevant text') === true,
+          '1541. NEW — isValidCustomExitType() rejects empty AND whitespace-only values when exitType is "Other", accepts a real trimmed value, and never blocks a non-Other exitType regardless of customExitType'
+        );
+      }
+
+      // 1542. NEW — resolveExitTypeDisplay() is the single source both the Former directory and
+      // the Historical Record page use to decide what to show: a predefined type displays as-is,
+      // Other+customExitType displays the custom value (never bare "Other"), and a LEGACY Other
+      // record with no customExitType safely falls back to "Other" rather than crashing or
+      // showing blank.
+      {
+        assert(
+          resolveExitTypeDisplay({ exitType: 'Contract Ended', customExitType: null }) === 'Contract Ended' &&
+          resolveExitTypeDisplay({ exitType: 'Other', customExitType: 'Mutual Separation' }) === 'Mutual Separation' &&
+          resolveExitTypeDisplay({ exitType: 'Other', customExitType: null }) === 'Other' &&
+          resolveExitTypeDisplay({ exitType: 'Other', customExitType: '   ' }) === 'Other' &&
+          resolveExitTypeDisplay(null) === null &&
+          resolveExitTypeDisplay({ exitType: null }) === null,
+          '1542. NEW — resolveExitTypeDisplay() shows the predefined type as-is, shows the custom value for Other (never bare "Other" when one was recorded), and safely falls back to "Other" for a legacy Other record with no customExitType — never crashes, never fabricates'
+        );
+      }
+
+      // 1543. NEW — VALIDATION: formerService.setExitInfo() rejects Other with an empty OR
+      // whitespace-only customExitType — Save does not silently succeed with exitType: 'Other',
+      // customExitType: ''.
+      {
+        let threwEmpty = false;
+        let threwWhitespace = false;
+        try {
+          await formerService.setExitInfo('emp-009', { exitType: 'Other', customExitType: '' });
+        } catch (err) {
+          threwEmpty = /specify the exit type/i.test(err.message);
+        }
+        try {
+          await formerService.setExitInfo('emp-009', { exitType: 'Other', customExitType: '    ' });
+        } catch (err) {
+          threwWhitespace = /specify the exit type/i.test(err.message);
+        }
+        assert(
+          threwEmpty && threwWhitespace,
+          '1543. NEW — VALIDATION: formerService.setExitInfo() throws "Please specify the exit type." for exitType: "Other" with an empty OR whitespace-only customExitType — Save is blocked, never silently persisted'
+        );
+      }
+
+      // 1544. NEW — Saving Other WITH a real customExitType persists both fields correctly, and
+      // the record still belongs to the "Other" Exit Type filter category (structured exitType is
+      // never overwritten by the free-text value).
+      {
+        const savedOther = await formerService.setExitInfo('emp-009', { exitType: 'Other', customExitType: '  Mutual Separation  ', exitRemarks: 'Verification test' });
+        assert(
+          savedOther.exitType === 'Other' && savedOther.customExitType === 'Mutual Separation',
+          `1544a. NEW — Saving Other with customExitType "  Mutual Separation  " persists exitType: "Other" (found "${savedOther.exitType}") and a trimmed customExitType: "Mutual Separation" (found "${savedOther.customExitType}")`
+        );
+
+        const otherFiltered = await formerService.getFormerDirectory({ exitType: 'Other' });
+        assert(
+          otherFiltered.employees.some((e) => e.id === 'emp-009'),
+          '1544b. NEW — The Exit Type filter for "Other" still includes emp-009 after saving a custom value — the structured category used for filtering was never overwritten by the free-text value'
+        );
+
+        const record009 = await formerService.getHistoricalRecord('emp-009');
+        assert(
+          record009.exitInfo.exitType === 'Other' && record009.exitInfo.customExitType === 'Mutual Separation',
+          '1544c. NEW — getHistoricalRecord() surfaces the same exitType/customExitType pair the Historical Record page reads to display "Mutual Separation"'
+        );
+      }
+
+      // 1545. NEW — SWITCHING AWAY: saving a predefined type after Other was previously set with
+      // a custom value clears the stale custom value — the record never shows both "Resignation"
+      // and "Mutual Separation" together, and it no longer belongs to the "Other" filter category.
+      {
+        await formerService.setExitInfo('emp-009', { exitType: 'Other', customExitType: 'Mutual Separation' });
+        const switched = await formerService.setExitInfo('emp-009', { exitType: 'Resignation', customExitType: 'Mutual Separation' });
+        assert(
+          switched.exitType === 'Resignation' && (switched.customExitType === null || switched.customExitType === undefined),
+          `1545a. NEW — SWITCHING: saving exitType: "Resignation" (even while the caller still passed the old customExitType value) clears customExitType to null (found ${JSON.stringify(switched.customExitType)}) — a predefined type is never saved alongside a stale custom value`
+        );
+
+        const resignationFiltered = await formerService.getFormerDirectory({ exitType: 'Resignation' });
+        const otherFilteredAfterSwitch = await formerService.getFormerDirectory({ exitType: 'Other' });
+        assert(
+          resignationFiltered.employees.some((e) => e.id === 'emp-009') &&
+          !otherFilteredAfterSwitch.employees.some((e) => e.id === 'emp-009'),
+          '1545b. NEW — After switching Other -> Resignation, emp-009 now belongs to the Resignation filter and no longer belongs to the Other filter — the record cleanly moved categories, it does not appear in both'
+        );
+
+        assert(
+          resolveExitTypeDisplay(switched) === 'Resignation',
+          '1545c. NEW — The resolved display for the switched record is exactly "Resignation" — the stale "Mutual Separation" custom value never appears alongside it'
+        );
+      }
+
+      // 1546. NEW — The Exit Type filter's own options remain the stable, controlled EXIT_TYPES
+      // list — FormerToolbar.jsx does not dynamically add "Mutual Separation" (or any other
+      // custom value) as its own filter option.
+      assert(
+        formerToolbarSrcRename.includes('EXIT_TYPES.map') &&
+        !formerToolbarSrcRename.includes('customExitType'),
+        '1546. NEW — FormerToolbar.jsx\'s Exit Type filter is still built only from the controlled EXIT_TYPES list — custom "Other" values are never turned into their own dynamic filter options'
+      );
+
+      // 1547. NEW — EditExitInfoModal.jsx conditionally renders "Specify Exit Type" only under
+      // isCustomExitTypeRequired(exitType), with the required marker, the "Enter exit type"
+      // placeholder (never a pre-populated example value or Exit Remarks' own text), and clears
+      // the custom value immediately when switching away from Other (not only on save).
+      assert(
+        editExitInfoModalSrcRename.includes('showCustomExitType &&') &&
+        editExitInfoModalSrcRename.includes('isCustomExitTypeRequired(exitType)') &&
+        editExitInfoModalSrcRename.includes('Specify Exit Type') &&
+        editExitInfoModalSrcRename.includes('placeholder="Enter exit type"') &&
+        editExitInfoModalSrcRename.match(/if \(value !== OTHER_EXIT_TYPE\)\s*\{\s*setCustomExitType\(''\);/),
+        '1547. NEW — EditExitInfoModal.jsx shows "Specify Exit Type" only when isCustomExitTypeRequired(exitType) is true, with a neutral "Enter exit type" placeholder (never a pre-populated example), and clears the custom value the moment HR switches away from Other'
+      );
+
+      // 1548. NEW — LEGACY DATA SAFETY: a Former record with exitType: 'Other' but NO
+      // customExitType (simulating data saved before this feature existed) never crashes
+      // getHistoricalRecord()/resolveExitTypeDisplay() and safely displays "Other".
+      {
+        await formerService.setExitInfo('emp-009', { exitType: 'Other', customExitType: 'temp — will be stripped below' });
+        const db = loadDatabase();
+        db.formerExitRecords = db.formerExitRecords.map((r) =>
+          r.employeeId === 'emp-009' ? { ...r, customExitType: undefined } : r
+        );
+        saveDatabase(db);
+
+        let legacyThrew = false;
+        let legacyRecord = null;
+        try {
+          legacyRecord = await formerService.getHistoricalRecord('emp-009');
+        } catch (err) {
+          legacyThrew = true;
+        }
+        assert(
+          !legacyThrew && legacyRecord !== null && resolveExitTypeDisplay(legacyRecord.exitInfo) === 'Other',
+          '1548. NEW — LEGACY: a Former record with exitType: "Other" and no customExitType field at all does not crash getHistoricalRecord() and safely displays "Other" — legacy pre-feature records are never broken'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // People Sidebar Lifecycle Icons (small targeted task: replace the four PEOPLE-section icons
+    // — Upcoming/Onboarding/Offboarding/Former — with a consistent Person+Clock/Plus/Minus/X
+    // family. No labels, order, routes, chevrons, or business logic changed — icons only.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const sidebarSrcIcons = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+      const userClockIconSrc = fs.readFileSync(path.resolve('./src/components/layout/icons/UserClockIcon.jsx'), 'utf-8');
+      const dashboardPageSrcIcons = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+
+      const peopleSectionIcons = (sidebarSrcIcons.match(/PEOPLE Section[\s\S]*?WORK Section/) || [''])[0];
+
+      // 1549. NEW — Upcoming now renders the composed UserClockIcon (Person + Clock) instead of
+      // UserPlus2 — that Person+Plus concept moved to Onboarding (check 1550).
+      assert(
+        sidebarSrcIcons.includes("import UserClockIcon from './icons/UserClockIcon.jsx'") &&
+        /to="\/upcoming"[\s\S]{0,250}<UserClockIcon/.test(peopleSectionIcons),
+        '1549. NEW — Upcoming\'s nav icon is now the composed UserClockIcon (Person + Clock) — "this person is scheduled and has not started yet"'
+      );
+
+      // 1550. NEW — Onboarding now renders UserPlus2 (Person + Plus, "joining/being added") —
+      // reusing the exact icon concept Upcoming used before this task, rather than picking an
+      // unrelated new icon.
+      assert(
+        /Onboarding[\s\S]{0,120}<UserPlus2/.test(peopleSectionIcons) || /<UserPlus2[\s\S]{0,120}Onboarding/.test(peopleSectionIcons),
+        '1550. NEW — Onboarding\'s nav icon is now UserPlus2 (Person + Plus) — reused from Upcoming\'s previous icon concept, not a newly invented one'
+      );
+
+      // 1551. NEW — Offboarding now renders UserMinus2 (Person + Minus, "in the process of
+      // leaving") — replacing the previous UserX, which is now reserved for Former only.
+      assert(
+        /Offboarding[\s\S]{0,120}<UserMinus2/.test(peopleSectionIcons) || /<UserMinus2[\s\S]{0,120}Offboarding/.test(peopleSectionIcons),
+        '1551. NEW — Offboarding\'s nav icon is now UserMinus2 (Person + Minus)'
+      );
+
+      // 1552. NEW — Former now renders UserX2 (Person + X, "has left, now Former") — no longer
+      // the History/clock-arrow icon a previous task used (see check 1520's own updated note).
+      assert(
+        /to="\/former"[\s\S]{0,250}<UserX2/.test(peopleSectionIcons) &&
+        !peopleSectionIcons.includes('<History'),
+        '1552. NEW — Former\'s nav icon is now UserX2 (Person + X), and the old History icon no longer appears anywhere in the PEOPLE section'
+      );
+
+      // 1553. NEW — UserClockIcon.jsx is a properly composed Lucide icon: built via Lucide's own
+      // public createLucideIcon() factory (never a deep/internal import, never a hand-rolled raw
+      // <svg> wrapper), reuses the SAME person-base path data UserRoundPlus/UserRoundMinus/
+      // UserRoundX already use (visual family consistency), and adds a genuine clock badge
+      // (a circle + hands, never a bare standalone Clock icon substituted in).
+      assert(
+        userClockIconSrc.includes("import { createLucideIcon } from 'lucide-react'") &&
+        userClockIconSrc.includes("createLucideIcon('UserClock'") &&
+        userClockIconSrc.includes('M2 21a8 8 0 0 1 13.292-6') &&
+        userClockIconSrc.match(/circle.*cx:\s*'10',\s*cy:\s*'8',\s*r:\s*'5'/) &&
+        userClockIconSrc.includes("'circle', { cx: '19', cy: '19'") &&
+        !userClockIconSrc.includes("from 'lucide-react/dist"),
+        '1553. NEW — UserClockIcon.jsx is composed via Lucide\'s public createLucideIcon() factory, reuses the exact person-base path UserRoundPlus/UserRoundMinus/UserRoundX already use, and adds a real clock-face badge circle — never a bare standalone Clock icon, never a deep internal import'
+      );
+
+      // 1554. REGRESSION: labels and PEOPLE section order are completely unchanged — Upcoming,
+      // then Onboarding, then Offboarding, then Former, in that order, with their exact existing
+      // label text.
+      {
+        const order = ['>Upcoming<', '>Onboarding<', '>Offboarding<', 'to="/former"'].map((needle) => peopleSectionIcons.indexOf(needle));
+        assert(
+          order.every((i) => i > -1) && order[0] < order[1] && order[1] < order[2] && order[2] < order[3],
+          `1554. REGRESSION: PEOPLE section order is unchanged — Upcoming -> Onboarding -> Offboarding -> Former (found indices ${JSON.stringify(order)})`
+        );
+      }
+
+      // 1555. REGRESSION: routes are completely unchanged — to="/upcoming", the Onboarding/
+      // Offboarding submenu routes, and to="/former" are all still exactly as they were.
+      assert(
+        sidebarSrcIcons.includes('to="/upcoming"') &&
+        sidebarSrcIcons.includes('to="/onboarding/employees"') &&
+        sidebarSrcIcons.includes('to="/onboarding/plans"') &&
+        sidebarSrcIcons.includes('to="/offboarding/departing"') &&
+        sidebarSrcIcons.includes('to="/offboarding/plans"') &&
+        sidebarSrcIcons.includes('to="/former"'),
+        '1555. REGRESSION: every PEOPLE section route (/upcoming, /onboarding/employees, /onboarding/plans, /offboarding/departing, /offboarding/plans, /former) is byte-for-byte unchanged — this task only swapped icon components'
+      );
+
+      // 1556. REGRESSION: Onboarding/Offboarding still render a ChevronDown/ChevronRight toggle
+      // (accordion submenus), while Upcoming/Former remain plain NavLinks with no chevron —
+      // exactly as before this task.
+      assert(
+        (peopleSectionIcons.match(/ChevronDown/g) || []).length === 2 &&
+        (peopleSectionIcons.match(/ChevronRight/g) || []).length === 2,
+        '1556. REGRESSION: Onboarding and Offboarding both still render their ChevronDown/ChevronRight toggle (2 of each across the PEOPLE section) — chevrons and submenu behavior are untouched'
+      );
+
+      // 1557. NEW — Dashboard KPI card icons are completely untouched by this task: the new
+      // UserClockIcon component is never imported/referenced anywhere in DashboardPage.jsx —
+      // this task is scoped to the left sidebar only.
+      assert(
+        !dashboardPageSrcIcons.includes('UserClockIcon'),
+        '1557. NEW — DashboardPage.jsx does not import or reference UserClockIcon — the Dashboard\'s own lifecycle KPI card icons were left completely untouched by this sidebar-only task'
+      );
 
       resetDatabase();
     }

@@ -264,6 +264,15 @@ export const employeeService = {
       if (sortBy === 'date-asc') {
         return (a.startDate || '').localeCompare(b.startDate || '');
       }
+      // Final Working Date sort — added for the Former Personnel directory, which sorts by
+      // contractEndDate (Final Working Date) rather than startDate. Purely additive: no existing
+      // caller/sortBy value is affected.
+      if (sortBy === 'finalDate-desc') {
+        return (b.contractEndDate || '').localeCompare(a.contractEndDate || '');
+      }
+      if (sortBy === 'finalDate-asc') {
+        return (a.contractEndDate || '').localeCompare(b.contractEndDate || '');
+      }
       if (sortBy === 'id-asc') {
         return compareEmployeeIdNumeric(a.employeeId, b.employeeId);
       }

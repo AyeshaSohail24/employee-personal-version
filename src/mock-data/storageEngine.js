@@ -19,6 +19,7 @@ import { seedDocumentTypes } from './seedDocumentTypes.js';
 import { seedUpcomingCandidates } from './seedUpcomingCandidates.js';
 import { seedEmailTemplates } from './seedEmailTemplates.js';
 import { seedNotes } from './seedNotes.js';
+import { seedFormerExitRecords } from './seedFormerExitRecords.js';
 
 const STORAGE_KEY = 'rizurf_hr_poc_v1';
 let inMemoryDb = null;
@@ -510,6 +511,19 @@ function getInitialState() {
     // In-app notification records (currently only 'note_reminder' type). Starts empty — the
     // app opens with real current persisted data only, never fake/demo notifications.
     notifications: [],
+    // Former module — Exit Information satellite records (see formerDomain.js/formerService.js).
+    // Shallow-copied for the same reason `notes` is: formerService.setExitInfo() replaces an
+    // array entry in place, and aliasing this straight to the imported seed module would let
+    // that write permanently corrupt the shared seed singleton, breaking resetDatabase().
+    formerExitRecords: [...seedFormerExitRecords],
+    // Document METADATA records (title/type/date/description/fileName) for the Former Historical
+    // Record page's Documents section — reuses the field name `employeeDocuments` that
+    // documentTypeDomain.js already defensively checked for but never populated (see that file's
+    // calculateDocumentTypeReferences()), rather than inventing a differently-named collection.
+    // Starts empty: no real document has ever been added by a user yet. Genuinely does NOT store
+    // file bytes — see AddDocumentModal.jsx's own comment for why (no backend file-storage layer
+    // exists in this PoC) — only the metadata a user enters plus the selected file's name/size.
+    employeeDocuments: [],
   };
   const migrated = migrateEmployeeTagsIfNeeded(base);
   const cleanedAtt = cleanupAttendanceIfNeeded(migrated);
@@ -555,6 +569,8 @@ export function loadDatabase() {
     if (!parsed.candidateEmailLog) parsed.candidateEmailLog = [];
     if (!parsed.notes) parsed.notes = [...seedNotes];
     if (!parsed.notifications) parsed.notifications = [];
+    if (!parsed.formerExitRecords) parsed.formerExitRecords = [...seedFormerExitRecords];
+    if (!parsed.employeeDocuments) parsed.employeeDocuments = [];
 
     const migrated = migrateEmployeeTagsIfNeeded(parsed);
     const cleanedAtt = cleanupAttendanceIfNeeded(migrated);

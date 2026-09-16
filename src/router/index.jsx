@@ -29,6 +29,10 @@ import MyNotesPage from '../pages/notes/MyNotesPage';
 import PinnedNotesPage from '../pages/notes/PinnedNotesPage';
 import ArchivedNotesPage from '../pages/notes/ArchivedNotesPage';
 
+// Former Personnel (historical record view over the same Personnel identity, status: Former)
+import FormerPersonnelPage from '../pages/former/FormerPersonnelPage';
+import HistoricalRecordPage from '../pages/former/HistoricalRecordPage';
+
 import NotFoundPage from '../pages/NotFoundPage';
 
 export const router = createBrowserRouter([
@@ -76,6 +80,11 @@ export const router = createBrowserRouter([
           { path: 'plans/:personType/department/:departmentId', element: <OffboardingPlanEditorPage /> },
         ],
       },
+
+      // Former Personnel routes (historical, lifecycle-filtered view — status: Former — over the
+      // same Personnel identity employeeService already owns; no duplicate dataset)
+      { path: 'former', element: <FormerPersonnelPage /> },
+      { path: 'former/:employeeId', element: <HistoricalRecordPage /> },
 
       // Notes routes (personal HR notepad)
       {

@@ -1923,6 +1923,32 @@ body {
   color: var(--text-muted);
 }
 
+/* Former Personnel toolbar's 3-filter modifier on the shared .filters-group (Department / Exit
+   Type / Sort By — no Mode/Salary/Status filters here). Unlike .personnel-filters-group's 5
+   hand-measured fr weights (needed there to fit 5 columns tightly at 1366px), 3 even 1fr columns
+   comfortably fit every realistic option label at any of this app's supported widths, so no
+   per-column measurement was needed. minmax(0, 1fr) still avoids the same font-metrics-driven
+   grid-overflow failure mode documented on .personnel-filters-group above. */
+.former-filters-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .former-filters-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .former-filters-group {
+    grid-template-columns: 1fr;
+  }
+}
+
 .filter-select {
   appearance: none;
   -webkit-appearance: none;
