@@ -7976,7 +7976,7 @@ export async function verifyStage18() {
       // 1134. UPDATED — Breadcrumb display metadata: a path-scoped label override maps /onboarding/employees -> "Progress" — not a second/duplicated breadcrumb, and not a route rename. The original check required this to be the FIRST entry in BREADCRUMB_LABEL_OVERRIDES; a later task ("Rename Employees Directory to Personnel") legitimately added an earlier '/employees': 'Personnel' entry to the same object, so this now checks the entry exists anywhere in the map rather than requiring first-position
       assert(
         headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES\s*=\s*\{[\s\S]*?'\/onboarding\/employees':\s*'Progress',/) &&
-        headerSrcFinal.includes('BREADCRUMB_LABEL_OVERRIDES[url] || formatBreadcrumbText(segment)') &&
+        headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES\[url\]\s*\|\|\s*\n?\s*formatBreadcrumbText\(segment\)/) &&
         (headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES/g) || []).length >= 2,
         '1134. UPDATED — Header.jsx\'s BREADCRUMB_LABEL_OVERRIDES still maps \'/onboarding/employees\' -> \'Progress\', consumed by the existing single breadcrumb generator — this is a display-metadata override, not a hardcoded second breadcrumb and not a route change (no longer required to be the object\'s first entry, since a later task added \'/employees\': \'Personnel\' ahead of it)'
       );
@@ -8120,7 +8120,7 @@ export async function verifyStage18() {
       assert(
         headerSrcOff.match(/'\/offboarding\/departing':\s*'Progress',/) &&
         headerSrcOff.match(/'\/offboarding\/employees':\s*'Progress',/) &&
-        headerSrcOff.includes('BREADCRUMB_LABEL_OVERRIDES[url] || formatBreadcrumbText(segment)'),
+        headerSrcOff.match(/BREADCRUMB_LABEL_OVERRIDES\[url\]\s*\|\|\s*\n?\s*formatBreadcrumbText\(segment\)/),
         '1145. NEW — Header.jsx defines path-keyed BREADCRUMB_LABEL_OVERRIDES entries (\'/offboarding/departing\' -> \'Progress\', \'/offboarding/employees\' -> \'Progress\') consumed by the existing single breadcrumb generator, so Home > Offboarding > Progress renders correctly (and cascades into the detail page breadcrumb too)'
       );
       // 1145b. Overrides are keyed by the FULL path, never the bare segment — so MAIN > Employees and Onboarding > Progress breadcrumbs are provably unaffected
@@ -10423,26 +10423,40 @@ export async function verifyStage18() {
         '1315. REGRESSION: router/index.jsx still routes \'employees\' to <AllEmployeesPage /> unchanged — preserving route compatibility was preferred over introducing a /personnel migration for this task'
       );
 
-      // 1316. List table: final PROFILE column added, ID still first, 10 columns total
+      // 1316. UPDATED (Personnel Details Page task) — List table: final DETAILS column added
+      // (was PROFILE — renamed alongside the View Profile -> View Details wording change below,
+      // since a column still labeled PROFILE next to a "View Details" button would read as
+      // inconsistent), ID still first, 10 columns total.
       assert(
         employeeListViewSrc.match(/<th style=\{\{ width: '6%' \}\}>ID<\/th>/) &&
-        employeeListViewSrc.match(/<th[^>]*>PROFILE<\/th>\s*<\/tr>/) &&
+        employeeListViewSrc.match(/<th[^>]*>DETAILS<\/th>\s*<\/tr>/) &&
+        !employeeListViewSrc.match(/<th[^>]*>PROFILE<\/th>/) &&
         (employeeListViewSrc.match(/<th style=/g) || []).length === 10,
-        '1316. NEW — EmployeeListView.jsx\'s table header keeps ID first and adds PROFILE as the FINAL column — exactly 10 <th> columns total (ID/NAME/DEPARTMENT/TYPE/MODE/DATES/SALARY/STATUS/DURATION/PROFILE)'
+        '1316. UPDATED — EmployeeListView.jsx\'s table header keeps ID first and adds DETAILS (was PROFILE) as the FINAL column — exactly 10 <th> columns total (ID/NAME/DEPARTMENT/TYPE/MODE/DATES/SALARY/STATUS/DURATION/DETAILS)'
       );
 
-      // 1317. Every list row has a "View Profile" action wired to onViewProfile(emp.id)
+      // 1317. SUPERSEDED (Personnel Details Page task) — the per-row action no longer opens
+      // PersonnelProfileModal via an onViewProfile(emp.id) callback; it now navigates to the
+      // dedicated Personnel Details page via a real <Link to={`/employees/${emp.id}`}>, reading
+      // "View Details" instead of "View Profile" — per direct user request, since a person's
+      // record can grow to include CV/resume PDFs that don't fit comfortably in a modal.
       assert(
-        employeeListViewSrc.includes('onClick={() => onViewProfile && onViewProfile(emp.id)}') &&
-        employeeListViewSrc.includes('<span>View Profile</span>'),
-        '1317. NEW — EmployeeListView.jsx\'s PROFILE cell renders a "View Profile" button calling onViewProfile(emp.id) for every row — explicit wording, not a bare "View"'
+        employeeListViewSrc.match(/<Link to=\{`\/employees\/\$\{emp\.id\}`\} className="btn-compact-override"/) &&
+        employeeListViewSrc.includes('<span>View Details</span>') &&
+        !employeeListViewSrc.includes('View Profile') &&
+        !employeeListViewSrc.includes('onViewProfile'),
+        '1317. SUPERSEDED — EmployeeListView.jsx\'s DETAILS cell renders a <Link to={`/employees/${emp.id}`}> reading "View Details" for every row — no onViewProfile callback, no "View Profile" text remains'
       );
 
-      // 1318. Card view also exposes View Profile (person-level action available consistently, not List-only)
+      // 1318. SUPERSEDED (Personnel Details Page task) — Card view also navigates to the
+      // dedicated Personnel Details page (person-level action available consistently, not
+      // List-only), same "View Details" wording and Link-based navigation as List view.
       assert(
-        employeeCardViewSrc.includes('onClick={() => onViewProfile && onViewProfile(emp.id)}') &&
-        employeeCardViewSrc.includes('<span>View Profile</span>'),
-        '1318. NEW — EmployeeCardView.jsx also renders a "View Profile" button per card, wired the same way as List view — Profile is not List-only'
+        employeeCardViewSrc.match(/<Link to=\{`\/employees\/\$\{emp\.id\}`\} className="btn-compact-override"/) &&
+        employeeCardViewSrc.includes('<span>View Details</span>') &&
+        !employeeCardViewSrc.includes('View Profile') &&
+        !employeeCardViewSrc.includes('onViewProfile'),
+        '1318. SUPERSEDED — EmployeeCardView.jsx also renders a <Link to={`/employees/${emp.id}`}> reading "View Details" per card, wired the same way as List view — Details is not List-only'
       );
 
       // 1319. Timeline view decision: NOT force-fitted with a Profile control (documented decision, not silently missing) — Timeline has no existing action-area affordance per row to attach it to cleanly
@@ -12164,6 +12178,216 @@ export async function verifyStage18() {
         assert(
           allSummaryFluid.metrics.upcomingCount === 1 && allSummaryFluid.metrics.onboardingCount === 2 && allSummaryFluid.metrics.activeCount === 11 && allSummaryFluid.metrics.departingCount === 2 && allSummaryFluid.metrics.formerCount === 2,
           `1458. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the 3+2 layout bug fix (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryFluid.metrics)}`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Replace Personnel "View Profile" Modal with a Dedicated Personnel Details Page
+    // (direct user request: a personnel record can grow to include CV/resume PDFs and other
+    // documents, which don't fit comfortably in PersonnelProfileModal's fixed-height modal shell.
+    // Clicking "View Details" — renamed from "View Profile" — now navigates to a dedicated
+    // /employees/:employeeId page instead of opening a modal. The route param name and its value
+    // (the internal employee.id, not the RZ-#### display code) follow the SAME convention already
+    // established by /onboarding/employees/:employeeId and /offboarding/employees/:employeeId.
+    // The new page is sourced through employeeService.getProfile() — the exact same service
+    // method PersonnelProfileModal already used — so no duplicate data-access logic was
+    // introduced, and it reuses that same 4-section field layout (Personal Information, Education
+    // & Application, Links & Documents, Employment/Internship Details) verbatim rather than
+    // redesigning the information architecture. PersonnelProfileModal itself is NOT deleted: the
+    // Dashboard's EndingWithin7DaysWidget still opens it via DashboardPage.jsx's onViewProfile
+    // callback (dashboard logic was explicitly out of scope for this task), so it is not orphaned.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const routerSrcDetails = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+      const detailsPageSrc = fs.readFileSync(path.resolve('./src/pages/employees/PersonnelDetailsPage.jsx'), 'utf-8');
+      const directoryContainerSrcDetails = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const employeeListViewSrcDetails = fs.readFileSync(path.resolve('./src/components/employees/EmployeeListView.jsx'), 'utf-8');
+      const employeeCardViewSrcDetails = fs.readFileSync(path.resolve('./src/components/employees/EmployeeCardView.jsx'), 'utf-8');
+      const dashboardPageSrcDetails = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const headerSrcDetails = fs.readFileSync(path.resolve('./src/components/layout/Header.jsx'), 'utf-8');
+
+      // 1459. NEW — router/index.jsx registers 'employees/:employeeId' -> PersonnelDetailsPage,
+      // following the SAME :employeeId param-naming convention already used by
+      // 'onboarding/employees/:employeeId' and 'offboarding/employees/:employeeId', as a sibling
+      // of the existing 'employees' route (not a breaking migration away from it).
+      assert(
+        routerSrcDetails.includes("{ path: 'employees', element: <AllEmployeesPage /> }") &&
+        routerSrcDetails.includes("{ path: 'employees/:employeeId', element: <PersonnelDetailsPage /> }"),
+        '1459. NEW — router/index.jsx keeps \'employees\' -> AllEmployeesPage unchanged and adds \'employees/:employeeId\' -> PersonnelDetailsPage as a sibling route, matching the :employeeId param convention already used by onboarding/offboarding detail routes'
+      );
+
+      // 1460. NEW — PersonnelDetailsPage.jsx extracts the id via useParams() (works on direct
+      // URL load/refresh, never relies on navigation state passed from the table) and loads data
+      // exclusively through employeeService.getProfile() — no mock-data/storageEngine/localStorage
+      // import anywhere in the file, preserving the same backend-swappable service boundary
+      // PersonnelProfileModal already established.
+      assert(
+        detailsPageSrc.includes('const { employeeId } = useParams();') &&
+        detailsPageSrc.match(/employeeService\s*\.getProfile\(employeeId\)/) &&
+        !detailsPageSrc.match(/from ['"].*mock-data/) &&
+        !detailsPageSrc.includes('storageEngine') &&
+        !detailsPageSrc.includes('localStorage') &&
+        !detailsPageSrc.includes('location.state'),
+        '1460. NEW — PersonnelDetailsPage.jsx reads the id from useParams() and loads it exclusively via employeeService.getProfile(employeeId) — no mock-data/storageEngine/localStorage import, and no reliance on navigation state, so direct URL access and browser refresh both work identically to normal navigation'
+      );
+
+      // 1461. NEW — all 4 sections and every field from PersonnelProfileModal are preserved
+      // verbatim on the new page (Personal Information x5, Education & Application x7, Links &
+      // Documents x4, Employment/Internship Details x9) — no field was silently dropped while
+      // porting from modal to page.
+      assert(
+        detailsPageSrc.includes('title="Personal Information"') &&
+        detailsPageSrc.includes('label="First Name"') && detailsPageSrc.includes('label="Last Name"') &&
+        detailsPageSrc.includes('label="Email"') && detailsPageSrc.includes('label="Contact Number"') &&
+        detailsPageSrc.includes('label="Nationality"') &&
+        detailsPageSrc.includes('title="Education & Application"') &&
+        detailsPageSrc.includes('label="Highest Level of Education"') && detailsPageSrc.includes('label="University"') &&
+        detailsPageSrc.includes('label="Interested Position"') && detailsPageSrc.includes('label="Acquisition Channel"') &&
+        detailsPageSrc.includes('label="Original Start Date"') && detailsPageSrc.includes('label="Original End Date"') &&
+        detailsPageSrc.includes('label="Anything Else"') &&
+        detailsPageSrc.includes('title="Links & Documents"') &&
+        detailsPageSrc.includes('label="LinkedIn"') && detailsPageSrc.includes('label="GitHub"') &&
+        detailsPageSrc.includes('label="Resume / CV"') && detailsPageSrc.includes('label="Portfolio"') &&
+        detailsPageSrc.includes('title="Employment / Internship Details"') &&
+        detailsPageSrc.includes('label="Personnel ID"') && detailsPageSrc.includes('label="Type"') &&
+        detailsPageSrc.includes('label="Position"') && detailsPageSrc.includes('label="Department"') &&
+        detailsPageSrc.includes('label="Work Mode"') && detailsPageSrc.includes('label="Salary"') &&
+        detailsPageSrc.includes('label="Actual Start Date"') && detailsPageSrc.includes('label="Actual End Date"') &&
+        detailsPageSrc.includes('label="Current Lifecycle Status"'),
+        '1461. NEW — PersonnelDetailsPage.jsx renders all 4 of PersonnelProfileModal\'s sections and every one of its 25 fields verbatim — no field was lost migrating from modal to page'
+      );
+
+      // 1462. NEW — Links & Documents fields never fabricate a document/URL: each one renders the
+      // existing "—" empty-state convention when its underlying value is null (true of every field
+      // today, per employeeService.getProfile's own doc comment), and only renders a real link
+      // when a URL is actually present — matching Part E's explicit "do not invent fake documents"
+      // requirement.
+      assert(
+        detailsPageSrc.match(/\{url \? \(\s*<a[\s\S]{0,150}target="_blank"[\s\S]{0,40}rel="noopener noreferrer"/) &&
+        detailsPageSrc.match(/\) : \(\s*<div[^>]*>—<\/div>/),
+        '1462. NEW — ProfileLinkField (Links & Documents) renders a real target="_blank" link only when a url is present, and the existing "—" empty-state convention otherwise — never a fabricated document/link'
+      );
+
+      // 1463. NEW — the page has a genuine loading state and a "Personnel Record Not Found" state
+      // with a working Back to Personnel link — an invalid/unknown id never crashes or renders
+      // blank.
+      assert(
+        detailsPageSrc.includes('Loading personnel details...') &&
+        detailsPageSrc.includes('Personnel Record Not Found') &&
+        detailsPageSrc.match(/<Link to="\/employees" className="btn-secondary"[\s\S]{0,100}Back to Personnel/),
+        '1463. NEW — PersonnelDetailsPage.jsx has a distinct loading state and a "Personnel Record Not Found" state (reached whenever employeeService.getProfile() resolves null) with a working Back to Personnel link — never a crash or a blank page for an invalid id'
+      );
+
+      // 1464. NEW — the page uses normal document-flow page scrolling (the shared, unstyled
+      // page-layout-container wrapper every other detail page in this app uses), never the
+      // modal's own fixed-height internal-scroll shell.
+      assert(
+        detailsPageSrc.includes('page-layout-container') &&
+        !detailsPageSrc.includes('modal-backdrop') &&
+        !detailsPageSrc.includes('modal-scroll-shell') &&
+        !detailsPageSrc.includes('modal-card'),
+        '1464. NEW — PersonnelDetailsPage.jsx wraps its content in the plain page-layout-container used by every other detail page in this app (no CSS rule constrains its height) — normal page scrolling, never the modal\'s fixed-height modal-scroll-shell'
+      );
+
+      // 1465. NEW — the header block shows the actual selected person's avatar/name/Personnel ID
+      // dynamically (profile.photo/profile.fullName/profile.personnelId), never a hardcoded
+      // "Aaron Kumar"/"RZ-1017" placeholder.
+      assert(
+        detailsPageSrc.includes('{profile.photo || \'EM\'}') &&
+        detailsPageSrc.includes('{profile.fullName}') &&
+        detailsPageSrc.includes('Personnel ID: <strong>{profile.personnelId}</strong>') &&
+        !detailsPageSrc.includes('Aaron Kumar') &&
+        !detailsPageSrc.includes('RZ-1017'),
+        '1465. NEW — The page header renders the selected person\'s own photo/fullName/personnelId dynamically — no hardcoded "Aaron Kumar" or "RZ-1017" placeholder anywhere in the file'
+      );
+
+      // 1466. SUPERSEDED — DirectoryPageContainer.jsx no longer imports/renders
+      // PersonnelProfileModal or holds profileEmployeeId state — the Personnel directory's own
+      // "View Details" trigger is now a plain navigation, not a modal.
+      assert(
+        !directoryContainerSrcDetails.includes('PersonnelProfileModal') &&
+        !directoryContainerSrcDetails.includes('profileEmployeeId') &&
+        !directoryContainerSrcDetails.match(/onViewProfile=\{setProfileEmployeeId\}/),
+        '1466. SUPERSEDED — DirectoryPageContainer.jsx no longer imports PersonnelProfileModal or holds profileEmployeeId state — List/Card view no longer receive an onViewProfile callback at all, since both now navigate directly via <Link>'
+      );
+
+      // 1467. REGRESSION: PersonnelProfileModal.jsx itself was NOT deleted, and remains a
+      // legitimate, non-orphaned component — DashboardPage.jsx still imports and renders it (via
+      // EndingWithin7DaysWidget's onViewProfile callback), which this task's explicit scope
+      // (dashboard logic) left untouched. Deleting it would have broken that still-live consumer.
+      assert(
+        fs.existsSync(path.resolve('./src/components/employees/PersonnelProfileModal.jsx')) &&
+        dashboardPageSrcDetails.includes("import PersonnelProfileModal from '../../components/employees/PersonnelProfileModal'") &&
+        dashboardPageSrcDetails.includes('<PersonnelProfileModal'),
+        '1467. REGRESSION: PersonnelProfileModal.jsx still exists and is still imported/rendered by DashboardPage.jsx (EndingWithin7DaysWidget\'s onViewProfile) — it was correctly kept, not deleted, since the Personnel directory was not its only consumer'
+      );
+
+      // 1468. NEW — Header.jsx's breadcrumb resolves the Personnel Details page's last segment to
+      // the person's actual name (via employeeService.getById(), never mock data), scoped
+      // narrowly to exactly '/employees/:id' (2 path segments) so onboarding's/offboarding's own
+      // 3-segment '.../employees/:id' detail routes are completely unaffected.
+      assert(
+        headerSrcDetails.includes("employeeService.getById(pathSegments[1])") &&
+        headerSrcDetails.includes("pathSegments[0] === 'employees' && pathSegments.length === 2") &&
+        headerSrcDetails.includes('personnelDetailName'),
+        '1468. NEW — Header.jsx resolves the Personnel Details breadcrumb segment to the actual person\'s name via employeeService.getById(), scoped to exactly the 2-segment /employees/:id route so onboarding/offboarding\'s own breadcrumb behavior is unaffected'
+      );
+
+      // 1469. FUNCTIONAL: employeeService.getProfile() returns genuinely different data for two
+      // different people — opening a second person's details would show the second person's own
+      // data, never a stale/shared previous selection.
+      {
+        const profileA = await employeeService.getProfile('emp-001');
+        const profileB = await employeeService.getProfile('emp-002');
+        assert(
+          profileA && profileB && profileA.fullName !== profileB.fullName && profileA.personnelId !== profileB.personnelId,
+          `1469. NEW — employeeService.getProfile() returns distinct fullName/personnelId for two different ids (emp-001: ${profileA && profileA.fullName}, emp-002: ${profileB && profileB.fullName}) — each Personnel Details page load reflects the actually-selected person`
+        );
+      }
+
+      // 1470. FUNCTIONAL: employeeService.getProfile() returns null for an id that does not exist
+      // — the exact signal PersonnelDetailsPage.jsx's not-found branch checks for.
+      {
+        const invalidProfile = await employeeService.getProfile('emp-does-not-exist-999');
+        assert(
+          invalidProfile === null,
+          `1470. NEW — employeeService.getProfile() returns null for a nonexistent id (found: ${JSON.stringify(invalidProfile)}) — PersonnelDetailsPage.jsx's "Personnel Record Not Found" state is driven by this same null, not a separately-invented error path`
+        );
+      }
+
+      // 1471. REGRESSION: Personnel directory filters/sort/view-mode/counts/lifecycle logic are
+      // completely untouched by this navigation-only change — DirectoryToolbar's filter props and
+      // employeeService.queryEmployees() are unaffected.
+      assert(
+        directoryContainerSrcDetails.includes('selectedStatus={statusFilter}') &&
+        directoryContainerSrcDetails.includes('selectedDept={departmentId}') &&
+        directoryContainerSrcDetails.includes('selectedType={typeFilter}') &&
+        directoryContainerSrcDetails.includes('selectedMode={modeFilter}') &&
+        directoryContainerSrcDetails.includes('selectedAllowance={allowanceFilter}') &&
+        directoryContainerSrcDetails.includes('selectedSort={sortBy}') &&
+        directoryContainerSrcDetails.includes('viewMode={viewMode}'),
+        '1471. REGRESSION: DirectoryPageContainer.jsx\'s Department/Type/Mode/Salary/Status filters, Sort By, and List/Card/Timeline view-mode wiring are all still passed to DirectoryToolbar exactly as before — this task changed only the per-row Details action'
+      );
+
+      // 1472. REGRESSION: neither EmployeeListView.jsx nor EmployeeCardView.jsx import
+      // PersonnelProfileModal in actual code — both now navigate via react-router's <Link>, never
+      // a modal (an explanatory comment mentioning the component by name, e.g. "instead of
+      // opening PersonnelProfileModal", is expected and fine — only real import/usage is checked).
+      {
+        const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+        const listCodeOnly = stripComments(employeeListViewSrcDetails);
+        const cardCodeOnly = stripComments(employeeCardViewSrcDetails);
+        assert(
+          !listCodeOnly.includes('PersonnelProfileModal') &&
+          !cardCodeOnly.includes('PersonnelProfileModal') &&
+          employeeListViewSrcDetails.includes("import { Link } from 'react-router-dom';") &&
+          employeeCardViewSrcDetails.includes("import { Link } from 'react-router-dom';"),
+          '1472. REGRESSION: EmployeeListView.jsx and EmployeeCardView.jsx both import react-router-dom\'s Link and neither references PersonnelProfileModal in actual code (comments excluded) — the Personnel directory\'s View Details action is pure navigation'
         );
       }
 

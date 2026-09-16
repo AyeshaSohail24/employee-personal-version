@@ -6,6 +6,7 @@ import DashboardPage from '../pages/dashboard/DashboardPage';
 
 // Employees Page
 import AllEmployeesPage from '../pages/employees/AllEmployeesPage';
+import PersonnelDetailsPage from '../pages/employees/PersonnelDetailsPage';
 
 // Upcoming (Candidate / Offer Workflow) Page
 import UpcomingPage from '../pages/upcoming/UpcomingPage';
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
 
       // Employees route (Single Employee Directory)
       { path: 'employees', element: <AllEmployeesPage /> },
+      { path: 'employees/:employeeId', element: <PersonnelDetailsPage /> },
 
       // Upcoming route (shortlisted candidate / offer workflow, pre-onboarding)
       { path: 'upcoming', element: <UpcomingPage /> },
