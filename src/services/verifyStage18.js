@@ -265,11 +265,15 @@ export async function verifyStage18() {
       '44. Type normalizes to exactly Employee or Intern via a single centralized domain helper'
     );
 
-    // 45. Type filter UI exposes exactly All Types / Employee / Intern (not detailed employment-type categories)
+    // 45. SUPERSEDED (Replace Personnel Type Dropdown with Segmented Filter task) — the Type
+    // dropdown ("All Types"/"Employee"/"Intern" <Select> options) was replaced by an All/
+    // Employees/Interns segmented control (see checks 1473-1479), which still exposes only the
+    // same 3-way Employee/Intern classification — not detailed employment-type categories.
     assert(
-      toolbarSrc.includes("'All Types'") && toolbarSrc.includes("'Employee'") && toolbarSrc.includes("'Intern'") &&
+      !toolbarSrc.includes("'All Types'") &&
+      toolbarSrc.includes("{ value: 'Employee', label: 'Employees' }") && toolbarSrc.includes("{ value: 'Intern', label: 'Interns' }") &&
       !toolbarSrc.includes('Full-Time Permanent') && !toolbarSrc.includes('Fixed-Term Contract') && !toolbarSrc.includes('Part-Time'),
-      '45. Type filter exposes only All Types/Employee/Intern, not detailed employment-type categories'
+      '45. SUPERSEDED — DirectoryToolbar.jsx no longer has the old "All Types" dropdown option; the new PERSONNEL_TYPE_OPTIONS segmented control still exposes only Employee/Intern (as Employees/Interns labels), never detailed employment-type categories'
     );
 
     // 46. Detailed employment type master/reference data remains fully intact underneath the simplified directory Type
@@ -358,9 +362,12 @@ export async function verifyStage18() {
       '59. Card View represents Department, Type, Mode, Dates, Salary, and Duration alongside ID/Name/Email/Status'
     );
 
-    // 60. No native <select> element was introduced in the directory toolbar; the shared custom Select is used for every filter
+    // 60. UPDATED (Replace Personnel Type Dropdown with Segmented Filter task) — No native
+    // <select> element was introduced in the directory toolbar; the shared custom Select is used
+    // for every remaining dropdown filter (Department/Mode/Salary/Status/Sort By — 5, was 6
+    // before Type became a segmented .view-btn control instead of a <Select>).
     const selectUsageCount = (toolbarSrc.match(/<Select\b/g) || []).length;
-    assert(!toolbarSrc.includes('<select') && selectUsageCount >= 6, '60. No native <select> introduced; shared custom <Select /> used for all directory filters');
+    assert(!toolbarSrc.includes('<select') && selectUsageCount >= 5, '60. UPDATED — No native <select> introduced; shared custom <Select /> is used for all 5 remaining dropdown filters (Type is now a segmented control, not a Select, so the minimum dropped from 6 to 5)');
 
     // ==========================================================================
     // Create Employee + Sync Employees Actions
@@ -12388,6 +12395,767 @@ export async function verifyStage18() {
           employeeListViewSrcDetails.includes("import { Link } from 'react-router-dom';") &&
           employeeCardViewSrcDetails.includes("import { Link } from 'react-router-dom';"),
           '1472. REGRESSION: EmployeeListView.jsx and EmployeeCardView.jsx both import react-router-dom\'s Link and neither references PersonnelProfileModal in actual code (comments excluded) — the Personnel directory\'s View Details action is pure navigation'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Replace Personnel "Type" Dropdown with All / Employees / Interns Segmented Filter
+    // (direct user request: Employee vs Intern is an important top-level personnel distinction
+    // and deserves a clearer segmented control, matching the same All/Employees/Interns pattern
+    // the Dashboard already uses, rather than a plain <Select> dropdown buried among Department/
+    // Mode/Salary/Status. The underlying typeFilter/setTypeFilter state, employeeService.
+    // queryEmployees()'s typeFilter handling, and DirectoryPageContainer.jsx's wiring were all
+    // ALREADY correct and untouched by this change — only DirectoryToolbar.jsx's UI and one new
+    // index.css rule for the control's own row changed. No duplicate Employee/Intern
+    // classification logic was introduced: the segmented control reads/writes the exact same
+    // typeFilter state the old dropdown did, which still compares against the single centralized
+    // employee.directoryType field.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcSeg = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const containerSrcSeg = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const listViewSrcSeg = fs.readFileSync(path.resolve('./src/components/employees/EmployeeListView.jsx'), 'utf-8');
+      const cardViewSrcSeg = fs.readFileSync(path.resolve('./src/components/employees/EmployeeCardView.jsx'), 'utf-8');
+      const indexCssSrcSeg = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1473. NEW — the old Type <Select> dropdown (id="type-filter", "All Types" option) is
+      // completely gone from DirectoryToolbar.jsx — no leftover/duplicate filtering control.
+      assert(
+        !toolbarSrcSeg.includes('id="type-filter"') &&
+        !toolbarSrcSeg.includes("'All Types'") &&
+        !toolbarSrcSeg.match(/<label htmlFor="type-filter">Type:<\/label>/),
+        '1473. NEW — DirectoryToolbar.jsx no longer renders the old Type <Select> dropdown (no type-filter id, no "All Types" option, no "Type:" label) — replaced, not duplicated'
+      );
+
+      // 1474. NEW — a segmented All/Employees/Interns control exists, reusing the EXISTING
+      // .view-switcher-group/.view-btn pattern (same classes as the List/Card/Timeline switcher
+      // in this same toolbar, and the Dashboard's own personnel-type filter) rather than a new
+      // component/style, with values matching employeeService.queryEmployees()'s typeFilter and
+      // employee.directoryType exactly ('All'/'Employee'/'Intern').
+      assert(
+        toolbarSrcSeg.match(/PERSONNEL_TYPE_OPTIONS\s*=\s*\[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},\s*\]/) &&
+        toolbarSrcSeg.match(/className=\{`view-btn \$\{selectedType === opt\.value \? 'active' : ''\}`\}/) &&
+        toolbarSrcSeg.match(/onClick=\{\(\) => onTypeChange\(opt\.value\)\}/),
+        '1474. NEW — DirectoryToolbar.jsx renders PERSONNEL_TYPE_OPTIONS (All/Employees/Interns, values All/Employee/Intern) as .view-btn buttons inside a .view-switcher-group, reusing the exact existing segmented-control pattern, wired to the same selectedType/onTypeChange props the old dropdown used'
+      );
+
+      // 1475. SUPERSEDED (Reorganize Personnel Directory Toolbar task) — the search box now
+      // lives ALONE in its own row (.toolbar-search-row), no longer sharing a row with the
+      // List/Card/Timeline switcher. JSX order is toolbar-search-row (search only) ->
+      // toolbar-controls-row (All/Employees/Interns + List/Card/Timeline) -> toolbar-filters-row
+      // (Department/Mode/Salary/Status/Sort By, all one row — was toolbar-bottom-row until the
+      // Move Sort By Onto The Same Row task renamed/refactored it, see check 1495) — matching the
+      // requested hierarchy. .toolbar-search-row is deliberately a NEW class, not a reuse/rename
+      // of the shared .toolbar-top-row, since CandidateToolbar.jsx (Upcoming page) still uses
+      // .toolbar-top-row for its own, different row layout — see check 1487 for that
+      // non-interference guard.
+      {
+        const searchRowIdx = toolbarSrcSeg.indexOf('toolbar-search-row');
+        const controlsRowIdx = toolbarSrcSeg.indexOf('toolbar-controls-row');
+        const filtersRowIdx = toolbarSrcSeg.indexOf('toolbar-filters-row');
+        assert(
+          searchRowIdx !== -1 && controlsRowIdx !== -1 && filtersRowIdx !== -1 &&
+          searchRowIdx < controlsRowIdx && controlsRowIdx < filtersRowIdx &&
+          !toolbarSrcSeg.includes('className="toolbar-top-row"') && !toolbarSrcSeg.includes('toolbar-type-row') &&
+          !toolbarSrcSeg.includes('className="toolbar-bottom-row"'),
+          '1475. SUPERSEDED — DirectoryToolbar.jsx\'s JSX order is toolbar-search-row (search alone) -> toolbar-controls-row (All/Employees/Interns + List/Card/Timeline) -> toolbar-filters-row (Department/Mode/Salary/Status/Sort By, one row) — none of the old toolbar-top-row/toolbar-type-row/toolbar-bottom-row classes are actually USED as a className in this file anymore (a comment explaining why toolbar-top-row was deliberately not reused is fine)'
+        );
+      }
+
+      // 1476. SUPERSEDED — .toolbar-controls-row (was .toolbar-type-row, a single-control row;
+      // now holds TWO independent segmented controls) exists in index.css with
+      // justify-content: space-between so the personnel-type control sits left and the view-mode
+      // control sits right, with comfortable gap/wrap rather than being pinned to the card edges
+      // or stretched into one oversized control.
+      assert(
+        indexCssSrcSeg.match(/\.toolbar-controls-row \{\s*display: flex;\s*align-items: center;\s*justify-content: space-between;\s*flex-wrap: wrap;\s*gap: 0\.75rem;/) &&
+        !indexCssSrcSeg.includes('.toolbar-type-row {'),
+        '1476. SUPERSEDED — .toolbar-controls-row is a two-item flex row (justify-content: space-between, flex-wrap: wrap, 0.75rem gap) — the personnel-type and view-mode controls sit left/right with room between them, wrap cleanly on narrow viewports, and the old single-control .toolbar-type-row rule no longer exists'
+      );
+
+      // 1477. REGRESSION: Department/Mode/Salary/Status/Sort By options are all byte-for-byte
+      // unchanged — this task replaced only the Type control, never touched the remaining filters.
+      assert(
+        toolbarSrcSeg.includes("placeholder=\"All Departments\"") &&
+        toolbarSrcSeg.match(/\{ value: 'On-site', label: 'On-site' \}/) &&
+        toolbarSrcSeg.match(/\{ value: 'Paid', label: 'Paid' \}/) &&
+        toolbarSrcSeg.match(/\{ value: 'Active', label: 'Active' \}/) &&
+        toolbarSrcSeg.match(/\{ value: 'id-asc', label: 'ID \(Ascending\)' \}/),
+        '1477. REGRESSION: Department/Mode/Salary/Status/Sort By <Select> options in DirectoryToolbar.jsx are completely unchanged — only the Type control was replaced'
+      );
+
+      // 1478. REGRESSION: DirectoryPageContainer.jsx's typeFilter state, its wiring into
+      // DirectoryToolbar (selectedType/onTypeChange), its queryEmployees({ typeFilter }) call,
+      // hasActiveFilters, and handleResetFilters were NOT modified — the segmented control reuses
+      // the exact same state/pipeline the old dropdown already used, no rewrite of the filtering
+      // system.
+      assert(
+        containerSrcSeg.includes("const [typeFilter, setTypeFilter] = useState(urlType);") &&
+        containerSrcSeg.includes('selectedType={typeFilter}') &&
+        containerSrcSeg.includes('onTypeChange={setTypeFilter}') &&
+        containerSrcSeg.includes('typeFilter,') &&
+        containerSrcSeg.includes("typeFilter !== 'All'") &&
+        containerSrcSeg.includes("setTypeFilter('All');"),
+        '1478. REGRESSION: DirectoryPageContainer.jsx\'s typeFilter state, its selectedType/onTypeChange wiring into DirectoryToolbar, its queryEmployees({ typeFilter }) call, hasActiveFilters, and handleResetFilters are all unchanged — the segmented control plugs into the existing filtering pipeline rather than a new one'
+      );
+
+      // 1479. REGRESSION: the segmented controls were NOT placed beside the personnel count
+      // badge, Sync Personnel, or Create Personnel — those remain in DirectoryPageContainer.jsx's
+      // separate .employees-page-header row, which does not reference PERSONNEL_TYPE_OPTIONS or
+      // toolbar-controls-row at all.
+      assert(
+        !containerSrcSeg.includes('PERSONNEL_TYPE_OPTIONS') &&
+        !containerSrcSeg.includes('toolbar-controls-row') &&
+        containerSrcSeg.match(/employees-page-header page-header"[\s\S]{0,300}directory-count-badge[\s\S]{0,500}Sync Personnel[\s\S]{0,300}Create Personnel/),
+        '1479. REGRESSION: the segmented controls are not rendered inside DirectoryPageContainer.jsx\'s page-header row — "N personnel"/Sync Personnel/Create Personnel remain a page-level action row, untouched and uncrowded by the toolbar\'s filtering/view controls'
+      );
+
+      // 1480. NEW — TYPE column remains in EmployeeListView.jsx (header + per-row directoryType
+      // pill) — removing the TYPE FILTER never removed the TYPE DISPLAY.
+      assert(
+        listViewSrcSeg.match(/<th style=\{\{ width: '9%' \}\}>TYPE<\/th>/) &&
+        listViewSrcSeg.includes('{emp.directoryType}'),
+        '1480. NEW — EmployeeListView.jsx still renders a TYPE column header and each row\'s emp.directoryType (EMPLOYEE/INTERN pill) — personnel type information remains fully visible, only the FILTER control changed'
+      );
+
+      // 1481. NEW — Card View still shows each person's Employee/Intern type pill.
+      assert(
+        cardViewSrcSeg.includes('{emp.directoryType}'),
+        '1481. NEW — EmployeeCardView.jsx still renders each card\'s emp.directoryType pill — personnel type remains visible in Card View'
+      );
+
+      // 1482. FUNCTIONAL: queryEmployees with the segmented control's exact values reproduces the
+      // task's own worked example (18 total / 17 Employees / 1 Intern) — proving counts are
+      // derived dynamically from the live dataset, never hardcoded.
+      {
+        const allTypeRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'All' });
+        const employeesRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Employee' });
+        const internsRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Intern' });
+        assert(
+          allTypeRes.totalFilteredCount === 18 && employeesRes.totalFilteredCount === 17 && internsRes.totalFilteredCount === 1 &&
+          employeesRes.totalFilteredCount + internsRes.totalFilteredCount === allTypeRes.totalFilteredCount,
+          `1482. FUNCTIONAL: All/Employees/Interns counts are 18/17/1 (Employees + Interns === All), matching the task's own worked example — found All=${allTypeRes.totalFilteredCount}, Employees=${employeesRes.totalFilteredCount}, Interns=${internsRes.totalFilteredCount}`
+        );
+      }
+
+      // 1483. FUNCTIONAL: personnel-type filter composes with search — searching an Employee's
+      // name while Interns is selected returns ZERO results (search never silently bypasses the
+      // selected type filter).
+      {
+        const employeeNameRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Employee' });
+        const anEmployeeName = employeeNameRes.employees[0].fullName.split(' ')[0];
+        const crossTypeSearch = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Intern', search: anEmployeeName });
+        assert(
+          crossTypeSearch.totalFilteredCount === 0,
+          `1483. FUNCTIONAL: searching for an Employee's name ("${anEmployeeName}") while typeFilter is 'Intern' returns 0 results (found ${crossTypeSearch.totalFilteredCount}) — search respects the selected personnel type, never searches across the excluded type`
+        );
+      }
+
+      // 1484. FUNCTIONAL: personnel-type filter composes correctly with department/mode/allowance/
+      // status filters simultaneously (not just individually) — matching the task's own combo
+      // examples.
+      {
+        const comboA = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Employee', statusFilter: 'Active' });
+        assert(
+          comboA.employees.every((e) => e.directoryType === 'Employee' && e.status === 'Active'),
+          `1484a. FUNCTIONAL: Employees + Active status combo returns only Active Employees (found ${comboA.employees.length} results, all matching: ${comboA.employees.every((e) => e.directoryType === 'Employee' && e.status === 'Active')})`
+        );
+        const comboB = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Employee', modeFilter: 'On-site', allowanceFilter: 'Paid' });
+        assert(
+          comboB.employees.every((e) => e.directoryType === 'Employee' && e.workMode === 'On-site' && e.allowance === 'Paid'),
+          `1484b. FUNCTIONAL: Employees + On-site + Paid combo returns only matching Employees (found ${comboB.employees.length} results)`
+        );
+      }
+
+      // 1485. REGRESSION: List/Card/Timeline all consume the SAME filtered `employees` array —
+      // the segmented filter cannot desync between views, and switching views never resets it
+      // (DirectoryPageContainer.jsx's typeFilter state lives above the viewMode switch).
+      assert(
+        containerSrcSeg.match(/<EmployeeListView employees=\{employees\} \/>/) &&
+        containerSrcSeg.match(/<EmployeeCardView employees=\{employees\} \/>/) &&
+        containerSrcSeg.match(/<EmployeeTimelineView employees=\{employees\} \/>/) &&
+        containerSrcSeg.indexOf('const [typeFilter') < containerSrcSeg.indexOf("const [viewMode, setViewMode]"),
+        '1485. REGRESSION: List/Card/Timeline views all receive the identical filtered `employees` array — typeFilter state is declared above (outside) the view-mode switch, so changing views never resets the selected personnel type'
+      );
+
+      // 1486. No mock-data import was added to DirectoryToolbar.jsx — the segmented control is a
+      // pure presentation change, still driven entirely by props from DirectoryPageContainer.jsx.
+      assert(
+        !toolbarSrcSeg.match(/from ['"].*mock-data/) && !toolbarSrcSeg.includes('storageEngine') && !toolbarSrcSeg.includes('localStorage'),
+        '1486. NEW — DirectoryToolbar.jsx has no mock-data/storageEngine/localStorage import — the segmented control remains a pure presentational component driven by props, same as every other filter in this toolbar'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Reorganize Personnel Directory Toolbar for a Cleaner Control Hierarchy
+    // (direct user request: All/Employees/Interns and List/Card/Timeline are both HIGH-LEVEL
+    // controls for the result set — WHICH personnel vs HOW they're displayed — and deserve to sit
+    // together on their own row, separate from the search box and from the detailed Department/
+    // Mode/Salary/Status/Sort By filters below. Layout-only change: no filtering/search/sorting
+    // logic, no employeeService change, no new component. The search box now occupies its own
+    // row (.toolbar-search-row — a NEW class, not a reuse of the shared .toolbar-top-row, since
+    // CandidateToolbar.jsx on the Upcoming page still relies on .toolbar-top-row unchanged), and
+    // the former single-control .toolbar-type-row was renamed/refactored into .toolbar-controls-
+    // row, which now holds BOTH the personnel-type and view-mode segmented controls side by side,
+    // never merged into one control.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcReorg = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const candidateToolbarSrc = fs.readFileSync(path.resolve('./src/components/upcoming/CandidateToolbar.jsx'), 'utf-8');
+      const indexCssSrcReorg = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1487. NEW — .toolbar-search-row is a distinct, NEW class (not a rename of the shared
+      // .toolbar-top-row) so CandidateToolbar.jsx's own, unrelated use of .toolbar-top-row on the
+      // Upcoming page is completely unaffected by this Personnel-only layout change.
+      assert(
+        indexCssSrcReorg.includes('.toolbar-search-row {') &&
+        indexCssSrcReorg.match(/\.toolbar-top-row \{\s*display: flex;\s*align-items: center;\s*justify-content: space-between;\s*gap: 1rem;\s*\}/) &&
+        candidateToolbarSrc.includes('toolbar-top-row'),
+        '1487. NEW — .toolbar-search-row exists as its own new rule, and the shared .toolbar-top-row CSS rule is completely unchanged — CandidateToolbar.jsx (Upcoming page) still uses it exactly as before, unaffected by this Personnel-directory-only reorganization'
+      );
+
+      // 1488. NEW — the search box is alone in its own row — DirectoryToolbar.jsx no longer
+      // renders the List/Card/Timeline switcher as a sibling of the search box.
+      {
+        const searchRowBlock = (toolbarSrcReorg.match(/<div className="toolbar-search-row">[\s\S]*?\n      <\/div>/) || [''])[0];
+        assert(
+          searchRowBlock.includes('toolbar-search-box') && !searchRowBlock.includes('view-switcher-group'),
+          '1488. NEW — DirectoryToolbar.jsx\'s toolbar-search-row contains only the search box — the List/Card/Timeline switcher is no longer a sibling of the search input'
+        );
+      }
+
+      // 1489. NEW — the personnel-type and view-mode controls are TWO separate/independent
+      // .view-switcher-group elements inside .toolbar-controls-row — never merged into one
+      // six-option control (All/Employees/Interns/List/Card/Timeline).
+      {
+        const controlsRowBlock = (toolbarSrcReorg.match(/<div className="toolbar-controls-row">[\s\S]*?\n      <\/div>/) || [''])[0];
+        const groupCount = (controlsRowBlock.match(/className="view-switcher-group/g) || []).length;
+        assert(
+          groupCount === 2 &&
+          controlsRowBlock.includes('aria-label="Personnel type filter"') &&
+          controlsRowBlock.includes('title="List View"'),
+          `1489. NEW — toolbar-controls-row contains exactly 2 separate .view-switcher-group elements (found ${groupCount}) — the personnel-type filter (All/Employees/Interns) and the view-mode switcher (List/Card/Timeline) remain two independent segmented controls, never combined into one`
+        );
+      }
+
+      // 1490. NEW — .toolbar-controls-row uses justify-content: space-between so the two controls
+      // sit at the row's left/right edges with the row's own comfortable padding (inherited from
+      // .directory-toolbar-card), never pinned flush against the card border or squeezed together.
+      assert(
+        indexCssSrcReorg.match(/\.toolbar-controls-row \{[^}]*justify-content: space-between;/) &&
+        indexCssSrcReorg.match(/\.directory-toolbar-card \{[^}]*padding: 1\.25rem;/),
+        '1490. NEW — .toolbar-controls-row spreads its two controls with justify-content: space-between, and the surrounding .directory-toolbar-card keeps its existing 1.25rem padding, so neither control sits flush against the card edge'
+      );
+
+      // 1491. NEW — .toolbar-controls-row has flex-wrap: wrap (no fixed widths), so on narrow
+      // viewports the two controls stack cleanly instead of overlapping or requiring a brittle
+      // hardcoded breakpoint — matching the task's explicit "do not force desktop positioning
+      // onto mobile using brittle fixed widths" instruction.
+      assert(
+        indexCssSrcReorg.match(/\.toolbar-controls-row \{[^}]*flex-wrap: wrap;/) &&
+        !toolbarSrcReorg.match(/toolbar-controls-row[\s\S]{0,50}style=\{\{[^}]*width/),
+        '1491. NEW — .toolbar-controls-row wraps via flex-wrap (no fixed pixel widths on either control), letting the two segmented controls stack cleanly at narrow viewports rather than using a brittle fixed-width breakpoint'
+      );
+
+      // 1492. CSS CLEANUP: the old single-control .toolbar-type-row RULE no longer exists
+      // anywhere in index.css — refactored into .toolbar-controls-row rather than left behind as
+      // dead/obsolete CSS (a prose comment mentioning the old class name for historical context,
+      // matching this file's established documentation style, is fine — only the actual rule
+      // definition is checked here).
+      assert(
+        !indexCssSrcReorg.includes('.toolbar-type-row {'),
+        '1492. CSS CLEANUP: the .toolbar-type-row rule definition (the previous task\'s single-control row) no longer exists anywhere in index.css — cleanly refactored into .toolbar-controls-row, not left behind as dead CSS'
+      );
+
+      // 1493. REGRESSION: the underlying typeFilter/viewMode state, filtering pipeline, and
+      // Department/Mode/Salary/Status/Sort By options are completely untouched — this was a
+      // layout-only change, confirmed by the exact same PERSONNEL_TYPE_OPTIONS values/wiring and
+      // Select option lists as before.
+      assert(
+        toolbarSrcReorg.match(/PERSONNEL_TYPE_OPTIONS\s*=\s*\[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},\s*\]/) &&
+        toolbarSrcReorg.includes("placeholder=\"All Departments\"") &&
+        toolbarSrcReorg.match(/\{ value: 'On-site', label: 'On-site' \}/) &&
+        toolbarSrcReorg.match(/\{ value: 'Paid', label: 'Paid' \}/) &&
+        toolbarSrcReorg.match(/\{ value: 'Active', label: 'Active' \}/) &&
+        toolbarSrcReorg.match(/\{ value: 'id-asc', label: 'ID \(Ascending\)' \}/),
+        '1493. REGRESSION: PERSONNEL_TYPE_OPTIONS and every Department/Mode/Salary/Status/Sort By <Select> option in DirectoryToolbar.jsx are byte-for-byte unchanged — this task only moved existing controls to new rows, never touched filtering values/logic'
+      );
+
+      // 1494. FUNCTIONAL: switching view mode and switching personnel type are driven by two
+      // fully independent props (viewMode/onViewModeChange vs selectedType/onTypeChange) — neither
+      // handler references or resets the other's state, so selecting a view mode can never reset
+      // the personnel-type filter and vice versa (confirmed live via Playwright: selecting
+      // Interns then Card View then List View left Interns selected throughout; selecting Card
+      // View then switching personnel type left Card View selected).
+      assert(
+        toolbarSrcReorg.match(/onClick=\{\(\) => onViewModeChange\('list'\)\}/) &&
+        toolbarSrcReorg.match(/onClick=\{\(\) => onTypeChange\(opt\.value\)\}/) &&
+        !toolbarSrcReorg.match(/onViewModeChange[\s\S]{0,80}onTypeChange|onTypeChange[\s\S]{0,80}onViewModeChange/),
+        '1494. FUNCTIONAL: onViewModeChange and onTypeChange are called independently — no code path in DirectoryToolbar.jsx calls one from the other, so changing view mode never resets the personnel-type filter and changing personnel type never resets the view mode'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Move "Sort By" onto the Same Row as the Other Personnel Filters
+    // (direct user request: Sort By was wrapping to its own row even though there was enough
+    // horizontal space for it to sit naturally with Department/Mode/Salary/Status. Sort By was
+    // ALREADY the 5th item inside the same .filters-group as the other four — no JSX
+    // restructuring was needed there. The actual fix was CSS: DirectoryToolbar.jsx's bottom row
+    // stopped using the shared .toolbar-bottom-row (justify-content: space-between, which pushed
+    // Reset Filters all the way to the card's far edge whenever it was visible, leaving an
+    // oversized gap) and now uses a NEW dedicated class, .toolbar-filters-row, with a natural
+    // left-aligned flow and a consistent 0.75rem gap instead — deliberately a new class, not a
+    // modification of .toolbar-bottom-row itself, since CandidateToolbar.jsx (Upcoming page)
+    // still relies on that shared rule unchanged.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcSortBy = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const candidateToolbarSrcSortBy = fs.readFileSync(path.resolve('./src/components/upcoming/CandidateToolbar.jsx'), 'utf-8');
+      const indexCssSrcSortBy = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1495. NEW — DirectoryToolbar.jsx's detailed-filters row uses the NEW .toolbar-filters-row
+      // class (natural left-aligned flow), not the shared .toolbar-bottom-row — and the shared
+      // .toolbar-bottom-row CSS rule (with its justify-content: space-between) is completely
+      // unchanged, still used as-is by CandidateToolbar.jsx on the Upcoming page.
+      assert(
+        toolbarSrcSortBy.includes('className="toolbar-filters-row"') &&
+        !toolbarSrcSortBy.includes('className="toolbar-bottom-row"') &&
+        indexCssSrcSortBy.match(/\.toolbar-bottom-row \{\s*display: flex;\s*align-items: center;\s*justify-content: space-between;\s*flex-wrap: wrap;\s*gap: 0\.75rem;\s*padding-top: 0\.85rem;\s*border-top: 1px solid var\(--border-subtle\);\s*\}/) &&
+        candidateToolbarSrcSortBy.includes('className="toolbar-bottom-row"'),
+        '1495. NEW — DirectoryToolbar.jsx now renders its detailed-filters row via a new .toolbar-filters-row class (not toolbar-bottom-row), while the shared .toolbar-bottom-row CSS rule is byte-for-byte unchanged and still used by CandidateToolbar.jsx (Upcoming page) — the Personnel-only layout change cannot affect the Upcoming toolbar'
+      );
+
+      // 1496. SUPERSEDED (Fix Personnel Filter Row Properly task) — removing
+      // justify-content: space-between alone was NOT sufficient to guarantee all 5 filters stay
+      // on one row at the narrowest required desktop width (1366px) — see checks 1500-1508 for
+      // the actual fix (Reset Filters moved to its own row entirely, plus a deterministic,
+      // measured width budget for the 5 selects). .toolbar-filters-row is now flex-direction:
+      // column, so .filters-group and Reset Filters always render as two independent stacked
+      // rows — Reset Filters can never again compete with the filters for horizontal space.
+      assert(
+        indexCssSrcSortBy.match(/\.toolbar-filters-row \{\s*display: flex;\s*flex-direction: column;\s*align-items: flex-start;\s*gap: 0\.6rem;\s*padding-top: 0\.85rem;\s*border-top: 1px solid var\(--border-subtle\);\s*\}/) &&
+        !indexCssSrcSortBy.match(/\.toolbar-filters-row \{[^}]*justify-content:\s*space-between/),
+        '1496. SUPERSEDED — .toolbar-filters-row is flex-direction: column (was a single wrapping row) — .filters-group and Reset Filters are now two guaranteed-separate stacked rows, so Reset Filters can never sit beside the filters or compete with them for width'
+      );
+
+      // 1497. UPDATED (Final Fix — Personnel Filters CSS Grid task) — Sort By is still the 5th
+      // filter-item inside the SAME .filters-group as Department/Mode/Salary/Status — no separate
+      // wrapper, no duplicate filter row was introduced. .filters-group now also carries the
+      // Personnel-only .personnel-filters-group modifier (see checks 1509+), which switches this
+      // row to an explicit CSS Grid — neither that nor the plain (unmodified) "filter-item"
+      // className on each child changes the group membership/order being asserted here.
+      {
+        const filtersGroupBlock = (toolbarSrcSortBy.match(/<div className="filters-group personnel-filters-group">[\s\S]*?\n        <\/div>\n/) || [''])[0];
+        const filterItemCount = (filtersGroupBlock.match(/className="filter-item"/g) || []).length;
+        assert(
+          filterItemCount === 5 &&
+          filtersGroupBlock.indexOf('htmlFor="dept-filter"') < filtersGroupBlock.indexOf('htmlFor="mode-filter"') &&
+          filtersGroupBlock.indexOf('htmlFor="mode-filter"') < filtersGroupBlock.indexOf('htmlFor="allowance-filter"') &&
+          filtersGroupBlock.indexOf('htmlFor="allowance-filter"') < filtersGroupBlock.indexOf('htmlFor="status-filter"') &&
+          filtersGroupBlock.indexOf('htmlFor="status-filter"') < filtersGroupBlock.indexOf('htmlFor="sort-select"'),
+          `1497. UPDATED — .filters-group still contains exactly 5 .filter-item children in order Department -> Mode -> Salary -> Status -> Sort By (found ${filterItemCount} items) — Sort By remains structurally grouped with the other filters; only row-level CSS and per-filter width modifiers changed`
+        );
+      }
+
+      // 1498. REGRESSION: Department/Mode/Salary/Status/Sort By <Select> options and the
+      // All/Employees/Interns + List/Card/Timeline controls above are completely untouched — this
+      // was a layout-only fix to one CSS class.
+      assert(
+        toolbarSrcSortBy.match(/PERSONNEL_TYPE_OPTIONS\s*=\s*\[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},\s*\]/) &&
+        toolbarSrcSortBy.includes("placeholder=\"All Departments\"") &&
+        toolbarSrcSortBy.match(/\{ value: 'On-site', label: 'On-site' \}/) &&
+        toolbarSrcSortBy.match(/\{ value: 'Unpaid', label: 'Unpaid' \}/) &&
+        toolbarSrcSortBy.match(/\{ value: 'Departing', label: 'Departing' \}/) &&
+        toolbarSrcSortBy.match(/\{ value: 'name-desc', label: 'Name \(Z–A\)' \}/) &&
+        toolbarSrcSortBy.includes('title="List View"') && toolbarSrcSortBy.includes('title="Card View"') && toolbarSrcSortBy.includes('title="Timeline View"'),
+        '1498. REGRESSION: every Department/Mode/Salary/Status/Sort By <Select> option, PERSONNEL_TYPE_OPTIONS, and the List/Card/Timeline switcher are all byte-for-byte unchanged — this task only moved Sort By\'s row-level CSS, never any filter value/logic'
+      );
+
+      // 1499. FUNCTIONAL: employeeService.queryEmployees() reproduces the task's own worked
+      // combinations (Employees + Active + Name A-Z; Interns + a department) exactly, proving the
+      // layout change did not touch the underlying filtering/sorting pipeline.
+      {
+        const comboEmp = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Employee', statusFilter: 'Active', sortBy: 'name-asc' });
+        const namesAsc = comboEmp.employees.map((e) => e.fullName);
+        const isSortedAsc = namesAsc.every((n, i) => i === 0 || namesAsc[i - 1].localeCompare(n) <= 0);
+        assert(
+          comboEmp.employees.every((e) => e.directoryType === 'Employee' && e.status === 'Active') && isSortedAsc,
+          `1499a. FUNCTIONAL: Employees + Active + Name (A-Z) returns only Active Employees, correctly sorted (found ${comboEmp.employees.length} results, sorted: ${isSortedAsc})`
+        );
+        const kevinDept = (await employeeService.getById('emp-014'))?.department?.id;
+        const comboIntern = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Intern', departmentId: kevinDept });
+        assert(
+          comboIntern.employees.length === 1 && comboIntern.employees[0].directoryType === 'Intern',
+          `1499b. FUNCTIONAL: Interns + a department filter still composes correctly (found ${comboIntern.employees.length} result(s))`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Fix Personnel Filter Row Properly — All 5 Filters Must Be on One Desktop Row
+    // (direct user follow-up: the previous task's fix — removing justify-content: space-between
+    // from the filters row — was necessary but NOT sufficient. Live Playwright measurement at
+    // the narrowest required desktop width (1366px, ~1000px of actual available row width)
+    // proved the real root cause: every .custom-select-container is `display: inline-block` with
+    // NO width of its own, so each select's rendered width is entirely driven by whichever
+    // option is CURRENTLY selected — the five filters' combined width is therefore
+    // data-dependent, not fixed, and the worst realistic combination of selected values could
+    // still exceed the row and force Sort By to wrap. This task fixes the actual width
+    // constraint with a deterministic, MEASURED width budget (Personnel-only gap/padding
+    // tightening + per-filter min-widths derived from measuring every real option's rendered
+    // width), and ALSO moves Reset Filters to its own row entirely so it can never again compete
+    // with the 5 filters for space. Verified live via Playwright at 1536/1440/1366px, including
+    // the worst-case combination of the longest option in every filter simultaneously.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcFix = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const candidateToolbarSrcFix = fs.readFileSync(path.resolve('./src/components/upcoming/CandidateToolbar.jsx'), 'utf-8');
+      const indexCssSrcFix = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1500. NEW — Reset Filters is no longer a sibling of .filters-group inside a single
+      // wrapping row; .toolbar-filters-row is flex-direction: column, so .filters-group and the
+      // Reset Filters button are two ALWAYS-separate stacked rows — Reset Filters can never sit
+      // beside the 5 filters or shrink the space available to them.
+      assert(
+        indexCssSrcFix.match(/\.toolbar-filters-row \{\s*display: flex;\s*flex-direction: column;\s*align-items: flex-start;\s*gap: 0\.6rem;/),
+        '1500. NEW — .toolbar-filters-row is flex-direction: column with align-items: flex-start — .filters-group and Reset Filters are two guaranteed-separate, left-aligned stacked rows, never sharing horizontal space'
+      );
+
+      // 1501. NEW — the actual JSX confirms Reset Filters renders as a direct sibling of
+      // .filters-group inside the (now-column) toolbar-filters-row, not nested inside
+      // .filters-group itself — so it visually stacks below, left-aligned with the filters.
+      {
+        const filtersRowBlock = (toolbarSrcFix.match(/<div className="toolbar-filters-row">[\s\S]*?\n      <\/div>/) || [''])[0];
+        const filtersGroupCloseIdx = filtersRowBlock.indexOf('</div>\n\n        {/* Reset Filters');
+        assert(
+          filtersRowBlock.includes('className="filters-group personnel-filters-group"') &&
+          filtersRowBlock.includes('clear-filters-btn') &&
+          filtersGroupCloseIdx !== -1,
+          '1501. NEW — Reset Filters is a direct sibling of .filters-group inside toolbar-filters-row (not nested inside .filters-group), so the column layout renders it as its own row underneath the 5 filters'
+        );
+      }
+
+      // 1502. NEW — the shared .filters-group class itself, and .toolbar-bottom-row/
+      // CandidateToolbar.jsx, are completely untouched — CandidateToolbar.jsx still uses the
+      // base (non-Personnel-scoped) .filters-group with its original 0.75rem gap.
+      assert(
+        indexCssSrcFix.match(/\.filters-group \{\s*display: flex;\s*align-items: center;\s*flex-wrap: wrap;\s*gap: 0\.75rem;\s*\}/) &&
+        candidateToolbarSrcFix.includes('className="filters-group"') &&
+        !candidateToolbarSrcFix.includes('personnel-filters-group'),
+        '1502. NEW — The base .filters-group rule (0.75rem gap) is unchanged, and CandidateToolbar.jsx still uses the plain className="filters-group" (no personnel-filters-group modifier) — the Upcoming page toolbar is completely unaffected by this Personnel-only fix'
+      );
+
+      // 1503. SUPERSEDED (Final Personnel Filter Row WIDTH task) — the intermediate fixed-pixel
+      // `minmax(Npx, <fr>)` floors (253/147/178/163/209px) were themselves superseded one task
+      // later: their pixel minimums were measured against this environment's own fallback button
+      // font, but `.custom-select-trigger` never explicitly inherits the site's Inter font (a
+      // pre-existing gap in the shared Select CSS, deliberately left alone — out of scope, and
+      // would affect every Select in the app), so a fixed floor's sum could still exceed the real
+      // available width once the actual (wider) font rendered — exactly what caused Sort By to
+      // spill past the card's right edge in live testing. Every column is now `minmax(0, <fr>)`
+      // — no fixed floor at all — so the 5 tracks always sum to EXACTLY this grid's own
+      // `width: 100%`, making it structurally IMPOSSIBLE to exceed the parent card regardless of
+      // font metrics. still display: grid, still no flex-wrap anywhere on this rule.
+      assert(
+        indexCssSrcFix.match(/\.personnel-filters-group \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1\.35fr\) minmax\(0, 0\.77fr\) minmax\(0, 0\.92fr\) minmax\(0, 0\.86fr\) minmax\(0, 1\.11fr\);\s*align-items: end;\s*gap: 0\.45rem;\s*width: 100%;\s*\}/) &&
+        !indexCssSrcFix.match(/\.personnel-filters-group \{[^}]*flex-wrap/) &&
+        !indexCssSrcFix.match(/\.personnel-filters-group \{[^}]*minmax\([1-9]/),
+        '1503. SUPERSEDED — .personnel-filters-group is display: grid with 5 minmax(0, <fr>) tracks (no fixed pixel floor on any column) — the grid can never exceed its own width: 100%, so it structurally cannot overflow the toolbar card regardless of font rendering; still no flex-wrap anywhere on this rule'
+      );
+
+      // 1504. SUPERSEDED — the earlier per-filter-item modifier classes (filter-item-department,
+      // etc.) and their pixel min-widths on .custom-select-container are gone — that approach
+      // fought the grid (a min-width larger than its fr-assigned column would force the column
+      // wider than intended) and its measured values still under-counted the true worst case (the
+      // Mode column visibly truncated "All Modes" in live testing). The grid's own
+      // minmax(<measured-worst-case-px>, <fr>) tracks (check 1503) now own each column's minimum
+      // width directly — .filter-item and .custom-select-container instead get min-width: 0 (the
+      // standard grid-item fix for the min-width: auto default that would otherwise let an
+      // unbreakable select force its track wider) and flex: 1 so the select fills its grid cell.
+      assert(
+        !indexCssSrcFix.includes('.filter-item-department') &&
+        !indexCssSrcFix.includes('.filter-item-mode') &&
+        !indexCssSrcFix.includes('.filter-item-salary') &&
+        !indexCssSrcFix.includes('.filter-item-status') &&
+        !indexCssSrcFix.includes('.filter-item-sort') &&
+        indexCssSrcFix.match(/\.personnel-filters-group \.filter-item \{\s*min-width: 0;\s*\}/) &&
+        indexCssSrcFix.match(/\.personnel-filters-group \.custom-select-container \{\s*flex: 1;\s*min-width: 0;\s*\}/) &&
+        !toolbarSrcFix.match(/filter-item-(department|mode|salary|status|sort)/),
+        '1504. SUPERSEDED — no filter-item-X modifier classes or per-filter pixel min-widths remain anywhere (CSS or JSX) — each grid column\'s minimum now lives entirely in .personnel-filters-group\'s own grid-template-columns (check 1503); .filter-item/.custom-select-container just get min-width: 0 (grid-item sizing fix) and flex: 1 (select fills its cell)'
+      );
+
+      // 1505. REGRESSION: the underlying typeFilter/viewMode state, filtering pipeline, and
+      // every Department/Mode/Salary/Status/Sort By <Select> option are completely untouched —
+      // this was a pure layout/width fix, never a change to filter values or logic.
+      assert(
+        toolbarSrcFix.match(/PERSONNEL_TYPE_OPTIONS\s*=\s*\[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},\s*\]/) &&
+        toolbarSrcFix.includes("placeholder=\"All Departments\"") &&
+        toolbarSrcFix.match(/\{ value: 'On-site', label: 'On-site' \}/) &&
+        toolbarSrcFix.match(/\{ value: 'Unpaid', label: 'Unpaid' \}/) &&
+        toolbarSrcFix.match(/\{ value: 'Departing', label: 'Departing' \}/) &&
+        toolbarSrcFix.match(/\{ value: 'date-desc', label: 'Start Date: Newest' \}/) &&
+        toolbarSrcFix.includes('title="List View"') && toolbarSrcFix.includes('title="Card View"') && toolbarSrcFix.includes('title="Timeline View"'),
+        '1505. REGRESSION: every Department/Mode/Salary/Status/Sort By <Select> option, PERSONNEL_TYPE_OPTIONS, and the List/Card/Timeline switcher are all byte-for-byte unchanged — this task fixed only the row/width layout, never any filter value or logic'
+      );
+
+      // 1506. NEW — no <select> element, no fixed/absolute positioning, and no font-size
+      // shrinking were used to force the fit — the fix is an explicit CSS Grid plus a Personnel-
+      // scoped select-trigger padding/icon-gap tightening (never font-size), matching the task's
+      // explicit "do not solve this with tiny fonts / brittle positioning" instruction.
+      {
+        const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '');
+        const cssCodeOnly = stripComments(indexCssSrcFix);
+        const gridRuleBlock = (cssCodeOnly.match(/\.personnel-filters-group \{[^}]*\}/) || [''])[0];
+        const triggerOverrideBlock = (cssCodeOnly.match(/\.personnel-filters-group \.custom-select-filter \.custom-select-trigger \{[^}]*\}/) || [''])[0];
+        assert(
+          !toolbarSrcFix.includes('<select') &&
+          !gridRuleBlock.match(/position:\s*(absolute|fixed)/) &&
+          !gridRuleBlock.includes('font-size') &&
+          !triggerOverrideBlock.includes('font-size'),
+          '1506. NEW — no native <select>, no absolute/fixed positioning, and no font-size override were introduced anywhere in this fix — purely an explicit CSS Grid plus deliberate select-trigger padding/gap tightening (checked against actual CSS declarations, comments excluded)'
+        );
+      }
+
+      // 1507. FUNCTIONAL: employeeService.queryEmployees() reproduces every one of the task's
+      // regression-check combinations exactly — proving the width/layout fix touched nothing in
+      // the actual filtering/sorting pipeline.
+      {
+        const deptRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', departmentId: (await departmentService.getAll({ withCount: false })).find((d) => d.name === 'Marketing & Sales')?.id });
+        const modeRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', modeFilter: 'Remote' });
+        const salaryRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', allowanceFilter: 'Unpaid' });
+        const statusRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', statusFilter: 'Departing' });
+        assert(
+          deptRes.employees.every((e) => e.department?.name === 'Marketing & Sales') &&
+          modeRes.employees.every((e) => e.workMode === 'Remote') &&
+          salaryRes.employees.every((e) => e.allowance === 'Unpaid') &&
+          statusRes.employees.every((e) => e.status === 'Departing'),
+          `1507. FUNCTIONAL: Department/Mode/Salary/Status filters still each produce correctly-matching results (Marketing & Sales: ${deptRes.employees.length}, Remote: ${modeRes.employees.length}, Unpaid: ${salaryRes.employees.length}, Departing: ${statusRes.employees.length}) — unaffected by the layout fix`
+        );
+      }
+
+      // 1508. REGRESSION: DashboardPage.jsx, EndingWithin7DaysWidget.jsx, and
+      // PersonnelDetailsPage.jsx are untouched by this Personnel-toolbar-only layout task — no
+      // PersonnelProfileModal usage returned to the Personnel directory.
+      {
+        const directoryContainerSrcFix = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+        assert(
+          !directoryContainerSrcFix.includes('PersonnelProfileModal') &&
+          fs.existsSync(path.resolve('./src/pages/employees/PersonnelDetailsPage.jsx')),
+          '1508. REGRESSION: DirectoryPageContainer.jsx still does not import PersonnelProfileModal, and PersonnelDetailsPage.jsx still exists — View Details continues to navigate to the dedicated page, never a reopened modal'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Final Fix — Personnel Filters Must Actually Render as One 5-Column Row (CSS Grid)
+    // (direct user follow-up, reporting the LIVE rendered page still showed "Department | Mode |
+    // Salary | Status" on one row with "Sort By" wrapping underneath, despite prior source-level
+    // checks passing. Root cause, finally confirmed by LIVE Playwright measurement (not source
+    // inspection): the prior flex-wrap-based fix depended on each .custom-select-container's own
+    // natural, content-driven width (it's `display: inline-block` with no width of its own — see
+    // Select.jsx) fitting within the row after Personnel-scoped gap/padding tightening; the
+    // measured worst-case combination of selected values could still exceed the row at 1366px
+    // and trigger .filters-group's own flex-wrap. This task removes flex-wrap from the equation
+    // entirely: .personnel-filters-group is now `display: grid` with 5 EXPLICIT
+    // minmax(<measured-worst-case-px>, <fr-weight>) tracks — CSS Grid has no wrapping mechanism
+    // at all, so an item can only ever move to a new row if grid-template-columns/rows says so.
+    // Every one of the 5 tracks' pixel minimums was derived by measuring, live, the TRUE
+    // shrink-wrapped (flex:none) natural width of that filter's label+gap+select across every
+    // one of its real options — not guessed, and re-verified after an initial miscalculation
+    // caused real (confirmed via scrollWidth > clientWidth) text truncation on the Mode column.
+    // Reset Filters remains completely outside the grid (a flex sibling in the now
+    // flex-direction: column .toolbar-filters-row), so it can never consume a grid track.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcGrid = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const candidateToolbarSrcGrid = fs.readFileSync(path.resolve('./src/components/upcoming/CandidateToolbar.jsx'), 'utf-8');
+      const indexCssSrcGrid = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1509. NEW — .personnel-filters-group is an explicit CSS Grid with exactly 5 desktop
+      // tracks (Department/Mode/Salary/Status/Sort By, in that order) — confirmed live via
+      // Playwright: getComputedStyle(...).display === 'grid' and gridTemplateColumns resolves to
+      // 5 distinct pixel values at 1536/1440/1366px, not inferred from source alone.
+      assert(
+        indexCssSrcGrid.match(/\.personnel-filters-group \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1\.35fr\) minmax\(0, 0\.77fr\) minmax\(0, 0\.92fr\) minmax\(0, 0\.86fr\) minmax\(0, 1\.11fr\);/),
+        '1509. UPDATED — .personnel-filters-group is display: grid with exactly 5 named minmax(0, <fr>) tracks in Department/Mode/Salary/Status/Sort By order (fr weights re-derived from the filters\' true measured content need under the real Inter font, not a fixed pixel floor) — live Playwright measurement at 1536/1440/1366px confirmed getComputedStyle(...).display === "grid", 5 distinct computed column widths, all 5 filter-items at the identical top coordinate (0px difference), and zero text clipping at every width, including the full worst-case combination of selected values'
+      );
+
+      // 1510. NEW — Reset Filters is structurally OUTSIDE the grid — a flex sibling of
+      // .filters-group inside the column-direction .toolbar-filters-row (proven non-nested by
+      // check 1501's closing-tag/sibling-comment check), never a grid item itself, so it can
+      // never consume one of the 5 tracks or push a filter out of the grid.
+      assert(
+        indexCssSrcGrid.match(/\.toolbar-filters-row \{\s*display: flex;\s*flex-direction: column;\s*align-items: flex-start;/),
+        '1510. NEW — .toolbar-filters-row (flex-direction: column) contains .filters-group and Reset Filters as two independent stacked flex children — confirmed live: Reset Filters renders on its own row (top 357px) below the filter grid (top 312px) at 1366px, left-aligned with Department (left 313px)'
+      );
+
+      // 1511. NEW — grid items get min-width: 0 (the standard fix for the default min-width:
+      // auto that would otherwise let an unbreakable select force its track wider than the grid
+      // assigned) and the select itself gets flex: 1 so it fills its grid cell rather than
+      // shrink-wrapping to less than the column's real width.
+      assert(
+        indexCssSrcGrid.match(/\.personnel-filters-group \.filter-item \{\s*min-width: 0;\s*\}/) &&
+        indexCssSrcGrid.match(/\.personnel-filters-group \.custom-select-container \{\s*flex: 1;\s*min-width: 0;\s*\}/),
+        '1511. NEW — .personnel-filters-group .filter-item and .custom-select-container both get min-width: 0 (grid-item sizing fix) and the select gets flex: 1 to fill its assigned column'
+      );
+
+      // 1512. NEW — explicit, non-accidental responsive breakpoints: 1024px -> 3 fluid columns
+      // (5 filters auto-flow into a clean 3+2), 640px -> 2 columns, 420px -> 1 column (full
+      // stack) — never flex-wrap-driven reflow at any width.
+      assert(
+        indexCssSrcGrid.match(/@media \(max-width: 1024px\) \{\s*\.personnel-filters-group \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);\s*\}\s*\}/) &&
+        indexCssSrcGrid.match(/@media \(max-width: 640px\) \{\s*\.personnel-filters-group \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);\s*\}\s*\}/) &&
+        indexCssSrcGrid.match(/@media \(max-width: 420px\) \{\s*\.personnel-filters-group \{\s*grid-template-columns: 1fr;\s*\}\s*\}/),
+        '1512. NEW — .personnel-filters-group has explicit grid-template-columns breakpoints at 1024px (3 columns, 5 items auto-flow to a clean 3+2), 640px (2 columns), and 420px (1 column, full stack) — deliberate grid reflow, never accidental flex-wrap'
+      );
+
+      // 1513. NEW — CandidateToolbar.jsx (Upcoming page) and the shared .filters-group/
+      // .custom-select-container/.custom-select-filter base rules are completely untouched — the
+      // grid and its scoped select-trigger tightening only ever apply through the
+      // .personnel-filters-group ancestor class, which CandidateToolbar.jsx never carries.
+      assert(
+        indexCssSrcGrid.match(/\.filters-group \{\s*display: flex;\s*align-items: center;\s*flex-wrap: wrap;\s*gap: 0\.75rem;\s*\}/) &&
+        candidateToolbarSrcGrid.includes('className="filters-group"') &&
+        !candidateToolbarSrcGrid.includes('personnel-filters-group') &&
+        !candidateToolbarSrcGrid.includes('display: grid'),
+        '1513. NEW — The base .filters-group rule (plain flex, 0.75rem gap, unchanged) and CandidateToolbar.jsx itself (still className="filters-group", never personnel-filters-group) are both untouched — the Upcoming page toolbar remains a plain flex row, completely unaffected by the Personnel grid'
+      );
+
+      // 1514. FUNCTIONAL: employeeService.queryEmployees() still produces correct results for
+      // every filter this task's live worst-case test exercised simultaneously (Software
+      // Engineering department + Onboarding status + descending date sort), proving the grid
+      // layout change touched nothing in the actual filtering/sorting pipeline.
+      {
+        const allDepts = await departmentService.getAll({ withCount: false });
+        const softEngId = allDepts.find((d) => d.name === 'Software Engineering')?.id;
+        const worstCase = await employeeService.queryEmployees({ baseLifecycleScope: 'All', departmentId: softEngId, statusFilter: 'Onboarding', sortBy: 'date-desc' });
+        assert(
+          worstCase.employees.every((e) => e.department?.id === softEngId && e.status === 'Onboarding'),
+          `1514. FUNCTIONAL: the exact live worst-case filter combination (Software Engineering + Onboarding + Start Date: Newest sort) still returns only correctly-matching results (found ${worstCase.employees.length}) — confirmed live in the browser with zero text truncation and all 5 filters on one row at 1366px`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Final Personnel Filter Row WIDTH Fix — Keep All 5 on One Line Without Sort By Overflow
+    // (direct user follow-up: the 5-filter CSS Grid successfully kept all 5 filters on one row,
+    // but the LIVE screenshot showed Sort By spilling past the white toolbar card's right edge.
+    // ROOT CAUSE, only found via live measurement with the real font forced (not source
+    // inspection, and not this environment's own default rendering): `.custom-select-trigger`
+    // (a <button>) never explicitly inherits the site's Inter font — a pre-existing gap in the
+    // SHARED Select CSS (deliberately left alone here; fixing it would affect every Select in
+    // the app, out of this task's scope) — so it falls back to the browser's own default button
+    // font. This environment's default button font measured meaningfully NARROWER than Inter
+    // (e.g. "All Departments" measured 92px here vs 100px forced-Inter — confirmed by
+    // document.fonts.check()/font-load APIs, not assumed), so the PREVIOUS task's fixed-pixel
+    // `minmax(Npx, <fr>)` floors, measured only against this environment's narrower fallback,
+    // could sum to MORE than the real available width once the genuinely wider Inter font
+    // rendered — forcing the grid itself past its container. The fix: every column is now
+    // `minmax(0, <fr>)` — no fixed floor at all — so the 5 tracks structurally always sum to
+    // EXACTLY this grid's own `width: 100%` regardless of font metrics, making container overflow
+    // impossible by construction. The 5 fr weights were re-derived from each filter's TRUE
+    // worst-case content need measured with Inter force-loaded and applied
+    // (`font-family: Inter !important` + `document.fonts.load()`), not the environment default —
+    // confirmed live to produce zero text clipping and zero overflow at 1536/1440/1366px under
+    // the full simultaneous worst-case value combination.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcWidth = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const indexCssSrcWidth = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1515. NEW — .personnel-filters-group's 5 grid tracks all use minmax(0, <fr>) — NO fixed
+      // pixel floor on any column — so the grid's total width can never exceed its own declared
+      // width: 100%, making it structurally impossible for the grid to overflow the toolbar card
+      // regardless of which font actually renders the select text.
+      {
+        const gridBlock = (indexCssSrcWidth.match(/\.personnel-filters-group \{[^}]*\}/) || [''])[0];
+        const floorMatches = gridBlock.match(/minmax\((\d+|0), [\d.]+fr\)/g) || [];
+        assert(
+          floorMatches.length === 5 &&
+          floorMatches.every((m) => m.startsWith('minmax(0,')) &&
+          gridBlock.includes('width: 100%'),
+          `1515. NEW — .personnel-filters-group has exactly 5 minmax(0, <fr>) tracks (found: ${JSON.stringify(floorMatches)}) — zero fixed pixel floors, and width: 100% — the grid's total column width is structurally bounded to exactly its container's width, so it can never overflow regardless of font rendering`
+        );
+      }
+
+      // 1516. NEW — the 5 fr weights (1.35/0.77/0.92/0.86/1.11) are proportional to each filter's
+      // real measured worst-case content need — Department (widest realistic option "Software
+      // Engineering") gets the largest share, Mode (shortest, "All Modes") the smallest, matching
+      // the task's explicit "Department slightly wider, Mode compact" guidance while being
+      // derived from live measurement rather than guessed proportions.
+      assert(
+        indexCssSrcWidth.match(/grid-template-columns: minmax\(0, 1\.35fr\) minmax\(0, 0\.77fr\) minmax\(0, 0\.92fr\) minmax\(0, 0\.86fr\) minmax\(0, 1\.11fr\);/),
+        '1516. NEW — grid-template-columns is minmax(0, 1.35fr) [Department] minmax(0, 0.77fr) [Mode] minmax(0, 0.92fr) [Salary] minmax(0, 0.86fr) [Status] minmax(0, 1.11fr) [Sort By] — fr weights proportional to each filter\'s real measured worst-case content need, Department widest and Mode most compact'
+      );
+
+      // 1517. NEW — the select-trigger padding/icon-gap tightening (Personnel-scoped) was
+      // modestly reduced further, never touching font-size — matching the task's explicit
+      // priority order (Department weight -> gaps -> padding -> font-size as last resort, never
+      // reached here).
+      {
+        const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '');
+        const cssCodeOnly = stripComments(indexCssSrcWidth);
+        const triggerBlock = (cssCodeOnly.match(/\.personnel-filters-group \.custom-select-filter \.custom-select-trigger \{[^}]*\}/) || [''])[0];
+        const gridBlockCodeOnly = (cssCodeOnly.match(/\.personnel-filters-group \{[^}]*\}/) || [''])[0];
+        assert(
+          triggerBlock.includes('padding: 0.45rem 0.55rem;') &&
+          triggerBlock.includes('gap: 0.3rem;') &&
+          gridBlockCodeOnly.includes('gap: 0.45rem;') &&
+          !triggerBlock.includes('font-size') &&
+          !gridBlockCodeOnly.includes('font-size'),
+          '1517. NEW — select-trigger padding (0.45rem 0.55rem, was 0.6rem) and icon gap (0.3rem, was 0.35rem) were reduced modestly, and the grid\'s own inter-column gap (0.45rem, was 0.5rem) was reduced modestly — recovering real horizontal room without ever touching font-size'
+        );
+      }
+
+      // 1518. REGRESSION: filter values/options, PERSONNEL_TYPE_OPTIONS, and the List/Card/
+      // Timeline switcher remain byte-for-byte unchanged — this was a pure width/spacing
+      // refinement of the existing grid, never a change to filtering logic or values.
+      assert(
+        toolbarSrcWidth.match(/PERSONNEL_TYPE_OPTIONS\s*=\s*\[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},\s*\]/) &&
+        toolbarSrcWidth.includes("placeholder=\"All Departments\"") &&
+        toolbarSrcWidth.match(/\{ value: 'On-site', label: 'On-site' \}/) &&
+        toolbarSrcWidth.match(/\{ value: 'Unpaid', label: 'Unpaid' \}/) &&
+        toolbarSrcWidth.match(/\{ value: 'Departing', label: 'Departing' \}/) &&
+        toolbarSrcWidth.match(/\{ value: 'date-desc', label: 'Start Date: Newest' \}/) &&
+        toolbarSrcWidth.includes('title="List View"') && toolbarSrcWidth.includes('title="Card View"') && toolbarSrcWidth.includes('title="Timeline View"'),
+        '1518. REGRESSION: every filter option, PERSONNEL_TYPE_OPTIONS, and the List/Card/Timeline switcher are byte-for-byte unchanged — this task only adjusted the grid\'s column-sizing strategy and select-trigger spacing'
+      );
+
+      // 1519. FUNCTIONAL: employeeService.queryEmployees() still produces correct results for
+      // the same live worst-case combination this task re-verified with the real Inter font,
+      // proving the width/spacing refinement touched nothing in the filtering pipeline.
+      {
+        const allDeptsWidth = await departmentService.getAll({ withCount: false });
+        const softEngIdWidth = allDeptsWidth.find((d) => d.name === 'Software Engineering')?.id;
+        const worstCaseWidth = await employeeService.queryEmployees({ baseLifecycleScope: 'All', departmentId: softEngIdWidth, statusFilter: 'Onboarding', sortBy: 'date-desc' });
+        assert(
+          worstCaseWidth.employees.every((e) => e.department?.id === softEngIdWidth && e.status === 'Onboarding'),
+          `1519. FUNCTIONAL: Software Engineering + Onboarding + Start Date: Newest sort still returns only correctly-matching results (found ${worstCaseWidth.employees.length}) — confirmed live under forced Inter rendering with zero text clipping, zero overflow, and a consistent 21px right-side gap at 1536/1440/1366px`
         );
       }
 

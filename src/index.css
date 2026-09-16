@@ -1774,6 +1774,30 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+/* Personnel Directory toolbar's own search-only row — deliberately a SEPARATE class from the
+   shared .toolbar-top-row (still used as-is by CandidateToolbar.jsx's search+actions row; never
+   touched here), since this toolbar's search box now occupies a full row by itself with no
+   sibling view switcher. display:flex keeps .toolbar-search-box's existing flex:1 behaving
+   exactly as it already does in every other toolbar that reuses it. */
+.toolbar-search-row {
+  display: flex;
+}
+
+/* Personnel Directory toolbar's second row — the two HIGH-LEVEL segmented controls for the
+   result set: All/Employees/Interns (WHICH personnel) on the left, List/Card/Timeline (HOW they
+   are displayed) on the right. Two independent .view-switcher-group instances, never merged into
+   one control. justify-content: space-between spreads them to the row's edges with comfortable
+   room between; flex-wrap + gap let them stack cleanly (each still fully visible/tappable) on
+   narrow viewports instead of overlapping or requiring a brittle fixed-width breakpoint.
+   Superseded the earlier single-control .toolbar-type-row now that this row holds two controls. */
+.toolbar-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .toolbar-bottom-row {
   display: flex;
   align-items: center;
@@ -1784,11 +1808,110 @@ body {
   border-top: 1px solid var(--border-subtle);
 }
 
+/* Personnel Directory toolbar's detailed-filters area — a NEW class, not the shared
+   .toolbar-bottom-row above (still used as-is by CandidateToolbar.jsx). column direction so
+   .filters-group (the 5 filters) and Reset Filters ALWAYS render as two independent, stacked
+   rows — Reset Filters can never sit on the same line as the filters, so it can never compete
+   with them for width or push Sort By onto a second line, regardless of viewport. */
+.toolbar-filters-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .filters-group {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+/* Personnel-only modifier on the shared .filters-group above (CandidateToolbar.jsx's own
+   .filters-group is untouched — it never gets this class, and the base .filters-group rule
+   above is never edited). ROOT CAUSE, finally fixed structurally: every .custom-select-container
+   is `display: inline-block` with no width of its own (see Select.jsx), so each select's
+   rendered width was entirely driven by whichever option happened to be CURRENTLY selected —
+   combined with .filters-group's flex-wrap, the 5-filters-on-one-row outcome depended on the
+   exact combined natural width of whatever values were selected versus the exact available row
+   width, which is why gap/padding tightening passes kept needing readjustment. Replacing
+   flex-wrap with an EXPLICIT CSS GRID removed the WRAPPING failure mode (CSS Grid has no
+   wrapping mechanism — an item only moves row if grid-template-rows says so), but a fixed-pixel
+   `minmax(Npx, ...)` FLOOR per column reintroduced a DIFFERENT failure mode: pixel widths were
+   measured against this environment's own font rendering, and `.custom-select-trigger` (a
+   <button>) never explicitly inherits the site's Inter font (a pre-existing gap in the SHARED
+   Select CSS, intentionally left alone here — fixing it is out of this task's scope and would
+   affect every Select in the app) — so the ACTUAL rendered font (and therefore true worst-case
+   text width) varies by browser/OS in a way this environment cannot fully reproduce. A fixed-px
+   floor whose sum exceeds the real available width forces the GRID itself wider than its
+   container. The robust fix: `minmax(0, <fr>)` — NO fixed floor on any column, so the 5 tracks
+   always sum to EXACTLY this grid's own `width: 100%`, making it structurally IMPOSSIBLE for the
+   grid to exceed its parent card regardless of font metrics. If real content ever needs more
+   than its fr-allocated share, the existing ellipsis on .custom-select-value degrades gracefully
+   *inside* that column — never as layout overflow. The 5 fr weights themselves (1.35/0.77/0.92/
+   0.86/1.11) are proportional to each filter's REAL measured worst-case content need under the
+   actual Inter font (257/146/175/163/211px respectively, measured live by temporarily forcing
+   `font-family: Inter` and cycling every option of every filter — not this environment's default
+   button-font fallback, and not guessed), so the fixed 971px of real available column space at
+   1366px (the tightest required desktop width) distributes with a comfortable, verified margin
+   on every column, including Department, whose "Software Engineering" was clipping under the
+   previous (Arial-fallback-measured) weights the instant the real, wider Inter font rendered it. */
+.personnel-filters-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.77fr) minmax(0, 0.92fr) minmax(0, 0.86fr) minmax(0, 1.11fr);
+  align-items: end;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+/* Scoped select-trigger tightening (padding + internal icon gap only — never font-size),
+   recovering a modest amount of horizontal room per select so realistic content fits comfortably
+   within its fr-allocated column share. Scoped through .personnel-filters-group as the ancestor,
+   so the shared .custom-select-trigger/.custom-select-filter rules used by every other Select in
+   the app (ReportFilterBar, EmailDraftsPanel, NotesPage, CandidateThreadPage, UpcomingPage,
+   CandidateToolbar) are completely untouched. */
+.personnel-filters-group .custom-select-filter .custom-select-trigger {
+  padding: 0.45rem 0.55rem;
+  gap: 0.3rem;
+}
+
+/* min-width: 0 overrides the browser's default min-width: auto on a grid item — without it, the
+   Select's own (inline-block, content-driven) natural width could force its column wider than
+   the grid assigned it, the same min-width: auto gotcha CSS Grid/Flexbox both have. flex: 1 (on
+   .custom-select-container specifically, a scoped override — the shared .custom-select-container
+   rule itself, used by every other Select consumer in the app, is never touched) lets the select
+   fill the remainder of its .filter-item row after the label, so it visually fills its grid cell
+   rather than shrink-wrapping to less than the column's real width. */
+.personnel-filters-group .filter-item {
+  min-width: 0;
+}
+
+.personnel-filters-group .custom-select-container {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Tablet: 3 columns (5 filters auto-flow into a clean 3+2), still a real grid — never flex-wrap.
+   Small: 2 columns. Mobile: 1 column, fully stacked. Explicit breakpoints, not accidental
+   reflow. */
+@media (max-width: 1024px) {
+  .personnel-filters-group {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .personnel-filters-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .personnel-filters-group {
+    grid-template-columns: 1fr;
+  }
 }
 
 .filter-item {

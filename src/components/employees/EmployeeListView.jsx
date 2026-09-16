@@ -159,7 +159,7 @@ export default function EmployeeListView({ employees = [] }) {
                       opening PersonnelProfileModal (per direct user request: a person's record
                       can grow to include CV/resume PDFs, which don't fit comfortably in a modal). */}
                   <td>
-                    <Link to={`/employees/${emp.id}`} className="btn-compact-override" style={{ whiteSpace: 'nowrap' }}>
+                    <Link to={`/employees/${emp.id}`} className="btn-compact-override" style={{ whiteSpace: 'nowrap', textDecoration: 'none' }}>
                       <Eye size={12} />
                       <span>View Details</span>
                     </Link>
