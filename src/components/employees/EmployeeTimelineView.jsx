@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Palette } from 'lucide-react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { Palette, Download, ChevronDown, FileText, ImageDown } from 'lucide-react';
 import {
   formatCompactDate,
   getTodayLocalDateString,
@@ -10,6 +10,8 @@ import {
 import { resolveDepartmentColor, buildDepartmentLegend } from '../../domain/departmentDomain.js';
 import { departmentService } from '../../services/departmentService.js';
 import DepartmentColorsModal from './DepartmentColorsModal.jsx';
+import TimelineExportView from './TimelineExportView.jsx';
+import { exportTimelineAsPdf, exportTimelineAsPng } from '../../utils/timelineExport.js';
 
 const TYPE_BADGE_STYLES = {
   Employee: { bg: '#F1F5F9', color: '#475569' },
@@ -20,7 +22,24 @@ export default function EmployeeTimelineView({ employees = [] }) {
   const [hoveredId, setHoveredId] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [isColorsModalOpen, setIsColorsModalOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const exportMenuRef = useRef(null);
+  const exportTemplateRef = useRef(null);
   const today = getTodayLocalDateString();
+
+  // Standard click-outside-to-close for the Export menu, mirroring the app's existing dropdown
+  // pattern (see NotificationPanel.jsx).
+  useEffect(() => {
+    if (!isExportMenuOpen) return undefined;
+    const handleClickOutside = (event) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isExportMenuOpen]);
 
   // Timeline reads Department color configuration through departmentService only (the app's
   // existing data-access boundary for Departments — never a lower-level storage layer touched
@@ -76,10 +95,35 @@ export default function EmployeeTimelineView({ employees = [] }) {
 
   const canvasMinWidth = Math.max(760, axisTicks.length * 90);
 
+  // Rasterizes the dedicated off-screen export template (TimelineExportView, always mounted
+  // below regardless of scroll position/viewport) — never the live interactive Timeline DOM.
+  // Disabled while `!range` (the Export button doesn't even render in that case, via the early
+  // return above) and while a previous export is still in flight, so HR can never trigger
+  // multiple simultaneous exports.
+  const handleExport = (format) => {
+    if (isExporting) return;
+    setIsExportMenuOpen(false);
+    setIsExporting(true);
+
+    const node = exportTemplateRef.current;
+    const generate = !node
+      ? Promise.reject(new Error('Export template is not ready.'))
+      : format === 'pdf'
+      ? exportTimelineAsPdf(node)
+      : exportTimelineAsPng(node);
+
+    generate
+      .catch((err) => {
+        console.error('Timeline export failed:', err);
+        alert('Unable to export timeline. Please try again.');
+      })
+      .finally(() => setIsExporting(false));
+  };
+
   return (
     <div className="timeline-card">
       <div className="timeline-header-row">
-        {legend.length > 0 ? (
+        {legend.length > 0 && (
           <div className="timeline-legend">
             {legend.map((d) => (
               <span key={d.id} className="timeline-legend-item">
@@ -88,17 +132,62 @@ export default function EmployeeTimelineView({ employees = [] }) {
               </span>
             ))}
           </div>
-        ) : (
-          <span />
         )}
-        <button
-          type="button"
-          className="btn-compact-override timeline-colors-btn"
-          onClick={() => setIsColorsModalOpen(true)}
-        >
-          <Palette size={12} />
-          <span>Department Colors</span>
-        </button>
+
+        {/* Right-aligned via its own row (justify-content: flex-end), never sharing a row with
+            the legend — this is what keeps the actions pinned to the right regardless of how
+            many lines the legend itself wraps to at a given width (a shared flex-wrap row with
+            justify-content: space-between only right-aligns the LAST line's items when that line
+            has more than one item; once the legend alone fills the first line, the actions group
+            would otherwise land back at the left edge on its own line — the exact bug this
+            structure avoids). */}
+        <div className="timeline-actions-row">
+          <div className="timeline-actions">
+            <button
+              type="button"
+              className="timeline-action-btn timeline-action-icon-btn"
+              onClick={() => setIsColorsModalOpen(true)}
+              title="Department Colors"
+              aria-label="Department Colors"
+            >
+              <Palette size={16} />
+            </button>
+
+            <div className="export-menu-wrapper" ref={exportMenuRef}>
+              <button
+                type="button"
+                className={`timeline-action-btn timeline-export-trigger ${isExportMenuOpen ? 'is-open' : ''}`}
+                onClick={() => setIsExportMenuOpen((open) => !open)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setIsExportMenuOpen(false);
+                }}
+                disabled={isExporting}
+                aria-haspopup="menu"
+                aria-expanded={isExportMenuOpen}
+                aria-label="Export Timeline"
+              >
+                <Download size={14} />
+                <span>{isExporting ? 'Exporting...' : 'Export'}</span>
+                <ChevronDown size={14} />
+              </button>
+
+              {isExportMenuOpen && (
+                <div className="export-menu" role="menu" onKeyDown={(e) => {
+                  if (e.key === 'Escape') setIsExportMenuOpen(false);
+                }}>
+                  <button type="button" role="menuitem" className="export-menu-item" onClick={() => handleExport('pdf')} disabled={isExporting}>
+                    <FileText size={14} />
+                    <span>Export as PDF</span>
+                  </button>
+                  <button type="button" role="menuitem" className="export-menu-item" onClick={() => handleExport('png')} disabled={isExporting}>
+                    <ImageDown size={14} />
+                    <span>Export as PNG</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="timeline-scroll-area">
@@ -213,6 +302,24 @@ export default function EmployeeTimelineView({ employees = [] }) {
         onClose={() => setIsColorsModalOpen(false)}
         onSaved={refreshDepartments}
       />
+
+      {/* Dedicated, export-ONLY render — positioned off-screen (never visible, never affects
+          layout/scroll of the page above) and always reflects the exact same filtered
+          `employees`/range/axisTicks/legend the live Timeline renders from. Rasterized by
+          handleExport() above; see TimelineExportView.jsx for exactly what it does/doesn't
+          include. Mounting it unconditionally (rather than only during export) avoids any
+          mount-then-wait-for-paint race condition when the Export button is clicked. */}
+      <div className="timeline-export-offscreen-host" aria-hidden="true">
+        <TimelineExportView
+          ref={exportTemplateRef}
+          employees={employeesWithFreshDepartments}
+          range={range}
+          axisTicks={axisTicks}
+          legend={legend}
+          today={today}
+          spansMultipleYears={spansMultipleYears}
+        />
+      </div>
     </div>
   );
 }

@@ -1034,6 +1034,38 @@ body {
   flex-direction: column;
   justify-content: space-between;
   min-width: 0;
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out;
+}
+
+/* Subtle hover lift — :not(.skeleton-box) excludes DashboardSkeleton.jsx's identical `.stat-card`
+   loading placeholders (same class, reused purely for consistent sizing while real KPI data
+   loads — never meaningfully "hoverable" content, and unlike the real cards it has no
+   .stat-card-icon child for the icon micro-interaction below to target anyway). Deliberately no
+   cursor: pointer and no dimension/border-width change — these five cards stay strictly
+   information-only (see StatCard.jsx's own doc comment); only transform/box-shadow/border-color
+   are animated, never `transition: all`. The lift itself never affects layout (CSS transforms are
+   compositor-only, so hovering one card can never shift its neighbors), and the small teal-tinted
+   shadow layer is the "restrained accent" — border-color shifts to the same primary teal already
+   used throughout the app, not a new color. */
+.stat-card:not(.skeleton-box):hover {
+  transform: translateY(-3px);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md), 0 0 0 1px rgba(18, 159, 169, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-card:not(.skeleton-box) {
+    transition: box-shadow 0.2s ease-out, border-color 0.2s ease-out;
+  }
+  .stat-card:not(.skeleton-box):hover {
+    transform: none;
+  }
+  .stat-card-icon {
+    transition: none;
+  }
+  .stat-card:not(.skeleton-box):hover .stat-card-icon {
+    transform: none;
+  }
 }
 
 .stat-card-title-group {
@@ -1051,6 +1083,14 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: transform 0.2s ease-out;
+}
+
+/* Very small, restrained icon micro-interaction (see task's own "tiny translateY(-1px)"
+   suggestion) — independent of and smaller than the card's own -3px lift, never a rotation
+   or bounce animation. */
+.stat-card:not(.skeleton-box):hover .stat-card-icon {
+  transform: translateY(-1px);
 }
 
 .stat-card-icon svg {
@@ -2117,23 +2157,147 @@ body {
   padding: 2rem 0;
 }
 
-/* Wraps the department legend and the "Department Colors" action on one row — the button lives
-   here (Timeline's own header), never in the shared Personnel toolbar, so it can't congest the
-   toolbar's existing filters. justify-content: space-between keeps the button pinned to the
-   right even when the legend is empty (an empty <span /> placeholder keeps that alignment). */
+/* Stacks the department legend (row 1) above the Timeline action controls (row 2) — a column
+   layout, deliberately NOT a single wrapping flex row. A shared row with justify-content:
+   space-between only right-aligns correctly while both the legend and the actions fit on one
+   line; once the legend's own 8 department entries wrap onto their own line at typical desktop
+   widths, a lone flex item on its own wrapped line sits at the START of that line under
+   space-between (nothing to distribute "between"), not the end — which is exactly the "actions
+   end up on the left" bug this column structure avoids structurally, at any viewport width. */
 .timeline-header-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.85rem;
   padding-bottom: 1rem;
   margin-bottom: 1rem;
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.timeline-colors-btn {
+/* Occupies the full Timeline content width and pushes .timeline-actions to the right edge —
+   robust regardless of legend wrapping or viewport width (never absolute positioning, never a
+   fixed margin-left tuned to one screenshot's width). */
+.timeline-actions-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Groups the icon-only "Department Colors" control and the "Export" dropdown together — both
+   Timeline-only secondary actions, never the shared Personnel toolbar. */
+.timeline-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Shared "secondary Timeline utility" button family — Department Colors (icon-only) and Export
+   (icon + label + chevron) both use this base so they always match in height, border radius,
+   and hover/focus treatment, per the app's existing light-teal-tint hover convention (already
+   used throughout index.css: var(--color-primary-light) background + var(--color-primary-active)
+   text/icon) rather than a new visual system. Intentionally a plain bordered surface, not a
+   filled primary-teal button — these are secondary tools, not the page's main call to action. */
+.timeline-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 36px;
+  padding: 0 0.7rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--color-navy-header);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.timeline-action-btn:hover {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary-active);
+}
+
+/* Same accessible focus ring already used elsewhere on Timeline's own interactive elements (see
+   .timeline-bar:focus-visible) — never the browser's bare default outline, never no outline at
+   all. */
+.timeline-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--color-primary);
+}
+
+.timeline-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Department Colors' icon-only variant — a compact square (~36px, matching .timeline-action-btn's
+   own height exactly so both controls align on the same baseline), centered palette icon, no
+   visible text (an accessible name is provided via aria-label + a native title tooltip instead). */
+.timeline-action-icon-btn {
+  width: 36px;
+  padding: 0;
   flex-shrink: 0;
+}
+
+/* While the Export menu is open, give the trigger the same tinted "active" treatment as :hover,
+   so it stays visually obvious which control the open dropdown belongs to. */
+.timeline-export-trigger {
+  flex-shrink: 0;
+}
+
+.timeline-export-trigger.is-open {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary-active);
+}
+
+.export-menu-wrapper {
+  position: relative;
+}
+
+.export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 170px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  z-index: 30;
+}
+
+.export-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+}
+
+.export-menu-item:hover {
+  background-color: var(--bg-subtle);
+}
+
+.export-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .timeline-legend {
@@ -2348,6 +2512,217 @@ body {
   .timeline-name-col {
     width: 150px;
   }
+}
+
+/* ==========================================================================
+   Timeline EXPORT-ONLY report template (TimelineExportView.jsx) — deliberately a completely
+   separate class namespace from the on-screen .timeline-* rules above, never shared, so styling
+   this report can never accidentally affect (or be affected by) the live interactive Timeline.
+   Rendered off-screen at all times (see .timeline-export-offscreen-host) and rasterized by
+   src/utils/timelineExport.js. Plain, static, high-contrast "report" presentation: no hover/
+   focus states exist in this markup at all, since none of its elements are interactive.
+   ========================================================================== */
+
+/* Keeps the export template fully laid out (so html-to-image can measure/capture its real
+   content size) while never appearing in the visible viewport or affecting page scroll/layout.
+   Deliberately position:fixed + a large negative offset, NOT display:none/visibility:hidden —
+   both of those prevent a DOM-capture library from rendering the node's content at all. */
+.timeline-export-offscreen-host {
+  position: fixed;
+  top: 0;
+  left: -99999px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.timeline-export-root {
+  background-color: #FFFFFF;
+  color: #111A2E;
+  padding: 32px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  box-sizing: border-box;
+}
+
+.timeline-export-title-block {
+  margin-bottom: 20px;
+}
+
+.timeline-export-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #111A2E;
+}
+
+.timeline-export-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  margin-top: 4px;
+}
+
+.timeline-export-generated {
+  font-size: 11px;
+  color: #94A3B8;
+  margin-top: 2px;
+}
+
+.timeline-export-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.timeline-export-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.timeline-export-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.timeline-export-chart {
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-export-axis-row {
+  display: flex;
+  padding-bottom: 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.timeline-export-name-col-spacer {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.timeline-export-name-col {
+  width: 240px;
+  flex-shrink: 0;
+  padding-right: 16px;
+  box-sizing: border-box;
+}
+
+.timeline-export-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.timeline-export-emp-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: #111A2E;
+}
+
+.timeline-export-emp-id {
+  display: block;
+  font-size: 11px;
+  color: #64748B;
+  margin-top: 2px;
+}
+
+.timeline-export-type-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Same inset-gutter technique as the live .timeline-plot-area (see its own comment above) — a
+   fixed 80px reserved on each side purely so Start/End labels never clip the report's edges. */
+.timeline-export-track-area {
+  position: relative;
+  flex: 1;
+  min-height: 18px;
+}
+
+.timeline-export-plot-area {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 80px;
+  right: 80px;
+}
+
+.timeline-export-axis-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.timeline-export-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #F1F5F9;
+  min-height: 48px;
+}
+
+.timeline-export-row:last-child {
+  border-bottom: none;
+}
+
+.timeline-export-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 16px;
+  border-radius: 4px;
+}
+
+.timeline-export-start-label,
+.timeline-export-end-label {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: #111A2E;
+  white-space: nowrap;
+}
+
+.timeline-export-start-label {
+  right: 100%;
+  margin-right: 6px;
+}
+
+.timeline-export-end-label {
+  left: 100%;
+  margin-left: 6px;
+}
+
+.timeline-export-ongoing-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748B;
+}
+
+.timeline-export-missing-note {
+  font-size: 12px;
+  color: #94A3B8;
+  font-style: italic;
 }
 
 /* Department Colors modal — one row per department, reusing the shared modal-card/form

@@ -14003,6 +14003,430 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Personnel -> Timeline — Export as PDF / PNG (small targeted task: no Timeline redesign, no
+    // date-calculation changes, no Personnel filtering changes — Export reuses everything the
+    // dynamic-range/department-color task above already established.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const timelineSrcExport = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const exportViewSrc = fs.readFileSync(path.resolve('./src/components/employees/TimelineExportView.jsx'), 'utf-8');
+      const timelineExportUtilSrc = fs.readFileSync(path.resolve('./src/utils/timelineExport.js'), 'utf-8');
+      const toolbarSrcExport = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const containerSrcExport = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const packageJsonSrc = fs.readFileSync(path.resolve('./package.json'), 'utf-8');
+
+      // 1577. NEW — The Export control exists ONLY inside the Timeline view (EmployeeTimelineView.jsx),
+      // never in the shared Personnel toolbar — so it can never congest Search/Department/Type/
+      // Mode/Salary/Status/Sort By.
+      assert(
+        timelineSrcExport.includes('timeline-export-trigger') && timelineSrcExport.includes('Export') &&
+        !toolbarSrcExport.includes('timeline-export-trigger') && !toolbarSrcExport.includes('Export as PDF') && !toolbarSrcExport.includes('Export as PNG'),
+        '1577. NEW — The "Export" control exists only in EmployeeTimelineView.jsx\'s own header — DirectoryToolbar.jsx (the shared Personnel toolbar) has no trace of it'
+      );
+
+      // 1578/1579. NEW — Both "Export as PDF" and "Export as PNG" options exist in the menu.
+      assert(timelineSrcExport.includes('Export as PDF'), '1578. NEW — "Export as PDF" option exists in the Export menu');
+      assert(timelineSrcExport.includes('Export as PNG'), '1579. NEW — "Export as PNG" option exists in the Export menu');
+
+      // 1580. NEW — The exportable DOM boundary (TimelineExportView.jsx) excludes every
+      // interactive control by construction: no button/onClick/modal/dropdown markup exists
+      // anywhere in this component at all — it is a purely static, non-interactive render.
+      assert(
+        !exportViewSrc.includes('<button') && !exportViewSrc.includes('onClick') &&
+        !exportViewSrc.includes('DepartmentColorsModal') && !exportViewSrc.includes('export-menu') &&
+        !exportViewSrc.includes('useState'),
+        '1580. NEW — TimelineExportView.jsx (the exportable DOM boundary) contains no interactive controls at all — no buttons, no onClick handlers, no Department Colors modal/Export menu markup, no interactive state — only a static report render'
+      );
+
+      // 1581. NEW — Export uses the CURRENT filtered personnel: TimelineExportView receives the
+      // exact same `employees` data EmployeeTimelineView itself renders from (no separate query),
+      // and never imports employeeService/departmentService itself to re-fetch personnel.
+      assert(
+        timelineSrcExport.match(/<TimelineExportView[\s\S]{0,200}employees=\{employeesWithFreshDepartments\}/) &&
+        !exportViewSrc.includes("from '../../services/employeeService.js'") &&
+        !exportViewSrc.includes('queryEmployees'),
+        '1581. NEW — TimelineExportView is passed the exact same employeesWithFreshDepartments array the live Timeline renders from — it never performs its own independent personnel query'
+      );
+
+      // 1582. NEW — Export preserves the dynamic date domain: TimelineExportView receives the
+      // already-computed `range`/`axisTicks` as props and never calls calculateTimelineRange()
+      // or generateTimelineMonthTicks() itself — so it can never compute a different domain than
+      // what's on screen, and can never reintroduce the old ±14-day-padding/month-snapping bug.
+      assert(
+        timelineSrcExport.match(/<TimelineExportView[\s\S]{0,200}range=\{range\}/) &&
+        timelineSrcExport.match(/<TimelineExportView[\s\S]{0,200}axisTicks=\{axisTicks\}/) &&
+        !exportViewSrc.includes('calculateTimelineRange') && !exportViewSrc.includes('generateTimelineMonthTicks'),
+        '1582. NEW — TimelineExportView receives the already-computed range/axisTicks as props — it never recalculates the Timeline\'s date domain independently'
+      );
+
+      // 1583. NEW — Start/End Date labels are preserved in the export: TimelineExportView reuses
+      // the exact same formatCompactDate()/calculateTimelineBarPosition() functions the live
+      // Timeline uses, and renders the same Ongoing state for periods with no End Date.
+      assert(
+        exportViewSrc.includes('formatCompactDate(emp.startDate') && exportViewSrc.includes('formatCompactDate(emp.contractEndDate') &&
+        exportViewSrc.includes('calculateTimelineBarPosition') && exportViewSrc.includes('timeline-export-ongoing-label') &&
+        exportViewSrc.includes('No Start Date on record'),
+        '1583. NEW — TimelineExportView renders Start/End Date labels via the same formatCompactDate()/calculateTimelineBarPosition() functions as the live Timeline, including the Ongoing state and the missing-Start-Date note — never fabricated dates'
+      );
+
+      // 1584. NEW — Export uses the CURRENT configured department colors: TimelineExportView
+      // resolves bar/legend color via the same resolveDepartmentColor() resolver as the live
+      // Timeline — never a separate hardcoded export color palette.
+      assert(
+        exportViewSrc.includes("import { resolveDepartmentColor } from '../../domain/departmentDomain.js'") &&
+        exportViewSrc.includes('resolveDepartmentColor(emp.department)') &&
+        !exportViewSrc.match(/const\s+.*(EXPORT_)?(COLOR|PALETTE).*=\s*\[/i),
+        '1584. NEW — TimelineExportView resolves every bar\'s color via the same resolveDepartmentColor() function the live Timeline and legend use — no separate/hardcoded export color palette exists'
+      );
+
+      // 1585. NEW — The department legend is included in the export output, built from the same
+      // `legend` prop (itself built via buildDepartmentLegend()) the live Timeline renders.
+      assert(
+        exportViewSrc.includes('timeline-export-legend') && exportViewSrc.includes('legend.map'),
+        '1585. NEW — TimelineExportView renders the department legend from the same `legend` data the live Timeline computes via buildDepartmentLegend()'
+      );
+
+      // 1586. NEW — Empty state cannot export a blank file: the Export button (and the entire
+      // Timeline header it lives in) only renders when `range` is non-null — the exact same
+      // early return that already prevents the Timeline itself from rendering an invalid axis
+      // for a zero-result filter. No separate empty-check was needed or added.
+      assert(
+        timelineSrcExport.match(/if \(!range\)[\s\S]{0,400}timeline-no-range-note[\s\S]{0,250}<\/div>/) &&
+        timelineSrcExport.indexOf('if (!range)') < timelineSrcExport.indexOf('timeline-export-trigger'),
+        '1586. NEW — The Export button is structurally unreachable when there is no valid Timeline (the existing `if (!range) return ...` early return happens before the Export button/header even renders) — a zero-result filter can never produce a blank export'
+      );
+
+      // 1587. NEW — Export loading/error state: isExporting disables the Export trigger and both
+      // menu items (preventing overlapping simultaneous exports), and a failure is caught and
+      // surfaced via the app's existing alert()-based error pattern (see
+      // handleMarkAllOverdueComplete's identical convention) — never an unhandled crash, never a
+      // raw stack trace shown to HR.
+      assert(
+        timelineSrcExport.includes('setIsExporting(true)') && timelineSrcExport.match(/setIsExporting\(false\)/) &&
+        timelineSrcExport.match(/disabled=\{isExporting\}/) &&
+        timelineSrcExport.match(/\.catch\(|catch \(err\)/) && timelineSrcExport.includes("alert('Unable to export timeline. Please try again.')") &&
+        timelineSrcExport.includes('console.error'),
+        '1587. NEW — Export sets isExporting around the whole operation (disabling the trigger and menu items), and catches failures with the app\'s existing alert()-based error pattern plus a console.error for developers — never an unhandled crash or an exposed stack trace'
+      );
+
+      // 1588. NEW — No external export/screenshot/conversion service is ever contacted — the
+      // entire export pipeline (DOM -> canvas -> PNG/PDF) runs with html-to-image + jsPDF,
+      // client-side only, and neither library nor this app's own export code performs a
+      // fetch()/XMLHttpRequest to any third-party endpoint.
+      assert(
+        !timelineExportUtilSrc.includes('fetch(') && !timelineExportUtilSrc.includes('XMLHttpRequest') &&
+        !timelineExportUtilSrc.match(/https?:\/\//) &&
+        timelineExportUtilSrc.includes("from 'html-to-image'") && timelineExportUtilSrc.includes("from 'jspdf'"),
+        '1588. NEW — timelineExport.js never calls fetch()/XMLHttpRequest and contains no hardcoded external URL — export happens entirely client-side via html-to-image + jsPDF, exactly as the task\'s security/privacy requirement demands'
+      );
+
+      // 1589. NEW — This task made no MySQL/backend changes: /server and /db are completely
+      // untouched, and the two new dependencies were added to package.json only (never to
+      // server/package.json, which does not exist — this app has one shared package.json, and
+      // neither new package is a server/db-layer dependency).
+      assert(
+        !fs.existsSync(path.resolve('./server/routes/timeline.js')) &&
+        packageJsonSrc.includes('"html-to-image"') && packageJsonSrc.includes('"jspdf"') &&
+        !packageJsonSrc.match(/"pdf-lib"|"puppeteer"|"playwright"/),
+        '1589. NEW — No backend/MySQL work was done for this task (no new /server route exists for it) — package.json gained exactly two new client-side dependencies (html-to-image, jspdf), no server-side rendering package'
+      );
+
+      // 1590. REGRESSION: List/Card views and DirectoryPageContainer.jsx's wiring remain
+      // completely untouched by the Export feature.
+      assert(
+        containerSrcExport.includes('<EmployeeListView employees={employees} />') &&
+        containerSrcExport.includes('<EmployeeCardView employees={employees} />') &&
+        !containerSrcExport.includes('TimelineExportView') && !containerSrcExport.includes('timelineExport'),
+        '1590. REGRESSION: DirectoryPageContainer.jsx still renders List/Card exactly as before — Export is entirely internal to EmployeeTimelineView.jsx/TimelineExportView.jsx, never touching the container, List, or Card'
+      );
+
+      // 1591. FUNCTIONAL: the export template's own report width scales with the number of axis
+      // ticks (mirroring the live Timeline's own canvasMinWidth strategy) — this is what prevents
+      // axis tick labels from overlapping on a long, multi-year date range in the export, since
+      // the export template has no internal scroll region to fall back on.
+      assert(
+        exportViewSrc.includes('EXPORT_TICK_SPACING') && exportViewSrc.match(/Math\.max\(\s*EXPORT_MIN_WIDTH/),
+        '1591. FUNCTIONAL: TimelineExportView\'s own report width grows with axisTicks.length (same per-tick spacing strategy as the live Timeline\'s canvasMinWidth) — long date ranges get a wider report instead of overlapping axis labels'
+      );
+
+      // 1592. FUNCTIONAL: the PDF page-slicing logic never produces a trailing blank page — it
+      // bounds every slice by the last real row's own boundary (contentBottomPx), never the raw
+      // captured canvas height, which would otherwise include the export template's own bottom
+      // padding as an extra near-empty page.
+      assert(
+        timelineExportUtilSrc.includes('contentBottomPx') &&
+        timelineExportUtilSrc.match(/while \(sliceStartPx < contentBottomPx\)/),
+        '1592. FUNCTIONAL: exportTimelineAsPdf() bounds its page-slicing loop by the last row\'s real boundary (contentBottomPx), not the raw canvas height — the export template\'s own bottom padding can never become a spurious blank trailing PDF page'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Personnel -> Timeline — Action Button Polish (small targeted task: right-align the
+    // Department Colors / Export controls and make Department Colors icon-only, with no change
+    // to Timeline redesign, export functionality, department-color functionality, date
+    // calculations, or Personnel filtering.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const timelineSrcPolish = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const indexCssSrcPolish = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const toolbarSrcPolish = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+
+      // 1593. NEW — The Department Colors trigger has NO visible text label anymore — it is
+      // icon-only (just the Palette icon), never rendering the literal words "Department Colors"
+      // as JSX text content.
+      assert(
+        timelineSrcPolish.match(/className="timeline-action-btn timeline-action-icon-btn"[\s\S]{0,250}<Palette size=\{16\} \/>\s*<\/button>/),
+        '1593. NEW — The Department Colors trigger button\'s JSX contains only the Palette icon between its opening and closing tags — no visible "Department Colors" text span exists inside it'
+      );
+
+      // 1594. NEW — The icon-only trigger still has a proper accessible name (aria-label) AND a
+      // native tooltip (title attribute) reading "Department Colors" — removing the visible text
+      // never removed the accessible name, per the app's existing title-attribute tooltip
+      // convention (already used by DirectoryToolbar.jsx's List/Card/Timeline switcher buttons).
+      assert(
+        timelineSrcPolish.match(/aria-label="Department Colors"/) &&
+        timelineSrcPolish.match(/title="Department Colors"/),
+        '1594. NEW — The icon-only Department Colors trigger has both aria-label="Department Colors" and a native title="Department Colors" tooltip — an icon-only control is never left without an accessible name'
+      );
+
+      // 1595. NEW — The Department Colors trigger still opens the exact same, unmodified
+      // DepartmentColorsModal — this task changed only the trigger BUTTON's presentation, never
+      // the modal it opens or department-color functionality itself.
+      assert(
+        timelineSrcPolish.match(/timeline-action-icon-btn"[\s\S]{0,150}onClick=\{\(\) => setIsColorsModalOpen\(true\)\}/) &&
+        timelineSrcPolish.includes('<DepartmentColorsModal') &&
+        timelineSrcPolish.includes('isOpen={isColorsModalOpen}'),
+        '1595. NEW — The icon-only trigger still calls setIsColorsModalOpen(true), opening the same DepartmentColorsModal component with the same isOpen wiring as before this task'
+      );
+
+      // 1596. NEW — The Export trigger still shows its visible "Export" text (never converted to
+      // icon-only, per the explicit requirement that Export keeps its label for clarity).
+      assert(
+        timelineSrcPolish.match(/timeline-export-trigger[\s\S]{0,600}<span>\{isExporting \? 'Exporting\.\.\.' : 'Export'\}<\/span>/),
+        '1596. NEW — The Export trigger still renders its visible "Export" (or "Exporting...") text — only Department Colors became icon-only, not Export'
+      );
+
+      // 1597. NEW — The actions group is right-aligned via a dedicated row (never absolute
+      // positioning, never a fixed/hardcoded margin-left tuned to one viewport width) — a
+      // structurally robust fix, not a screenshot-matched hack.
+      assert(
+        timelineSrcPolish.includes('timeline-actions-row') &&
+        indexCssSrcPolish.match(/\.timeline-actions-row \{[^}]*justify-content: flex-end;[^}]*\}/) &&
+        !indexCssSrcPolish.match(/\.timeline-actions(-row)?\s*\{[^}]*position:\s*absolute/) &&
+        !indexCssSrcPolish.match(/\.timeline-actions(-row)?\s*\{[^}]*margin-left:\s*\d+(px|rem)/),
+        '1597. NEW — .timeline-actions-row uses display: flex; justify-content: flex-end (a real, responsive right-alignment technique) — never position: absolute and never a hardcoded pixel/rem margin-left tuned to one specific viewport width'
+      );
+
+      // 1598. NEW — The Export dropdown menu remains functional after the polish pass: same
+      // menu markup, same PDF/PNG options, still positioned via `right: 0` relative to its own
+      // trigger (so it stays anchored to the button regardless of the button's new position on
+      // the right edge of the page — this is exactly why `right: 0` rather than a page-relative
+      // offset was already the correct implementation before this task, and remains correct now).
+      assert(
+        timelineSrcPolish.includes('Export as PDF') && timelineSrcPolish.includes('Export as PNG') &&
+        indexCssSrcPolish.match(/\.export-menu \{[^}]*right: 0;[^}]*\}/),
+        '1598. NEW — The Export dropdown still offers Export as PDF/PNG and is still positioned with right: 0 relative to its own trigger (.export-menu-wrapper), so it stays correctly anchored and within the page boundary now that the trigger itself sits at the right edge'
+      );
+
+      // 1599. NEW — No global button CSS regression: the new .timeline-action-btn/
+      // .timeline-action-icon-btn rules are scoped to these specific classes only — this task
+      // never added a bare `button { ... }` selector that could restyle buttons elsewhere in
+      // the app.
+      assert(
+        !indexCssSrcPolish.match(/\n\s*button\s*\{/) &&
+        indexCssSrcPolish.includes('.timeline-action-btn {') && indexCssSrcPolish.includes('.timeline-action-icon-btn {'),
+        '1599. NEW — No bare `button { ... }` selector was introduced — the new secondary-action button styling is scoped to .timeline-action-btn/.timeline-action-icon-btn only, so it cannot accidentally restyle buttons anywhere else in the app'
+      );
+
+      // 1600. NEW — Both controls share the same height/border-radius via the shared
+      // .timeline-action-btn base class (Department Colors and Export both carry this class),
+      // guaranteeing the "matching height/style family" requirement structurally rather than by
+      // independently duplicating the same values in two places that could drift apart later.
+      assert(
+        timelineSrcPolish.match(/className="timeline-action-btn timeline-action-icon-btn"/) &&
+        timelineSrcPolish.match(/className=\{`timeline-action-btn timeline-export-trigger/) &&
+        indexCssSrcPolish.match(/\.timeline-action-btn \{[^}]*height: 36px;/),
+        '1600. NEW — Both the Department Colors and Export triggers carry the shared .timeline-action-btn base class (height: 36px, matching border-radius/border/hover treatment) — they cannot visually drift apart since both read from the same base rule'
+      );
+
+      // 1601. NEW — The Export trigger gets a distinct "menu is open" visual state
+      // (.timeline-export-trigger.is-open, applied while isExportMenuOpen is true) using the
+      // same teal-tint hover family, not a separate/inconsistent color.
+      assert(
+        timelineSrcPolish.match(/timeline-export-trigger \$\{isExportMenuOpen \? 'is-open' : ''\}/) &&
+        indexCssSrcPolish.match(/\.timeline-export-trigger\.is-open \{[^}]*background-color: var\(--color-primary-light\);/),
+        '1601. NEW — The Export trigger gains an "is-open" class while its dropdown is open, styled with the same light-teal-tint family used for :hover — the open state is visually obvious without inventing a new color'
+      );
+
+      // 1602. REGRESSION: Department Colors action still lives only inside
+      // EmployeeTimelineView.jsx — the shared Personnel toolbar (DirectoryToolbar.jsx) still has
+      // no trace of either Timeline action control after the polish pass.
+      assert(
+        !toolbarSrcPolish.includes('timeline-action-btn') && !toolbarSrcPolish.includes('timeline-action-icon-btn') &&
+        !toolbarSrcPolish.includes('timeline-export-trigger'),
+        '1602. REGRESSION: DirectoryToolbar.jsx (the shared Personnel toolbar) still has no trace of the Timeline-only action controls after this styling pass'
+      );
+
+      // 1603. REGRESSION: the legend markup/classes are completely untouched by this task — same
+      // .timeline-legend/.timeline-legend-item/.timeline-legend-dot structure as before, still
+      // rendered from the same `legend` data.
+      assert(
+        timelineSrcPolish.includes('timeline-legend') && timelineSrcPolish.includes('legend.map') &&
+        timelineSrcPolish.includes('timeline-legend-dot') && timelineSrcPolish.includes('timeline-legend-item'),
+        '1603. REGRESSION: The department legend\'s own markup/classes are unchanged by this task — only its position relative to the (now separately-rowed) actions group changed'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Dashboard — Polished Hover Effect on All 5 Lifecycle KPI Cards (small targeted task: no
+    // Dashboard redesign, no data/count changes, cards remain strictly information-only — no
+    // clickability/navigation was added.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const statCardSrcHover = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const dashboardPageSrcHover = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const dashboardSkeletonSrcHover = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+      const indexCssSrcHover = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      const statCardBlock = (indexCssSrcHover.match(/\.stat-card \{[^}]*\}/) || [''])[0];
+      const statCardHoverBlock = (indexCssSrcHover.match(/\.stat-card:not\(\.skeleton-box\):hover \{[^}]*\}/) || [''])[0];
+
+      // 1604. NEW — All 5 lifecycle KPI cards remain strictly non-clickable: StatCard.jsx has no
+      // onClick/Link/NavLink/role="button"/tabIndex, and DashboardPage.jsx's 5 <StatCard> usages
+      // pass no navigation-implying prop either. Hover polish never became a navigation feature.
+      assert(
+        !statCardSrcHover.includes('onClick') && !statCardSrcHover.includes('<Link') && !statCardSrcHover.includes('<NavLink') &&
+        !statCardSrcHover.includes('role="button"') && !statCardSrcHover.includes('tabIndex') &&
+        !statCardSrcHover.includes('cursor') &&
+        (dashboardPageSrcHover.match(/<StatCard/g) || []).length === 5 &&
+        !dashboardPageSrcHover.match(/<StatCard[^>]*onClick/) && !dashboardPageSrcHover.match(/<StatCard[^>]*linkTo/),
+        '1604. NEW — StatCard.jsx and its 5 DashboardPage.jsx usages remain free of onClick/Link/NavLink/role="button"/tabIndex/cursor — the hover polish added no clickability or navigation to the 5 lifecycle KPI cards'
+      );
+
+      // 1605. NEW — No cursor: pointer was introduced anywhere in the new hover CSS — these cards
+      // must never visually imply clickability.
+      assert(
+        !statCardBlock.includes('cursor') && !statCardHoverBlock.includes('cursor') &&
+        !indexCssSrcHover.match(/\.stat-card[^{]*\{[^}]*cursor:\s*pointer/),
+        '1605. NEW — No `cursor: pointer` exists anywhere in .stat-card\'s default or :hover CSS — the default (non-pointer) cursor is preserved on hover, consistent with an information-only card'
+      );
+
+      // 1606. NEW — Hover applies a small, restrained lift (translateY, not scale/rotation), a
+      // strengthened shadow, and a teal border accent reusing the EXISTING --color-primary token
+      // (#129FA9) — never a newly hardcoded, unrelated color, and never turning the card's
+      // background teal.
+      assert(
+        statCardHoverBlock.match(/transform:\s*translateY\(-[234]px\)/) &&
+        !statCardHoverBlock.match(/scale\(|rotate\(/) &&
+        statCardHoverBlock.includes('border-color: var(--color-primary)') &&
+        statCardHoverBlock.match(/box-shadow:\s*var\(--shadow-md\)/) &&
+        !statCardHoverBlock.match(/background-color:\s*var\(--color-primary\)/) && !statCardHoverBlock.match(/background-color:\s*#129FA9/i),
+        `1606. NEW — .stat-card:hover applies translateY(-2px to -4px) (found: ${(statCardHoverBlock.match(/translateY\(-\d+px\)/) || ['none'])[0]}), the existing --shadow-md token for elevation, and border-color: var(--color-primary) for the teal accent — never scale/rotation, never a teal background fill`
+      );
+
+      // 1607. NEW — Only appropriate properties are transitioned (transform/box-shadow/
+      // border-color) — `transition: all` was deliberately avoided, and the duration is within
+      // the requested ~180-220ms range.
+      assert(
+        !statCardBlock.match(/transition:\s*all/) &&
+        statCardBlock.match(/transition:[^;]*transform 0\.2s/) &&
+        statCardBlock.match(/transition:[^;]*box-shadow 0\.2s/) &&
+        statCardBlock.match(/transition:[^;]*border-color 0\.2s/),
+        '1607. NEW — .stat-card\'s transition list explicitly names transform/box-shadow/border-color at 0.2s (200ms, within the requested 180-220ms range) each — never a blanket `transition: all`'
+      );
+
+      // 1608. NEW — A very small, independent icon micro-interaction exists (translateY(-1px) on
+      // .stat-card-icon when its parent card is hovered) — smaller than the card's own lift,
+      // never spinning/rotating/bouncing.
+      {
+        const iconHoverRuleBlocks = indexCssSrcHover.match(/\.stat-card(?::not\(\.skeleton-box\))?[^{]*\.stat-card-icon\s*\{[^}]*\}/g) || [];
+        const iconRulesAnimateBadly = iconHoverRuleBlocks.some((block) => /rotate\(|animation:/i.test(block));
+        assert(
+          indexCssSrcHover.match(/\.stat-card:not\(\.skeleton-box\):hover \.stat-card-icon \{\s*transform: translateY\(-1px\);\s*\}/) &&
+          !iconRulesAnimateBadly,
+          '1608. NEW — .stat-card-icon receives a tiny, independent translateY(-1px) on card hover — smaller than the card\'s own -3px lift, and none of .stat-card-icon\'s own rule blocks use rotate()/a keyframe animation (a spin/rotate/bounce animation)'
+        );
+      }
+
+      // 1609. NEW — prefers-reduced-motion: reduce removes the translate lift for both the card
+      // and its icon (while the app previously had no reduced-motion pattern to reuse — this is a
+      // new, scoped addition, not a reused pre-existing rule) — the card and icon simply render
+      // without transform, still showing the border/shadow accent so hover remains understandable
+      // without any movement.
+      assert(
+        indexCssSrcHover.match(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,600}\.stat-card:not\(\.skeleton-box\):hover \{\s*transform: none;/) &&
+        indexCssSrcHover.match(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,600}\.stat-card:not\(\.skeleton-box\):hover \.stat-card-icon \{\s*transform: none;/),
+        '1609. NEW — @media (prefers-reduced-motion: reduce) sets transform: none on both .stat-card:hover and .stat-card-icon on hover — the lift is removed for users who request reduced motion, while the (non-spatial) border/shadow accent still communicates the hover state'
+      );
+
+      // 1610. NEW — The hover CSS is scoped specifically to .stat-card (excluding
+      // .skeleton-box, DashboardSkeleton.jsx's loading placeholder that reuses the same class
+      // purely for sizing) — never a broad/global selector, and never bleeding into any other
+      // application card class (Personnel/Notes/Onboarding/Offboarding/Former cards, or modals).
+      {
+        const otherCardClasses = ['employee-card', 'note-card', 'onboarding-card', 'offboarding-card', 'former-', 'modal-card', 'dashboard-widget'];
+        const leaked = otherCardClasses.filter((cls) => indexCssSrcHover.match(new RegExp(`\\.${cls}[\\w-]*:not\\(\\.skeleton-box\\):hover`)));
+        assert(
+          indexCssSrcHover.includes('.stat-card:not(.skeleton-box):hover') &&
+          !indexCssSrcHover.match(/\n\s*\.card\s*:hover|\n\s*button:hover\s*\{|\n\s*div:hover\s*\{/) &&
+          leaked.length === 0,
+          `1610. NEW — The new hover rules target .stat-card:not(.skeleton-box) specifically — no bare/generic selector (.card, button, div) was introduced, and no other application card class (Personnel/Notes/Onboarding/Offboarding/Former/modals) picked up this hover treatment (found leaked: ${JSON.stringify(leaked)})`
+        );
+      }
+
+      // 1611. NEW — DashboardSkeleton.jsx's loading placeholders (same .stat-card class, reused
+      // purely for consistent sizing) are excluded from the new hover treatment via the
+      // :not(.skeleton-box) guard — a loading skeleton is never meaningfully "hoverable".
+      assert(
+        dashboardSkeletonSrcHover.includes('className="stat-card skeleton-box"') &&
+        indexCssSrcHover.includes(':not(.skeleton-box)'),
+        '1611. NEW — DashboardSkeleton.jsx\'s 5 placeholders still carry both "stat-card" and "skeleton-box" classes, and the new hover rules explicitly exclude .skeleton-box — the loading skeleton never receives the hover lift/shadow/accent'
+      );
+
+      // 1612. REGRESSION: no layout-affecting property (border-width, padding, margin, width,
+      // height) changes on hover — only transform (compositor-only, never triggers layout) and
+      // box-shadow/border-color (paint-only, never triggers layout) are touched, so hovering one
+      // card can never shift its neighbors or itself resize.
+      assert(
+        !statCardHoverBlock.match(/border-width:|padding:|margin:|width:|height:/) &&
+        !statCardBlock.match(/\bheight:/),
+        '1612. REGRESSION: .stat-card:hover changes no layout-affecting property (border-width/padding/margin/width/height) — border-width stays 1px on hover exactly as in the default state, so no neighboring card can ever shift'
+      );
+
+      // 1613. REGRESSION: the existing responsive grid breakpoints (1270px -> 3 columns, 640px ->
+      // 2 columns, 420px -> 1 column) and the base 5-column fluid rule are completely untouched
+      // by this hover-only task.
+      assert(
+        indexCssSrcHover.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/) &&
+        indexCssSrcHover.match(/@media \(max-width: 1270px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/) &&
+        indexCssSrcHover.match(/@media \(max-width: 640px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/) &&
+        indexCssSrcHover.match(/@media \(max-width: 420px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(1, minmax\(0, 1fr\)\);/),
+        '1613. REGRESSION: .stat-cards-grid\'s existing responsive breakpoints (5 fluid columns desktop, 3 at 1270px, 2 at 640px, 1 at 420px) are byte-for-byte unchanged — this task added hover styling only, never touched the grid'
+      );
+
+      // 1614. REGRESSION: all 5 cards still render via the same shared StatCard component/
+      // .stat-card class — this task never diverged one card onto its own separate styling.
+      assert(
+        (dashboardPageSrcHover.match(/<StatCard/g) || []).length === 5 &&
+        statCardSrcHover.includes('className="stat-card"') &&
+        (statCardSrcHover.match(/className="stat-card"/g) || []).length === 1,
+        '1614. REGRESSION: DashboardPage.jsx still renders exactly 5 <StatCard> components, and StatCard.jsx still applies the single shared "stat-card" className — the hover effect is defined once and automatically applies identically to all 5 cards'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);
