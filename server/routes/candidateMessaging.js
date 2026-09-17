@@ -44,4 +44,26 @@ export const routes = {
       sendJson(res, ctx.cid, 201, result);
     },
   },
+  "/candidates/{applicantId}/documents": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { documents: await db.listDocuments(ctx.params.applicantId) });
+    },
+    async post(req, res, ctx) {
+      const body = await readJsonBody(req);
+      const id = await db.requestDocument(ctx.params.applicantId, body.documentTypeId);
+      sendJson(res, ctx.cid, 201, { document: await db.getDocument(id) });
+    },
+  },
+  "/candidate-documents/{id}": {
+    async patch(req, res, ctx) {
+      const body = await readJsonBody(req);
+      try {
+        await db.updateDocument(ctx.params.id, body);
+      } catch (error) {
+        if (error instanceof RowNotFoundError) throw new NotFoundError(error.message);
+        throw error;
+      }
+      sendJson(res, ctx.cid, 200, { document: await db.getDocument(ctx.params.id) });
+    },
+  },
 };
