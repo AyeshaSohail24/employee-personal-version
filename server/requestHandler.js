@@ -105,13 +105,20 @@ async function handleRequest(req, res, { cid, url, pathname, method }) {
 
   const matched = matchRoute(pathname);
 
-  // No API route matched — this is the SPA shell (or one of its
-  // client-side routes). Gate it on a live session (§4 step 1 / §5),
-  // same as any other authenticated page, then serve the built app.
-  // On a Vercel deployment of just /server, dist/ never exists (the SPA is
-  // its own separate Vercel project) — this falls through to the plaintext
-  // message below instead, which is harmless.
-  if (!matched && method === "GET") {
+  // No API route matched, AND this looks like a real browser page load
+  // (mirrors vercel.json's own Accept-header condition) — treat it as the
+  // SPA shell (or one of its client-side routes), gated on a live session
+  // (§4 step 1 / §5), same as any other authenticated page.
+  //
+  // On Vercel this branch never actually fires: vercel.json already routes
+  // anything with Accept: text/html straight to index.html without ever
+  // reaching this function, so nothing that gets here could be a genuine
+  // page load. It only matters for a persistent-server deployment serving
+  // a built dist/ itself (Railway, a VPS) with no such routing layer in
+  // front of it. Checking the same signal here keeps an actually-invalid
+  // API path a clean 404 (SS-5) instead of a confusing redirect, on both.
+  const acceptsHtml = /^text\/html/.test(req.headers.accept ?? "");
+  if (!matched && method === "GET" && acceptsHtml) {
     const session = readSession(req.headers.cookie);
     const live = session && (await gatewaySessionIsLive(session));
     if (!live) {
