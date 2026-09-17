@@ -14427,6 +14427,96 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Sidebar — Replace Old [R]/Rizurf/HR Branding With The Existing Rizurf Realty Logo Image
+    // (branding area only: nav labels/icons/routes/active-states/submenus untouched, top app
+    // header untouched, no new logo asset created — the already-existing images/logo-dark-mode.png
+    // is imported in place, chosen over logo-light-mode.png/Logo.png because its light wordmark is
+    // the variant readable against the sidebar's own dark navy background.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const sidebarSrcBrand = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+      const indexCssSrcBrand = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1615. NEW — The already-existing logo image is imported directly from the project's own
+      // `images/` folder — no new copy of it was created inside src/assets or public/.
+      assert(
+        /import\s+\w+\s+from\s+['"]\.\.\/\.\.\/\.\.\/images\/logo-dark-mode\.png['"]/.test(sidebarSrcBrand) &&
+        !fs.existsSync(path.resolve('./src/assets/logo-dark-mode.png')) &&
+        !fs.existsSync(path.resolve('./public/logo-dark-mode.png')) &&
+        !fs.existsSync(path.resolve('./src/assets/Logo_ver2.png')) &&
+        !fs.existsSync(path.resolve('./public/Logo_ver2.png')),
+        '1615. NEW — Sidebar.jsx imports the logo directly from images/logo-dark-mode.png in place; no duplicate copy of the logo was created under src/assets or public/'
+      );
+
+      // 1616. NEW — The rendered <img> carries the required accessible name.
+      assert(
+        /<img\s+src=\{rizurfLogo\}\s+alt="Rizurf Realty"/.test(sidebarSrcBrand),
+        '1616. NEW — The logo <img> has alt="Rizurf Realty" (not "logo" or any other generic value)'
+      );
+
+      // 1617. REGRESSION: the old square "R" icon markup is fully gone.
+      assert(
+        !sidebarSrcBrand.includes('brand-icon') &&
+        !indexCssSrcBrand.includes('.brand-icon'),
+        '1617. REGRESSION: the old .brand-icon ("R" square) markup and its CSS rule are both fully removed'
+      );
+
+      // 1618. REGRESSION: the old separate "Rizurf" text span is fully gone.
+      assert(
+        !sidebarSrcBrand.includes('brand-text') &&
+        !indexCssSrcBrand.includes('.brand-text'),
+        '1618. REGRESSION: the old .brand-text ("Rizurf" label) markup and its CSS rule are both fully removed'
+      );
+
+      // 1619. REGRESSION: the old "HR" badge is fully gone.
+      assert(
+        !sidebarSrcBrand.includes('brand-tag') &&
+        !indexCssSrcBrand.includes('.brand-tag') &&
+        !/>\s*HR\s*<\/span>/.test(sidebarSrcBrand),
+        '1619. REGRESSION: the old .brand-tag ("HR" badge) markup and its CSS rule are both fully removed'
+      );
+
+      // 1620. NEW — Aspect ratio is preserved: the logo is sized via height only, width stays
+      // `auto` (no independent width also being forced, which would distort/stretch it).
+      const brandLogoBlock = (indexCssSrcBrand.match(/\.brand-logo \{[^}]*\}/) || [''])[0];
+      assert(
+        /height:\s*\d+px/.test(brandLogoBlock) &&
+        /width:\s*auto/.test(brandLogoBlock) &&
+        !/width:\s*\d+px/.test(brandLogoBlock),
+        '1620. NEW — .brand-logo sets a fixed height with width: auto (no fixed pixel width alongside it), so the logo\'s natural aspect ratio is never stretched or squashed'
+      );
+
+      // 1621. REGRESSION: every nav route from before this task is still present, unchanged.
+      const expectedRoutes = ['/dashboard', '/employees', '/upcoming', '/onboarding/employees', '/onboarding/plans', '/offboarding/departing', '/offboarding/plans', '/former', '/notes', '/notes/pinned', '/notes/archived'];
+      const missingRoutes = expectedRoutes.filter((r) => !sidebarSrcBrand.includes(`to="${r}"`));
+      assert(
+        missingRoutes.length === 0,
+        `1621. REGRESSION: all 11 sidebar nav routes are still present in Sidebar.jsx, byte-identical to before this task (missing: ${JSON.stringify(missingRoutes)})`
+      );
+
+      // 1622. REGRESSION: the nav section structure (MAIN/PEOPLE/WORK titles, submenu toggles)
+      // is untouched — this task only changed the branding block above the <nav>.
+      assert(
+        sidebarSrcBrand.includes('>MAIN<') && sidebarSrcBrand.includes('>PEOPLE<') && sidebarSrcBrand.includes('>WORK<') &&
+        sidebarSrcBrand.includes("toggleSection('onboarding')") &&
+        sidebarSrcBrand.includes("toggleSection('offboarding')") &&
+        sidebarSrcBrand.includes("toggleSection('notes')"),
+        '1622. REGRESSION: the MAIN/PEOPLE/WORK section titles and the Onboarding/Offboarding/Notes submenu toggles are all still present and unchanged'
+      );
+
+      // 1623. REGRESSION: the logo's click-through target is still /dashboard, exactly like the
+      // old branding block's own NavLink already was — no new/removed navigation behavior.
+      assert(
+        /<NavLink\s+to="\/dashboard"\s+className="brand-title-group"\s+onClick=\{closeMobile\}>\s*<img/.test(sidebarSrcBrand),
+        '1623. NEW/REGRESSION: the branding element is still wrapped in a NavLink to="/dashboard" with the same onClick={closeMobile} handler the old branding already had — click-through behavior is preserved exactly'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);

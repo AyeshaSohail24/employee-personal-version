@@ -106,41 +106,27 @@ body {
 .brand-title-group {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
   text-decoration: none;
   color: #FFFFFF;
 }
 
-.brand-icon {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, #129FA9 0%, #0E848D 100%);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #FFFFFF;
-  font-weight: 800;
-  font-size: 1.125rem;
-  box-shadow: 0 2px 8px rgba(18, 159, 169, 0.4);
-}
-
-.brand-text {
-  font-size: 1.1rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #FFFFFF;
-}
-
-.brand-tag {
-  font-size: 0.65rem;
-  background-color: var(--color-primary);
-  color: #FFFFFF;
-  padding: 0.15rem 0.4rem;
-  border-radius: var(--radius-full);
-  font-weight: 600;
-  text-transform: uppercase;
-  margin-left: 0.25rem;
+/* The official Rizurf Realty logo (images/Logo_ver2.png) — already contains both the building
+   symbol and the "Rizurf Realty" wordmark, so no separate icon/text/badge markup exists alongside
+   it anymore. Height is constrained (not width) so the logo fits cleanly within
+   .sidebar-header's existing fixed height (var(--header-height), shared with the top app header
+   for visual alignment — intentionally left untouched by this task) with comfortable vertical
+   breathing room; width is `auto`, so the logo's real aspect ratio is never distorted.
+   logo-dark-mode.png's canvas carries noticeably more transparent vertical padding than a tightly
+   cropped mark would (visible mark content is ~74% of the canvas height), so 48px was chosen
+   (not the smaller value a naively "tight" logo would use) so the actual visible symbol+wordmark
+   reads at a comparable size to a tightly-cropped logo, rather than looking undersized because of
+   padding baked into the file. max-width: 100% is a defensive fallback only — at this height the
+   rendered width (~139px) already sits comfortably inside .sidebar-header's own horizontal padding. */
+.brand-logo {
+  height: 48px;
+  width: auto;
+  max-width: 100%;
+  display: block;
 }
 
 .sidebar-nav {
