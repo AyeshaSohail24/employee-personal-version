@@ -75,6 +75,7 @@
 DROP TABLE IF EXISTS `audit_logs`;
 DROP TABLE IF EXISTS `notifications`;
 DROP TABLE IF EXISTS `notes`;
+DROP TABLE IF EXISTS `candidate_documents`;
 DROP TABLE IF EXISTS `candidate_messages`;
 DROP TABLE IF EXISTS `applicant_conversions`;
 DROP TABLE IF EXISTS `email_templates`;
@@ -574,11 +575,35 @@ CREATE TABLE IF NOT EXISTS `candidate_messages` (
     INDEX `idx_candidate_messages_unseen` (`applicant_id`, `direction`, `is_seen`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 26. CANDIDATE_DOCUMENTS — the file-gathering step of the Upcoming pipeline:
+--     which documents have been requested from / submitted by a still-in-
+--     pipeline applicant, before they're accepted and converted. This is our
+--     own data (files WE gather), not something pushed back into the
+--     Applicants DB — see the architecture note at the top of this file on
+--     why that boundary matters. `applicant_id` is a soft ref, same as
+--     candidate_messages above.
+CREATE TABLE IF NOT EXISTS `candidate_documents` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `applicant_id` INT NOT NULL, -- soft ref -> applicants.id (Applicants DB, external)
+    `document_type_id` INT NOT NULL,
+    `status` VARCHAR(20) NOT NULL DEFAULT 'requested', -- requested | received | verified | rejected
+    `file_url` VARCHAR(500) NULL,
+    `requested_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `received_at` TIMESTAMP NULL,
+    `verified_at` TIMESTAMP NULL,
+    `verified_by` INT NULL,
+    `notes` TEXT NULL,
+    FOREIGN KEY (`document_type_id`) REFERENCES `document_types`(`id`),
+    FOREIGN KEY (`verified_by`) REFERENCES `employees`(`id`) ON DELETE SET NULL,
+    INDEX `idx_candidate_documents_applicant` (`applicant_id`),
+    INDEX `idx_candidate_documents_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ----------------------------------------------------------------------------
 -- Notes, notifications, audit trail
 -- ----------------------------------------------------------------------------
 
--- 26. NOTES — personal HR notepad (replaces the old Activities-as-notepad module)
+-- 27. NOTES — personal HR notepad (replaces the old Activities-as-notepad module)
 CREATE TABLE IF NOT EXISTS `notes` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `title` VARCHAR(255) NOT NULL,
@@ -599,7 +624,7 @@ CREATE TABLE IF NOT EXISTS `notes` (
     INDEX `idx_notes_archived` (`is_archived`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 27. NOTIFICATIONS — in-app notification center (currently only note reminders)
+-- 28. NOTIFICATIONS — in-app notification center (currently only note reminders)
 CREATE TABLE IF NOT EXISTS `notifications` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `type` VARCHAR(50) NOT NULL DEFAULT 'note_reminder',
@@ -613,7 +638,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
     INDEX `idx_notifications_read` (`is_read`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 28. AUDIT_LOGS — append-only trail (presence overrides, activity completion,
+-- 29. AUDIT_LOGS — append-only trail (presence overrides, activity completion,
 --     departure automation, applicant→employee conversions, etc.). `user_id`
 --     is intentionally a plain string (not an FK) so a logging call can never
 --     itself fail on a referential-integrity error — this table is meant to

@@ -89,6 +89,14 @@ export const openapi = {
           endpoints: ["GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "GET /email-templates", "POST /email-templates", "PATCH /email-templates/{id}"],
         },
         {
+          name: "Gather Candidate Documents",
+          icon: "📎",
+          description: "Request and track documents a candidate needs to submit before they're accepted.",
+          does: ["List a candidate's requested/submitted documents", "Request a new document", "Mark a document received, verified, or rejected"],
+          best_for: "The file-gathering phase between first-contact messaging and sending an offer.",
+          endpoints: ["GET /candidates/{applicantId}/documents", "POST /candidates/{applicantId}/documents", "PATCH /candidate-documents/{id}"],
+        },
+        {
           name: "Convert Applicants",
           icon: "🔁",
           description: "Turn an accepted applicant into a local employee and, for interns, push them into the Interns database.",
@@ -124,7 +132,7 @@ export const openapi = {
         },
         {
           name: "Message and hire a candidate",
-          steps: ["GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "POST /applicants/{applicantId}/convert"],
+          steps: ["GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/documents", "PATCH /candidate-documents/{id}", "POST /applicants/{applicantId}/convert"],
         },
       ],
       // Real ids confirmed against each service's own /health — except
@@ -352,6 +360,16 @@ export const openapi = {
     "/email-templates/{id}": {
       patch: { summary: "Edit an email draft.", security: scoped("candidate-messaging:write"),
         "x-rizurf": { name: "Update Email Draft", purpose: "Change a template's subject, body or offer type", use_when: ["Editing wording"], do_not_use_when: [], inputs: ["name", "offerType", "subject", "body"], outputs: ["template"], requires: ["Template exists"], related_endpoints: ["GET /email-templates"], tags: ["email drafts", "edit"] } },
+    },
+    "/candidates/{applicantId}/documents": {
+      get: { summary: "List a candidate's requested and submitted documents.", security: scoped("candidate-documents:read"),
+        "x-rizurf": { name: "List Candidate Documents", purpose: "See what's been requested from / submitted by a candidate", use_when: ["Opening the file-gathering tab of a candidate's thread"], do_not_use_when: [], inputs: ["applicantId"], outputs: ["documents[]"], requires: [], related_endpoints: ["POST /candidates/{applicantId}/documents"], tags: ["documents", "candidate", "file gathering"] } },
+      post: { summary: "Request a document from a candidate.", security: scoped("candidate-documents:write"),
+        "x-rizurf": { name: "Request Candidate Document", purpose: "Ask a candidate to submit a specific document", use_when: ["A candidate has passed messaging and needs to submit ID/contract documents"], do_not_use_when: [], inputs: ["applicantId", "documentTypeId"], outputs: ["document"], requires: [], related_endpoints: ["GET /candidates/{applicantId}/documents"], tags: ["documents", "request", "file gathering"] } },
+    },
+    "/candidate-documents/{id}": {
+      patch: { summary: "Mark a candidate document received, verified, or rejected.", security: scoped("candidate-documents:write"),
+        "x-rizurf": { name: "Update Candidate Document", purpose: "Record a document's submission or review outcome", use_when: ["A candidate uploads the requested file", "HR reviews a submitted document"], do_not_use_when: [], inputs: ["status", "fileUrl", "notes"], outputs: ["document"], requires: ["Document exists"], related_endpoints: ["GET /candidates/{applicantId}/documents", "POST /applicants/{applicantId}/convert"], tags: ["documents", "verify", "review"] } },
     },
     "/applicants/{applicantId}/convert": {
       post: { summary: "Accept an applicant: create their employee record and (for interns) push them to the Interns database.", security: scoped("applicant-conversion:write"),
