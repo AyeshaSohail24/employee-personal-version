@@ -1,8 +1,9 @@
 import * as db from "../db/candidateMessaging.js";
 import { RowNotFoundError } from "../db/crud.js";
-import { sendJson, NotFoundError } from "../http/errors.js";
+import { sendJson, NotFoundError, ValidationError } from "../http/errors.js";
 import { readJsonBody } from "../http/util.js";
 import { convertApplicant } from "../db/applicantConversion.js";
+import { CHANNELS } from "../messaging/index.js";
 
 export const routes = {
   "/candidates/{applicantId}/messages": {
@@ -11,6 +12,9 @@ export const routes = {
     },
     async post(req, res, ctx) {
       const body = await readJsonBody(req);
+      if (body.channel !== undefined && !CHANNELS.includes(body.channel)) {
+        throw new ValidationError(`channel must be one of: ${CHANNELS.join(", ")}.`);
+      }
       const id = await db.createMessage(ctx.params.applicantId, body);
       sendJson(res, ctx.cid, 201, { message: await db.getMessage(id) });
     },
