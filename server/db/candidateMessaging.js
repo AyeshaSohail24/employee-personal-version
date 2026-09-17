@@ -1,8 +1,8 @@
 import { listRows, getRow, insertRow, updateRow } from "./crud.js";
 import { sendCandidateMessage } from "../messaging/index.js";
 
-export function listMessages(applicantId) {
-  return listRows("candidate_messages", { where: { applicant_id: applicantId }, orderBy: "sent_at", orderDir: "ASC", limit: 500 });
+export function listMessages(applicantId, { limit, offset } = {}) {
+  return listRows("candidate_messages", { where: { applicant_id: applicantId }, orderBy: "sent_at", orderDir: "ASC", limit, offset });
 }
 
 export async function createMessage(applicantId, data) {
@@ -25,7 +25,7 @@ export async function createMessage(applicantId, data) {
 
 export const getMessage = (id) => getRow("candidate_messages", id);
 
-export const listEmailTemplates = () => listRows("email_templates", { orderBy: "name", orderDir: "ASC", limit: 200 });
+export const listEmailTemplates = ({ limit, offset } = {}) => listRows("email_templates", { orderBy: "name", orderDir: "ASC", limit, offset });
 export const getEmailTemplate = (id) => getRow("email_templates", id);
 
 export const createEmailTemplate = (data) =>
@@ -49,8 +49,8 @@ export function updateEmailTemplate(id, data) {
 // The file-gathering step of the Upcoming pipeline — see candidate_documents'
 // comment in db/schema_employees.sql for why this is our own table rather
 // than a field pushed back into the Applicants DB.
-export function listDocuments(applicantId) {
-  return listRows("candidate_documents", { where: { applicant_id: applicantId }, orderBy: "requested_at", orderDir: "ASC" });
+export function listDocuments(applicantId, { limit, offset } = {}) {
+  return listRows("candidate_documents", { where: { applicant_id: applicantId }, orderBy: "requested_at", orderDir: "ASC", limit, offset });
 }
 
 export const getDocument = (id) => getRow("candidate_documents", id);

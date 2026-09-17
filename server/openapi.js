@@ -398,7 +398,7 @@ export const openapi = {
     },
 
     "/user-accounts": {
-      get: { summary: "List local user accounts.", security: scoped("admin:users"),
+      get: { summary: "List local user accounts.", security: scoped("users:read"),
         "x-rizurf": { name: "List User Accounts", purpose: "See local role assignments keyed to gateway identities", use_when: ["Reviewing who has HR/admin access in this app"], do_not_use_when: [], inputs: [], outputs: ["userAccounts[]"], requires: [], related_endpoints: [], tags: ["users", "accounts", "roles", "admin"] } },
     },
     "/audit-logs": {

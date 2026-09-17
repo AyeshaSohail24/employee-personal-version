@@ -31,10 +31,10 @@ export function updateNote(id, data) {
 
 export const removeNote = (id) => deleteRow("notes", id);
 
-export function listNotifications(isRead) {
+export function listNotifications(isRead, { limit, offset } = {}) {
   const where = {};
   if (isRead !== undefined) where.is_read = isRead;
-  return listRows("notifications", { where, orderBy: "created_at" });
+  return listRows("notifications", { where, orderBy: "created_at", limit, offset });
 }
 
 export const markNotificationRead = (id, isRead) => updateRow("notifications", id, { is_read: isRead });

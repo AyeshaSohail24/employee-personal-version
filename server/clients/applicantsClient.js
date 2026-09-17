@@ -8,15 +8,21 @@
 // schema_applicants.sql and MUST be re-checked once that service exists.
 import { EXTERNAL_CLIENTS } from "../config.js";
 import { getServiceAccessToken } from "./gatewayClientCredentials.js";
+import { getCorrelationId } from "../http/requestContext.js";
 
 const cfg = EXTERNAL_CLIENTS.applicants;
 
 async function call(path, { method = "GET", body, scope = "applicants:read" } = {}) {
   if (!cfg.baseUrl) throw new Error("APPLICANTS_API_BASE_URL is not configured — that service isn't live yet.");
   const token = await getServiceAccessToken({ ...cfg, scope });
+  const cid = getCorrelationId();
   const response = await fetch(`${cfg.baseUrl}${path}`, {
     method,
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      ...(cid ? { "x-correlation-id": cid } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {

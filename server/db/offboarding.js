@@ -3,8 +3,8 @@ import { listRows, getRow, insertRow, updateRow, RowNotFoundError } from "./crud
 
 export { RowNotFoundError };
 
-export const listTemplates = (departmentId) =>
-  listRows("offboarding_plan_templates", { where: departmentId ? { department_id: departmentId } : {}, orderBy: "id", orderDir: "ASC" });
+export const listTemplates = (departmentId, { limit, offset } = {}) =>
+  listRows("offboarding_plan_templates", { where: departmentId ? { department_id: departmentId } : {}, orderBy: "id", orderDir: "ASC", limit, offset });
 export const getTemplate = (id) => getRow("offboarding_plan_templates", id);
 export const createTemplate = (data) =>
   insertRow("offboarding_plan_templates", { name: data.name, department_id: data.departmentId ?? null, description: data.description ?? null });

@@ -9,6 +9,8 @@ import { authorizeRedirectUrl, exchangeCodeForIdentity, CALLBACK_PATH } from "./
 import { serializeSessionCookie, readSession } from "./auth/session.js";
 import { gatewaySessionIsLive } from "./auth/introspect.js";
 import { distExists, serveIndexHtml, serveStaticAsset } from "./http/staticSite.js";
+import { runWithCorrelationId } from "./http/requestContext.js";
+import { pool } from "./db/pool.js";
 
 import { routes as employeeRoutes } from "./routes/employees.js";
 import { routes as orgStructureRoutes } from "./routes/orgStructure.js";
@@ -45,76 +47,10 @@ http
     const method = (req.method ?? "GET").toUpperCase();
 
     try {
-      // MICROAPP_AUTH.md §4 step 4 — the code exchange, server-to-server only.
-      if (pathname === CALLBACK_PATH && method === "GET") {
-        const code = url.searchParams.get("code");
-        if (!code) return sendError(res, cid, 400, "VALIDATION_ERROR", "Missing `code`.");
-        const identity = await exchangeCodeForIdentity(code);
-        res.writeHead(302, {
-          location: "/",
-          "set-cookie": serializeSessionCookie(identity),
-          ...NO_STORE,
-        });
-        return res.end();
-      }
-
-      if (pathname === "/health") {
-        return sendJson(res, cid, 200, {
-          status: "ok",
-          service: SERVICE_ID,
-          version: VERSION,
-          uptime_seconds: Math.floor((Date.now() - started) / 1000),
-          checks: { database: true },
-        });
-      }
-      if (pathname === "/openapi.json") return sendJson(res, cid, 200, openapi);
-
-      const matched = matchRoute(pathname);
-
-      // No API route matched — this is the SPA shell (or one of its
-      // client-side routes). Gate it on a live session (§4 step 1 / §5),
-      // same as any other authenticated page, then serve the built app.
-      if (!matched && method === "GET") {
-        const session = readSession(req.headers.cookie);
-        const live = session && (await gatewaySessionIsLive(session));
-        if (!live) {
-          res.writeHead(302, { location: authorizeRedirectUrl(), ...NO_STORE });
-          return res.end();
-        }
-        if (!distExists()) {
-          res.writeHead(200, { "content-type": "text/plain", ...NO_STORE });
-          return res.end("Signed in. Run `npm run build` to serve the app from this server, or use `npm run dev` for UI iteration.");
-        }
-        if (pathname !== "/" && serveStaticAsset(pathname, res)) return;
-        return serveIndexHtml(res, NO_STORE);
-      }
-
-      if (!matched) {
-        return sendError(res, cid, 404, "RESOURCE_NOT_FOUND", `No route for ${pathname}.`);
-      }
-
-      const { routeKey, params } = matched;
-      const allowed = Object.keys(openapi.paths[routeKey]).map((m) => m.toUpperCase());
-      if (!allowed.includes(method)) {
-        res.setHeader("allow", allowed.join(", "));
-        return sendError(res, cid, 405, "METHOD_NOT_ALLOWED", `${method} is not allowed on ${pathname}.`);
-      }
-
-      if (!isPublicRoute(routeKey)) {
-        const requiredScopes = requiredScopesFor(routeKey, method);
-        const auth = await authenticate(req, requiredScopes);
-        if (!auth.ok) return sendError(res, cid, auth.status, auth.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED", auth.message);
-
-        const isWrite = method !== "GET";
-        if (isWrite && !principalMayWrite(auth.principal)) {
-          return sendError(res, cid, 403, "FORBIDDEN", "Your role does not permit write access.");
-        }
-      }
-
-      const handler = routes[routeKey]?.[method.toLowerCase()];
-      if (!handler) return sendError(res, cid, 501, "NOT_IMPLEMENTED", "Not implemented.");
-
-      await handler(req, res, { cid, url, params });
+      // Runs the whole request inside a correlation-id context so outbound
+      // calls in server/clients/* can forward it (SS-4) without every
+      // function from here down needing a `cid` parameter passed through.
+      await runWithCorrelationId(cid, () => handleRequest(req, res, { cid, url, pathname, method }));
     } catch (error) {
       if (error instanceof NotFoundError) return sendError(res, cid, 404, "RESOURCE_NOT_FOUND", error.message);
       if (error instanceof ValidationError) return sendError(res, cid, 422, "VALIDATION_ERROR", error.message);
@@ -126,3 +62,84 @@ http
   .listen(PORT, () => {
     console.log(`${SERVICE_ID} listening on http://127.0.0.1:${PORT}`);
   });
+
+async function handleRequest(req, res, { cid, url, pathname, method }) {
+  // MICROAPP_AUTH.md §4 step 4 — the code exchange, server-to-server only.
+  if (pathname === CALLBACK_PATH && method === "GET") {
+    const code = url.searchParams.get("code");
+    if (!code) return sendError(res, cid, 400, "VALIDATION_ERROR", "Missing `code`.");
+    const identity = await exchangeCodeForIdentity(code);
+    res.writeHead(302, {
+      location: "/",
+      "set-cookie": serializeSessionCookie(identity),
+      ...NO_STORE,
+    });
+    return res.end();
+  }
+
+  if (pathname === "/health") {
+    // SS-2 — report `degraded` when the service is up but a dependency
+    // isn't; a hardcoded `true` here would make this endpoint worthless.
+    let databaseOk = true;
+    try {
+      await pool.query("SELECT 1");
+    } catch {
+      databaseOk = false;
+    }
+    return sendJson(res, cid, 200, {
+      status: databaseOk ? "ok" : "degraded",
+      service: SERVICE_ID,
+      version: VERSION,
+      uptime_seconds: Math.floor((Date.now() - started) / 1000),
+      checks: { database: databaseOk },
+    });
+  }
+  if (pathname === "/openapi.json") return sendJson(res, cid, 200, openapi);
+
+  const matched = matchRoute(pathname);
+
+  // No API route matched — this is the SPA shell (or one of its
+  // client-side routes). Gate it on a live session (§4 step 1 / §5),
+  // same as any other authenticated page, then serve the built app.
+  if (!matched && method === "GET") {
+    const session = readSession(req.headers.cookie);
+    const live = session && (await gatewaySessionIsLive(session));
+    if (!live) {
+      res.writeHead(302, { location: authorizeRedirectUrl(), ...NO_STORE });
+      return res.end();
+    }
+    if (!distExists()) {
+      res.writeHead(200, { "content-type": "text/plain", ...NO_STORE });
+      return res.end("Signed in. Run `npm run build` to serve the app from this server, or use `npm run dev` for UI iteration.");
+    }
+    if (pathname !== "/" && serveStaticAsset(pathname, res)) return;
+    return serveIndexHtml(res, NO_STORE);
+  }
+
+  if (!matched) {
+    return sendError(res, cid, 404, "RESOURCE_NOT_FOUND", `No route for ${pathname}.`);
+  }
+
+  const { routeKey, params } = matched;
+  const allowed = Object.keys(openapi.paths[routeKey]).map((m) => m.toUpperCase());
+  if (!allowed.includes(method)) {
+    res.setHeader("allow", allowed.join(", "));
+    return sendError(res, cid, 405, "METHOD_NOT_ALLOWED", `${method} is not allowed on ${pathname}.`);
+  }
+
+  if (!isPublicRoute(routeKey)) {
+    const requiredScopes = requiredScopesFor(routeKey, method);
+    const auth = await authenticate(req, requiredScopes);
+    if (!auth.ok) return sendError(res, cid, auth.status, auth.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED", auth.message);
+
+    const isWrite = method !== "GET";
+    if (isWrite && !principalMayWrite(auth.principal)) {
+      return sendError(res, cid, 403, "FORBIDDEN", "Your role does not permit write access.");
+    }
+  }
+
+  const handler = routes[routeKey]?.[method.toLowerCase()];
+  if (!handler) return sendError(res, cid, 501, "NOT_IMPLEMENTED", "Not implemented.");
+
+  await handler(req, res, { cid, url, params });
+}
