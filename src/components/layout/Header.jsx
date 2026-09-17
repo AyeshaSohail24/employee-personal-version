@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, Search, Bell, ChevronRight, User } from 'lucide-react';
 import { useRole } from '../../state/RoleContext';
 import { useSession } from '../../state/SessionContext';
 import { useNotifications } from '../../state/NotificationContext';
+import { employeeService } from '../../services/employeeService.js';
 import NotificationPanel from './NotificationPanel';
 
 function initialsFor(name, email) {
@@ -23,6 +24,30 @@ export default function Header({ toggleMobileSidebar }) {
 
   // Helper to construct dynamic breadcrumbs from URL pathname
   const pathSegments = location.pathname.split('/').filter(Boolean);
+
+  // Personnel Details page ("/employees/:id", exactly 2 segments) is the one route whose last
+  // breadcrumb segment should read as the person's actual name ("Home > Personnel > Aaron
+  // Kumar") rather than a formatted raw id — scoped narrowly so onboarding/offboarding's own
+  // "/onboarding/employees/:id" / "/offboarding/employees/:id" routes (3 segments, unrelated
+  // breadcrumb context) are completely unaffected. Sourced through the same employeeService the
+  // rest of the app uses, never mock data directly.
+  const isPersonnelDetailRoute = pathSegments[0] === 'employees' && pathSegments.length === 2;
+  const [personnelDetailName, setPersonnelDetailName] = useState(null);
+
+  useEffect(() => {
+    if (!isPersonnelDetailRoute) {
+      setPersonnelDetailName(null);
+      return undefined;
+    }
+    let cancelled = false;
+    employeeService.getById(pathSegments[1]).then((emp) => {
+      if (!cancelled) setPersonnelDetailName(emp ? emp.fullName : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   const formatBreadcrumbText = (segment) => {
     return segment
@@ -66,7 +91,11 @@ export default function Header({ toggleMobileSidebar }) {
           {pathSegments.map((segment, index) => {
             const url = `/${pathSegments.slice(0, index + 1).join('/')}`;
             const isLast = index === pathSegments.length - 1;
-            const label = BREADCRUMB_LABEL_OVERRIDES[url] || formatBreadcrumbText(segment);
+            const isPersonnelDetailNameSegment = isPersonnelDetailRoute && index === 1;
+            const label =
+              (isPersonnelDetailNameSegment && personnelDetailName) ||
+              BREADCRUMB_LABEL_OVERRIDES[url] ||
+              formatBreadcrumbText(segment);
 
             return (
               <React.Fragment key={url}>

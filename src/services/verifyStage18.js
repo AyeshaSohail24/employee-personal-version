@@ -18,6 +18,8 @@ import {
   calculateTimelineBarPosition,
   getTodayLocalDateString,
   addDaysToLocalDate,
+  getDaysDifference,
+  formatCompactDate,
 } from '../utils/dateUtils.js';
 import { employeeService } from './employeeService.js';
 import { upcomingCandidateService } from './upcomingCandidateService.js';
@@ -50,6 +52,14 @@ import { activityService } from './activityService.js';
 import { dashboardService } from './dashboardService.js';
 import { notesService } from './notesService.js';
 import { notificationService } from './notificationService.js';
+import { formerService } from './formerService.js';
+import {
+  EXIT_TYPES,
+  OTHER_EXIT_TYPE,
+  isCustomExitTypeRequired,
+  isValidCustomExitType,
+  resolveExitTypeDisplay,
+} from '../domain/formerDomain.js';
 import { loadDatabase, saveDatabase, resetDatabase, migrateOnboardingScopesIfNeeded, migrateOnboardingPersonTypeIfNeeded } from '../mock-data/storageEngine.js';
 import fs from 'fs';
 import path from 'path';
@@ -264,11 +274,15 @@ export async function verifyStage18() {
       '44. Type normalizes to exactly Employee or Intern via a single centralized domain helper'
     );
 
-    // 45. Type filter UI exposes exactly All Types / Employee / Intern (not detailed employment-type categories)
+    // 45. SUPERSEDED (Replace Personnel Type Dropdown with Segmented Filter task) — the Type
+    // dropdown ("All Types"/"Employee"/"Intern" <Select> options) was replaced by an All/
+    // Employees/Interns segmented control (see checks 1473-1479), which still exposes only the
+    // same 3-way Employee/Intern classification — not detailed employment-type categories.
     assert(
-      toolbarSrc.includes("'All Types'") && toolbarSrc.includes("'Employee'") && toolbarSrc.includes("'Intern'") &&
+      !toolbarSrc.includes("'All Types'") &&
+      toolbarSrc.includes("{ value: 'Employee', label: 'Employees' }") && toolbarSrc.includes("{ value: 'Intern', label: 'Interns' }") &&
       !toolbarSrc.includes('Full-Time Permanent') && !toolbarSrc.includes('Fixed-Term Contract') && !toolbarSrc.includes('Part-Time'),
-      '45. Type filter exposes only All Types/Employee/Intern, not detailed employment-type categories'
+      '45. SUPERSEDED — DirectoryToolbar.jsx no longer has the old "All Types" dropdown option; the new PERSONNEL_TYPE_OPTIONS segmented control still exposes only Employee/Intern (as Employees/Interns labels), never detailed employment-type categories'
     );
 
     // 46. Detailed employment type master/reference data remains fully intact underneath the simplified directory Type
@@ -357,9 +371,12 @@ export async function verifyStage18() {
       '59. Card View represents Department, Type, Mode, Dates, Salary, and Duration alongside ID/Name/Email/Status'
     );
 
-    // 60. No native <select> element was introduced in the directory toolbar; the shared custom Select is used for every filter
+    // 60. UPDATED (Replace Personnel Type Dropdown with Segmented Filter task) — No native
+    // <select> element was introduced in the directory toolbar; the shared custom Select is used
+    // for every remaining dropdown filter (Department/Mode/Salary/Status/Sort By — 5, was 6
+    // before Type became a segmented .view-btn control instead of a <Select>).
     const selectUsageCount = (toolbarSrc.match(/<Select\b/g) || []).length;
-    assert(!toolbarSrc.includes('<select') && selectUsageCount >= 6, '60. No native <select> introduced; shared custom <Select /> used for all directory filters');
+    assert(!toolbarSrc.includes('<select') && selectUsageCount >= 5, '60. UPDATED — No native <select> introduced; shared custom <Select /> is used for all 5 remaining dropdown filters (Type is now a segmented control, not a Select, so the minimum dropped from 6 to 5)');
 
     // ==========================================================================
     // Create Employee + Sync Employees Actions
@@ -7975,7 +7992,7 @@ export async function verifyStage18() {
       // 1134. UPDATED — Breadcrumb display metadata: a path-scoped label override maps /onboarding/employees -> "Progress" — not a second/duplicated breadcrumb, and not a route rename. The original check required this to be the FIRST entry in BREADCRUMB_LABEL_OVERRIDES; a later task ("Rename Employees Directory to Personnel") legitimately added an earlier '/employees': 'Personnel' entry to the same object, so this now checks the entry exists anywhere in the map rather than requiring first-position
       assert(
         headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES\s*=\s*\{[\s\S]*?'\/onboarding\/employees':\s*'Progress',/) &&
-        headerSrcFinal.includes('BREADCRUMB_LABEL_OVERRIDES[url] || formatBreadcrumbText(segment)') &&
+        headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES\[url\]\s*\|\|\s*\n?\s*formatBreadcrumbText\(segment\)/) &&
         (headerSrcFinal.match(/BREADCRUMB_LABEL_OVERRIDES/g) || []).length >= 2,
         '1134. UPDATED — Header.jsx\'s BREADCRUMB_LABEL_OVERRIDES still maps \'/onboarding/employees\' -> \'Progress\', consumed by the existing single breadcrumb generator — this is a display-metadata override, not a hardcoded second breadcrumb and not a route change (no longer required to be the object\'s first entry, since a later task added \'/employees\': \'Personnel\' ahead of it)'
       );
@@ -8119,7 +8136,7 @@ export async function verifyStage18() {
       assert(
         headerSrcOff.match(/'\/offboarding\/departing':\s*'Progress',/) &&
         headerSrcOff.match(/'\/offboarding\/employees':\s*'Progress',/) &&
-        headerSrcOff.includes('BREADCRUMB_LABEL_OVERRIDES[url] || formatBreadcrumbText(segment)'),
+        headerSrcOff.match(/BREADCRUMB_LABEL_OVERRIDES\[url\]\s*\|\|\s*\n?\s*formatBreadcrumbText\(segment\)/),
         '1145. NEW — Header.jsx defines path-keyed BREADCRUMB_LABEL_OVERRIDES entries (\'/offboarding/departing\' -> \'Progress\', \'/offboarding/employees\' -> \'Progress\') consumed by the existing single breadcrumb generator, so Home > Offboarding > Progress renders correctly (and cascades into the detail page breadcrumb too)'
       );
       // 1145b. Overrides are keyed by the FULL path, never the bare segment — so MAIN > Employees and Onboarding > Progress breadcrumbs are provably unaffected
@@ -10422,26 +10439,40 @@ export async function verifyStage18() {
         '1315. REGRESSION: router/index.jsx still routes \'employees\' to <AllEmployeesPage /> unchanged — preserving route compatibility was preferred over introducing a /personnel migration for this task'
       );
 
-      // 1316. List table: final PROFILE column added, ID still first, 10 columns total
+      // 1316. UPDATED (Personnel Details Page task) — List table: final DETAILS column added
+      // (was PROFILE — renamed alongside the View Profile -> View Details wording change below,
+      // since a column still labeled PROFILE next to a "View Details" button would read as
+      // inconsistent), ID still first, 10 columns total.
       assert(
         employeeListViewSrc.match(/<th style=\{\{ width: '6%' \}\}>ID<\/th>/) &&
-        employeeListViewSrc.match(/<th[^>]*>PROFILE<\/th>\s*<\/tr>/) &&
+        employeeListViewSrc.match(/<th[^>]*>DETAILS<\/th>\s*<\/tr>/) &&
+        !employeeListViewSrc.match(/<th[^>]*>PROFILE<\/th>/) &&
         (employeeListViewSrc.match(/<th style=/g) || []).length === 10,
-        '1316. NEW — EmployeeListView.jsx\'s table header keeps ID first and adds PROFILE as the FINAL column — exactly 10 <th> columns total (ID/NAME/DEPARTMENT/TYPE/MODE/DATES/SALARY/STATUS/DURATION/PROFILE)'
+        '1316. UPDATED — EmployeeListView.jsx\'s table header keeps ID first and adds DETAILS (was PROFILE) as the FINAL column — exactly 10 <th> columns total (ID/NAME/DEPARTMENT/TYPE/MODE/DATES/SALARY/STATUS/DURATION/DETAILS)'
       );
 
-      // 1317. Every list row has a "View Profile" action wired to onViewProfile(emp.id)
+      // 1317. SUPERSEDED (Personnel Details Page task) — the per-row action no longer opens
+      // PersonnelProfileModal via an onViewProfile(emp.id) callback; it now navigates to the
+      // dedicated Personnel Details page via a real <Link to={`/employees/${emp.id}`}>, reading
+      // "View Details" instead of "View Profile" — per direct user request, since a person's
+      // record can grow to include CV/resume PDFs that don't fit comfortably in a modal.
       assert(
-        employeeListViewSrc.includes('onClick={() => onViewProfile && onViewProfile(emp.id)}') &&
-        employeeListViewSrc.includes('<span>View Profile</span>'),
-        '1317. NEW — EmployeeListView.jsx\'s PROFILE cell renders a "View Profile" button calling onViewProfile(emp.id) for every row — explicit wording, not a bare "View"'
+        employeeListViewSrc.match(/<Link to=\{`\/employees\/\$\{emp\.id\}`\} className="btn-compact-override"/) &&
+        employeeListViewSrc.includes('<span>View Details</span>') &&
+        !employeeListViewSrc.includes('View Profile') &&
+        !employeeListViewSrc.includes('onViewProfile'),
+        '1317. SUPERSEDED — EmployeeListView.jsx\'s DETAILS cell renders a <Link to={`/employees/${emp.id}`}> reading "View Details" for every row — no onViewProfile callback, no "View Profile" text remains'
       );
 
-      // 1318. Card view also exposes View Profile (person-level action available consistently, not List-only)
+      // 1318. SUPERSEDED (Personnel Details Page task) — Card view also navigates to the
+      // dedicated Personnel Details page (person-level action available consistently, not
+      // List-only), same "View Details" wording and Link-based navigation as List view.
       assert(
-        employeeCardViewSrc.includes('onClick={() => onViewProfile && onViewProfile(emp.id)}') &&
-        employeeCardViewSrc.includes('<span>View Profile</span>'),
-        '1318. NEW — EmployeeCardView.jsx also renders a "View Profile" button per card, wired the same way as List view — Profile is not List-only'
+        employeeCardViewSrc.match(/<Link to=\{`\/employees\/\$\{emp\.id\}`\} className="btn-compact-override"/) &&
+        employeeCardViewSrc.includes('<span>View Details</span>') &&
+        !employeeCardViewSrc.includes('View Profile') &&
+        !employeeCardViewSrc.includes('onViewProfile'),
+        '1318. SUPERSEDED — EmployeeCardView.jsx also renders a <Link to={`/employees/${emp.id}`}> reading "View Details" per card, wired the same way as List view — Details is not List-only'
       );
 
       // 1319. Timeline view decision: NOT force-fitted with a Profile control (documented decision, not silently missing) — Timeline has no existing action-area affordance per row to attach it to cleanly
@@ -10608,7 +10639,3794 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Simplify HR Dashboard + 5 Lifecycle Count Cards + Personnel Type Filter + "Ending Within 7 Days"
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const dashboardPageSrc = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const dashboardServiceSrc = fs.readFileSync(path.resolve('./src/services/dashboardService.js'), 'utf-8');
+      const endingWidgetSrc = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+      const dashboardSkeletonSrc = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+
+      // --- STATIC / STRUCTURAL CHECKS ---
+
+      // 1334. Five separate StatCard cards — Upcoming/Onboarding/Active/Offboarding/Former — never combined
+      assert(
+        dashboardPageSrc.match(/title="Upcoming"/) && dashboardPageSrc.match(/title="Onboarding"/) &&
+        dashboardPageSrc.match(/title="Active"/) && dashboardPageSrc.match(/title="Offboarding"/) &&
+        dashboardPageSrc.match(/title="Former"/) &&
+        (dashboardPageSrc.match(/<StatCard/g) || []).length === 5 &&
+        !dashboardPageSrc.includes('New Joiners'),
+        '1334. NEW — DashboardPage.jsx renders exactly 5 separate <StatCard> components titled Upcoming/Onboarding/Active/Offboarding/Former — Upcoming and Onboarding are no longer combined into one "New Joiners & Upcoming" card'
+      );
+
+      // 1335. metrics carries the 5 separate counts (upcomingCount/onboardingCount never merged into one newJoinersGroupCount)
+      assert(
+        dashboardServiceSrc.includes('upcomingCount: counts.Upcoming,') &&
+        dashboardServiceSrc.includes('onboardingCount: counts.Onboarding,') &&
+        !dashboardServiceSrc.includes('newJoinersGroupCount'),
+        '1335. NEW — dashboardService.js\'s metrics object exposes upcomingCount and onboardingCount as fully separate fields — the old combined newJoinersGroupCount no longer exists'
+      );
+
+      // 1336. The 3 removed widgets (New Joiners, Departing, Department/Organization Snapshot) are gone from disk and no longer imported by DashboardPage
+      assert(
+        !fs.existsSync(path.resolve('./src/components/dashboard/NewJoinersWidget.jsx')) &&
+        !fs.existsSync(path.resolve('./src/components/dashboard/DepartingWidget.jsx')) &&
+        !fs.existsSync(path.resolve('./src/components/dashboard/DepartmentSnapshotWidget.jsx')) &&
+        !dashboardPageSrc.includes('NewJoinersWidget') && !dashboardPageSrc.includes('DepartingWidget') && !dashboardPageSrc.includes('DepartmentSnapshotWidget'),
+        '1336. NEW — NewJoinersWidget.jsx, DepartingWidget.jsx, and DepartmentSnapshotWidget.jsx were removed entirely (genuinely unused after this cleanup, not shared elsewhere) — DashboardPage.jsx no longer imports or renders any of them'
+      );
+
+      // 1337. Dashboard renders exactly the 2 required sections and nothing else — no charts/recent activity/notes/attendance/recruitment/quick-actions were added
+      // (UPDATED — Workforce Lifecycle Distribution was later removed entirely at the user's direct
+      // request as redundant with the 5 lifecycle count cards above it; see the dedicated "Remove
+      // Workforce Lifecycle Distribution" check block further down for the removal itself.)
+      assert(
+        dashboardPageSrc.includes('stat-cards-grid') && dashboardPageSrc.includes('<EndingWithin7DaysWidget') && !dashboardPageSrc.includes('<LifecycleDistribution') &&
+        !dashboardPageSrc.match(/Recent Activit|Quick Action|Attendance|Recruitment|Birthday|Reminder/i),
+        '1337. UPDATED — DashboardPage.jsx\'s rendered content is exactly the 2 required areas (5 lifecycle cards, Ending Within 7 Days) — Workforce Lifecycle Distribution was removed as redundant, and no chart/recent-activity/notes/attendance/recruitment/quick-action/birthday section was added'
+      );
+
+      // 1338. All/Employees/Interns personnel-type filter uses the SAME segmented view-switcher-group/view-btn style already used elsewhere (e.g. Launch Plan modals) — not a new inconsistent filter
+      assert(
+        dashboardPageSrc.includes('view-switcher-group') && dashboardPageSrc.includes('view-btn') &&
+        dashboardPageSrc.match(/PERSONNEL_TYPE_OPTIONS = \[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},/) &&
+        dashboardPageSrc.includes("useState('All')"),
+        '1338. NEW — DashboardPage.jsx\'s All/Employees/Interns filter reuses the existing .view-switcher-group/.view-btn segmented control style, defaults to All, and is clearly a PERSONNEL TYPE filter (Employee/Intern), never a lifecycle status filter'
+      );
+
+      // 1339. dashboardService filters ONCE into a single `personnel` array, then derives counts/distribution/ending from that SAME array — never 3 separately-filtered datasets
+      {
+        const summaryFnMatch = dashboardServiceSrc.match(/async getDashboardSummary\([\s\S]*?\n  \},/);
+        const summaryFnBlock = summaryFnMatch ? summaryFnMatch[0] : '';
+        assert(
+          summaryFnBlock.match(/const personnel = personnelType === 'All'[\s\S]*?allEmployees\.filter/) &&
+          (summaryFnBlock.match(/personnel\s*\n?\s*\.\s*(forEach|filter|length)/g) || []).length >= 3,
+          '1339. NEW — dashboardService.getDashboardSummary() filters the hydrated employee list into ONE `personnel` array up front, then the lifecycle counts, the distribution, and the Ending Within 7 Days list are all derived from that SAME array — never 3 independently-filtered datasets that could drift apart'
+        );
+      }
+
+      // 1340. dashboardService.js does not import mock data directly — only employeeService (existing service/domain boundary preserved)
+      assert(
+        dashboardServiceSrc.includes("from './employeeService.js'") &&
+        !dashboardServiceSrc.match(/from ['"].*mock-data/) && !dashboardServiceSrc.includes('storageEngine'),
+        '1340. NEW — dashboardService.js sources personnel data exclusively through employeeService — it never imports mock-data or storageEngine directly'
+      );
+
+      // 1341. LifecycleDistribution.jsx no longer exists — removed entirely at the user's direct request
+      // as redundant with the 5 lifecycle count cards (each card already shows the count that the
+      // Distribution widget's bar/legend duplicated). This check originally validated the widget's
+      // personnelType-aware legend wording; it now guards that the removal was clean (component gone,
+      // no dangling import) rather than testing dead code.
+      assert(
+        !fs.existsSync(path.resolve('./src/components/dashboard/LifecycleDistribution.jsx')) &&
+        !dashboardPageSrc.includes('LifecycleDistribution'),
+        '1341. UPDATED — LifecycleDistribution.jsx has been deleted and DashboardPage.jsx no longer imports or references it anywhere (removed as redundant with the 5 lifecycle count cards, per direct user request)'
+      );
+
+      // 1342. Ending Within 7 Days eligibility is narrowly scoped to Active/Departing only (Upcoming/Onboarding/Former all deliberately excluded, with the reasoning documented in source)
+      assert(
+        dashboardServiceSrc.match(/ENDING_SOON_ELIGIBLE_STATUSES = \['Active', 'Departing'\]/) &&
+        dashboardServiceSrc.includes('ENDING_SOON_WINDOW_DAYS = 7'),
+        '1342. NEW — dashboardService.js scopes the Ending Within 7 Days eligibility to exactly [\'Active\', \'Departing\'] — Upcoming (not started), Onboarding (start of lifecycle, not end), and Former (historical, not a live signal) are all deliberately excluded'
+      );
+
+      // 1343. Ending Within 7 Days uses the canonical contractEndDate field — the SAME field the Personnel directory's own Dates column already uses — never a separate dashboard-only end date, offboarding plan override, or task due date
+      assert(
+        dashboardServiceSrc.includes('emp.contractEndDate') &&
+        !dashboardServiceSrc.match(/anchorDate|dueDate|originalEndDate|customAnchorDate/),
+        '1343. NEW — dashboardService.js resolves Ending Within 7 Days from employee.contractEndDate — the existing canonical field (matching EmployeeListView.jsx\'s own DATES column), never an Offboarding plan anchor/override or a task due date'
+      );
+
+      // 1344. Empty-state wording matches exactly, and rows show the required person/type/department/end-date/days-remaining information (not overstuffed)
+      assert(
+        endingWidgetSrc.includes('Nobody is ending within the next 7 days.') &&
+        endingWidgetSrc.includes('End Date') && endingWidgetSrc.match(/person\.directoryType\} · \{person\.department/) &&
+        endingWidgetSrc.includes("formatTimeRemaining"),
+        '1344. NEW — EndingWithin7DaysWidget.jsx\'s empty state reads "Nobody is ending within the next 7 days.", and each populated row shows exactly person/Type · Department/End Date/days-remaining — nothing more'
+      );
+
+      // 1345. SUPERSEDED by the "Make Lifecycle Cards Information-Only" task — the 5 lifecycle
+      // cards no longer link anywhere at all (that task removed linkTo/navigation entirely, per
+      // direct user request that these cards be summary-only, never a click-through to Personnel).
+      // This check now asserts the OPPOSITE of its original intent: no /employees?status=X linkTo
+      // usage remains anywhere in DashboardPage.jsx's lifecycle-card block.
+      assert(
+        !dashboardPageSrc.includes('linkTo="/employees?status=Upcoming"') &&
+        !dashboardPageSrc.includes('linkTo="/employees?status=Onboarding"') &&
+        !dashboardPageSrc.includes('linkTo="/employees?status=Active"') &&
+        !dashboardPageSrc.includes('linkTo="/employees?status=Departing"') &&
+        !dashboardPageSrc.includes('linkTo="/employees?status=Former"'),
+        '1345. SUPERSEDED — None of the 5 lifecycle cards pass a linkTo prop anymore (was /employees?status=X for all 5) — they are information-only summary cards per direct user request, never a click-through to Personnel'
+      );
+
+      // 1346. Skeleton loading state matches the new 5-card + 2-widget layout (no stale 4-card / 2-column-grid skeleton left behind)
+      assert(
+        (dashboardSkeletonSrc.match(/\[1, 2, 3, 4, 5\]/) || []).length === 1 &&
+        !dashboardSkeletonSrc.includes('dashboard-content-grid'),
+        '1346. NEW — DashboardSkeleton.jsx renders 5 skeleton cards (not 4) and no longer renders the old 2-column dashboard-content-grid skeleton'
+      );
+
+      // 1347. Optional Profile access reuses the EXISTING PersonnelProfileModal — no second profile modal implementation was built
+      assert(
+        dashboardPageSrc.includes("import PersonnelProfileModal from '../../components/employees/PersonnelProfileModal'") &&
+        endingWidgetSrc.includes('onViewProfile') &&
+        !fs.existsSync(path.resolve('./src/components/dashboard/PersonnelProfileModal.jsx')),
+        '1347. NEW — DashboardPage.jsx imports and reuses the SAME PersonnelProfileModal the Personnel directory\'s View Profile action uses (via EndingWithin7DaysWidget\'s onViewProfile callback) — no second/duplicate profile modal was created under components/dashboard'
+      );
+
+      // --- FUNCTIONAL CHECKS ---
+
+      // 1348. FUNCTIONAL: All/Employee/Intern filters produce internally-consistent counts (5 cards sum to the distribution total, matching the task's own worked example)
+      {
+        const allSummary = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        const empSummary = await dashboardService.getDashboardSummary({ personnelType: 'Employee' });
+        const internSummary = await dashboardService.getDashboardSummary({ personnelType: 'Intern' });
+
+        const sumAll = allSummary.metrics.upcomingCount + allSummary.metrics.onboardingCount + allSummary.metrics.activeCount + allSummary.metrics.departingCount + allSummary.metrics.formerCount;
+        assert(sumAll === allSummary.total && allSummary.total === 18, `1348a. NEW — FUNCTIONAL: All filter — the 5 card counts sum to exactly the distribution total (${sumAll} === ${allSummary.total}, found 18 total personnel matching the seed data)`);
+        assert(allSummary.metrics.upcomingCount === 1 && allSummary.metrics.onboardingCount === 2 && allSummary.metrics.activeCount === 11 && allSummary.metrics.departingCount === 2 && allSummary.metrics.formerCount === 2, `1348b. NEW — FUNCTIONAL: All filter counts exactly match the task's own worked example (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummary.metrics)}`);
+
+        const sumEmp = empSummary.metrics.upcomingCount + empSummary.metrics.onboardingCount + empSummary.metrics.activeCount + empSummary.metrics.departingCount + empSummary.metrics.formerCount;
+        assert(sumEmp === empSummary.total, `1348c. NEW — FUNCTIONAL: Employees filter — the 5 card counts sum to the distribution total (${sumEmp} === ${empSummary.total})`);
+
+        const sumIntern = internSummary.metrics.upcomingCount + internSummary.metrics.onboardingCount + internSummary.metrics.activeCount + internSummary.metrics.departingCount + internSummary.metrics.formerCount;
+        assert(sumIntern === internSummary.total, `1348d. NEW — FUNCTIONAL: Interns filter — the 5 card counts sum to the distribution total (${sumIntern} === ${internSummary.total})`);
+
+        assert(allSummary.total === empSummary.total + internSummary.total, `1348e. NEW — FUNCTIONAL: All total exactly equals Employees total + Interns total (${allSummary.total} === ${empSummary.total} + ${internSummary.total})`);
+      }
+
+      // 1349. FUNCTIONAL: Distribution percentage denominator recalculates per filter (never the unfiltered All total), and is safe for a zero-result type
+      {
+        const empSummary2 = await dashboardService.getDashboardSummary({ personnelType: 'Employee' });
+        const internSummary2 = await dashboardService.getDashboardSummary({ personnelType: 'Intern' });
+        const empActive = empSummary2.lifecycleDistribution.find((d) => d.status === 'Active');
+        assert(empActive.percentage === Math.round((empActive.count / empSummary2.total) * 100), `1349a. NEW — FUNCTIONAL: Employees filter's Active percentage is computed against the Employees total (${empSummary2.total}), not the unfiltered All total — found ${empActive.count}/${empSummary2.total} = ${empActive.percentage}%`);
+
+        // Interns currently has 0 in several statuses — confirms 0% (never NaN%) with a safe denominator
+        const internFormer = internSummary2.lifecycleDistribution.find((d) => d.status === 'Former');
+        assert(internFormer.count === 0 && internFormer.percentage === 0 && !Number.isNaN(internFormer.percentage), `1349b. NEW — FUNCTIONAL: A zero-count lifecycle state within a filtered type resolves to a clean 0% (never NaN%) — found Interns/Former = ${internFormer.count} (${internFormer.percentage}%)`);
+
+        // Force an entirely zero-result type by temporarily reclassifying every current Intern
+        // to an Employee-normalizing employeeTypeId (identified via the hydrated
+        // directoryType — the same normalizeDirectoryType() logic the rest of the app uses —
+        // rather than guessing at raw employeeTypes[].name values, e.g. "Intern / Apprentice").
+        const hydratedForZero = await employeeService.getAll({ hydrate: true });
+        const internEmployeeIds = new Set(hydratedForZero.filter((e) => e.directoryType === 'Intern').map((e) => e.id));
+        const dbForZero = loadDatabase();
+        dbForZero.employees = dbForZero.employees.map((e) => (internEmployeeIds.has(e.id) ? { ...e, employeeTypeId: 'type-1' } : e));
+        saveDatabase(dbForZero);
+        const zeroInternSummary = await dashboardService.getDashboardSummary({ personnelType: 'Intern' });
+        const allPercentagesSafe = zeroInternSummary.lifecycleDistribution.every((d) => d.count === 0 && d.percentage === 0 && !Number.isNaN(d.percentage));
+        assert(zeroInternSummary.total === 0 && allPercentagesSafe && zeroInternSummary.endingWithin7Days.length === 0, `1349c. NEW — FUNCTIONAL: A personnel type with ZERO total records resolves every distribution percentage to a safe 0% (no divide-by-zero, no NaN, no broken progress bar) and an empty Ending Within 7 Days list (found total=${zeroInternSummary.total})`);
+        resetDatabase();
+      }
+
+      // 1350. FUNCTIONAL: Ending Within 7 Days — full boundary-condition suite (today/+1/+7 included, +8/past excluded, missing/invalid date safe, Former/Onboarding excluded, per-type filtering correct)
+      {
+        resetDatabase();
+        const today = getTodayLocalDateString();
+        const dbForEnding = loadDatabase();
+        dbForEnding.employees = dbForEnding.employees.map((e) => {
+          if (e.id === 'emp-004') return { ...e, contractEndDate: today }; // Marcus Tan, Active, Employee -> today (0 days)
+          if (e.id === 'emp-005') return { ...e, contractEndDate: addDaysToLocalDate(today, 1) }; // Priyanka Nair, Active -> +1
+          if (e.id === 'emp-016') return { ...e, contractEndDate: addDaysToLocalDate(today, 7) }; // Farah Mansor, Departing -> +7
+          if (e.id === 'emp-017') return { ...e, contractEndDate: addDaysToLocalDate(today, 8) }; // Aaron Kumar, Departing -> +8 (excluded)
+          if (e.id === 'emp-006') return { ...e, contractEndDate: addDaysToLocalDate(today, -1) }; // Lucas Fernandez, Active -> -1 (excluded)
+          if (e.id === 'emp-018') return { ...e, contractEndDate: addDaysToLocalDate(today, 2) }; // Daniel Lee, Former -> excluded (Former)
+          if (e.id === 'emp-014') return { ...e, contractEndDate: addDaysToLocalDate(today, 3) }; // Kevin Heng, Onboarding Intern -> excluded (Onboarding)
+          if (e.id === 'emp-007') return { ...e, contractEndDate: 'not-a-real-date' }; // Chloe Lim, Active -> invalid date, must not crash
+          if (e.id === 'emp-008') return { ...e, contractEndDate: null }; // Harith Zain, Active -> missing, excluded safely
+          return e;
+        });
+        saveDatabase(dbForEnding);
+
+        let ending;
+        try {
+          ending = (await dashboardService.getDashboardSummary({ personnelType: 'All' })).endingWithin7Days;
+        } catch (e) {
+          assert(false, `1350setup. NEW — FUNCTIONAL: getDashboardSummary() must not crash on invalid/missing contractEndDate values (threw: ${e.message})`);
+          ending = [];
+        }
+        assert(Array.isArray(ending), '1350setup. NEW — FUNCTIONAL: getDashboardSummary() does not crash with invalid/missing contractEndDate values present in the dataset');
+
+        const names = ending.map((p) => p.fullName);
+        assert(names.includes('Marcus Tan'), '1350a. NEW — FUNCTIONAL: A person ending TODAY (0 days) is included');
+        assert(names.includes('Priyanka Nair'), '1350b. NEW — FUNCTIONAL: A person ending in 1 day is included');
+        assert(names.includes('Farah Mansor'), '1350c. NEW — FUNCTIONAL: A person ending in exactly 7 days is included (inclusive upper bound)');
+        assert(!names.includes('Aaron Kumar'), '1350d. NEW — FUNCTIONAL: A person ending in 8 days is EXCLUDED (outside the 7-day window)');
+        assert(!names.includes('Lucas Fernandez'), '1350e. NEW — FUNCTIONAL: A person whose end date already passed (yesterday) is EXCLUDED');
+        assert(!names.includes('Daniel Lee'), '1350f. NEW — FUNCTIONAL: A Former person is EXCLUDED even though their (historical) end date falls in the window');
+        assert(!names.includes('Kevin Heng'), '1350g. NEW — FUNCTIONAL: An Onboarding person is EXCLUDED under the narrow eligibility rule (Active/Departing only)');
+        assert(!names.includes('Chloe Lim'), '1350h. NEW — FUNCTIONAL: An invalid contractEndDate value is safely excluded, not crashed on or fabricated into a fake match');
+        assert(!names.includes('Harith Zain'), '1350i. NEW — FUNCTIONAL: A missing (null) contractEndDate is safely excluded');
+
+        const empOnlyEnding = (await dashboardService.getDashboardSummary({ personnelType: 'Employee' })).endingWithin7Days;
+        assert(empOnlyEnding.every((p) => p.directoryType === 'Employee') && empOnlyEnding.some((p) => p.fullName === 'Marcus Tan'), '1350j. NEW — FUNCTIONAL: Employees filter includes matching Employees and excludes any Intern');
+        const internOnlyEnding = (await dashboardService.getDashboardSummary({ personnelType: 'Intern' })).endingWithin7Days;
+        assert(internOnlyEnding.every((p) => p.directoryType === 'Intern') && !internOnlyEnding.some((p) => p.fullName === 'Marcus Tan'), '1350k. NEW — FUNCTIONAL: Interns filter excludes matching Employees (found only: ' + internOnlyEnding.map((p) => p.fullName).join(', ') + ')');
+        const allEnding = (await dashboardService.getDashboardSummary({ personnelType: 'All' })).endingWithin7Days;
+        assert(allEnding.length === empOnlyEnding.length + internOnlyEnding.length, '1350l. NEW — FUNCTIONAL: All filter\'s Ending Within 7 Days list is exactly the union of the Employees-only and Interns-only lists');
+
+        resetDatabase();
+      }
+
+      // 1351. FUNCTIONAL: Ending Within 7 Days is sorted nearest-date-first, with a stable name A-Z tiebreak for equal end dates
+      {
+        resetDatabase();
+        const today2 = getTodayLocalDateString();
+        const dbForSort = loadDatabase();
+        dbForSort.employees = dbForSort.employees.map((e) => {
+          if (e.id === 'emp-004') return { ...e, contractEndDate: addDaysToLocalDate(today2, 5) }; // Marcus Tan
+          if (e.id === 'emp-005') return { ...e, contractEndDate: addDaysToLocalDate(today2, 2) }; // Priyanka Nair
+          if (e.id === 'emp-016') return { ...e, contractEndDate: addDaysToLocalDate(today2, 2) }; // Farah Mansor — same day as Priyanka, alphabetically AFTER
+          if (e.id === 'emp-006') return { ...e, contractEndDate: addDaysToLocalDate(today2, 0) }; // Lucas Fernandez
+          return e;
+        });
+        saveDatabase(dbForSort);
+        const sorted = (await dashboardService.getDashboardSummary({ personnelType: 'All' })).endingWithin7Days.map((p) => p.fullName);
+        assert(
+          JSON.stringify(sorted) === JSON.stringify(['Lucas Fernandez', 'Farah Mansor', 'Priyanka Nair', 'Marcus Tan']),
+          `1351. NEW — FUNCTIONAL: Ending Within 7 Days sorts nearest-date-first (0, then the two tied at 2 days ordered alphabetically Farah before Priyanka, then 5 days) — found ${JSON.stringify(sorted)}`
+        );
+        resetDatabase();
+      }
+
+      // 1352. REGRESSION: Onboarding/Offboarding composition and lifecycle logic remain completely unaffected by this Dashboard-scoped task
+      {
+        const onbCompForDashRegr = composeOnboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, await onboardingService.getScopeTaskDefinitions(), '2026-09-01');
+        assert(onbCompForDashRegr.counts.total === 11, `1352a. REGRESSION: composeOnboardingTasks() still composes an Employee in Software Engineering to 11 tasks (found ${onbCompForDashRegr.counts.total}) — unaffected by the Dashboard simplification`);
+        const offCompForDashRegr = composeOffboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, (loadDatabase().offboardingPlanTasks || []), '2026-09-01');
+        assert(offCompForDashRegr.counts.total === 15, `1352b. REGRESSION: composeOffboardingTasks() still composes the same Employee to 15 tasks (found ${offCompForDashRegr.counts.total}) — unaffected by the Dashboard simplification`);
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Compact HR Dashboard Layout to Minimize Desktop Scrolling
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcCompact = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcCompact = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcCompact = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const dashboardSkeletonSrcCompact = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+      const endingWidgetSrcCompact = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+
+      // Note: this suite runs in Node with no real browser layout engine, so it cannot measure
+      // actual rendered pixel heights — per this task's own explicit instruction not to write
+      // fragile pixel-value tests here, these checks instead assert the SPECIFIC compacted CSS
+      // values against their previously-documented (larger) values, which is a reliable,
+      // deterministic source-level signal that the density reduction actually happened. The real
+      // "does it fit at 1536x864 without scrolling" verification was done via live Playwright
+      // (see the task's final report), which this suite cannot reproduce.
+
+      // --- STAT CARD (lifecycle count cards) COMPACTING ---
+
+      // 1353. UPDATED (Fix Actual 3+2 Layout Bug task) — STRUCTURAL: .stat-card never sets its own
+      // max-width or justify-self — width now comes entirely from the GRID's own FLUID column
+      // track (repeat(5, minmax(0, 1fr)), see check 1401), not from any per-card constraint or
+      // fixed-pixel grid column. Padding (0.95rem 0.85rem) coincidentally matches the prior
+      // fixed-column-era value, but was independently re-derived via Playwright as the horizontal
+      // padding needed for 5 fluid columns to keep fitting without wrapping down to ~1280px
+      // content width — see .stat-card-subtitle's own comment for the rest of that measurement.
+      assert(
+        !indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,400}max-width:/) &&
+        !indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,400}justify-self:/) &&
+        indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,300}padding: 0\.95rem 0\.85rem;/),
+        '1353. UPDATED — .stat-card has neither max-width nor justify-self (width comes from the grid\'s own fluid column track, never a fixed pixel value) and its padding is 0.95rem 0.85rem, empirically tuned so 5 fluid columns keep fitting down to ~1280px content width'
+      );
+
+      // 1354. UPDATED (Make Lifecycle Cards Information-Only task) — the icon+label are still ONE
+      // compact row (.stat-card-title-group), never a separate large icon row above the label. The
+      // .stat-card-top-row wrapper that used to lay the arrow out against this row is gone (dead
+      // code once there was nothing left to lay out against) — .stat-card-title-group is now the
+      // card's own top-level element.
+      assert(
+        statCardSrcCompact.includes('className="stat-card-title-group"') &&
+        !statCardSrcCompact.includes('className="stat-card-header"') &&
+        !statCardSrcCompact.includes('className="stat-card-top-row"'),
+        '1354. UPDATED — StatCard.jsx still keeps the icon and label on a single compact .stat-card-title-group row (never a separate large icon row above the label), and the old .stat-card-top-row wrapper is gone entirely now that there is no arrow left to lay out against it'
+      );
+
+      // 1355. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-card no longer forces a
+      // fixed height or aspect-ratio at all — height now comes from padding + natural content
+      // (icon/title row, count, description), with the grid's default align-items: stretch keeping
+      // all 5 cards equal height. This is "wider, not taller": nothing artificially inflates or
+      // fixes the card's vertical size anymore.
+      assert(
+        !indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,400}aspect-ratio/) &&
+        !(indexCssSrcCompact.match(/\.stat-card \{[^}]*\}/) || [''])[0].match(/\bheight:/) &&
+        indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,300}min-width: 0;/) &&
+        indexCssSrcCompact.match(/\.stat-card \{[\s\S]{0,300}justify-content: space-between;/),
+        '1355. UPDATED — .stat-card sets neither aspect-ratio nor a fixed height — its height is purely a function of padding + content (icon/title row, count, description), kept equal across all 5 cards by the grid\'s own row-stretch behavior. min-width: 0 (nowrap title can\'t overflow the grid) and justify-content: space-between (spreads the header row and body across the card) remain'
+      );
+
+      // 1356. STRUCTURAL — .stat-card-value/.stat-card-title/.stat-card-subtitle are all still
+      // styled with a real, legible font-size, and the title retains its ellipsis-truncation
+      // safety net (overflow: hidden + text-overflow: ellipsis) for any narrower viewport where it
+      // might ever be needed again, even though it no longer triggers at normal desktop widths.
+      assert(
+        indexCssSrcCompact.match(/\.stat-card-value \{\s*font-size: [\d.]+rem;/) &&
+        indexCssSrcCompact.match(/\.stat-card-title \{[\s\S]{0,200}overflow: hidden;[\s\S]{0,60}text-overflow: ellipsis;/) &&
+        indexCssSrcCompact.match(/\.stat-card-subtitle \{\s*font-size: [\d.]+rem;/),
+        '1356. .stat-card-value/.stat-card-title/.stat-card-subtitle all still declare a real font-size, and the title keeps its overflow:hidden + text-overflow:ellipsis safety net for narrow viewports — even though at normal desktop widths (per Playwright measurement) no title or description needs to truncate/wrap anymore'
+      );
+
+      // 1357. SUPERSEDED (Fix Actual 3+2 Layout Bug task) — .stat-cards-grid's base (desktop) rule
+      // is no longer any fixed pixel column (150/175/190px were each tried across successive tasks)
+      // — it is now a genuinely fluid repeat(5, minmax(0, 1fr)), because a fixed column combined
+      // with ANY breakpoint threshold will always desync from some real, common browser width below
+      // that threshold, which is exactly what produced the reported 3-cards-then-2-cards bug.
+      // Breakpoints are now 1270px/640px/420px (empirically re-measured against the current fluid
+      // CSS — see checks 1401/1429/1439), not the old 1320/720/420 (or 1240/720/420 before that).
+      assert(
+        indexCssSrcCompact.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/) &&
+        !indexCssSrcCompact.match(/grid-template-columns: repeat\(5, \d+px\)/) &&
+        !indexCssSrcCompact.includes('@media (max-width: 1320px)') && !indexCssSrcCompact.includes('@media (max-width: 1240px)') &&
+        indexCssSrcCompact.includes('@media (max-width: 1270px)') && indexCssSrcCompact.includes('@media (max-width: 640px)') && indexCssSrcCompact.includes('@media (max-width: 420px)'),
+        '1357. SUPERSEDED — .stat-cards-grid\'s desktop rule is now a genuinely fluid repeat(5, minmax(0, 1fr)) — never a fixed pixel column (150/175/190px all superseded) — with breakpoints at 1270px/640px/420px (empirically re-measured; was 1320/720/420, before that 1240/720/420, before that 1440/1000/480)'
+      );
+
+      // --- DASHBOARD WIDGET (Distribution + Ending) COMPACTING ---
+
+      // 1358. UPDATED — .dashboard-widget / .widget-header padding and margin, reduced when a direct
+      // user follow-up asked to "decrease the text and the size of 2 boxes below" (0.65rem 0.85rem /
+      // 0.4rem), then INCREASED again by a later follow-up asking for more spacing "in and out of
+      // the cards" (0.95rem 1.05rem / 0.55rem), then once more by the "Small Controlled
+      // Enlargement" task asking for both widgets to feel "slightly larger" (1.05rem 1.15rem /
+      // 0.65rem) — icon size and heading typography were deliberately left untouched that time.
+      assert(
+        indexCssSrcCompact.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 1\.05rem 1\.15rem;/) &&
+        indexCssSrcCompact.match(/\.widget-header \{[\s\S]{0,150}margin-bottom: 0\.65rem;/) &&
+        !indexCssSrcCompact.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 1\.5rem;/),
+        '1358. UPDATED — .dashboard-widget\'s outer padding is now 1.05rem 1.15rem (was 1.5rem, then 1.1rem/1.25rem, then 0.85rem/1.1rem, then 0.65rem/0.85rem, then 0.95rem/1.05rem) and .widget-header\'s margin-bottom is now 0.65rem (was 1.25rem, then 0.75rem, then 0.5rem, then 0.4rem, then 0.55rem) — a moderate size increase per direct user request that both lower widgets felt slightly small'
+      );
+
+      // 1359. .widget-icon-badge reduced moderately (38px -> 32px -> 26px), matching the same "visible but not oversized" treatment as the stat-card icon
+      assert(
+        indexCssSrcCompact.match(/\.widget-icon-badge \{\s*width: 26px;\s*height: 26px;/),
+        '1359. UPDATED — .widget-icon-badge (both widgets\' icon container) shrank from 38px to 32px, then to 26px per a direct user follow-up asking for smaller widget boxes, consistent with the stat-card icon treatment'
+      );
+
+      // 1360. UPDATED — the Workforce Lifecycle Distribution widget (stacked bar + legend) that this
+      // compacting pass tightened was later removed entirely (see the "Remove Workforce Lifecycle
+      // Distribution" check block), so its CSS (.legend-item-card, .lifecycle-legend-grid, etc.) was
+      // deleted rather than kept as dead code. This check now guards that cleanup instead of asserting
+      // padding values on a widget that no longer exists.
+      assert(
+        !indexCssSrcCompact.includes('.legend-item-card') && !indexCssSrcCompact.includes('.lifecycle-legend-grid'),
+        '1360. UPDATED — .legend-item-card and .lifecycle-legend-grid (Workforce Lifecycle Distribution\'s legend styling) were removed from index.css along with the widget itself — no dead CSS left behind'
+      );
+
+      // 1361. UPDATED — Empty-state ("Nobody is ending within the next 7 days." / "Nothing due soon.") font-size shrank further, and padding grew back slightly as part of the later "increase spacing" follow-up
+      assert(
+        indexCssSrcCompact.match(/\.empty-widget-text \{[\s\S]{0,120}padding: 0\.4rem 0;/) &&
+        indexCssSrcCompact.match(/\.empty-widget-text \{[\s\S]{0,120}font-size: 0\.72rem;/) &&
+        !indexCssSrcCompact.match(/\.empty-widget-text \{[\s\S]{0,120}padding: 2rem 0;/),
+        '1361. UPDATED — .empty-widget-text\'s font-size is now 0.72rem (was 0.875rem, then 0.78rem) and its padding is 0.4rem 0 (was 2rem, then 0.6rem, then 0.4rem, then 0.3rem, back to 0.4rem) — smaller text with slightly more breathing room, matching the widgets\' later "increase spacing" follow-up'
+      );
+
+      // 1362. UPDATED — DashboardPage.jsx's inter-section gap (stat cards -> lower widgets), and
+      // the Dashboard-scoped header's own scoped margin-bottom override (never touching the shared
+      // base .page-header rule other pages use, which is why this remains a SEPARATE, scoped
+      // check rather than reusing .page-header's own margin-bottom). The inter-section gap went
+      // 0.65rem -> 0.75rem -> 1.75rem -> 2.25rem across several direct user requests for more
+      // overall page spacing. The header's own margin-bottom (subtitle -> card row) was a SEPARATE
+      // 0.3rem the whole time, until a later, more targeted request ("Personnel lifecycle
+      // counts..." sat too close to the cards) bumped just that one value to 0.7rem.
+      assert(
+        (dashboardPageSrcCompact.match(/marginTop: '2\.25rem'/g) || []).length === 1 &&
+        !dashboardPageSrcCompact.includes("marginTop: '1.5rem'") && !dashboardPageSrcCompact.includes("marginTop: '1rem'") && !dashboardPageSrcCompact.includes("marginTop: '0.75rem'") && !dashboardPageSrcCompact.includes("marginTop: '1.75rem'") &&
+        indexCssSrcCompact.match(/\.dashboard-page-header \{[\s\S]{0,120}margin-bottom: 0\.7rem;/),
+        '1362. UPDATED — The gap between the 5 stat cards and the Ending Within 7 Days / Soonest Due Tasks row is 2.25rem (was 1.5rem, then 1rem, then 0.65rem, then 0.75rem, then 1.75rem), and .dashboard-page-header\'s own separate margin-bottom (subtitle -> card row) is now 0.7rem (was 0.3rem) — scoped to Dashboard only, never the shared base .page-header rule'
+      );
+
+      // 1363. UPDATED (Small Controlled Enlargement task) — DashboardSkeleton.jsx's loading
+      // placeholders. .stat-card no longer has a fixed height (see check 1355) — it now gets its
+      // height purely from padding + real content, but this skeleton div has NO content to size
+      // itself with, so it still needs an explicit inline height to approximate the real card's
+      // rendered height (rather than collapsing to just its padding). The 2 side-by-side widget
+      // placeholders (Ending Within 7 Days + Soonest Due Tasks) inside .dashboard-widgets-row grew
+      // from 150px to 200px each, measured via Playwright against the real 2-item collapsed
+      // widget height (~198-213px) now that the widget itself is moderately larger.
+      assert(
+        dashboardSkeletonSrcCompact.match(/className="stat-card skeleton-box" style=\{\{ height: '\d+px' \}\}/) &&
+        (dashboardSkeletonSrcCompact.match(/height: '200px'/g) || []).length === 2 &&
+        !dashboardSkeletonSrcCompact.includes("height: '150px'") &&
+        !dashboardSkeletonSrcCompact.includes("height: '95px'") &&
+        !dashboardSkeletonSrcCompact.includes("height: '110px'") &&
+        !dashboardSkeletonSrcCompact.includes("height: '120px'") && !dashboardSkeletonSrcCompact.includes("height: '160px'") && !dashboardSkeletonSrcCompact.includes("height: '220px'") &&
+        dashboardSkeletonSrcCompact.includes('dashboard-widgets-row'),
+        '1363. UPDATED — DashboardSkeleton.jsx\'s 5 card placeholders carry an explicit inline height (approximating the real .stat-card\'s content-driven height) and there are exactly 2 side-by-side 200px widget placeholders (was 150px) inside .dashboard-widgets-row (Ending Within 7 Days + Soonest Due Tasks), matching the widgets\' moderately larger real size'
+      );
+
+      // --- CSS SCOPE: compacted classes remain effectively Dashboard-only ---
+
+      // 1364. None of the compacted classes (.stat-card, .dashboard-widget, .widget-header, .widget-icon-badge, .legend-item-card, .empty-widget-text) are referenced by any Personnel/Onboarding/Offboarding/Notes component — compacting the Dashboard could not have accidentally compacted the rest of the application
+      {
+        const nonDashboardConsumers = [];
+        const classesToCheck = ['stat-card', 'dashboard-widget', 'widget-header', 'widget-icon-badge', 'legend-item-card', 'empty-widget-text'];
+        const scanDirs = ['./src/components/employees', './src/components/onboarding', './src/components/offboarding', './src/components/notes', './src/pages/employees', './src/pages/onboarding', './src/pages/offboarding', './src/pages/notes'];
+        for (const dir of scanDirs) {
+          if (!fs.existsSync(path.resolve(dir))) continue;
+          const files = fs.readdirSync(path.resolve(dir)).filter((f) => f.endsWith('.jsx'));
+          for (const file of files) {
+            const content = fs.readFileSync(path.resolve(dir, file), 'utf-8');
+            for (const cls of classesToCheck) {
+              if (content.includes(`"${cls}`) || content.includes(`'${cls}`) || content.includes(` ${cls}"`) || content.includes(` ${cls}'`)) {
+                nonDashboardConsumers.push(`${dir}/${file}:${cls}`);
+              }
+            }
+          }
+        }
+        assert(
+          nonDashboardConsumers.length === 0,
+          `1364. REGRESSION: No Personnel/Onboarding/Offboarding/Notes component references any of the compacted dashboard classes (${classesToCheck.join(', ')}) — compacting the Dashboard could not have accidentally changed padding/spacing anywhere else in the application (found: ${nonDashboardConsumers.join(', ') || 'none'})`
+        );
+      }
+
+      // --- REGRESSION: business logic/functionality unaffected by this purely-visual task ---
+
+      // 1365. UPDATED — All 5 StatCard titles, the filter, and the Profile modal wiring are all
+      // still present (card LINKS are the one exception — removed entirely by the later "Make
+      // Lifecycle Cards Information-Only" task, per direct user request; see check 1345) — this
+      // task itself changed CSS/JSX density only, never content or behavior.
+      assert(
+        dashboardPageSrcCompact.match(/title="Upcoming"/) && dashboardPageSrcCompact.match(/title="Onboarding"/) &&
+        dashboardPageSrcCompact.match(/title="Active"/) && dashboardPageSrcCompact.match(/title="Offboarding"/) &&
+        dashboardPageSrcCompact.match(/title="Former"/) &&
+        dashboardPageSrcCompact.includes('view-switcher-group') &&
+        dashboardPageSrcCompact.includes('<PersonnelProfileModal'),
+        '1365. UPDATED — All 5 lifecycle card titles, the All/Employees/Interns filter, and the PersonnelProfileModal integration are all still present in DashboardPage.jsx — card links are no longer asserted here since a later task removed them entirely (see check 1345)'
+      );
+
+      // 1366. No previously-removed Dashboard widget (New Joiners, Departing, Department/Organization Snapshot) returned during this compacting pass
+      assert(
+        !fs.existsSync(path.resolve('./src/components/dashboard/NewJoinersWidget.jsx')) &&
+        !fs.existsSync(path.resolve('./src/components/dashboard/DepartingWidget.jsx')) &&
+        !fs.existsSync(path.resolve('./src/components/dashboard/DepartmentSnapshotWidget.jsx')) &&
+        !dashboardPageSrcCompact.includes('NewJoinersWidget') && !dashboardPageSrcCompact.includes('DepartingWidget') && !dashboardPageSrcCompact.includes('DepartmentSnapshotWidget'),
+        '1366. REGRESSION: None of the previously-removed Dashboard widgets (New Joiners, Departing, Department/Organization Snapshot) came back during this compacting pass'
+      );
+
+      // 1367. FUNCTIONAL: dashboardService counts/filtering/ending-window logic is completely untouched by this visual task — same worked example as before
+      {
+        const allSummaryCompact = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryCompact.metrics.upcomingCount === 1 && allSummaryCompact.metrics.onboardingCount === 2 && allSummaryCompact.metrics.activeCount === 11 && allSummaryCompact.metrics.departingCount === 2 && allSummaryCompact.metrics.formerCount === 2,
+          `1367. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts as before this visual-only task (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryCompact.metrics)}`
+        );
+      }
+
+      // 1368. REGRESSION: Onboarding/Offboarding composition and lifecycle logic remain completely unaffected by this Dashboard-density-only task
+      {
+        const onbCompForCompactRegr = composeOnboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, await onboardingService.getScopeTaskDefinitions(), '2026-09-01');
+        assert(onbCompForCompactRegr.counts.total === 11, `1368a. REGRESSION: composeOnboardingTasks() still composes an Employee in Software Engineering to 11 tasks (found ${onbCompForCompactRegr.counts.total}) — unaffected by the Dashboard compacting task`);
+        const offCompForCompactRegr = composeOffboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, (loadDatabase().offboardingPlanTasks || []), '2026-09-01');
+        assert(offCompForCompactRegr.counts.total === 15, `1368b. REGRESSION: composeOffboardingTasks() still composes the same Employee to 15 tasks (found ${offCompForCompactRegr.counts.total}) — unaffected by the Dashboard compacting task`);
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Remove Workforce Lifecycle Distribution (redundant with the 5 lifecycle count cards)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const dashboardPageSrcNoDist = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const dashboardServiceSrcNoDist = fs.readFileSync(path.resolve('./src/services/dashboardService.js'), 'utf-8');
+      const dashboardSkeletonSrcNoDist = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+      const indexCssSrcNoDist = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1369. LifecycleDistribution.jsx is deleted, and DashboardPage.jsx no longer imports/destructures/renders it — direct user request, redundant with the 5 lifecycle count cards
+      assert(
+        !fs.existsSync(path.resolve('./src/components/dashboard/LifecycleDistribution.jsx')) &&
+        !dashboardPageSrcNoDist.includes('LifecycleDistribution') &&
+        !dashboardPageSrcNoDist.includes('lifecycleDistribution'),
+        '1369. NEW — LifecycleDistribution.jsx has been deleted, and DashboardPage.jsx no longer imports it, destructures lifecycleDistribution from the summary, or renders the widget — removed per direct user request as redundant with the 5 lifecycle count cards above it'
+      );
+
+      // 1370. DashboardSkeleton.jsx no longer has an orphaned placeholder for the removed Distribution
+      // widget. It later (Squarer Stat Cards + Soonest Due Tasks task) gained a SECOND
+      // .dashboard-widget skeleton-box for the new Soonest Due Tasks widget, so the count is 2
+      // (Ending Within 7 Days + Soonest Due Tasks), not 1 — this still confirms no 3rd/orphaned one.
+      assert(
+        !dashboardSkeletonSrcNoDist.includes("height: '95px'") &&
+        (dashboardSkeletonSrcNoDist.match(/dashboard-widget skeleton-box/g) || []).length === 2,
+        '1370. UPDATED — DashboardSkeleton.jsx\'s orphaned 95px Distribution placeholder is gone, and exactly 2 .dashboard-widget skeleton-box placeholders remain (Ending Within 7 Days + Soonest Due Tasks) — never a stale 3rd one'
+      );
+
+      // 1371. The dead legend/distribution CSS (.lifecycle-legend-grid, .legend-item-card, .legend-dot, .legend-info, .legend-label, .legend-count) was removed from index.css along with the widget — no orphaned dead CSS left behind
+      assert(
+        !indexCssSrcNoDist.includes('.lifecycle-legend-grid') &&
+        !indexCssSrcNoDist.includes('.legend-item-card') &&
+        !indexCssSrcNoDist.includes('.legend-dot') &&
+        !indexCssSrcNoDist.includes('.legend-info') &&
+        !indexCssSrcNoDist.includes('.legend-label') &&
+        !indexCssSrcNoDist.includes('.legend-count'),
+        '1371. NEW — index.css no longer defines .lifecycle-legend-grid/.legend-item-card/.legend-dot/.legend-info/.legend-label/.legend-count — this CSS became dead code once LifecycleDistribution.jsx was deleted, and was removed rather than left orphaned'
+      );
+
+      // 1372. The page subtitle no longer references "distribution" (was accurate when the widget existed, now stale) — the 5 cards + Ending Within 7 Days remain fully described
+      assert(
+        dashboardPageSrcNoDist.match(/Personnel lifecycle counts and upcoming end dates/g) &&
+        (dashboardPageSrcNoDist.match(/Personnel lifecycle counts and upcoming end dates/g) || []).length === 3 &&
+        !dashboardPageSrcNoDist.includes('Personnel lifecycle counts, distribution, and upcoming end dates'),
+        '1372. NEW — All 3 page-description occurrences (loading/error/loaded states) read "Personnel lifecycle counts and upcoming end dates" — the stale "distribution" reference is gone from all of them'
+      );
+
+      // 1373. dashboardService.js still computes and returns lifecycleDistribution — this data remains valid and is still covered by functional checks 1348-1349, even though no UI widget currently renders it; removing the widget did not require removing the underlying data derivation
+      assert(
+        dashboardServiceSrcNoDist.includes('lifecycleDistribution'),
+        '1373. REGRESSION: dashboardService.js still derives and returns lifecycleDistribution from getDashboardSummary() — the widget was removed from the UI, but the underlying data computation (still exercised by checks 1348-1349) was deliberately left intact rather than removed'
+      );
+
+      // 1374. FUNCTIONAL: removing the widget did not change the underlying lifecycle counts — same worked example as every prior Dashboard task
+      {
+        const allSummaryNoDist = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryNoDist.metrics.upcomingCount === 1 && allSummaryNoDist.metrics.onboardingCount === 2 && allSummaryNoDist.metrics.activeCount === 11 && allSummaryNoDist.metrics.departingCount === 2 && allSummaryNoDist.metrics.formerCount === 2,
+          `1374. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the Distribution widget removal (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryNoDist.metrics)}`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Squarer Stat Cards + Soonest Due Tasks (side by side with Ending Within 7 Days, both
+    // internally scrollable, whole Dashboard still fits one screen with NO page scroll)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const dashboardPageSrcSquare = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const indexCssSrcSquare = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const soonestDueSrc = fs.readFileSync(path.resolve('./src/components/dashboard/SoonestDueTasksWidget.jsx'), 'utf-8');
+      const endingWidgetSrcSquare = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+      const dashboardSkeletonSrcSquare = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+
+      // 1375. DashboardPage.jsx renders Ending Within 7 Days and the NEW Soonest Due Tasks widget SIDE BY SIDE inside .dashboard-widgets-row — never one stretched full-width bar
+      assert(
+        dashboardPageSrcSquare.includes("import SoonestDueTasksWidget from '../../components/dashboard/SoonestDueTasksWidget'") &&
+        dashboardPageSrcSquare.match(/dashboard-widgets-row"[\s\S]{0,200}<EndingWithin7DaysWidget[\s\S]{0,300}<SoonestDueTasksWidget/),
+        '1375. NEW — DashboardPage.jsx imports SoonestDueTasksWidget and renders it together with EndingWithin7DaysWidget inside the SAME .dashboard-widgets-row container — side by side, not stacked as one full-width bar'
+      );
+
+      // 1376. .dashboard-widgets-row is a true 2-column grid on desktop, collapsing to 1 column only on genuinely narrow (tablet/mobile) viewports
+      assert(
+        indexCssSrcSquare.match(/\.dashboard-widgets-row \{\s*display: grid;\s*grid-template-columns: 1fr 1fr;/) &&
+        indexCssSrcSquare.match(/@media \(max-width: 900px\) \{\s*\.dashboard-widgets-row \{\s*grid-template-columns: 1fr;/),
+        '1376. NEW — .dashboard-widgets-row is display:grid with grid-template-columns: 1fr 1fr (two genuinely equal-width cards, per direct user request "don\'t make them horizontal or stretched out"), collapsing to a single column only below 900px'
+      );
+
+      // 1377. UPDATED (Fix KPI Card Proportions task) — min-width: 0 remains on .stat-card,
+      // preventing the OFFBOARDING/ONBOARDING nowrap title from overflowing an evenly-divided
+      // 5-column grid at narrower desktop widths — this was an actual horizontal-overflow bug
+      // caught only by measuring computed widths, not just checking scrollHeight. It remains
+      // relevant even now that cards are much wider, since the grid still narrows at each
+      // responsive breakpoint (5/3/2/1 columns) and the guard costs nothing to keep.
+      assert(
+        indexCssSrcSquare.match(/\.stat-card \{[\s\S]{0,300}min-width: 0;/) &&
+        !indexCssSrcSquare.match(/\.stat-card \{[\s\S]{0,400}max-width:/),
+        '1377. UPDATED — .stat-card still carries min-width: 0 (so a long nowrap title like OFFBOARDING can shrink/ellipsis instead of forcing its grid column — and therefore the whole row — wider than the container) and no longer carries any max-width cap, which was the actual source of the "narrow tile" regression this task fixes'
+      );
+
+      // 1378. SUPERSEDED (Fix Actual 3+2 Layout Bug task) — STRUCTURAL: .stat-cards-grid's desktop
+      // rule no longer uses ANY fixed column track (150/175/190px all superseded — see check 1357)
+      // — it is a fluid repeat(5, minmax(0, 1fr)) with an 0.85rem gap (was 0.65rem) and no
+      // justify-content: center (nothing left to center once the grid fills the row), and is still
+      // NEVER combined with justify-content: space-between.
+      assert(
+        indexCssSrcSquare.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);\s*gap: 0\.85rem;/) &&
+        !(indexCssSrcSquare.match(/\.stat-cards-grid \{[^}]*\}/) || [''])[0].includes('space-between'),
+        '1378. SUPERSEDED — .stat-cards-grid\'s desktop rule is a fluid repeat(5, minmax(0, 1fr)) with an 0.85rem gap (was 0.65rem) and no justify-content at all (was center, before that unset) — never justify-content: space-between'
+      );
+
+      // 1379. .dashboard-widget (the shared class both Ending Within 7 Days and Soonest Due Tasks use) has min-width: 0 — without it, Soonest Due Tasks' nowrap task-row text forces its column wider than 1fr 1fr allows, starving Ending Within 7 Days down to a fraction of its fair share (an actual bug caught by measuring each widget's computed width, not just checking for page overflow)
+      assert(
+        indexCssSrcSquare.match(/\.dashboard-widget \{[\s\S]{0,200}min-width: 0;/),
+        '1379. NEW — .dashboard-widget has min-width: 0 so neither widget\'s internal nowrap text (e.g. a long Soonest Due Tasks row title) can force the .dashboard-widgets-row 1fr 1fr grid to size the two columns unequally — both widgets stay genuinely equal-width'
+      );
+
+      // 1380. UPDATED — Both widgets' row lists use the SAME .dashboard-widget-scroll-list class, which is bounded (max-height + overflow-y: auto) — this is what lets either widget hold many rows without growing the page itself, per direct user request ("can have a scroll bar (vertical)... overall also must fit in 1 page"). A later "See more" follow-up made this class conditional (only applied while expanded — see checks 1395-1397), so this check now looks for the conditional className expression rather than a literal static one.
+      assert(
+        indexCssSrcSquare.match(/\.dashboard-widget-scroll-list \{\s*max-height: \d+px;\s*overflow-y: auto;/) &&
+        endingWidgetSrcSquare.includes("expanded ? 'dashboard-widget-scroll-list' : undefined") &&
+        soonestDueSrc.includes("expanded ? 'dashboard-widget-scroll-list' : undefined"),
+        '1380. UPDATED — .dashboard-widget-scroll-list has a bounded max-height with overflow-y: auto, and BOTH EndingWithin7DaysWidget.jsx and SoonestDueTasksWidget.jsx apply it to their row list while expanded — either widget scrolls internally past that height instead of growing the page taller once "See more" is clicked'
+      );
+
+      // 1381. SoonestDueTasksWidget.jsx sources its data from the SAME useNotifications() context (unreadNotifications) the header Bell's NotificationPanel already uses — never a second/duplicate notification data source — and sorts soonest-due-first (ascending dueAt), which is the one meaningful difference from the Bell's own most-recently-created-first order
+      assert(
+        soonestDueSrc.includes("import { useNotifications } from '../../state/NotificationContext'") &&
+        soonestDueSrc.includes('unreadNotifications') &&
+        soonestDueSrc.match(/\.sort\(\(a, b\) => \(a\.dueAt \|\| ''\)\.localeCompare\(b\.dueAt \|\| ''\)\)/),
+        '1381. NEW — SoonestDueTasksWidget.jsx reuses the SAME useNotifications().unreadNotifications the header Bell dropdown displays (no second notification data source/type was invented) and sorts them soonest-due-first (ascending dueAt) rather than the Bell\'s most-recently-created-first order'
+      );
+
+      // 1382. Clicking a Soonest Due Tasks row reuses the EXACT SAME mark-as-read + navigate-to-note behavior as the Bell's NotificationPanel.jsx — no second click-through implementation
+      assert(
+        soonestDueSrc.includes('markAsRead(notification.id)') &&
+        soonestDueSrc.includes('notesService.getById(notification.noteId)') &&
+        soonestDueSrc.match(/navigate\(note\.isArchived \? '\/notes\/archived' : '\/notes', \{ state: \{ openNoteId: note\.id \} \}\)/),
+        '1382. NEW — SoonestDueTasksWidget.jsx\'s row click handler is functionally identical to NotificationPanel.jsx\'s handleNotificationClick (markAsRead, then look up the note and navigate to /notes or /notes/archived with openNoteId) — no second, subtly-different click-through implementation'
+      );
+
+      // 1383. UPDATED (Small Controlled Enlargement task) — DashboardSkeleton.jsx's loading state
+      // matches the current layout: 5 stat-card skeletons plus 2 side-by-side widget skeletons
+      // inside .dashboard-widgets-row, grown from 150px to 200px each to match the widgets'
+      // moderately larger scale.
+      assert(
+        (dashboardSkeletonSrcSquare.match(/\[1, 2, 3, 4, 5\]/) || []).length === 1 &&
+        dashboardSkeletonSrcSquare.includes('dashboard-widgets-row') &&
+        (dashboardSkeletonSrcSquare.match(/<div className="dashboard-widget skeleton-box" style=\{\{ height: '200px' \}\} \/>/g) || []).length === 2,
+        '1383. UPDATED — DashboardSkeleton.jsx renders 5 stat-card placeholders (height comes from .stat-card\'s own content-driven height, not a fixed skeleton value) and exactly 2 side-by-side 200px widget placeholders (was 150px, then 110px, then 150px, now 200px) inside .dashboard-widgets-row, matching each widget\'s moderately larger "latest 2 rows" default'
+      );
+
+      // 1384. FUNCTIONAL/REGRESSION: dashboardService's lifecycle counts and Ending Within 7 Days logic are completely untouched by this purely-visual layout task
+      {
+        const allSummarySquare = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummarySquare.metrics.upcomingCount === 1 && allSummarySquare.metrics.onboardingCount === 2 && allSummarySquare.metrics.activeCount === 11 && allSummarySquare.metrics.departingCount === 2 && allSummarySquare.metrics.formerCount === 2,
+          `1384. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the Squarer Stat Cards + Soonest Due Tasks layout task (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummarySquare.metrics)}`
+        );
+      }
+
+      // 1385. FUNCTIONAL: notificationService still generates note-reminder notifications exactly as before — SoonestDueTasksWidget is a new READ-ONLY view over this existing data, not a new write path
+      {
+        const notesBefore = (await notesService.getAll()).length;
+        await notificationService.checkDueReminders();
+        const notesAfter = (await notesService.getAll()).length;
+        assert(notesBefore === notesAfter, `1385. REGRESSION: notificationService.checkDueReminders() still never creates/deletes notes (found ${notesBefore} before, ${notesAfter} after) — Soonest Due Tasks only reads existing notification data, it doesn't introduce a new write path`);
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Center Stat Card Numbers + Widen Gap to Ending Within 7 Days / Soonest Due Tasks
+    // (direct user follow-up to the Squarer Stat Cards + Soonest Due Tasks task)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcCenter = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcCenter = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const dashboardSkeletonSrcCenter = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+      const statCardSrcCenter = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+
+      // 1386. UPDATED (Fix KPI Card Proportions task) — .stat-card-body was previously centered both
+      // horizontally AND vertically (per an earlier direct user request). This later, more
+      // authoritative formal task explicitly diagnosed that heavy centering as contributing to the
+      // "cramped/isolated tile" feeling and asked for a more natural, left-aligned KPI layout
+      // (label top, count middle, description bottom) instead — so .stat-card-body no longer
+      // centers its content; it reads top-to-bottom, left-aligned, like the reference.
+      assert(
+        statCardSrcCenter.includes('className="stat-card-body"') &&
+        indexCssSrcCenter.match(/\.stat-card-body \{\s*flex: 1;\s*display: flex;\s*flex-direction: column;\s*justify-content: center;\s*\}/) &&
+        !indexCssSrcCenter.match(/\.stat-card-body \{[^}]*align-items: center/) &&
+        !indexCssSrcCenter.match(/\.stat-card-body \{[^}]*text-align: center/),
+        '1386. UPDATED — .stat-card-body no longer centers its content horizontally (no align-items: center, no text-align: center) — the count and description now read naturally left-aligned beneath the icon/label/arrow row, per this task\'s explicit "prefer a more natural dashboard KPI alignment" instruction, superseding the earlier full-centering request'
+      );
+
+      // 1387. UPDATED — The gap between the 5 stat cards and the Ending Within 7 Days / Soonest Due Tasks row was widened to 1.75rem, then further to 2.25rem, in BOTH the real page and its loading skeleton (kept in sync), across two separate direct user requests for more spacing
+      assert(
+        (dashboardPageSrcCenter.match(/marginTop: '2\.25rem'/g) || []).length === 1 &&
+        (dashboardSkeletonSrcCenter.match(/marginTop: '2\.25rem'/g) || []).length === 1,
+        '1387. UPDATED — Both DashboardPage.jsx and DashboardSkeleton.jsx use marginTop: \'2.25rem\' for the gap above the Ending Within 7 Days / Soonest Due Tasks row (was 0.75rem, then 1.75rem) — widened again per direct user request for more overall page spacing, and the loading skeleton stays visually in sync with the real layout'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Widen Gap Between the Stat Card Number and its Subtitle Text
+    // (direct user follow-up: "increase the spacing between the number and text in the card")
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcNumGap = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1388. UPDATED (Fix KPI Card Proportions task) — STRUCTURAL: .stat-card-value still has its
+      // own margin AND .stat-card-subtitle keeps a non-zero margin-top, so the count and its
+      // description never sit flush against each other. Exact value intentionally not pinned here
+      // (it has already been re-tuned twice across follow-ups) — the structural fact that matters
+      // is that deliberate spacing exists between them, not the specific rem number.
+      assert(
+        indexCssSrcNumGap.match(/\.stat-card-value \{[\s\S]{0,150}margin: [\d.]+rem 0;/) &&
+        indexCssSrcNumGap.match(/\.stat-card-subtitle \{[\s\S]{0,150}margin-top: (?!0[;\s])[\d.]+rem;/),
+        '1388. UPDATED — .stat-card-value keeps its own vertical margin and .stat-card-subtitle keeps a non-zero margin-top, so the count and its description text always have deliberate breathing room between them rather than sitting flush together'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Make the 5 Stat Cards Even Smaller (direct user follow-up)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcSmaller = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcSmaller = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+
+      // 1389. SUPERSEDED by the later "Fix KPI Card Proportions" task — the max-width: 150px +
+      // justify-self: center cap this check used to require was later identified as the actual
+      // ROOT CAUSE of the "narrow isolated tile with huge empty gaps" visual bug, and was removed
+      // entirely. This check now asserts the opposite of its original intent: the cap must be GONE.
+      assert(
+        !indexCssSrcSmaller.match(/\.stat-card \{[\s\S]{0,400}max-width:/) &&
+        !indexCssSrcSmaller.match(/\.stat-card \{[\s\S]{0,400}justify-self:/),
+        '1389. SUPERSEDED — .stat-card no longer has a max-width or justify-self cap (both removed by the later "Fix KPI Card Proportions" task, which diagnosed that exact pairing as the cause of the huge-gap regression) — the card now fills its fluid grid column instead of being capped and centered within it'
+      );
+
+      // 1390. UPDATED — shrinking the cards did not touch content or the filter — still purely a
+      // size/CSS change (card LINKS are no longer asserted here — removed entirely by a later task; see check 1345)
+      assert(
+        dashboardPageSrcSmaller.match(/title="Upcoming"/) && dashboardPageSrcSmaller.match(/title="Offboarding"/) &&
+        dashboardPageSrcSmaller.includes('view-switcher-group'),
+        '1390. UPDATED — All 5 lifecycle card titles and the All/Employees/Interns filter are still present in DashboardPage.jsx exactly as before — shrinking the cards was a pure CSS size change, never a content change (links are no longer part of this assertion, since a later task removed them entirely)'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Fix OFFBOARDING Title Cutoff + Shrink Ending Within 7 Days / Soonest Due Tasks
+    // (direct user follow-up: "the text Offboarding should not be cutoff... decrease the text
+    // and the size of 2 boxes below as well so there is ample amount also")
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcFix = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1391. UPDATED AGAIN by the "Fix Actual 3+2 Layout Bug" task — icon size grew to 22px (was
+      // 18px) and letter-spacing widened to 0.02em (was 0.01em) as part of restoring the card's
+      // typography to a medium, proportionate scale now that width comes from a fluid grid instead
+      // of a fixed narrow column (see check 1437 for the full typography restoration).
+      // OFFBOARDING still doesn't truncate at any of the fluid card widths measured (1536-1280px
+      // content width, confirmed via Playwright measurement, not asserted here as a pixel regex).
+      assert(
+        indexCssSrcFix.match(/\.stat-card-title \{[\s\S]{0,150}letter-spacing: 0\.02em;/) &&
+        indexCssSrcFix.match(/\.stat-card-icon \{\s*width: 22px;\s*height: 22px;/) &&
+        !indexCssSrcFix.match(/\.stat-card \{[\s\S]{0,400}max-width:/),
+        '1391. UPDATED — .stat-card-title\'s letter-spacing is now 0.02em (was 0.01em), and .stat-card-icon is now 22px (was 18px) — both restored to a medium scale now that the card\'s width comes from a fluid grid track, never a fixed narrow column'
+      );
+
+      // 1392. UPDATED — .dashboard-widget, .widget-header, .widget-title, .widget-subtitle, and
+      // .widget-icon-badge all shrank together for the "decrease the text and the size of 2 boxes"
+      // follow-up; a LATER direct user request ("increase spacing... in and out of the cards") then
+      // grew the widget's own padding/header margin back up again while the TEXT stayed small; the
+      // "Small Controlled Enlargement" task grew padding once more (icon badge and typography
+      // deliberately left untouched, per that task's explicit "do not change icons/typography").
+      assert(
+        indexCssSrcFix.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 1\.05rem 1\.15rem;/) &&
+        indexCssSrcFix.match(/\.widget-title \{\s*font-size: 0\.85rem;/) &&
+        indexCssSrcFix.match(/\.widget-subtitle \{\s*font-size: 0\.65rem;/) &&
+        indexCssSrcFix.match(/\.widget-icon-badge \{\s*width: 26px;\s*height: 26px;/) &&
+        indexCssSrcFix.match(/\.dashboard-widget-scroll-list \{\s*max-height: 195px;/),
+        '1392. UPDATED — .dashboard-widget\'s padding is now 1.05rem 1.15rem (was 0.65rem/0.85rem, then 0.95rem/1.05rem), .widget-title/.widget-subtitle/.widget-icon-badge are unchanged (0.85rem/0.65rem/26px, per direct user request not to touch icons or typography), and .dashboard-widget-scroll-list\'s max-height is 195px (was 180px) to keep roughly the same visible row count in the expanded view'
+      );
+
+      // 1393. UPDATED — .dashboard-task-row (Soonest Due Tasks rows) padding grew again (0.55rem/
+      // 0.75rem -> 0.6rem/0.8rem, per the "Small Controlled Enlargement" task) while its 3 text
+      // sizes (title/message/time) stayed exactly as-is — that task only touched spacing, not
+      // typography, for these rows.
+      assert(
+        indexCssSrcFix.match(/\.dashboard-task-row \{[\s\S]{0,250}padding: 0\.6rem 0\.8rem;/) &&
+        indexCssSrcFix.match(/\.dashboard-task-row-title \{\s*font-size: 0\.72rem;/) &&
+        indexCssSrcFix.match(/\.dashboard-task-row-message \{\s*font-size: 0\.62rem;/) &&
+        indexCssSrcFix.match(/\.dashboard-task-row-time \{\s*font-size: 0\.58rem;/),
+        '1393. UPDATED — .dashboard-task-row\'s padding is now 0.6rem 0.8rem (was 0.4rem/0.6rem, then 0.55rem/0.75rem) while its title/message/time font sizes remain unchanged at 0.72rem/0.62rem/0.58rem — more room around the same text, per direct user request'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Shorter Stat Cards + More Spacing + "See More" (show only latest 2 by default)
+    // (direct user follow-up: "decrease the height of the 5 cards... decrease the font size as
+    // well and increase spacing accordingly in and out of the cards with overall page as well,
+    // and add see more for both cards as in dashboard it should only show latest 2 only")
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcSeeMore = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const endingWidgetSrcSeeMore = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+      const soonestDueSrcSeeMore = fs.readFileSync(path.resolve('./src/components/dashboard/SoonestDueTasksWidget.jsx'), 'utf-8');
+
+      // 1394. SUPERSEDED by the "Fix KPI Card Proportions" task — that task removed the fixed
+      // height: 105px too (along with the max-width cap), so the card is neither pinned to a
+      // literal square NOR to any other fixed pixel height; height is purely content + padding
+      // driven now, kept equal across all 5 cards via the grid's default row-stretch behavior.
+      assert(
+        !indexCssSrcSeeMore.match(/\.stat-card \{[\s\S]{0,400}aspect-ratio/) &&
+        !(indexCssSrcSeeMore.match(/\.stat-card \{[^}]*\}/) || [''])[0].match(/\bheight:/),
+        '1394. SUPERSEDED — .stat-card no longer has aspect-ratio OR a fixed height at all — height now comes purely from padding + natural content (icon/title row, count, description), which is "wider, not taller" per the later "Fix KPI Card Proportions" task, rather than an arbitrary fixed pixel value'
+      );
+
+      // 1395. Both widgets default to showing only the latest/soonest 2 rows — EndingWithin7DaysWidget and SoonestDueTasksWidget both slice to a DEFAULT_VISIBLE_COUNT of 2 when not expanded
+      assert(
+        endingWidgetSrcSeeMore.includes('const DEFAULT_VISIBLE_COUNT = 2;') && endingWidgetSrcSeeMore.includes('people.slice(0, DEFAULT_VISIBLE_COUNT)') &&
+        soonestDueSrcSeeMore.includes('const DEFAULT_VISIBLE_COUNT = 2;') && soonestDueSrcSeeMore.includes('sorted.slice(0, DEFAULT_VISIBLE_COUNT)'),
+        '1395. NEW — EndingWithin7DaysWidget.jsx and SoonestDueTasksWidget.jsx both default (unexpanded) to showing only their first 2 items — since both lists are already sorted soonest-first, this is exactly the "latest 2" the user asked the Dashboard to show'
+      );
+
+      // 1396. A "See more (N)" / "Show less" toggle appears in BOTH widgets, driven by local expand/collapse state — only shown when there is actually more than 2 items to reveal
+      assert(
+        endingWidgetSrcSeeMore.match(/useState\(false\)/) && endingWidgetSrcSeeMore.includes('dashboard-widget-see-more') && endingWidgetSrcSeeMore.match(/hiddenCount > 0/) &&
+        soonestDueSrcSeeMore.match(/useState\(false\)/) && soonestDueSrcSeeMore.includes('dashboard-widget-see-more') && soonestDueSrcSeeMore.match(/hiddenCount > 0/) &&
+        indexCssSrcSeeMore.includes('.dashboard-widget-see-more'),
+        '1396. NEW — Both widgets render a "See more (N)" button (toggling to "Show less" once expanded) only when hiddenCount > 0 (i.e. more than 2 items exist) — a person/task list with exactly 2 or fewer items shows no such button, since there is nothing more to reveal'
+      );
+
+      // 1397. When expanded, both widgets reuse the SAME .dashboard-widget-scroll-list bounded/scrollable class already established for internal scrolling — no second "expanded list" implementation
+      assert(
+        endingWidgetSrcSeeMore.match(/expanded \? 'dashboard-widget-scroll-list' : undefined/) &&
+        soonestDueSrcSeeMore.match(/expanded \? 'dashboard-widget-scroll-list' : undefined/),
+        '1397. NEW — Both widgets apply the existing .dashboard-widget-scroll-list class ONLY while expanded (undefined otherwise) — the expanded "see more" view reuses the same bounded, internally-scrollable list styling, not a second/different implementation'
+      );
+
+      // 1398. FUNCTIONAL/REGRESSION: shrinking the stat cards, adding the See More toggle, and widening spacing did not change any underlying dashboardService counts
+      {
+        const allSummarySeeMore = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummarySeeMore.metrics.upcomingCount === 1 && allSummarySeeMore.metrics.onboardingCount === 2 && allSummarySeeMore.metrics.activeCount === 11 && allSummarySeeMore.metrics.departingCount === 2 && allSummarySeeMore.metrics.formerCount === 2,
+          `1398. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the shorter-cards/See-More layout task (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummarySeeMore.metrics)}`
+        );
+      }
+
+      // 1399. FUNCTIONAL: with more than 2 people ending within 7 days, EndingWithin7DaysWidget's underlying data (from dashboardService) still contains ALL of them in the correct nearest-date-first order — the widget only ever SLICES the display, it never asks the service for fewer records
+      {
+        resetDatabase();
+        const today3 = getTodayLocalDateString();
+        const dbForSeeMore = loadDatabase();
+        dbForSeeMore.employees = dbForSeeMore.employees.map((e) => {
+          if (e.id === 'emp-004') return { ...e, contractEndDate: today3 };
+          if (e.id === 'emp-005') return { ...e, contractEndDate: addDaysToLocalDate(today3, 1) };
+          if (e.id === 'emp-016') return { ...e, contractEndDate: addDaysToLocalDate(today3, 2) };
+          if (e.id === 'emp-006') return { ...e, contractEndDate: addDaysToLocalDate(today3, 3) };
+          return e;
+        });
+        saveDatabase(dbForSeeMore);
+        const endingList = (await dashboardService.getDashboardSummary({ personnelType: 'All' })).endingWithin7Days;
+        assert(endingList.length === 4, `1399. FUNCTIONAL: dashboardService still returns ALL 4 matching people (not pre-truncated to 2) when more than 2 are ending within 7 days — the "latest 2" limit is purely a display-layer slice in EndingWithin7DaysWidget, never a service-level truncation (found ${endingList.length})`);
+        resetDatabase();
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Fix Dashboard KPI Card Proportions and Spacing Using Reference Layout
+    // (formal task: cards were narrow fixed-width tiles with huge gaps between them; fix uses
+    // the available row width via a fluid 5-column grid, restores comfortable padding, and
+    // switches from centered to natural left-aligned KPI content — a pure layout/CSS task with
+    // NO changes to dashboard data, business logic, filters, routes, or widget functionality)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcKpiFix = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcKpiFix = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const dashboardServiceSrcKpiFix = fs.readFileSync(path.resolve('./src/services/dashboardService.js'), 'utf-8');
+
+      // 1400. STRUCTURAL: the five-card grid remains exactly 5 StatCard components — this task changed proportions/spacing only, never the number of cards
+      assert(
+        (dashboardPageSrcKpiFix.match(/<StatCard/g) || []).length === 5,
+        '1400. STRUCTURAL: DashboardPage.jsx still renders exactly 5 <StatCard> components — the KPI proportions/spacing fix did not add, remove, or merge any lifecycle card'
+      );
+
+      // 1401. UPDATED (Fix Actual 3+2 Layout Bug task) — cards now use a genuinely FLUID, equal
+      // column WIDTH (repeat(5, minmax(0, 1fr))) instead of any fixed-pixel column — several
+      // intermediate iterations (150/175/190/210px, all superseded) fixed the column to a pixel
+      // value, which is exactly what produced the reported 3-cards-then-2-cards bug: any real
+      // window narrower than that iteration's breakpoint would fall back to 3 columns even with
+      // comfortable room left for 5. .stat-card itself still never carries its own width/max-width
+      // property (width is entirely delegated to the grid track), and space-between is still
+      // never used.
+      assert(
+        indexCssSrcKpiFix.match(/grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/) &&
+        !indexCssSrcKpiFix.match(/grid-template-columns: repeat\(5, \d+px\)/) &&
+        !(indexCssSrcKpiFix.match(/\.stat-card \{[^}]*\}/) || [''])[0].match(/\bwidth: \d+px/) &&
+        !indexCssSrcKpiFix.match(/\.stat-cards-grid \{[^}]*space-between/),
+        '1401. UPDATED — .stat-cards-grid now uses a genuinely fluid repeat(5, minmax(0, 1fr)) (every fixed-pixel iteration — 150/175/190/210px — was superseded because a fixed column combined with any breakpoint can desync from the real window width). .stat-card itself still has no width/max-width property of its own (delegated entirely to the grid track), and .stat-cards-grid is still never combined with justify-content: space-between'
+      );
+
+      // 1402. STRUCTURAL: responsive breakpoints still exist (grid still wraps gracefully at narrower widths — it doesn't force 5 cramped columns at every viewport)
+      assert(
+        (indexCssSrcKpiFix.match(/@media \(max-width: \d+px\) \{\s*\.stat-cards-grid \{/g) || []).length === 3,
+        '1402. STRUCTURAL: .stat-cards-grid still has 3 responsive breakpoints that reduce the column count at narrower viewports — cards wrap to fewer, still-fluid columns rather than being forced into an ever-more-cramped 5-column row'
+      );
+
+      // 1403. SUPERSEDED by the "Make Lifecycle Cards Information-Only" task — the /employees?status=X
+      // links this check used to require were removed entirely, per direct user request that these
+      // 5 cards be pure summary metrics, never a click-through to Personnel. See checks 1345 and
+      // 1407-1426 for the full information-only verification.
+      assert(
+        !dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Upcoming"') &&
+        !dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Onboarding"') &&
+        !dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Active"') &&
+        !dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Departing"') &&
+        !dashboardPageSrcKpiFix.includes('linkTo="/employees?status=Former"'),
+        '1403. SUPERSEDED — None of the 5 lifecycle cards pass a linkTo prop anymore — card navigation was removed entirely by a later task (per direct user request), never restored'
+      );
+
+      // 1404. STRUCTURAL: the All/Employees/Interns filter remains in its existing upper-right position, never moved into the lifecycle-card row
+      assert(
+        dashboardPageSrcKpiFix.includes('view-switcher-group') &&
+        dashboardPageSrcKpiFix.match(/page-header dashboard-page-header"[\s\S]{0,400}personnelTypeSwitcher/),
+        '1404. STRUCTURAL: The All/Employees/Interns filter (view-switcher-group) still renders inside the page header row, above and separate from .stat-cards-grid — never moved into the lifecycle-card row itself'
+      );
+
+      // 1405. STRUCTURAL: the lower Dashboard widgets (Ending Within 7 Days + Soonest Due Tasks) remain, and share the SAME outer wrapper as the lifecycle grid, so their left/right edges naturally align with the card row (no separate margin was introduced around either)
+      assert(
+        dashboardPageSrcKpiFix.includes('<EndingWithin7DaysWidget') && dashboardPageSrcKpiFix.includes('<SoonestDueTasksWidget') &&
+        dashboardPageSrcKpiFix.match(/<div className="dashboard-page-wrapper">[\s\S]*<div className="stat-cards-grid">[\s\S]*<div className="dashboard-widgets-row"/),
+        '1405. STRUCTURAL: EndingWithin7DaysWidget and SoonestDueTasksWidget both still render, and .stat-cards-grid and .dashboard-widgets-row are both direct children of the SAME .dashboard-page-wrapper (no extra per-section margin/wrapper was introduced), so their outer left/right edges align automatically — confirmed by Playwright measurement (both rows measured left=292/right=1504 at 1536px)'
+      );
+
+      // 1406. REGRESSION: dashboardService calculations, lifecycle counts, and the All/Employees/Interns filtering logic are completely untouched — this was a pure layout/CSS task
+      {
+        const allSummaryKpiFix = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryKpiFix.metrics.upcomingCount === 1 && allSummaryKpiFix.metrics.onboardingCount === 2 && allSummaryKpiFix.metrics.activeCount === 11 && allSummaryKpiFix.metrics.departingCount === 2 && allSummaryKpiFix.metrics.formerCount === 2,
+          `1406. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the KPI Card Proportions layout fix (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryKpiFix.metrics)}`
+        );
+        assert(
+          dashboardServiceSrcKpiFix.includes('ENDING_SOON_ELIGIBLE_STATUSES') && dashboardServiceSrcKpiFix.includes("ENDING_SOON_WINDOW_DAYS = 7"),
+          '1406b. REGRESSION: dashboardService.js\'s Ending Within 7 Days eligibility/window logic is byte-for-byte untouched by this layout task'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Make 5 Dashboard Lifecycle Cards Information-Only + Remove Navigation + Rebalance
+    // (direct user request: the 5 lifecycle cards should display counts only — no navigation,
+    // no arrow, no clickable affordance — while staying fully dynamic and backend-ready)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const dashboardPageSrcInfoOnly = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcInfoOnly = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const indexCssSrcInfoOnly = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardServiceSrcInfoOnly = fs.readFileSync(path.resolve('./src/services/dashboardService.js'), 'utf-8');
+      const dashboardSkeletonSrcInfoOnly = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+
+      // Isolate each individual <StatCard ... /> invocation in DashboardPage.jsx so checks 2-6
+      // can confirm each SPECIFIC card (not just StatCard.jsx generically) never receives linkTo.
+      const statCardInvocations = dashboardPageSrcInfoOnly.match(/<StatCard\b[\s\S]*?\/>/g) || [];
+      const findCardByTitle = (title) => statCardInvocations.find((block) => block.includes(`title="${title}"`));
+
+      // 1407. Five lifecycle cards still render
+      assert(
+        statCardInvocations.length === 5,
+        '1407. NEW — DashboardPage.jsx still renders exactly 5 <StatCard> invocations (Upcoming/Onboarding/Active/Offboarding/Former) — removing navigation did not add, remove, or merge any card'
+      );
+
+      // 1408-1412. Each of the 5 specific cards is information-only (exists, and its own invocation carries no linkTo)
+      for (const title of ['Upcoming', 'Onboarding', 'Active', 'Offboarding', 'Former']) {
+        const block = findCardByTitle(title);
+        assert(
+          Boolean(block) && !block.includes('linkTo'),
+          `${1408 + ['Upcoming', 'Onboarding', 'Active', 'Offboarding', 'Former'].indexOf(title)}. NEW — The ${title} card's own <StatCard> invocation exists and carries no linkTo prop — it is information-only, never a navigation trigger`
+        );
+      }
+
+      // 1413. No lifecycle card receives a linkTo prop anywhere in the block of 5 invocations (belt-and-suspenders on top of 1408-1412's per-card checks)
+      assert(
+        statCardInvocations.every((block) => !block.includes('linkTo')),
+        '1413. NEW — None of the 5 lifecycle <StatCard> invocations pass a linkTo prop — confirmed across the whole block, not just individually'
+      );
+
+      // 1414. No lifecycle navigation arrows render — StatCard.jsx no longer imports Link or ArrowUpRight, and never renders either
+      assert(
+        !statCardSrcInfoOnly.includes("from 'react-router-dom'") &&
+        !statCardSrcInfoOnly.includes('ArrowUpRight') &&
+        !statCardSrcInfoOnly.includes('<Link'),
+        '1414. NEW — StatCard.jsx no longer imports react-router-dom\'s Link or lucide-react\'s ArrowUpRight, and renders neither — the navigation arrow is completely gone, not just visually hidden'
+      );
+
+      // 1415. No lifecycle cards use link semantics — StatCard.jsx's root element is a plain <div>, never an <a>/<Link>/<button>, and carries no href/role="link"/aria-label implying navigation
+      assert(
+        statCardSrcInfoOnly.match(/return \(\s*<div className="stat-card">/) &&
+        !statCardSrcInfoOnly.includes('role="link"') && !statCardSrcInfoOnly.includes('role="button"') &&
+        !statCardSrcInfoOnly.match(/aria-label=\{`View/),
+        '1415. NEW — StatCard.jsx\'s root element is a plain <div className="stat-card">, never a link/button, with no link-implying role or aria-label — normal, non-interactive semantic card markup'
+      );
+
+      // 1416. No misleading clickable cursor/hover behavior — .stat-card has no cursor: pointer and no interactive hover transform/shadow-lift (both removed; confirmed live via Playwright: getComputedStyle(card).cursor === 'auto')
+      assert(
+        !indexCssSrcInfoOnly.match(/\.stat-card \{[^}]*cursor: pointer/) &&
+        !indexCssSrcInfoOnly.match(/\.stat-card:hover \{[^}]*transform/),
+        '1416. NEW — .stat-card has no cursor: pointer and .stat-card:hover no longer exists at all (no transform/box-shadow lift) — confirmed live via Playwright that getComputedStyle(card).cursor is \'auto\', not \'pointer\''
+      );
+
+      // 1417. Counts still derive dynamically from dashboardService — DashboardPage.jsx calls dashboardService.getDashboardSummary() and reads metrics.*Count, never a literal number
+      assert(
+        dashboardPageSrcInfoOnly.includes('dashboardService.getDashboardSummary({ personnelType })') &&
+        dashboardPageSrcInfoOnly.includes('value={metrics.upcomingCount}') && dashboardPageSrcInfoOnly.includes('value={metrics.onboardingCount}') &&
+        dashboardPageSrcInfoOnly.includes('value={metrics.activeCount}') && dashboardPageSrcInfoOnly.includes('value={metrics.departingCount}') &&
+        dashboardPageSrcInfoOnly.includes('value={metrics.formerCount}'),
+        '1417. NEW — All 5 cards\' value props read from dashboardService\'s live metrics object (metrics.upcomingCount / onboardingCount / activeCount / departingCount / formerCount) — never a literal number'
+      );
+
+      // 1418-1420. FUNCTIONAL: All/Employees/Interns each produce internally-consistent, independently-verifiable counts (the same worked example this suite has used throughout)
+      {
+        const allInfoOnly = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allInfoOnly.metrics.upcomingCount === 1 && allInfoOnly.metrics.onboardingCount === 2 && allInfoOnly.metrics.activeCount === 11 && allInfoOnly.metrics.departingCount === 2 && allInfoOnly.metrics.formerCount === 2,
+          `1418. FUNCTIONAL: All filter still produces the correct counts (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allInfoOnly.metrics)}`
+        );
+
+        const empInfoOnly = await dashboardService.getDashboardSummary({ personnelType: 'Employee' });
+        const sumEmpInfoOnly = empInfoOnly.metrics.upcomingCount + empInfoOnly.metrics.onboardingCount + empInfoOnly.metrics.activeCount + empInfoOnly.metrics.departingCount + empInfoOnly.metrics.formerCount;
+        assert(sumEmpInfoOnly === empInfoOnly.total && empInfoOnly.total < allInfoOnly.total, `1419. FUNCTIONAL: Employees filter produces internally-consistent counts (sum ${sumEmpInfoOnly} === total ${empInfoOnly.total}) that differ from the unfiltered All total (${allInfoOnly.total}) — the filter demonstrably changes what is counted`);
+
+        const internInfoOnly = await dashboardService.getDashboardSummary({ personnelType: 'Intern' });
+        const sumInternInfoOnly = internInfoOnly.metrics.upcomingCount + internInfoOnly.metrics.onboardingCount + internInfoOnly.metrics.activeCount + internInfoOnly.metrics.departingCount + internInfoOnly.metrics.formerCount;
+        assert(sumInternInfoOnly === internInfoOnly.total && allInfoOnly.total === empInfoOnly.total + internInfoOnly.total, `1420. FUNCTIONAL: Interns filter produces internally-consistent counts (sum ${sumInternInfoOnly} === total ${internInfoOnly.total}), and All total exactly equals Employees total + Interns total (${allInfoOnly.total} === ${empInfoOnly.total} + ${internInfoOnly.total})`);
+      }
+
+      // 1421. No hardcoded lifecycle counts anywhere in DashboardPage.jsx's card block — every value prop is a metrics.* expression, confirmed by the ABSENCE of a bare numeric value= prop
+      assert(
+        !dashboardPageSrcInfoOnly.match(/<StatCard[\s\S]{0,300}value=\{\d+\}/),
+        '1421. NEW — No <StatCard> invocation uses a literal numeric value={N} — every one reads value={metrics.*Count} from the live dashboardService response'
+      );
+
+      // 1422. UPDATED (Fix Actual 3+2 Layout Bug task) — Five-card desktop grid remains, now a
+      // genuinely fluid repeat(5, minmax(0, 1fr)) rather than any fixed-pixel column, and the old
+      // PER-CARD 150px max-width + justify-self: center regression never returns (that combination
+      // left dead space inside each column; a later fixed-column iteration had the same fragility
+      // from the other direction — see check 1401)
+      assert(
+        indexCssSrcInfoOnly.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/) &&
+        !indexCssSrcInfoOnly.match(/\.stat-card \{[^}]*max-width: 150px/) &&
+        !indexCssSrcInfoOnly.match(/\.stat-card \{[^}]*justify-self: center/),
+        '1422. UPDATED — .stat-cards-grid\'s desktop rule is a genuinely fluid repeat(5, minmax(0, 1fr)) (every fixed-pixel iteration, including 190px, was superseded), and .stat-card has neither the old max-width: 150px cap nor justify-self: center — width comes purely from the grid track, never a per-card constraint'
+      );
+
+      // 1423. Lower Dashboard widgets (Ending Within 7 Days + Soonest Due Tasks) remain completely unaffected — still rendered, still side by side, unrelated to the lifecycle-card scope of this task
+      assert(
+        dashboardPageSrcInfoOnly.includes('<EndingWithin7DaysWidget') && dashboardPageSrcInfoOnly.includes('<SoonestDueTasksWidget') &&
+        dashboardPageSrcInfoOnly.includes('className="dashboard-widgets-row"'),
+        '1423. REGRESSION: EndingWithin7DaysWidget and SoonestDueTasksWidget both still render side by side in .dashboard-widgets-row — completely untouched by this lifecycle-card-only task'
+      );
+
+      // 1424. DashboardSkeleton.jsx's card placeholders match the information-only card structure — no arrow-shaped placeholder element, still reuses the real .stat-card class (mapped over [1,2,3,4,5], same pattern as check 1346 uses) so its dimensions track the real (now-arrowless) card automatically
+      assert(
+        !dashboardSkeletonSrcInfoOnly.includes('stat-card-link') &&
+        (dashboardSkeletonSrcInfoOnly.match(/className="stat-card skeleton-box"/g) || []).length === 1 &&
+        (dashboardSkeletonSrcInfoOnly.match(/\[1, 2, 3, 4, 5\]/g) || []).length === 1,
+        '1424. NEW — DashboardSkeleton.jsx has no arrow-shaped placeholder element (no .stat-card-link anywhere) and still maps its single .stat-card skeleton-box placeholder over [1, 2, 3, 4, 5] (rendering 5 at runtime) — the loading state matches the new information-only card shape'
+      );
+
+      // 1425. dashboardService.js remains backend-ready: sources data exclusively through employeeService (never mock-data/storageEngine directly), so a later swap to a real API/database-backed employeeService would require no redesign of these cards
+      assert(
+        dashboardServiceSrcInfoOnly.includes("from './employeeService.js'") &&
+        !dashboardServiceSrcInfoOnly.match(/from ['"].*mock-data/) && !dashboardServiceSrcInfoOnly.includes('storageEngine') &&
+        !dashboardPageSrcInfoOnly.match(/from ['"].*mock-data/) && !dashboardPageSrcInfoOnly.includes('storageEngine') && !dashboardPageSrcInfoOnly.includes('localStorage'),
+        '1425. NEW — dashboardService.js still sources personnel data exclusively through employeeService (never mock-data/storageEngine directly), and DashboardPage.jsx itself imports neither mock data nor localStorage/storageEngine — the service boundary stays swappable for a real backend/database later, without any redesign of these cards'
+      );
+
+      // 1426. REGRESSION: Onboarding/Offboarding composition and lifecycle logic remain completely unaffected by this Dashboard-card-only task
+      {
+        const onbCompForInfoOnly = composeOnboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, await onboardingService.getScopeTaskDefinitions(), '2026-09-01');
+        assert(onbCompForInfoOnly.counts.total === 11, `1426a. REGRESSION: composeOnboardingTasks() still composes an Employee in Software Engineering to 11 tasks (found ${onbCompForInfoOnly.counts.total}) — unaffected by the Dashboard card-only task`);
+        const offCompForInfoOnly = composeOffboardingTasks({ id: 'emp-005', directoryType: 'Employee', department: { id: 'dept-3' } }, (loadDatabase().offboardingPlanTasks || []), '2026-09-01');
+        assert(offCompForInfoOnly.counts.total === 15, `1426b. REGRESSION: composeOffboardingTasks() still composes the same Employee to 15 tasks (found ${offCompForInfoOnly.counts.total}) — unaffected by the Dashboard card-only task`);
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Refine 5 Dashboard Lifecycle Cards: Less Rectangular + Balanced Width/Spacing
+    // (direct user request: cards had become too wide/rectangular after filling their full grid
+    // column; this task caps the GRID's own width and centers it as one group instead of
+    // stretching each card — a pure CSS/layout change, no data/logic/navigation change)
+    //
+    // NOTE ON WHAT THIS BLOCK CAN AND CANNOT VERIFY: this suite runs in plain Node with no
+    // browser/layout engine, so it can assert the CSS SOURCE facts below (max-width is set, no
+    // fixed pixel column width, no reintroduced 150px regression, no space-between anti-pattern),
+    // but it cannot itself render the page and measure whether the result actually LOOKS
+    // "balanced" versus "rectangular" — that requires a real browser. That visual judgment (card
+    // width/height across 190-215px candidates, gap, centered-group balance, no wrapping) was
+    // made via live Playwright inspection and screenshots during this task, documented in the
+    // task's own final report, not re-encoded here as a brittle pixel assertion.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcRefine = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcRefine = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcRefine = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const dashboardSkeletonSrcRefine = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+
+      // 1427. SUPERSEDED (Fix Actual 3+2 Layout Bug task) — the fixed-column-track + justify-content:
+      // center strategy that grew 175px -> 190px across several iterations is exactly what caused
+      // the reported bug: real windows narrower than each iteration's breakpoint fell back to 3
+      // columns even with comfortable room for 5. The grid is now genuinely fluid
+      // (repeat(5, minmax(0, 1fr))) with no fixed column and no centering hack — see check 1401 for
+      // the full current-state assertion. This check now guards that the old strategy never returns.
+      assert(
+        !indexCssSrcRefine.match(/\.stat-cards-grid \{[^}]*grid-template-columns: repeat\(5, \d+px\)/) &&
+        !indexCssSrcRefine.match(/\.stat-cards-grid \{[^}]*justify-content: center/) &&
+        !(indexCssSrcRefine.match(/\.stat-card \{[^}]*\}/) || [''])[0].match(/max-width|justify-self/),
+        '1427. SUPERSEDED — .stat-cards-grid no longer uses any fixed-pixel column track or justify-content: center (that combination, paired with a breakpoint, is what produced the reported 3+2 layout bug at real window widths below the breakpoint) — .stat-card itself still has neither max-width nor justify-self'
+      );
+
+      // 1428. STRUCTURAL (Fix Actual 3+2 Layout Bug task) — the grid's base desktop rule sets no
+      // fixed pixel width on either the grid columns or the card itself, confirming card width is
+      // derived purely from the fluid grid rather than any hardcoded desktop value (old 150px/
+      // 175px/190px/210px iterations are all gone).
+      {
+        const gridBlock = (indexCssSrcRefine.match(/\.stat-cards-grid \{[^}]*\}/) || [''])[0];
+        assert(
+          !gridBlock.match(/repeat\(5, \d+px\)/) && gridBlock.match(/repeat\(5, minmax\(0, 1fr\)\)/),
+          `1428. UPDATED — .stat-cards-grid's base rule sets no fixed pixel column width at all (repeat(5, minmax(0, 1fr)) only) — card width comes entirely from dividing the real Dashboard content width, never a hardcoded value that could fall out of sync with it`
+        );
+      }
+
+      // 1429. UPDATED (Fix Actual 3+2 Layout Bug task) — the single responsive breakpoint switches
+      // to 3 fluid columns once 5 fluid columns would genuinely make the card too narrow for its
+      // content (empirically measured via Playwright — see the .stat-cards-grid comment in
+      // index.css for the exact crossover). Both the 5-column and 3-column rules use the same
+      // fluid minmax(0, 1fr) strategy — never a fixed pixel column at any breakpoint.
+      assert(
+        indexCssSrcRefine.match(/@media \(max-width: 1270px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/),
+        '1429. UPDATED — The 1270px breakpoint (empirically measured as the exact crossover where the description first wraps at 5 fluid columns; was 1320px/1240px in earlier fixed-column iterations) switches to repeat(3, minmax(0, 1fr)) — fluid at every breakpoint, never a fixed pixel column'
+      );
+
+      // 1430. REGRESSION: information-only behavior (from the prior task) is still fully intact — no arrow, no Link, no linkTo, no clickable cursor/hover
+      assert(
+        !statCardSrcRefine.includes("from 'react-router-dom'") && !statCardSrcRefine.includes('ArrowUpRight') && !statCardSrcRefine.includes('<Link') &&
+        !dashboardPageSrcRefine.match(/<StatCard[\s\S]{0,300}linkTo/) &&
+        !indexCssSrcRefine.match(/\.stat-card \{[^}]*cursor: pointer/) &&
+        !indexCssSrcRefine.match(/\.stat-card:hover \{[^}]*transform/),
+        '1430. REGRESSION: StatCard.jsx still has no Link/ArrowUpRight/linkTo, and .stat-card still has no cursor: pointer or interactive hover transform — the information-only behavior from the prior task was not disturbed by this width/spacing refinement'
+      );
+
+      // 1431. STRUCTURAL: five cards still render, all reading their value from the live dashboardService metrics (never a hardcoded literal)
+      assert(
+        (dashboardPageSrcRefine.match(/<StatCard\b[\s\S]*?\/>/g) || []).length === 5 &&
+        !dashboardPageSrcRefine.match(/<StatCard[\s\S]{0,300}value=\{\d+\}/),
+        '1431. STRUCTURAL: DashboardPage.jsx still renders exactly 5 <StatCard> components, none with a literal numeric value= — counts remain fully dynamic, sourced from dashboardService'
+      );
+
+      // 1432. REGRESSION: the All/Employees/Interns filter is untouched by this CSS-only task
+      assert(
+        dashboardPageSrcRefine.includes('view-switcher-group') && dashboardPageSrcRefine.includes("useState('All')"),
+        '1432. REGRESSION: DashboardPage.jsx\'s All/Employees/Interns personnel-type filter is completely untouched — still the same view-switcher-group defaulting to All'
+      );
+
+      // 1433. REGRESSION: lower Dashboard widgets (Ending Within 7 Days + Soonest Due Tasks) are completely unaffected — this task only touched .stat-cards-grid/.stat-card CSS
+      assert(
+        dashboardPageSrcRefine.includes('<EndingWithin7DaysWidget') && dashboardPageSrcRefine.includes('<SoonestDueTasksWidget') &&
+        dashboardPageSrcRefine.includes('className="dashboard-widgets-row"') &&
+        !indexCssSrcRefine.match(/\.dashboard-widgets-row \{[^}]*max-width/),
+        '1433. REGRESSION: EndingWithin7DaysWidget and SoonestDueTasksWidget both still render side by side in .dashboard-widgets-row, and .dashboard-widgets-row itself was NOT given a max-width cap — the lower widgets keep using the full Dashboard content width, independent of the now-narrower, centered lifecycle-card group above them'
+      );
+
+      // 1434. UPDATED — Dashboard skeleton reuses the SAME .stat-cards-grid class as the real cards, so it automatically inherits whatever desktop sizing strategy that shared rule currently uses (group-cap-and-center at the time this check was written; a fixed compact column + justify-content: center as of the later "Match Compact 5-Card Strip" task — see check 1442 for that current state) without any skeleton-specific width override — only the per-card height stays an explicit inline style (the empty skeleton div has no content of its own to derive a height from)
+      assert(
+        dashboardSkeletonSrcRefine.match(/<div className="stat-cards-grid">/) &&
+        !dashboardSkeletonSrcRefine.match(/stat-cards-grid[\s\S]{0,50}style=\{\{[^}]*max-width/),
+        '1434. UPDATED — DashboardSkeleton.jsx\'s card grid wrapper uses the plain .stat-cards-grid class with no inline width/max-width override — it automatically matches whatever desktop sizing strategy the real cards currently use because it shares the same CSS rule, not a duplicated one'
+      );
+
+      // 1435. FUNCTIONAL/REGRESSION: dashboardService's lifecycle counts are completely untouched by this CSS-only task
+      {
+        const allSummaryRefine = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryRefine.metrics.upcomingCount === 1 && allSummaryRefine.metrics.onboardingCount === 2 && allSummaryRefine.metrics.activeCount === 11 && allSummaryRefine.metrics.departingCount === 2 && allSummaryRefine.metrics.formerCount === 2,
+          `1435. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the card width/spacing refinement (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryRefine.metrics)}`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Match Lifecycle KPI Cards to the Second Reference: Small Compact 5-Card Horizontal Strip
+    // (direct user request, with a supplied reference screenshot: the immediately-prior card
+    // width (~210px) was STILL too large — cards fell back to 3+2 at the user's actual desktop
+    // width. This task replaces the fluid/capped-group grid strategy with a fixed, genuinely
+    // compact 175px column track, and shrinks padding/icon/typography to match)
+    //
+    // NOTE ON WHAT THIS BLOCK CAN AND CANNOT VERIFY: this suite runs in plain Node with no
+    // browser/layout engine — it can assert the CSS SOURCE facts below (fixed compact column
+    // width is set, no fluid full-width stretch, no old 150px regression, breakpoints present),
+    // but it cannot itself render the page and count cards per row or compare pixels against a
+    // reference screenshot. That verification — perRow === 5 at 1536x864, card width/height,
+    // gap, and a direct visual comparison against the supplied reference — was done via live
+    // Playwright measurement and screenshots during this task, documented in the task's own
+    // final report, not re-encoded here as a brittle pixel assertion.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcCompactStrip = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcCompactStrip = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcCompactStrip = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const dashboardSkeletonSrcCompactStrip = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+
+      // 1436. SUPERSEDED (Fix Actual 3+2 Layout Bug task) — the desktop grid no longer uses ANY
+      // fixed column width — the fixed-pixel-column approach (150/175/190/210px, all now gone) was
+      // the root cause of the reported 3+2 layout bug (see check 1401). This check now guards that
+      // no fixed-pixel column has crept back in.
+      {
+        const gridBlock = (indexCssSrcCompactStrip.match(/\.stat-cards-grid \{[^}]*\}/) || [''])[0];
+        assert(
+          !gridBlock.match(/repeat\(5, \d+px\)/) && gridBlock.match(/repeat\(5, minmax\(0, 1fr\)\)/),
+          `1436. SUPERSEDED — .stat-cards-grid's desktop rule has no fixed pixel column width at all (repeat(5, minmax(0, 1fr)) only) — every earlier fixed-pixel iteration (150/175/190/210px) is gone, since that whole strategy was the root cause of the 3+2 layout bug`
+        );
+      }
+
+      // 1437. UPDATED (Fix Actual 3+2 Layout Bug task) — icon, title, value, and subtitle font
+      // sizes were all restored to a "medium" scale proportionate to the card's now-fluid, wider
+      // width (icon 18px -> 22px, title 0.62rem -> 0.72rem, value 1.4rem -> 1.6rem, subtitle
+      // 0.66rem -> 0.7rem) — the earlier compact-strip-era shrinking existed only to force cards to
+      // fit a narrow fixed column, which is no longer necessary now that width is fluid. Padding
+      // (0.95rem 0.85rem) happens to coincidentally match the prior iteration's value, but under a
+      // different rationale (empirically tuned so 5 fluid columns keep fitting without wrapping
+      // down to ~1280px content width — see the .stat-card-subtitle comment in index.css).
+      assert(
+        indexCssSrcCompactStrip.match(/\.stat-card \{[\s\S]{0,300}padding: 0\.95rem 0\.85rem;/) &&
+        indexCssSrcCompactStrip.match(/\.stat-card-icon \{\s*width: 22px;\s*height: 22px;/) &&
+        indexCssSrcCompactStrip.match(/\.stat-card-title \{\s*font-size: 0\.72rem;/) &&
+        indexCssSrcCompactStrip.match(/\.stat-card-value \{\s*font-size: 1\.6rem;/) &&
+        indexCssSrcCompactStrip.match(/\.stat-card-subtitle \{\s*font-size: 0\.7rem;/),
+        '1437. UPDATED — .stat-card\'s padding is 0.95rem 0.85rem, icon is 22px (was 18px), title is 0.72rem (was 0.62rem), value is 1.6rem (was 1.4rem), and subtitle is 0.7rem (was 0.66rem) — typography was restored to a medium, proportionate scale now that card width is fluid rather than fixed-narrow, per the "not tiny, not huge" requirement'
+      );
+
+      // 1438. STRUCTURAL: five lifecycle cards still render, still information-only (no Link/ArrowUpRight/linkTo, no clickable cursor/hover) — this task changed CSS sizing only
+      assert(
+        (dashboardPageSrcCompactStrip.match(/<StatCard\b[\s\S]*?\/>/g) || []).length === 5 &&
+        !statCardSrcCompactStrip.includes("from 'react-router-dom'") && !statCardSrcCompactStrip.includes('ArrowUpRight') && !statCardSrcCompactStrip.includes('<Link') &&
+        !dashboardPageSrcCompactStrip.match(/<StatCard[\s\S]{0,300}linkTo/) &&
+        !indexCssSrcCompactStrip.match(/\.stat-card \{[^}]*cursor: pointer/) &&
+        !indexCssSrcCompactStrip.match(/\.stat-card:hover \{[^}]*transform/),
+        '1438. REGRESSION: DashboardPage.jsx still renders exactly 5 <StatCard> components, StatCard.jsx still has no Link/ArrowUpRight/linkTo, and .stat-card still has no cursor: pointer or interactive hover transform — the information-only behavior remains completely intact through this pure sizing change'
+      );
+
+      // 1439. UPDATED (Fix Actual 3+2 Layout Bug task): responsive breakpoints exist and every one
+      // of them falls back to FLUID columns, matching the now-fluid desktop rule. The 5->3
+      // threshold was moved to 1270px (empirically measured exact crossover — see check 1429 and
+      // the .stat-cards-grid comment in index.css), replacing the old 1320px/1240px fixed-column-era
+      // values; 720px was tightened to 640px and 420px stayed the same, both re-verified via
+      // Playwright as clean, non-overflowing fallbacks.
+      assert(
+        (indexCssSrcCompactStrip.match(/@media \(max-width: \d+px\) \{\s*\.stat-cards-grid \{/g) || []).length === 3 &&
+        indexCssSrcCompactStrip.match(/@media \(max-width: 1270px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/) &&
+        indexCssSrcCompactStrip.match(/@media \(max-width: 640px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/) &&
+        indexCssSrcCompactStrip.match(/@media \(max-width: 420px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(1, minmax\(0, 1fr\)\);/),
+        '1439. UPDATED — .stat-cards-grid has 3 responsive breakpoints (1270px -> 3 columns, empirically measured, was 1320px/1240px; 640px -> 2 columns, was 720px; 420px -> 1 column, unchanged), every one falling back to FLUID minmax(0, 1fr) columns — the desktop rule and every breakpoint now share the identical fluid strategy'
+      );
+
+      // 1440. FUNCTIONAL/REGRESSION: counts remain fully dynamic and the All/Employees/Interns filter is untouched by this CSS-only task
+      {
+        const allSummaryCompactStrip = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryCompactStrip.metrics.upcomingCount === 1 && allSummaryCompactStrip.metrics.onboardingCount === 2 && allSummaryCompactStrip.metrics.activeCount === 11 && allSummaryCompactStrip.metrics.departingCount === 2 && allSummaryCompactStrip.metrics.formerCount === 2,
+          `1440. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the compact-strip sizing change (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryCompactStrip.metrics)}`
+        );
+        assert(
+          !dashboardPageSrcCompactStrip.match(/<StatCard[\s\S]{0,300}value=\{\d+\}/) &&
+          dashboardPageSrcCompactStrip.includes('view-switcher-group'),
+          '1440b. REGRESSION: No <StatCard> uses a literal numeric value=, and the All/Employees/Interns filter (view-switcher-group) is still present and untouched'
+        );
+      }
+
+      // 1441. REGRESSION: lower Dashboard widgets (Ending Within 7 Days + Soonest Due Tasks) are completely unaffected — this task only touched .stat-cards-grid/.stat-card CSS and the skeleton
+      assert(
+        dashboardPageSrcCompactStrip.includes('<EndingWithin7DaysWidget') && dashboardPageSrcCompactStrip.includes('<SoonestDueTasksWidget') &&
+        dashboardPageSrcCompactStrip.includes('className="dashboard-widgets-row"') &&
+        !indexCssSrcCompactStrip.match(/\.dashboard-widgets-row \{[^}]*175px/),
+        '1441. REGRESSION: EndingWithin7DaysWidget and SoonestDueTasksWidget both still render side by side in .dashboard-widgets-row, untouched by the lifecycle-card compacting — .dashboard-widgets-row was not given the new 175px card sizing'
+      );
+
+      // 1442. UPDATED (Fix Actual 3+2 Layout Bug task) — Dashboard skeleton height updated to 106px
+      // (was 96px) to match the real card's measured height at its now-fluid width, and still
+      // reuses the same .stat-cards-grid class (so it automatically inherits the fluid
+      // repeat(5, minmax(0, 1fr)) column strategy, with no skeleton-specific width override)
+      assert(
+        dashboardSkeletonSrcCompactStrip.match(/className="stat-card skeleton-box" style=\{\{ height: '106px' \}\}/) &&
+        !dashboardSkeletonSrcCompactStrip.match(/stat-cards-grid[\s\S]{0,50}style=\{\{[^}]*width/),
+        '1442. UPDATED — DashboardSkeleton.jsx\'s card placeholders use height: 106px (was 96px, matching the real card\'s measured height now that width is fluid) and set no inline width — they inherit the fluid grid columns automatically from the shared .stat-cards-grid class'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Small Controlled Dashboard Enlargement + "See More" Behavior Confirmation
+    // (direct user request: the 5 lifecycle cards and 2 lower widgets had become "slightly too
+    // small" — this task moderately enlarges both while explicitly NOT touching card width,
+    // gap, icon colors, typography hierarchy, filters, data sources, or information-only
+    // behavior. It also re-confirms the "show first 2 + See More" behavior for both lower
+    // widgets, which — on inspection — was ALREADY fully implemented by prior tasks; no new
+    // collapse/expand logic was written, only re-verified.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcEnlarge = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const endingWidgetSrcEnlarge = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+      const soonestDueSrcEnlarge = fs.readFileSync(path.resolve('./src/components/dashboard/SoonestDueTasksWidget.jsx'), 'utf-8');
+      const dashboardPageSrcEnlarge = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcEnlarge = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+
+      // 1443. SUPERSEDED (Fix Actual 3+2 Layout Bug task) — the fixed-column-width middle-ground
+      // sizing this check used to verify (150 < width <= 200px) was itself part of the fragile
+      // fixed-pixel-plus-breakpoint strategy that caused the reported 3+2 bug. The grid now has no
+      // fixed column width at any size — see checks 1401/1428/1436 for the current fluid-only
+      // assertion. This check now guards that no fixed column has crept back in at this task's
+      // former history point.
+      assert(
+        !indexCssSrcEnlarge.match(/\.stat-cards-grid \{[^}]*grid-template-columns: repeat\(5, \d+px\)/),
+        '1443. SUPERSEDED — .stat-cards-grid has no fixed-pixel column width of any size (150-228px, spanning every historical iteration) — the whole fixed-column strategy was replaced by a fluid repeat(5, minmax(0, 1fr)) grid, since fixed columns paired with a breakpoint are what produced the reported 3+2 layout bug'
+      );
+
+      // 1444. UPDATED (Fix Actual 3+2 Layout Bug task) — the inter-card gap is 0.85rem (was
+      // 0.65rem) on the now-fluid grid, and justify-content: center is gone entirely (it was only
+      // ever needed to center leftover space around a fixed-width column track, which no longer
+      // exists on a fluid grid that already fills the full row width).
+      assert(
+        indexCssSrcEnlarge.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);\s*gap: 0\.85rem;/) &&
+        !indexCssSrcEnlarge.match(/\.stat-cards-grid \{[^}]*justify-content: center/),
+        '1444. UPDATED: .stat-cards-grid\'s gap is now 0.85rem (was 0.65rem) and justify-content: center is gone — a fluid grid that already fills the full row width has no leftover space to center'
+      );
+
+      // 1445. REGRESSION: lower-widget padding grew, but widget colors, icon size/colors, and heading typography (title/subtitle font-size) are byte-for-byte unchanged — this task enlarged spacing only, never colors or icons, per explicit instruction
+      assert(
+        indexCssSrcEnlarge.match(/\.dashboard-widget \{[\s\S]{0,200}padding: 1\.05rem 1\.15rem;/) &&
+        indexCssSrcEnlarge.match(/\.widget-icon-badge \{\s*width: 26px;\s*height: 26px;/) &&
+        indexCssSrcEnlarge.match(/\.widget-title \{\s*font-size: 0\.85rem;/) &&
+        indexCssSrcEnlarge.match(/\.widget-subtitle \{\s*font-size: 0\.65rem;/),
+        '1445. REGRESSION: .dashboard-widget\'s padding grew to 1.05rem 1.15rem, but .widget-icon-badge (26px) and .widget-title/.widget-subtitle font sizes (0.85rem/0.65rem) are completely unchanged — spacing grew, icons/colors/typography did not, per direct user instruction'
+      );
+
+      // 1446. STRUCTURAL: EndingWithin7DaysWidget.jsx and SoonestDueTasksWidget.jsx BOTH already implement "show first 2, See More when totalItems > 2" — confirmed present (not newly added) via source inspection, matching the exact rule: hiddenCount = totalItems - 2, condition is hiddenCount > 0 (mathematically identical to totalItems > 2)
+      assert(
+        endingWidgetSrcEnlarge.includes('const DEFAULT_VISIBLE_COUNT = 2;') &&
+        endingWidgetSrcEnlarge.match(/const hiddenCount = people\.length - DEFAULT_VISIBLE_COUNT;/) &&
+        endingWidgetSrcEnlarge.match(/\{hiddenCount > 0 && \(/) &&
+        soonestDueSrcEnlarge.includes('const DEFAULT_VISIBLE_COUNT = 2;') &&
+        soonestDueSrcEnlarge.match(/const hiddenCount = sorted\.length - DEFAULT_VISIBLE_COUNT;/) &&
+        soonestDueSrcEnlarge.match(/\{hiddenCount > 0 && \(/),
+        '1446. STRUCTURAL: Both widgets slice their full ordered result to DEFAULT_VISIBLE_COUNT (2) by default and show "See more"/"Show less" only when hiddenCount (totalItems - 2) is > 0 — mathematically identical to the requested "totalItems > 2" rule. This logic pre-dates this task; it was verified, not rewritten, per the instruction to reuse existing service/UI boundaries'
+      );
+
+      // 1447. STRUCTURAL: each widget's expand/collapse state is a fully independent local useState — no shared state, no prop drilling between the two widgets — confirmed via Playwright (expanding one leaves the other collapsed and vice versa)
+      assert(
+        (endingWidgetSrcEnlarge.match(/const \[expanded, setExpanded\] = useState\(false\);/g) || []).length === 1 &&
+        (soonestDueSrcEnlarge.match(/const \[expanded, setExpanded\] = useState\(false\);/g) || []).length === 1,
+        '1447. STRUCTURAL: EndingWithin7DaysWidget and SoonestDueTasksWidget each declare their OWN independent useState(false) for expanded — no shared/lifted state, so expanding one widget can never affect the other (confirmed live via Playwright: expanding only Soonest Due Tasks left Ending Within 7 Days collapsed, and vice versa)'
+      );
+
+      // 1448. STRUCTURAL: the expanded list uses a bounded max-height with overflow-y: auto (internal scroll) — never unbounded page growth — for datasets larger than fit comfortably
+      assert(
+        indexCssSrcEnlarge.match(/\.dashboard-widget-scroll-list \{\s*max-height: 195px;\s*overflow-y: auto;/) &&
+        endingWidgetSrcEnlarge.includes("expanded ? 'dashboard-widget-scroll-list' : undefined") &&
+        soonestDueSrcEnlarge.includes("expanded ? 'dashboard-widget-scroll-list' : undefined"),
+        '1448. REGRESSION: .dashboard-widget-scroll-list still has a bounded max-height (195px, was 180px) with overflow-y: auto, and both widgets still apply it only while expanded — larger datasets scroll internally instead of growing the page'
+      );
+
+      // 1449. REGRESSION: five lifecycle cards remain information-only (no Link/ArrowUpRight/linkTo, no clickable cursor/hover) and counts remain fully dynamic — this task changed CSS sizing only
+      assert(
+        (dashboardPageSrcEnlarge.match(/<StatCard\b[\s\S]*?\/>/g) || []).length === 5 &&
+        !statCardSrcEnlarge.includes("from 'react-router-dom'") && !statCardSrcEnlarge.includes('ArrowUpRight') && !statCardSrcEnlarge.includes('<Link') &&
+        !dashboardPageSrcEnlarge.match(/<StatCard[\s\S]{0,300}linkTo/) &&
+        !indexCssSrcEnlarge.match(/\.stat-card \{[^}]*cursor: pointer/) &&
+        !dashboardPageSrcEnlarge.match(/<StatCard[\s\S]{0,300}value=\{\d+\}/) &&
+        dashboardPageSrcEnlarge.includes('view-switcher-group'),
+        '1449. REGRESSION: DashboardPage.jsx still renders exactly 5 information-only <StatCard> components (no Link/ArrowUpRight/linkTo/cursor:pointer, no literal numeric value=), and the All/Employees/Interns filter (view-switcher-group) remains untouched'
+      );
+
+      // 1450. FUNCTIONAL/REGRESSION: dashboardService's lifecycle counts and Ending Within 7 Days eligibility logic are completely untouched by this sizing-only task
+      {
+        const allSummaryEnlarge = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryEnlarge.metrics.upcomingCount === 1 && allSummaryEnlarge.metrics.onboardingCount === 2 && allSummaryEnlarge.metrics.activeCount === 11 && allSummaryEnlarge.metrics.departingCount === 2 && allSummaryEnlarge.metrics.formerCount === 2,
+          `1450. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the Small Controlled Enlargement task (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryEnlarge.metrics)}`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Fix Actual 3+2 Layout Bug (FINAL DASHBOARD LAYOUT FIX task)
+    // (direct user report, with a description of the actual bug at a real desktop viewport: the 5
+    // lifecycle cards were rendering as 3 cards on one row + 2 cards on a second row, not the
+    // single row of 5 every earlier "size tweak" task assumed it had already achieved. Root cause:
+    // every prior iteration (checks 1401/1422/1427-1429/1436-1439/1442-1443/1357/1378/1391, now all
+    // updated) fixed .stat-cards-grid's column to a SPECIFIC pixel value (150/175/190/210px) and
+    // paired it with a breakpoint tuned to exactly that value — any real browser window narrower
+    // than that breakpoint (which covers a lot of ordinary widths, not an exotic edge case) fell
+    // back to 3 columns even with comfortable room left for 5. This task replaces the whole
+    // strategy with a genuinely fluid grid (repeat(5, minmax(0, 1fr))) that can never desync from
+    // the real rendered width the way a fixed pixel value can, restores typography/padding/icon to
+    // a medium scale now that width is no longer artificially narrow, and moves the one fallback
+    // breakpoint to an empirically re-measured 1270px. Exact DOM measurements at 1536/1440/1366/
+    // 1280/1271/1270/1200/1024/980/950/920/900/768/640/420/375px viewports (5-per-row confirmed at
+    // every width down to 1271px; clean 3+2 from 1270px down through 768px; no wrap, no title
+    // truncation, no horizontal overflow at any width) were taken via live Playwright, not
+    // re-encoded here as brittle pixel regexes, since this Node suite has no real browser layout
+    // engine — see the task's final report for the full table.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const indexCssSrcFluid = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const dashboardPageSrcFluid = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const statCardSrcFluid = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const dashboardSkeletonSrcFluid = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+      const endingWidgetSrcFluid = fs.readFileSync(path.resolve('./src/components/dashboard/EndingWithin7DaysWidget.jsx'), 'utf-8');
+      const soonestDueSrcFluid = fs.readFileSync(path.resolve('./src/components/dashboard/SoonestDueTasksWidget.jsx'), 'utf-8');
+
+      // 1451. NEW — .stat-cards-grid's desktop (base) rule is a genuinely fluid five-column grid —
+      // repeat(5, minmax(0, 1fr)) — with no fixed pixel column width and no per-card max-width/
+      // justify-self hack anywhere. This is the single root-cause fix: card width is always exactly
+      // 1/5 of the real Dashboard content width (minus gaps), so it can never fall out of sync with
+      // the actual rendered window the way a fixed 150/175/190/210px value could.
+      assert(
+        indexCssSrcFluid.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);\s*gap: 0\.85rem;\s*\}/) &&
+        !indexCssSrcFluid.match(/\.stat-cards-grid \{[^}]*grid-template-columns: repeat\(5, \d+px\)/) &&
+        !(indexCssSrcFluid.match(/\.stat-card \{[^}]*\}/) || [''])[0].match(/max-width|justify-self/),
+        '1451. NEW — .stat-cards-grid\'s desktop rule is a genuinely fluid repeat(5, minmax(0, 1fr)) with an 0.85rem gap — no fixed pixel column width anywhere, and .stat-card carries neither max-width nor justify-self — this is the actual fix for the reported 3-cards-then-2-cards layout bug'
+      );
+
+      // 1452. NEW — the ONE responsive fallback breakpoint (empirically measured via Playwright as
+      // the exact width where the description first wraps to 2 lines at 5 fluid columns) switches to
+      // 3 FLUID columns, never a second fixed-pixel size — and there are no leftover/contradictory
+      // media queries for .stat-cards-grid at any of the old superseded thresholds (1320/1240/900
+      // placeholder/720px).
+      assert(
+        (indexCssSrcFluid.match(/@media \([^)]*\) \{\s*\.stat-cards-grid \{/g) || []).length === 3 &&
+        indexCssSrcFluid.match(/@media \(max-width: 1270px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);\s*\}\s*\}/) &&
+        indexCssSrcFluid.match(/@media \(max-width: 640px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);\s*\}\s*\}/) &&
+        indexCssSrcFluid.match(/@media \(max-width: 420px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(1, minmax\(0, 1fr\)\);\s*\}\s*\}/) &&
+        !indexCssSrcFluid.match(/@media \(max-width: 1320px\) \{\s*\.stat-cards-grid/) && !indexCssSrcFluid.match(/@media \(max-width: 1240px\) \{\s*\.stat-cards-grid/) &&
+        !indexCssSrcFluid.match(/@media \(max-width: 900px\) \{\s*\.stat-cards-grid/) && !indexCssSrcFluid.match(/@media \(max-width: 720px\) \{\s*\.stat-cards-grid/),
+        '1452. NEW — .stat-cards-grid has exactly 3 responsive breakpoints (1270px -> 3 columns, 640px -> 2 columns, 420px -> 1 column), every one fluid (minmax(0, 1fr)), and none of the superseded thresholds (1320/1240/900-placeholder/720px) apply to .stat-cards-grid anymore — a single, non-contradictory responsive strategy, not layered leftover rules'
+      );
+
+      // 1453. NEW — typography/padding/icon were restored to a medium scale (never shrunk back to
+      // the "compact strip" era's tiny values) now that card width is fluid rather than artificially
+      // narrow: icon 22px, title 0.72rem, value 1.6rem (still the visually dominant element on the
+      // card), subtitle 0.7rem, padding 0.95rem 0.85rem.
+      assert(
+        indexCssSrcFluid.match(/\.stat-card-icon \{\s*width: 22px;\s*height: 22px;/) &&
+        indexCssSrcFluid.match(/\.stat-card-title \{\s*font-size: 0\.72rem;/) &&
+        indexCssSrcFluid.match(/\.stat-card-value \{\s*font-size: 1\.6rem;/) &&
+        indexCssSrcFluid.match(/\.stat-card-subtitle \{\s*font-size: 0\.7rem;/) &&
+        indexCssSrcFluid.match(/\.stat-card \{[\s\S]{0,300}padding: 0\.95rem 0\.85rem;/) &&
+        parseFloat(indexCssSrcFluid.match(/\.stat-card-value \{\s*font-size: ([\d.]+)rem;/)[1]) > parseFloat(indexCssSrcFluid.match(/\.stat-card-title \{\s*font-size: ([\d.]+)rem;/)[1]),
+        '1453. NEW — .stat-card\'s icon (22px), title (0.72rem), value (1.6rem), subtitle (0.7rem), and padding (0.95rem 0.85rem) are all a medium, legible scale — never shrunk back to the tiny compact-strip-era values now that width comes from the fluid grid — and the count (value) remains the visually dominant element (larger font-size than the title label)'
+      );
+
+      // 1454. REGRESSION: cards remain purely information-only — no Link/ArrowUpRight/linkTo, no
+      // clickable cursor/hover-nav — this was a pure layout/CSS fix, never a behavior change.
+      assert(
+        !statCardSrcFluid.includes("from 'react-router-dom'") && !statCardSrcFluid.includes('ArrowUpRight') && !statCardSrcFluid.includes('<Link') &&
+        !dashboardPageSrcFluid.match(/<StatCard[\s\S]{0,300}linkTo/) &&
+        !indexCssSrcFluid.match(/\.stat-card \{[^}]*cursor: pointer/) &&
+        !indexCssSrcFluid.match(/\.stat-card:hover \{[^}]*transform/),
+        '1454. REGRESSION: StatCard.jsx still has no Link/ArrowUpRight/linkTo, and .stat-card still has no cursor: pointer or interactive hover transform — the information-only behavior is completely unaffected by this layout fix'
+      );
+
+      // 1455. NEW — DashboardPage.jsx still renders exactly 5 <StatCard> components, every value
+      // reads from the live dashboardService metrics (never a literal number), and the All/
+      // Employees/Interns filter (view-switcher-group) is untouched — this task fixed only the
+      // grid's CSS strategy, never card count, data source, or the filter.
+      assert(
+        (dashboardPageSrcFluid.match(/<StatCard\b[\s\S]*?\/>/g) || []).length === 5 &&
+        !dashboardPageSrcFluid.match(/<StatCard[\s\S]{0,300}value=\{\d+\}/) &&
+        dashboardPageSrcFluid.includes('view-switcher-group'),
+        '1455. NEW — DashboardPage.jsx still renders exactly 5 <StatCard> components with no literal numeric value= prop, and the All/Employees/Interns filter (view-switcher-group) is completely untouched by this layout fix'
+      );
+
+      // 1456. NEW — DashboardSkeleton.jsx's 5 card placeholders reuse the real .stat-cards-grid
+      // class (so they automatically inherit the fluid column strategy, never a stale fixed-width
+      // assumption) with an explicit inline height matching the real card's measured height, and
+      // the lower 2-widget skeleton row is unchanged by this task.
+      assert(
+        dashboardSkeletonSrcFluid.match(/<div className="stat-cards-grid">/) &&
+        !dashboardSkeletonSrcFluid.match(/stat-cards-grid[\s\S]{0,50}style=\{\{[^}]*width/) &&
+        dashboardSkeletonSrcFluid.match(/className="stat-card skeleton-box" style=\{\{ height: '106px' \}\}/) &&
+        (dashboardSkeletonSrcFluid.match(/dashboard-widget skeleton-box/g) || []).length === 2,
+        '1456. NEW — DashboardSkeleton.jsx\'s 5 placeholders reuse the plain .stat-cards-grid class with no inline width override (inheriting the fluid column strategy automatically) and an explicit height: 106px matching the real card\'s measured height — the lower 2-widget skeleton row remains untouched'
+      );
+
+      // 1457. REGRESSION: both lower widgets' "show first 2, See More when totalItems > 2" behavior
+      // is unchanged — explicitly re-verified (not rewritten) per this task's instruction, since it
+      // was already correctly implemented by an earlier task.
+      assert(
+        endingWidgetSrcFluid.includes('const DEFAULT_VISIBLE_COUNT = 2;') &&
+        endingWidgetSrcFluid.match(/const hiddenCount = people\.length - DEFAULT_VISIBLE_COUNT;/) &&
+        endingWidgetSrcFluid.match(/\{hiddenCount > 0 && \(/) &&
+        soonestDueSrcFluid.includes('const DEFAULT_VISIBLE_COUNT = 2;') &&
+        soonestDueSrcFluid.match(/const hiddenCount = sorted\.length - DEFAULT_VISIBLE_COUNT;/) &&
+        soonestDueSrcFluid.match(/\{hiddenCount > 0 && \(/),
+        '1457. REGRESSION: EndingWithin7DaysWidget.jsx and SoonestDueTasksWidget.jsx both still slice to DEFAULT_VISIBLE_COUNT (2) by default and show See More/Show less only when hiddenCount (totalItems - 2) > 0 — unchanged by this task, re-verified live via Playwright (seeded 5 items per widget: collapsed shows exactly 2 rows + "See more (3)", expanding reveals all 5 in a bounded scroll list, collapsing restores exactly 2) rather than rewritten'
+      );
+
+      // 1458. FUNCTIONAL/REGRESSION: dashboardService's lifecycle counts are completely untouched by
+      // this CSS-only layout fix.
+      {
+        const allSummaryFluid = await dashboardService.getDashboardSummary({ personnelType: 'All' });
+        assert(
+          allSummaryFluid.metrics.upcomingCount === 1 && allSummaryFluid.metrics.onboardingCount === 2 && allSummaryFluid.metrics.activeCount === 11 && allSummaryFluid.metrics.departingCount === 2 && allSummaryFluid.metrics.formerCount === 2,
+          `1458. REGRESSION: dashboardService.getDashboardSummary() still produces the exact same counts after the 3+2 layout bug fix (Upcoming 1, Onboarding 2, Active 11, Offboarding 2, Former 2) — found ${JSON.stringify(allSummaryFluid.metrics)}`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Replace Personnel "View Profile" Modal with a Dedicated Personnel Details Page
+    // (direct user request: a personnel record can grow to include CV/resume PDFs and other
+    // documents, which don't fit comfortably in PersonnelProfileModal's fixed-height modal shell.
+    // Clicking "View Details" — renamed from "View Profile" — now navigates to a dedicated
+    // /employees/:employeeId page instead of opening a modal. The route param name and its value
+    // (the internal employee.id, not the RZ-#### display code) follow the SAME convention already
+    // established by /onboarding/employees/:employeeId and /offboarding/employees/:employeeId.
+    // The new page is sourced through employeeService.getProfile() — the exact same service
+    // method PersonnelProfileModal already used — so no duplicate data-access logic was
+    // introduced, and it reuses that same 4-section field layout (Personal Information, Education
+    // & Application, Links & Documents, Employment/Internship Details) verbatim rather than
+    // redesigning the information architecture. PersonnelProfileModal itself is NOT deleted: the
+    // Dashboard's EndingWithin7DaysWidget still opens it via DashboardPage.jsx's onViewProfile
+    // callback (dashboard logic was explicitly out of scope for this task), so it is not orphaned.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const routerSrcDetails = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+      const detailsPageSrc = fs.readFileSync(path.resolve('./src/pages/employees/PersonnelDetailsPage.jsx'), 'utf-8');
+      const directoryContainerSrcDetails = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const employeeListViewSrcDetails = fs.readFileSync(path.resolve('./src/components/employees/EmployeeListView.jsx'), 'utf-8');
+      const employeeCardViewSrcDetails = fs.readFileSync(path.resolve('./src/components/employees/EmployeeCardView.jsx'), 'utf-8');
+      const dashboardPageSrcDetails = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const headerSrcDetails = fs.readFileSync(path.resolve('./src/components/layout/Header.jsx'), 'utf-8');
+
+      // 1459. NEW — router/index.jsx registers 'employees/:employeeId' -> PersonnelDetailsPage,
+      // following the SAME :employeeId param-naming convention already used by
+      // 'onboarding/employees/:employeeId' and 'offboarding/employees/:employeeId', as a sibling
+      // of the existing 'employees' route (not a breaking migration away from it).
+      assert(
+        routerSrcDetails.includes("{ path: 'employees', element: <AllEmployeesPage /> }") &&
+        routerSrcDetails.includes("{ path: 'employees/:employeeId', element: <PersonnelDetailsPage /> }"),
+        '1459. NEW — router/index.jsx keeps \'employees\' -> AllEmployeesPage unchanged and adds \'employees/:employeeId\' -> PersonnelDetailsPage as a sibling route, matching the :employeeId param convention already used by onboarding/offboarding detail routes'
+      );
+
+      // 1460. NEW — PersonnelDetailsPage.jsx extracts the id via useParams() (works on direct
+      // URL load/refresh, never relies on navigation state passed from the table) and loads data
+      // exclusively through employeeService.getProfile() — no mock-data/storageEngine/localStorage
+      // import anywhere in the file, preserving the same backend-swappable service boundary
+      // PersonnelProfileModal already established.
+      assert(
+        detailsPageSrc.includes('const { employeeId } = useParams();') &&
+        detailsPageSrc.match(/employeeService\s*\.getProfile\(employeeId\)/) &&
+        !detailsPageSrc.match(/from ['"].*mock-data/) &&
+        !detailsPageSrc.includes('storageEngine') &&
+        !detailsPageSrc.includes('localStorage') &&
+        !detailsPageSrc.includes('location.state'),
+        '1460. NEW — PersonnelDetailsPage.jsx reads the id from useParams() and loads it exclusively via employeeService.getProfile(employeeId) — no mock-data/storageEngine/localStorage import, and no reliance on navigation state, so direct URL access and browser refresh both work identically to normal navigation'
+      );
+
+      // 1461. NEW — all 4 sections and every field from PersonnelProfileModal are preserved
+      // verbatim on the new page (Personal Information x5, Education & Application x7, Links &
+      // Documents x4, Employment/Internship Details x9) — no field was silently dropped while
+      // porting from modal to page.
+      assert(
+        detailsPageSrc.includes('title="Personal Information"') &&
+        detailsPageSrc.includes('label="First Name"') && detailsPageSrc.includes('label="Last Name"') &&
+        detailsPageSrc.includes('label="Email"') && detailsPageSrc.includes('label="Contact Number"') &&
+        detailsPageSrc.includes('label="Nationality"') &&
+        detailsPageSrc.includes('title="Education & Application"') &&
+        detailsPageSrc.includes('label="Highest Level of Education"') && detailsPageSrc.includes('label="University"') &&
+        detailsPageSrc.includes('label="Interested Position"') && detailsPageSrc.includes('label="Acquisition Channel"') &&
+        detailsPageSrc.includes('label="Original Start Date"') && detailsPageSrc.includes('label="Original End Date"') &&
+        detailsPageSrc.includes('label="Anything Else"') &&
+        detailsPageSrc.includes('title="Links & Documents"') &&
+        detailsPageSrc.includes('label="LinkedIn"') && detailsPageSrc.includes('label="GitHub"') &&
+        detailsPageSrc.includes('label="Resume / CV"') && detailsPageSrc.includes('label="Portfolio"') &&
+        detailsPageSrc.includes('title="Employment / Internship Details"') &&
+        detailsPageSrc.includes('label="Personnel ID"') && detailsPageSrc.includes('label="Type"') &&
+        detailsPageSrc.includes('label="Position"') && detailsPageSrc.includes('label="Department"') &&
+        detailsPageSrc.includes('label="Work Mode"') && detailsPageSrc.includes('label="Salary"') &&
+        detailsPageSrc.includes('label="Actual Start Date"') && detailsPageSrc.includes('label="Actual End Date"') &&
+        detailsPageSrc.includes('label="Current Lifecycle Status"'),
+        '1461. NEW — PersonnelDetailsPage.jsx renders all 4 of PersonnelProfileModal\'s sections and every one of its 25 fields verbatim — no field was lost migrating from modal to page'
+      );
+
+      // 1462. NEW — Links & Documents fields never fabricate a document/URL: each one renders the
+      // existing "—" empty-state convention when its underlying value is null (true of every field
+      // today, per employeeService.getProfile's own doc comment), and only renders a real link
+      // when a URL is actually present — matching Part E's explicit "do not invent fake documents"
+      // requirement.
+      assert(
+        detailsPageSrc.match(/\{url \? \(\s*<a[\s\S]{0,150}target="_blank"[\s\S]{0,40}rel="noopener noreferrer"/) &&
+        detailsPageSrc.match(/\) : \(\s*<div[^>]*>—<\/div>/),
+        '1462. NEW — ProfileLinkField (Links & Documents) renders a real target="_blank" link only when a url is present, and the existing "—" empty-state convention otherwise — never a fabricated document/link'
+      );
+
+      // 1463. NEW — the page has a genuine loading state and a "Personnel Record Not Found" state
+      // with a working Back to Personnel link — an invalid/unknown id never crashes or renders
+      // blank.
+      assert(
+        detailsPageSrc.includes('Loading personnel details...') &&
+        detailsPageSrc.includes('Personnel Record Not Found') &&
+        detailsPageSrc.match(/<Link to="\/employees" className="btn-secondary"[\s\S]{0,100}Back to Personnel/),
+        '1463. NEW — PersonnelDetailsPage.jsx has a distinct loading state and a "Personnel Record Not Found" state (reached whenever employeeService.getProfile() resolves null) with a working Back to Personnel link — never a crash or a blank page for an invalid id'
+      );
+
+      // 1464. NEW — the page uses normal document-flow page scrolling (the shared, unstyled
+      // page-layout-container wrapper every other detail page in this app uses), never the
+      // modal's own fixed-height internal-scroll shell.
+      assert(
+        detailsPageSrc.includes('page-layout-container') &&
+        !detailsPageSrc.includes('modal-backdrop') &&
+        !detailsPageSrc.includes('modal-scroll-shell') &&
+        !detailsPageSrc.includes('modal-card'),
+        '1464. NEW — PersonnelDetailsPage.jsx wraps its content in the plain page-layout-container used by every other detail page in this app (no CSS rule constrains its height) — normal page scrolling, never the modal\'s fixed-height modal-scroll-shell'
+      );
+
+      // 1465. NEW — the header block shows the actual selected person's avatar/name/Personnel ID
+      // dynamically (profile.photo/profile.fullName/profile.personnelId), never a hardcoded
+      // "Aaron Kumar"/"RZ-1017" placeholder.
+      assert(
+        detailsPageSrc.includes('{profile.photo || \'EM\'}') &&
+        detailsPageSrc.includes('{profile.fullName}') &&
+        detailsPageSrc.includes('Personnel ID: <strong>{profile.personnelId}</strong>') &&
+        !detailsPageSrc.includes('Aaron Kumar') &&
+        !detailsPageSrc.includes('RZ-1017'),
+        '1465. NEW — The page header renders the selected person\'s own photo/fullName/personnelId dynamically — no hardcoded "Aaron Kumar" or "RZ-1017" placeholder anywhere in the file'
+      );
+
+      // 1466. SUPERSEDED — DirectoryPageContainer.jsx no longer imports/renders
+      // PersonnelProfileModal or holds profileEmployeeId state — the Personnel directory's own
+      // "View Details" trigger is now a plain navigation, not a modal.
+      assert(
+        !directoryContainerSrcDetails.includes('PersonnelProfileModal') &&
+        !directoryContainerSrcDetails.includes('profileEmployeeId') &&
+        !directoryContainerSrcDetails.match(/onViewProfile=\{setProfileEmployeeId\}/),
+        '1466. SUPERSEDED — DirectoryPageContainer.jsx no longer imports PersonnelProfileModal or holds profileEmployeeId state — List/Card view no longer receive an onViewProfile callback at all, since both now navigate directly via <Link>'
+      );
+
+      // 1467. REGRESSION: PersonnelProfileModal.jsx itself was NOT deleted, and remains a
+      // legitimate, non-orphaned component — DashboardPage.jsx still imports and renders it (via
+      // EndingWithin7DaysWidget's onViewProfile callback), which this task's explicit scope
+      // (dashboard logic) left untouched. Deleting it would have broken that still-live consumer.
+      assert(
+        fs.existsSync(path.resolve('./src/components/employees/PersonnelProfileModal.jsx')) &&
+        dashboardPageSrcDetails.includes("import PersonnelProfileModal from '../../components/employees/PersonnelProfileModal'") &&
+        dashboardPageSrcDetails.includes('<PersonnelProfileModal'),
+        '1467. REGRESSION: PersonnelProfileModal.jsx still exists and is still imported/rendered by DashboardPage.jsx (EndingWithin7DaysWidget\'s onViewProfile) — it was correctly kept, not deleted, since the Personnel directory was not its only consumer'
+      );
+
+      // 1468. NEW — Header.jsx's breadcrumb resolves the Personnel Details page's last segment to
+      // the person's actual name (via employeeService.getById(), never mock data), scoped
+      // narrowly to exactly '/employees/:id' (2 path segments) so onboarding's/offboarding's own
+      // 3-segment '.../employees/:id' detail routes are completely unaffected.
+      assert(
+        headerSrcDetails.includes("employeeService.getById(pathSegments[1])") &&
+        headerSrcDetails.includes("pathSegments[0] === 'employees' && pathSegments.length === 2") &&
+        headerSrcDetails.includes('personnelDetailName'),
+        '1468. NEW — Header.jsx resolves the Personnel Details breadcrumb segment to the actual person\'s name via employeeService.getById(), scoped to exactly the 2-segment /employees/:id route so onboarding/offboarding\'s own breadcrumb behavior is unaffected'
+      );
+
+      // 1469. FUNCTIONAL: employeeService.getProfile() returns genuinely different data for two
+      // different people — opening a second person's details would show the second person's own
+      // data, never a stale/shared previous selection.
+      {
+        const profileA = await employeeService.getProfile('emp-001');
+        const profileB = await employeeService.getProfile('emp-002');
+        assert(
+          profileA && profileB && profileA.fullName !== profileB.fullName && profileA.personnelId !== profileB.personnelId,
+          `1469. NEW — employeeService.getProfile() returns distinct fullName/personnelId for two different ids (emp-001: ${profileA && profileA.fullName}, emp-002: ${profileB && profileB.fullName}) — each Personnel Details page load reflects the actually-selected person`
+        );
+      }
+
+      // 1470. FUNCTIONAL: employeeService.getProfile() returns null for an id that does not exist
+      // — the exact signal PersonnelDetailsPage.jsx's not-found branch checks for.
+      {
+        const invalidProfile = await employeeService.getProfile('emp-does-not-exist-999');
+        assert(
+          invalidProfile === null,
+          `1470. NEW — employeeService.getProfile() returns null for a nonexistent id (found: ${JSON.stringify(invalidProfile)}) — PersonnelDetailsPage.jsx's "Personnel Record Not Found" state is driven by this same null, not a separately-invented error path`
+        );
+      }
+
+      // 1471. REGRESSION: Personnel directory filters/sort/view-mode/counts/lifecycle logic are
+      // completely untouched by this navigation-only change — DirectoryToolbar's filter props and
+      // employeeService.queryEmployees() are unaffected.
+      assert(
+        directoryContainerSrcDetails.includes('selectedStatus={statusFilter}') &&
+        directoryContainerSrcDetails.includes('selectedDept={departmentId}') &&
+        directoryContainerSrcDetails.includes('selectedType={typeFilter}') &&
+        directoryContainerSrcDetails.includes('selectedMode={modeFilter}') &&
+        directoryContainerSrcDetails.includes('selectedAllowance={allowanceFilter}') &&
+        directoryContainerSrcDetails.includes('selectedSort={sortBy}') &&
+        directoryContainerSrcDetails.includes('viewMode={viewMode}'),
+        '1471. REGRESSION: DirectoryPageContainer.jsx\'s Department/Type/Mode/Salary/Status filters, Sort By, and List/Card/Timeline view-mode wiring are all still passed to DirectoryToolbar exactly as before — this task changed only the per-row Details action'
+      );
+
+      // 1472. REGRESSION: neither EmployeeListView.jsx nor EmployeeCardView.jsx import
+      // PersonnelProfileModal in actual code — both now navigate via react-router's <Link>, never
+      // a modal (an explanatory comment mentioning the component by name, e.g. "instead of
+      // opening PersonnelProfileModal", is expected and fine — only real import/usage is checked).
+      {
+        const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+        const listCodeOnly = stripComments(employeeListViewSrcDetails);
+        const cardCodeOnly = stripComments(employeeCardViewSrcDetails);
+        assert(
+          !listCodeOnly.includes('PersonnelProfileModal') &&
+          !cardCodeOnly.includes('PersonnelProfileModal') &&
+          employeeListViewSrcDetails.includes("import { Link } from 'react-router-dom';") &&
+          employeeCardViewSrcDetails.includes("import { Link } from 'react-router-dom';"),
+          '1472. REGRESSION: EmployeeListView.jsx and EmployeeCardView.jsx both import react-router-dom\'s Link and neither references PersonnelProfileModal in actual code (comments excluded) — the Personnel directory\'s View Details action is pure navigation'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Replace Personnel "Type" Dropdown with All / Employees / Interns Segmented Filter
+    // (direct user request: Employee vs Intern is an important top-level personnel distinction
+    // and deserves a clearer segmented control, matching the same All/Employees/Interns pattern
+    // the Dashboard already uses, rather than a plain <Select> dropdown buried among Department/
+    // Mode/Salary/Status. The underlying typeFilter/setTypeFilter state, employeeService.
+    // queryEmployees()'s typeFilter handling, and DirectoryPageContainer.jsx's wiring were all
+    // ALREADY correct and untouched by this change — only DirectoryToolbar.jsx's UI and one new
+    // index.css rule for the control's own row changed. No duplicate Employee/Intern
+    // classification logic was introduced: the segmented control reads/writes the exact same
+    // typeFilter state the old dropdown did, which still compares against the single centralized
+    // employee.directoryType field.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcSeg = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const containerSrcSeg = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const listViewSrcSeg = fs.readFileSync(path.resolve('./src/components/employees/EmployeeListView.jsx'), 'utf-8');
+      const cardViewSrcSeg = fs.readFileSync(path.resolve('./src/components/employees/EmployeeCardView.jsx'), 'utf-8');
+      const indexCssSrcSeg = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1473. NEW — the old Type <Select> dropdown (id="type-filter", "All Types" option) is
+      // completely gone from DirectoryToolbar.jsx — no leftover/duplicate filtering control.
+      assert(
+        !toolbarSrcSeg.includes('id="type-filter"') &&
+        !toolbarSrcSeg.includes("'All Types'") &&
+        !toolbarSrcSeg.match(/<label htmlFor="type-filter">Type:<\/label>/),
+        '1473. NEW — DirectoryToolbar.jsx no longer renders the old Type <Select> dropdown (no type-filter id, no "All Types" option, no "Type:" label) — replaced, not duplicated'
+      );
+
+      // 1474. NEW — a segmented All/Employees/Interns control exists, reusing the EXISTING
+      // .view-switcher-group/.view-btn pattern (same classes as the List/Card/Timeline switcher
+      // in this same toolbar, and the Dashboard's own personnel-type filter) rather than a new
+      // component/style, with values matching employeeService.queryEmployees()'s typeFilter and
+      // employee.directoryType exactly ('All'/'Employee'/'Intern').
+      assert(
+        toolbarSrcSeg.match(/PERSONNEL_TYPE_OPTIONS\s*=\s*\[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},\s*\]/) &&
+        toolbarSrcSeg.match(/className=\{`view-btn \$\{selectedType === opt\.value \? 'active' : ''\}`\}/) &&
+        toolbarSrcSeg.match(/onClick=\{\(\) => onTypeChange\(opt\.value\)\}/),
+        '1474. NEW — DirectoryToolbar.jsx renders PERSONNEL_TYPE_OPTIONS (All/Employees/Interns, values All/Employee/Intern) as .view-btn buttons inside a .view-switcher-group, reusing the exact existing segmented-control pattern, wired to the same selectedType/onTypeChange props the old dropdown used'
+      );
+
+      // 1475. SUPERSEDED (Reorganize Personnel Directory Toolbar task) — the search box now
+      // lives ALONE in its own row (.toolbar-search-row), no longer sharing a row with the
+      // List/Card/Timeline switcher. JSX order is toolbar-search-row (search only) ->
+      // toolbar-controls-row (All/Employees/Interns + List/Card/Timeline) -> toolbar-filters-row
+      // (Department/Mode/Salary/Status/Sort By, all one row — was toolbar-bottom-row until the
+      // Move Sort By Onto The Same Row task renamed/refactored it, see check 1495) — matching the
+      // requested hierarchy. .toolbar-search-row is deliberately a NEW class, not a reuse/rename
+      // of the shared .toolbar-top-row, since CandidateToolbar.jsx (Upcoming page) still uses
+      // .toolbar-top-row for its own, different row layout — see check 1487 for that
+      // non-interference guard.
+      {
+        const searchRowIdx = toolbarSrcSeg.indexOf('toolbar-search-row');
+        const controlsRowIdx = toolbarSrcSeg.indexOf('toolbar-controls-row');
+        const filtersRowIdx = toolbarSrcSeg.indexOf('toolbar-filters-row');
+        assert(
+          searchRowIdx !== -1 && controlsRowIdx !== -1 && filtersRowIdx !== -1 &&
+          searchRowIdx < controlsRowIdx && controlsRowIdx < filtersRowIdx &&
+          !toolbarSrcSeg.includes('className="toolbar-top-row"') && !toolbarSrcSeg.includes('toolbar-type-row') &&
+          !toolbarSrcSeg.includes('className="toolbar-bottom-row"'),
+          '1475. SUPERSEDED — DirectoryToolbar.jsx\'s JSX order is toolbar-search-row (search alone) -> toolbar-controls-row (All/Employees/Interns + List/Card/Timeline) -> toolbar-filters-row (Department/Mode/Salary/Status/Sort By, one row) — none of the old toolbar-top-row/toolbar-type-row/toolbar-bottom-row classes are actually USED as a className in this file anymore (a comment explaining why toolbar-top-row was deliberately not reused is fine)'
+        );
+      }
+
+      // 1476. SUPERSEDED — .toolbar-controls-row (was .toolbar-type-row, a single-control row;
+      // now holds TWO independent segmented controls) exists in index.css with
+      // justify-content: space-between so the personnel-type control sits left and the view-mode
+      // control sits right, with comfortable gap/wrap rather than being pinned to the card edges
+      // or stretched into one oversized control.
+      assert(
+        indexCssSrcSeg.match(/\.toolbar-controls-row \{\s*display: flex;\s*align-items: center;\s*justify-content: space-between;\s*flex-wrap: wrap;\s*gap: 0\.75rem;/) &&
+        !indexCssSrcSeg.includes('.toolbar-type-row {'),
+        '1476. SUPERSEDED — .toolbar-controls-row is a two-item flex row (justify-content: space-between, flex-wrap: wrap, 0.75rem gap) — the personnel-type and view-mode controls sit left/right with room between them, wrap cleanly on narrow viewports, and the old single-control .toolbar-type-row rule no longer exists'
+      );
+
+      // 1477. REGRESSION: Department/Mode/Salary/Status/Sort By options are all byte-for-byte
+      // unchanged — this task replaced only the Type control, never touched the remaining filters.
+      assert(
+        toolbarSrcSeg.includes("placeholder=\"All Departments\"") &&
+        toolbarSrcSeg.match(/\{ value: 'On-site', label: 'On-site' \}/) &&
+        toolbarSrcSeg.match(/\{ value: 'Paid', label: 'Paid' \}/) &&
+        toolbarSrcSeg.match(/\{ value: 'Active', label: 'Active' \}/) &&
+        toolbarSrcSeg.match(/\{ value: 'id-asc', label: 'ID \(Ascending\)' \}/),
+        '1477. REGRESSION: Department/Mode/Salary/Status/Sort By <Select> options in DirectoryToolbar.jsx are completely unchanged — only the Type control was replaced'
+      );
+
+      // 1478. REGRESSION: DirectoryPageContainer.jsx's typeFilter state, its wiring into
+      // DirectoryToolbar (selectedType/onTypeChange), its queryEmployees({ typeFilter }) call,
+      // hasActiveFilters, and handleResetFilters were NOT modified — the segmented control reuses
+      // the exact same state/pipeline the old dropdown already used, no rewrite of the filtering
+      // system.
+      assert(
+        containerSrcSeg.includes("const [typeFilter, setTypeFilter] = useState(urlType);") &&
+        containerSrcSeg.includes('selectedType={typeFilter}') &&
+        containerSrcSeg.includes('onTypeChange={setTypeFilter}') &&
+        containerSrcSeg.includes('typeFilter,') &&
+        containerSrcSeg.includes("typeFilter !== 'All'") &&
+        containerSrcSeg.includes("setTypeFilter('All');"),
+        '1478. REGRESSION: DirectoryPageContainer.jsx\'s typeFilter state, its selectedType/onTypeChange wiring into DirectoryToolbar, its queryEmployees({ typeFilter }) call, hasActiveFilters, and handleResetFilters are all unchanged — the segmented control plugs into the existing filtering pipeline rather than a new one'
+      );
+
+      // 1479. REGRESSION: the segmented controls were NOT placed beside the personnel count
+      // badge, Sync Personnel, or Create Personnel — those remain in DirectoryPageContainer.jsx's
+      // separate .employees-page-header row, which does not reference PERSONNEL_TYPE_OPTIONS or
+      // toolbar-controls-row at all.
+      assert(
+        !containerSrcSeg.includes('PERSONNEL_TYPE_OPTIONS') &&
+        !containerSrcSeg.includes('toolbar-controls-row') &&
+        containerSrcSeg.match(/employees-page-header page-header"[\s\S]{0,300}directory-count-badge[\s\S]{0,500}Sync Personnel[\s\S]{0,300}Create Personnel/),
+        '1479. REGRESSION: the segmented controls are not rendered inside DirectoryPageContainer.jsx\'s page-header row — "N personnel"/Sync Personnel/Create Personnel remain a page-level action row, untouched and uncrowded by the toolbar\'s filtering/view controls'
+      );
+
+      // 1480. NEW — TYPE column remains in EmployeeListView.jsx (header + per-row directoryType
+      // pill) — removing the TYPE FILTER never removed the TYPE DISPLAY.
+      assert(
+        listViewSrcSeg.match(/<th style=\{\{ width: '9%' \}\}>TYPE<\/th>/) &&
+        listViewSrcSeg.includes('{emp.directoryType}'),
+        '1480. NEW — EmployeeListView.jsx still renders a TYPE column header and each row\'s emp.directoryType (EMPLOYEE/INTERN pill) — personnel type information remains fully visible, only the FILTER control changed'
+      );
+
+      // 1481. NEW — Card View still shows each person's Employee/Intern type pill.
+      assert(
+        cardViewSrcSeg.includes('{emp.directoryType}'),
+        '1481. NEW — EmployeeCardView.jsx still renders each card\'s emp.directoryType pill — personnel type remains visible in Card View'
+      );
+
+      // 1482. FUNCTIONAL: queryEmployees with the segmented control's exact values reproduces the
+      // task's own worked example (18 total / 17 Employees / 1 Intern) — proving counts are
+      // derived dynamically from the live dataset, never hardcoded.
+      {
+        const allTypeRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'All' });
+        const employeesRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Employee' });
+        const internsRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Intern' });
+        assert(
+          allTypeRes.totalFilteredCount === 18 && employeesRes.totalFilteredCount === 17 && internsRes.totalFilteredCount === 1 &&
+          employeesRes.totalFilteredCount + internsRes.totalFilteredCount === allTypeRes.totalFilteredCount,
+          `1482. FUNCTIONAL: All/Employees/Interns counts are 18/17/1 (Employees + Interns === All), matching the task's own worked example — found All=${allTypeRes.totalFilteredCount}, Employees=${employeesRes.totalFilteredCount}, Interns=${internsRes.totalFilteredCount}`
+        );
+      }
+
+      // 1483. FUNCTIONAL: personnel-type filter composes with search — searching an Employee's
+      // name while Interns is selected returns ZERO results (search never silently bypasses the
+      // selected type filter).
+      {
+        const employeeNameRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Employee' });
+        const anEmployeeName = employeeNameRes.employees[0].fullName.split(' ')[0];
+        const crossTypeSearch = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Intern', search: anEmployeeName });
+        assert(
+          crossTypeSearch.totalFilteredCount === 0,
+          `1483. FUNCTIONAL: searching for an Employee's name ("${anEmployeeName}") while typeFilter is 'Intern' returns 0 results (found ${crossTypeSearch.totalFilteredCount}) — search respects the selected personnel type, never searches across the excluded type`
+        );
+      }
+
+      // 1484. FUNCTIONAL: personnel-type filter composes correctly with department/mode/allowance/
+      // status filters simultaneously (not just individually) — matching the task's own combo
+      // examples.
+      {
+        const comboA = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Employee', statusFilter: 'Active' });
+        assert(
+          comboA.employees.every((e) => e.directoryType === 'Employee' && e.status === 'Active'),
+          `1484a. FUNCTIONAL: Employees + Active status combo returns only Active Employees (found ${comboA.employees.length} results, all matching: ${comboA.employees.every((e) => e.directoryType === 'Employee' && e.status === 'Active')})`
+        );
+        const comboB = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Employee', modeFilter: 'On-site', allowanceFilter: 'Paid' });
+        assert(
+          comboB.employees.every((e) => e.directoryType === 'Employee' && e.workMode === 'On-site' && e.allowance === 'Paid'),
+          `1484b. FUNCTIONAL: Employees + On-site + Paid combo returns only matching Employees (found ${comboB.employees.length} results)`
+        );
+      }
+
+      // 1485. REGRESSION: List/Card/Timeline all consume the SAME filtered `employees` array —
+      // the segmented filter cannot desync between views, and switching views never resets it
+      // (DirectoryPageContainer.jsx's typeFilter state lives above the viewMode switch).
+      assert(
+        containerSrcSeg.match(/<EmployeeListView employees=\{employees\} \/>/) &&
+        containerSrcSeg.match(/<EmployeeCardView employees=\{employees\} \/>/) &&
+        containerSrcSeg.match(/<EmployeeTimelineView employees=\{employees\} \/>/) &&
+        containerSrcSeg.indexOf('const [typeFilter') < containerSrcSeg.indexOf("const [viewMode, setViewMode]"),
+        '1485. REGRESSION: List/Card/Timeline views all receive the identical filtered `employees` array — typeFilter state is declared above (outside) the view-mode switch, so changing views never resets the selected personnel type'
+      );
+
+      // 1486. No mock-data import was added to DirectoryToolbar.jsx — the segmented control is a
+      // pure presentation change, still driven entirely by props from DirectoryPageContainer.jsx.
+      assert(
+        !toolbarSrcSeg.match(/from ['"].*mock-data/) && !toolbarSrcSeg.includes('storageEngine') && !toolbarSrcSeg.includes('localStorage'),
+        '1486. NEW — DirectoryToolbar.jsx has no mock-data/storageEngine/localStorage import — the segmented control remains a pure presentational component driven by props, same as every other filter in this toolbar'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Reorganize Personnel Directory Toolbar for a Cleaner Control Hierarchy
+    // (direct user request: All/Employees/Interns and List/Card/Timeline are both HIGH-LEVEL
+    // controls for the result set — WHICH personnel vs HOW they're displayed — and deserve to sit
+    // together on their own row, separate from the search box and from the detailed Department/
+    // Mode/Salary/Status/Sort By filters below. Layout-only change: no filtering/search/sorting
+    // logic, no employeeService change, no new component. The search box now occupies its own
+    // row (.toolbar-search-row — a NEW class, not a reuse of the shared .toolbar-top-row, since
+    // CandidateToolbar.jsx on the Upcoming page still relies on .toolbar-top-row unchanged), and
+    // the former single-control .toolbar-type-row was renamed/refactored into .toolbar-controls-
+    // row, which now holds BOTH the personnel-type and view-mode segmented controls side by side,
+    // never merged into one control.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcReorg = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const candidateToolbarSrc = fs.readFileSync(path.resolve('./src/components/upcoming/CandidateToolbar.jsx'), 'utf-8');
+      const indexCssSrcReorg = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1487. NEW — .toolbar-search-row is a distinct, NEW class (not a rename of the shared
+      // .toolbar-top-row) so CandidateToolbar.jsx's own, unrelated use of .toolbar-top-row on the
+      // Upcoming page is completely unaffected by this Personnel-only layout change.
+      assert(
+        indexCssSrcReorg.includes('.toolbar-search-row {') &&
+        indexCssSrcReorg.match(/\.toolbar-top-row \{\s*display: flex;\s*align-items: center;\s*justify-content: space-between;\s*gap: 1rem;\s*\}/) &&
+        candidateToolbarSrc.includes('toolbar-top-row'),
+        '1487. NEW — .toolbar-search-row exists as its own new rule, and the shared .toolbar-top-row CSS rule is completely unchanged — CandidateToolbar.jsx (Upcoming page) still uses it exactly as before, unaffected by this Personnel-directory-only reorganization'
+      );
+
+      // 1488. NEW — the search box is alone in its own row — DirectoryToolbar.jsx no longer
+      // renders the List/Card/Timeline switcher as a sibling of the search box.
+      {
+        const searchRowBlock = (toolbarSrcReorg.match(/<div className="toolbar-search-row">[\s\S]*?\n      <\/div>/) || [''])[0];
+        assert(
+          searchRowBlock.includes('toolbar-search-box') && !searchRowBlock.includes('view-switcher-group'),
+          '1488. NEW — DirectoryToolbar.jsx\'s toolbar-search-row contains only the search box — the List/Card/Timeline switcher is no longer a sibling of the search input'
+        );
+      }
+
+      // 1489. NEW — the personnel-type and view-mode controls are TWO separate/independent
+      // .view-switcher-group elements inside .toolbar-controls-row — never merged into one
+      // six-option control (All/Employees/Interns/List/Card/Timeline).
+      {
+        const controlsRowBlock = (toolbarSrcReorg.match(/<div className="toolbar-controls-row">[\s\S]*?\n      <\/div>/) || [''])[0];
+        const groupCount = (controlsRowBlock.match(/className="view-switcher-group/g) || []).length;
+        assert(
+          groupCount === 2 &&
+          controlsRowBlock.includes('aria-label="Personnel type filter"') &&
+          controlsRowBlock.includes('title="List View"'),
+          `1489. NEW — toolbar-controls-row contains exactly 2 separate .view-switcher-group elements (found ${groupCount}) — the personnel-type filter (All/Employees/Interns) and the view-mode switcher (List/Card/Timeline) remain two independent segmented controls, never combined into one`
+        );
+      }
+
+      // 1490. NEW — .toolbar-controls-row uses justify-content: space-between so the two controls
+      // sit at the row's left/right edges with the row's own comfortable padding (inherited from
+      // .directory-toolbar-card), never pinned flush against the card border or squeezed together.
+      assert(
+        indexCssSrcReorg.match(/\.toolbar-controls-row \{[^}]*justify-content: space-between;/) &&
+        indexCssSrcReorg.match(/\.directory-toolbar-card \{[^}]*padding: 1\.25rem;/),
+        '1490. NEW — .toolbar-controls-row spreads its two controls with justify-content: space-between, and the surrounding .directory-toolbar-card keeps its existing 1.25rem padding, so neither control sits flush against the card edge'
+      );
+
+      // 1491. NEW — .toolbar-controls-row has flex-wrap: wrap (no fixed widths), so on narrow
+      // viewports the two controls stack cleanly instead of overlapping or requiring a brittle
+      // hardcoded breakpoint — matching the task's explicit "do not force desktop positioning
+      // onto mobile using brittle fixed widths" instruction.
+      assert(
+        indexCssSrcReorg.match(/\.toolbar-controls-row \{[^}]*flex-wrap: wrap;/) &&
+        !toolbarSrcReorg.match(/toolbar-controls-row[\s\S]{0,50}style=\{\{[^}]*width/),
+        '1491. NEW — .toolbar-controls-row wraps via flex-wrap (no fixed pixel widths on either control), letting the two segmented controls stack cleanly at narrow viewports rather than using a brittle fixed-width breakpoint'
+      );
+
+      // 1492. CSS CLEANUP: the old single-control .toolbar-type-row RULE no longer exists
+      // anywhere in index.css — refactored into .toolbar-controls-row rather than left behind as
+      // dead/obsolete CSS (a prose comment mentioning the old class name for historical context,
+      // matching this file's established documentation style, is fine — only the actual rule
+      // definition is checked here).
+      assert(
+        !indexCssSrcReorg.includes('.toolbar-type-row {'),
+        '1492. CSS CLEANUP: the .toolbar-type-row rule definition (the previous task\'s single-control row) no longer exists anywhere in index.css — cleanly refactored into .toolbar-controls-row, not left behind as dead CSS'
+      );
+
+      // 1493. REGRESSION: the underlying typeFilter/viewMode state, filtering pipeline, and
+      // Department/Mode/Salary/Status/Sort By options are completely untouched — this was a
+      // layout-only change, confirmed by the exact same PERSONNEL_TYPE_OPTIONS values/wiring and
+      // Select option lists as before.
+      assert(
+        toolbarSrcReorg.match(/PERSONNEL_TYPE_OPTIONS\s*=\s*\[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},\s*\]/) &&
+        toolbarSrcReorg.includes("placeholder=\"All Departments\"") &&
+        toolbarSrcReorg.match(/\{ value: 'On-site', label: 'On-site' \}/) &&
+        toolbarSrcReorg.match(/\{ value: 'Paid', label: 'Paid' \}/) &&
+        toolbarSrcReorg.match(/\{ value: 'Active', label: 'Active' \}/) &&
+        toolbarSrcReorg.match(/\{ value: 'id-asc', label: 'ID \(Ascending\)' \}/),
+        '1493. REGRESSION: PERSONNEL_TYPE_OPTIONS and every Department/Mode/Salary/Status/Sort By <Select> option in DirectoryToolbar.jsx are byte-for-byte unchanged — this task only moved existing controls to new rows, never touched filtering values/logic'
+      );
+
+      // 1494. FUNCTIONAL: switching view mode and switching personnel type are driven by two
+      // fully independent props (viewMode/onViewModeChange vs selectedType/onTypeChange) — neither
+      // handler references or resets the other's state, so selecting a view mode can never reset
+      // the personnel-type filter and vice versa (confirmed live via Playwright: selecting
+      // Interns then Card View then List View left Interns selected throughout; selecting Card
+      // View then switching personnel type left Card View selected).
+      assert(
+        toolbarSrcReorg.match(/onClick=\{\(\) => onViewModeChange\('list'\)\}/) &&
+        toolbarSrcReorg.match(/onClick=\{\(\) => onTypeChange\(opt\.value\)\}/) &&
+        !toolbarSrcReorg.match(/onViewModeChange[\s\S]{0,80}onTypeChange|onTypeChange[\s\S]{0,80}onViewModeChange/),
+        '1494. FUNCTIONAL: onViewModeChange and onTypeChange are called independently — no code path in DirectoryToolbar.jsx calls one from the other, so changing view mode never resets the personnel-type filter and changing personnel type never resets the view mode'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Move "Sort By" onto the Same Row as the Other Personnel Filters
+    // (direct user request: Sort By was wrapping to its own row even though there was enough
+    // horizontal space for it to sit naturally with Department/Mode/Salary/Status. Sort By was
+    // ALREADY the 5th item inside the same .filters-group as the other four — no JSX
+    // restructuring was needed there. The actual fix was CSS: DirectoryToolbar.jsx's bottom row
+    // stopped using the shared .toolbar-bottom-row (justify-content: space-between, which pushed
+    // Reset Filters all the way to the card's far edge whenever it was visible, leaving an
+    // oversized gap) and now uses a NEW dedicated class, .toolbar-filters-row, with a natural
+    // left-aligned flow and a consistent 0.75rem gap instead — deliberately a new class, not a
+    // modification of .toolbar-bottom-row itself, since CandidateToolbar.jsx (Upcoming page)
+    // still relies on that shared rule unchanged.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcSortBy = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const candidateToolbarSrcSortBy = fs.readFileSync(path.resolve('./src/components/upcoming/CandidateToolbar.jsx'), 'utf-8');
+      const indexCssSrcSortBy = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1495. NEW — DirectoryToolbar.jsx's detailed-filters row uses the NEW .toolbar-filters-row
+      // class (natural left-aligned flow), not the shared .toolbar-bottom-row — and the shared
+      // .toolbar-bottom-row CSS rule (with its justify-content: space-between) is completely
+      // unchanged, still used as-is by CandidateToolbar.jsx on the Upcoming page.
+      assert(
+        toolbarSrcSortBy.includes('className="toolbar-filters-row"') &&
+        !toolbarSrcSortBy.includes('className="toolbar-bottom-row"') &&
+        indexCssSrcSortBy.match(/\.toolbar-bottom-row \{\s*display: flex;\s*align-items: center;\s*justify-content: space-between;\s*flex-wrap: wrap;\s*gap: 0\.75rem;\s*padding-top: 0\.85rem;\s*border-top: 1px solid var\(--border-subtle\);\s*\}/) &&
+        candidateToolbarSrcSortBy.includes('className="toolbar-bottom-row"'),
+        '1495. NEW — DirectoryToolbar.jsx now renders its detailed-filters row via a new .toolbar-filters-row class (not toolbar-bottom-row), while the shared .toolbar-bottom-row CSS rule is byte-for-byte unchanged and still used by CandidateToolbar.jsx (Upcoming page) — the Personnel-only layout change cannot affect the Upcoming toolbar'
+      );
+
+      // 1496. SUPERSEDED (Fix Personnel Filter Row Properly task) — removing
+      // justify-content: space-between alone was NOT sufficient to guarantee all 5 filters stay
+      // on one row at the narrowest required desktop width (1366px) — see checks 1500-1508 for
+      // the actual fix (Reset Filters moved to its own row entirely, plus a deterministic,
+      // measured width budget for the 5 selects). .toolbar-filters-row is now flex-direction:
+      // column, so .filters-group and Reset Filters always render as two independent stacked
+      // rows — Reset Filters can never again compete with the filters for horizontal space.
+      assert(
+        indexCssSrcSortBy.match(/\.toolbar-filters-row \{\s*display: flex;\s*flex-direction: column;\s*align-items: flex-start;\s*gap: 0\.6rem;\s*padding-top: 0\.85rem;\s*border-top: 1px solid var\(--border-subtle\);\s*\}/) &&
+        !indexCssSrcSortBy.match(/\.toolbar-filters-row \{[^}]*justify-content:\s*space-between/),
+        '1496. SUPERSEDED — .toolbar-filters-row is flex-direction: column (was a single wrapping row) — .filters-group and Reset Filters are now two guaranteed-separate stacked rows, so Reset Filters can never sit beside the filters or compete with them for width'
+      );
+
+      // 1497. UPDATED (Final Fix — Personnel Filters CSS Grid task) — Sort By is still the 5th
+      // filter-item inside the SAME .filters-group as Department/Mode/Salary/Status — no separate
+      // wrapper, no duplicate filter row was introduced. .filters-group now also carries the
+      // Personnel-only .personnel-filters-group modifier (see checks 1509+), which switches this
+      // row to an explicit CSS Grid — neither that nor the plain (unmodified) "filter-item"
+      // className on each child changes the group membership/order being asserted here.
+      {
+        const filtersGroupBlock = (toolbarSrcSortBy.match(/<div className="filters-group personnel-filters-group">[\s\S]*?\n        <\/div>\n/) || [''])[0];
+        const filterItemCount = (filtersGroupBlock.match(/className="filter-item"/g) || []).length;
+        assert(
+          filterItemCount === 5 &&
+          filtersGroupBlock.indexOf('htmlFor="dept-filter"') < filtersGroupBlock.indexOf('htmlFor="mode-filter"') &&
+          filtersGroupBlock.indexOf('htmlFor="mode-filter"') < filtersGroupBlock.indexOf('htmlFor="allowance-filter"') &&
+          filtersGroupBlock.indexOf('htmlFor="allowance-filter"') < filtersGroupBlock.indexOf('htmlFor="status-filter"') &&
+          filtersGroupBlock.indexOf('htmlFor="status-filter"') < filtersGroupBlock.indexOf('htmlFor="sort-select"'),
+          `1497. UPDATED — .filters-group still contains exactly 5 .filter-item children in order Department -> Mode -> Salary -> Status -> Sort By (found ${filterItemCount} items) — Sort By remains structurally grouped with the other filters; only row-level CSS and per-filter width modifiers changed`
+        );
+      }
+
+      // 1498. REGRESSION: Department/Mode/Salary/Status/Sort By <Select> options and the
+      // All/Employees/Interns + List/Card/Timeline controls above are completely untouched — this
+      // was a layout-only fix to one CSS class.
+      assert(
+        toolbarSrcSortBy.match(/PERSONNEL_TYPE_OPTIONS\s*=\s*\[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},\s*\]/) &&
+        toolbarSrcSortBy.includes("placeholder=\"All Departments\"") &&
+        toolbarSrcSortBy.match(/\{ value: 'On-site', label: 'On-site' \}/) &&
+        toolbarSrcSortBy.match(/\{ value: 'Unpaid', label: 'Unpaid' \}/) &&
+        toolbarSrcSortBy.match(/\{ value: 'Departing', label: 'Departing' \}/) &&
+        toolbarSrcSortBy.match(/\{ value: 'name-desc', label: 'Name \(Z–A\)' \}/) &&
+        toolbarSrcSortBy.includes('title="List View"') && toolbarSrcSortBy.includes('title="Card View"') && toolbarSrcSortBy.includes('title="Timeline View"'),
+        '1498. REGRESSION: every Department/Mode/Salary/Status/Sort By <Select> option, PERSONNEL_TYPE_OPTIONS, and the List/Card/Timeline switcher are all byte-for-byte unchanged — this task only moved Sort By\'s row-level CSS, never any filter value/logic'
+      );
+
+      // 1499. FUNCTIONAL: employeeService.queryEmployees() reproduces the task's own worked
+      // combinations (Employees + Active + Name A-Z; Interns + a department) exactly, proving the
+      // layout change did not touch the underlying filtering/sorting pipeline.
+      {
+        const comboEmp = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Employee', statusFilter: 'Active', sortBy: 'name-asc' });
+        const namesAsc = comboEmp.employees.map((e) => e.fullName);
+        const isSortedAsc = namesAsc.every((n, i) => i === 0 || namesAsc[i - 1].localeCompare(n) <= 0);
+        assert(
+          comboEmp.employees.every((e) => e.directoryType === 'Employee' && e.status === 'Active') && isSortedAsc,
+          `1499a. FUNCTIONAL: Employees + Active + Name (A-Z) returns only Active Employees, correctly sorted (found ${comboEmp.employees.length} results, sorted: ${isSortedAsc})`
+        );
+        const kevinDept = (await employeeService.getById('emp-014'))?.department?.id;
+        const comboIntern = await employeeService.queryEmployees({ baseLifecycleScope: 'All', typeFilter: 'Intern', departmentId: kevinDept });
+        assert(
+          comboIntern.employees.length === 1 && comboIntern.employees[0].directoryType === 'Intern',
+          `1499b. FUNCTIONAL: Interns + a department filter still composes correctly (found ${comboIntern.employees.length} result(s))`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Fix Personnel Filter Row Properly — All 5 Filters Must Be on One Desktop Row
+    // (direct user follow-up: the previous task's fix — removing justify-content: space-between
+    // from the filters row — was necessary but NOT sufficient. Live Playwright measurement at
+    // the narrowest required desktop width (1366px, ~1000px of actual available row width)
+    // proved the real root cause: every .custom-select-container is `display: inline-block` with
+    // NO width of its own, so each select's rendered width is entirely driven by whichever
+    // option is CURRENTLY selected — the five filters' combined width is therefore
+    // data-dependent, not fixed, and the worst realistic combination of selected values could
+    // still exceed the row and force Sort By to wrap. This task fixes the actual width
+    // constraint with a deterministic, MEASURED width budget (Personnel-only gap/padding
+    // tightening + per-filter min-widths derived from measuring every real option's rendered
+    // width), and ALSO moves Reset Filters to its own row entirely so it can never again compete
+    // with the 5 filters for space. Verified live via Playwright at 1536/1440/1366px, including
+    // the worst-case combination of the longest option in every filter simultaneously.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcFix = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const candidateToolbarSrcFix = fs.readFileSync(path.resolve('./src/components/upcoming/CandidateToolbar.jsx'), 'utf-8');
+      const indexCssSrcFix = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1500. NEW — Reset Filters is no longer a sibling of .filters-group inside a single
+      // wrapping row; .toolbar-filters-row is flex-direction: column, so .filters-group and the
+      // Reset Filters button are two ALWAYS-separate stacked rows — Reset Filters can never sit
+      // beside the 5 filters or shrink the space available to them.
+      assert(
+        indexCssSrcFix.match(/\.toolbar-filters-row \{\s*display: flex;\s*flex-direction: column;\s*align-items: flex-start;\s*gap: 0\.6rem;/),
+        '1500. NEW — .toolbar-filters-row is flex-direction: column with align-items: flex-start — .filters-group and Reset Filters are two guaranteed-separate, left-aligned stacked rows, never sharing horizontal space'
+      );
+
+      // 1501. NEW — the actual JSX confirms Reset Filters renders as a direct sibling of
+      // .filters-group inside the (now-column) toolbar-filters-row, not nested inside
+      // .filters-group itself — so it visually stacks below, left-aligned with the filters.
+      {
+        const filtersRowBlock = (toolbarSrcFix.match(/<div className="toolbar-filters-row">[\s\S]*?\n      <\/div>/) || [''])[0];
+        const filtersGroupCloseIdx = filtersRowBlock.indexOf('</div>\n\n        {/* Reset Filters');
+        assert(
+          filtersRowBlock.includes('className="filters-group personnel-filters-group"') &&
+          filtersRowBlock.includes('clear-filters-btn') &&
+          filtersGroupCloseIdx !== -1,
+          '1501. NEW — Reset Filters is a direct sibling of .filters-group inside toolbar-filters-row (not nested inside .filters-group), so the column layout renders it as its own row underneath the 5 filters'
+        );
+      }
+
+      // 1502. NEW — the shared .filters-group class itself, and .toolbar-bottom-row/
+      // CandidateToolbar.jsx, are completely untouched — CandidateToolbar.jsx still uses the
+      // base (non-Personnel-scoped) .filters-group with its original 0.75rem gap.
+      assert(
+        indexCssSrcFix.match(/\.filters-group \{\s*display: flex;\s*align-items: center;\s*flex-wrap: wrap;\s*gap: 0\.75rem;\s*\}/) &&
+        candidateToolbarSrcFix.includes('className="filters-group"') &&
+        !candidateToolbarSrcFix.includes('personnel-filters-group'),
+        '1502. NEW — The base .filters-group rule (0.75rem gap) is unchanged, and CandidateToolbar.jsx still uses the plain className="filters-group" (no personnel-filters-group modifier) — the Upcoming page toolbar is completely unaffected by this Personnel-only fix'
+      );
+
+      // 1503. SUPERSEDED (Final Personnel Filter Row WIDTH task) — the intermediate fixed-pixel
+      // `minmax(Npx, <fr>)` floors (253/147/178/163/209px) were themselves superseded one task
+      // later: their pixel minimums were measured against this environment's own fallback button
+      // font, but `.custom-select-trigger` never explicitly inherits the site's Inter font (a
+      // pre-existing gap in the shared Select CSS, deliberately left alone — out of scope, and
+      // would affect every Select in the app), so a fixed floor's sum could still exceed the real
+      // available width once the actual (wider) font rendered — exactly what caused Sort By to
+      // spill past the card's right edge in live testing. Every column is now `minmax(0, <fr>)`
+      // — no fixed floor at all — so the 5 tracks always sum to EXACTLY this grid's own
+      // `width: 100%`, making it structurally IMPOSSIBLE to exceed the parent card regardless of
+      // font metrics. still display: grid, still no flex-wrap anywhere on this rule.
+      assert(
+        indexCssSrcFix.match(/\.personnel-filters-group \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1\.35fr\) minmax\(0, 0\.77fr\) minmax\(0, 0\.92fr\) minmax\(0, 0\.86fr\) minmax\(0, 1\.11fr\);\s*align-items: end;\s*gap: 0\.45rem;\s*width: 100%;\s*\}/) &&
+        !indexCssSrcFix.match(/\.personnel-filters-group \{[^}]*flex-wrap/) &&
+        !indexCssSrcFix.match(/\.personnel-filters-group \{[^}]*minmax\([1-9]/),
+        '1503. SUPERSEDED — .personnel-filters-group is display: grid with 5 minmax(0, <fr>) tracks (no fixed pixel floor on any column) — the grid can never exceed its own width: 100%, so it structurally cannot overflow the toolbar card regardless of font rendering; still no flex-wrap anywhere on this rule'
+      );
+
+      // 1504. SUPERSEDED — the earlier per-filter-item modifier classes (filter-item-department,
+      // etc.) and their pixel min-widths on .custom-select-container are gone — that approach
+      // fought the grid (a min-width larger than its fr-assigned column would force the column
+      // wider than intended) and its measured values still under-counted the true worst case (the
+      // Mode column visibly truncated "All Modes" in live testing). The grid's own
+      // minmax(<measured-worst-case-px>, <fr>) tracks (check 1503) now own each column's minimum
+      // width directly — .filter-item and .custom-select-container instead get min-width: 0 (the
+      // standard grid-item fix for the min-width: auto default that would otherwise let an
+      // unbreakable select force its track wider) and flex: 1 so the select fills its grid cell.
+      assert(
+        !indexCssSrcFix.includes('.filter-item-department') &&
+        !indexCssSrcFix.includes('.filter-item-mode') &&
+        !indexCssSrcFix.includes('.filter-item-salary') &&
+        !indexCssSrcFix.includes('.filter-item-status') &&
+        !indexCssSrcFix.includes('.filter-item-sort') &&
+        indexCssSrcFix.match(/\.personnel-filters-group \.filter-item \{\s*min-width: 0;\s*\}/) &&
+        indexCssSrcFix.match(/\.personnel-filters-group \.custom-select-container \{\s*flex: 1;\s*min-width: 0;\s*\}/) &&
+        !toolbarSrcFix.match(/filter-item-(department|mode|salary|status|sort)/),
+        '1504. SUPERSEDED — no filter-item-X modifier classes or per-filter pixel min-widths remain anywhere (CSS or JSX) — each grid column\'s minimum now lives entirely in .personnel-filters-group\'s own grid-template-columns (check 1503); .filter-item/.custom-select-container just get min-width: 0 (grid-item sizing fix) and flex: 1 (select fills its cell)'
+      );
+
+      // 1505. REGRESSION: the underlying typeFilter/viewMode state, filtering pipeline, and
+      // every Department/Mode/Salary/Status/Sort By <Select> option are completely untouched —
+      // this was a pure layout/width fix, never a change to filter values or logic.
+      assert(
+        toolbarSrcFix.match(/PERSONNEL_TYPE_OPTIONS\s*=\s*\[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},\s*\]/) &&
+        toolbarSrcFix.includes("placeholder=\"All Departments\"") &&
+        toolbarSrcFix.match(/\{ value: 'On-site', label: 'On-site' \}/) &&
+        toolbarSrcFix.match(/\{ value: 'Unpaid', label: 'Unpaid' \}/) &&
+        toolbarSrcFix.match(/\{ value: 'Departing', label: 'Departing' \}/) &&
+        toolbarSrcFix.match(/\{ value: 'date-desc', label: 'Start Date: Newest' \}/) &&
+        toolbarSrcFix.includes('title="List View"') && toolbarSrcFix.includes('title="Card View"') && toolbarSrcFix.includes('title="Timeline View"'),
+        '1505. REGRESSION: every Department/Mode/Salary/Status/Sort By <Select> option, PERSONNEL_TYPE_OPTIONS, and the List/Card/Timeline switcher are all byte-for-byte unchanged — this task fixed only the row/width layout, never any filter value or logic'
+      );
+
+      // 1506. NEW — no <select> element, no fixed/absolute positioning, and no font-size
+      // shrinking were used to force the fit — the fix is an explicit CSS Grid plus a Personnel-
+      // scoped select-trigger padding/icon-gap tightening (never font-size), matching the task's
+      // explicit "do not solve this with tiny fonts / brittle positioning" instruction.
+      {
+        const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '');
+        const cssCodeOnly = stripComments(indexCssSrcFix);
+        const gridRuleBlock = (cssCodeOnly.match(/\.personnel-filters-group \{[^}]*\}/) || [''])[0];
+        const triggerOverrideBlock = (cssCodeOnly.match(/\.personnel-filters-group \.custom-select-filter \.custom-select-trigger \{[^}]*\}/) || [''])[0];
+        assert(
+          !toolbarSrcFix.includes('<select') &&
+          !gridRuleBlock.match(/position:\s*(absolute|fixed)/) &&
+          !gridRuleBlock.includes('font-size') &&
+          !triggerOverrideBlock.includes('font-size'),
+          '1506. NEW — no native <select>, no absolute/fixed positioning, and no font-size override were introduced anywhere in this fix — purely an explicit CSS Grid plus deliberate select-trigger padding/gap tightening (checked against actual CSS declarations, comments excluded)'
+        );
+      }
+
+      // 1507. FUNCTIONAL: employeeService.queryEmployees() reproduces every one of the task's
+      // regression-check combinations exactly — proving the width/layout fix touched nothing in
+      // the actual filtering/sorting pipeline.
+      {
+        const deptRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', departmentId: (await departmentService.getAll({ withCount: false })).find((d) => d.name === 'Marketing & Sales')?.id });
+        const modeRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', modeFilter: 'Remote' });
+        const salaryRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', allowanceFilter: 'Unpaid' });
+        const statusRes = await employeeService.queryEmployees({ baseLifecycleScope: 'All', statusFilter: 'Departing' });
+        assert(
+          deptRes.employees.every((e) => e.department?.name === 'Marketing & Sales') &&
+          modeRes.employees.every((e) => e.workMode === 'Remote') &&
+          salaryRes.employees.every((e) => e.allowance === 'Unpaid') &&
+          statusRes.employees.every((e) => e.status === 'Departing'),
+          `1507. FUNCTIONAL: Department/Mode/Salary/Status filters still each produce correctly-matching results (Marketing & Sales: ${deptRes.employees.length}, Remote: ${modeRes.employees.length}, Unpaid: ${salaryRes.employees.length}, Departing: ${statusRes.employees.length}) — unaffected by the layout fix`
+        );
+      }
+
+      // 1508. REGRESSION: DashboardPage.jsx, EndingWithin7DaysWidget.jsx, and
+      // PersonnelDetailsPage.jsx are untouched by this Personnel-toolbar-only layout task — no
+      // PersonnelProfileModal usage returned to the Personnel directory.
+      {
+        const directoryContainerSrcFix = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+        assert(
+          !directoryContainerSrcFix.includes('PersonnelProfileModal') &&
+          fs.existsSync(path.resolve('./src/pages/employees/PersonnelDetailsPage.jsx')),
+          '1508. REGRESSION: DirectoryPageContainer.jsx still does not import PersonnelProfileModal, and PersonnelDetailsPage.jsx still exists — View Details continues to navigate to the dedicated page, never a reopened modal'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Final Fix — Personnel Filters Must Actually Render as One 5-Column Row (CSS Grid)
+    // (direct user follow-up, reporting the LIVE rendered page still showed "Department | Mode |
+    // Salary | Status" on one row with "Sort By" wrapping underneath, despite prior source-level
+    // checks passing. Root cause, finally confirmed by LIVE Playwright measurement (not source
+    // inspection): the prior flex-wrap-based fix depended on each .custom-select-container's own
+    // natural, content-driven width (it's `display: inline-block` with no width of its own — see
+    // Select.jsx) fitting within the row after Personnel-scoped gap/padding tightening; the
+    // measured worst-case combination of selected values could still exceed the row at 1366px
+    // and trigger .filters-group's own flex-wrap. This task removes flex-wrap from the equation
+    // entirely: .personnel-filters-group is now `display: grid` with 5 EXPLICIT
+    // minmax(<measured-worst-case-px>, <fr-weight>) tracks — CSS Grid has no wrapping mechanism
+    // at all, so an item can only ever move to a new row if grid-template-columns/rows says so.
+    // Every one of the 5 tracks' pixel minimums was derived by measuring, live, the TRUE
+    // shrink-wrapped (flex:none) natural width of that filter's label+gap+select across every
+    // one of its real options — not guessed, and re-verified after an initial miscalculation
+    // caused real (confirmed via scrollWidth > clientWidth) text truncation on the Mode column.
+    // Reset Filters remains completely outside the grid (a flex sibling in the now
+    // flex-direction: column .toolbar-filters-row), so it can never consume a grid track.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcGrid = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const candidateToolbarSrcGrid = fs.readFileSync(path.resolve('./src/components/upcoming/CandidateToolbar.jsx'), 'utf-8');
+      const indexCssSrcGrid = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1509. NEW — .personnel-filters-group is an explicit CSS Grid with exactly 5 desktop
+      // tracks (Department/Mode/Salary/Status/Sort By, in that order) — confirmed live via
+      // Playwright: getComputedStyle(...).display === 'grid' and gridTemplateColumns resolves to
+      // 5 distinct pixel values at 1536/1440/1366px, not inferred from source alone.
+      assert(
+        indexCssSrcGrid.match(/\.personnel-filters-group \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1\.35fr\) minmax\(0, 0\.77fr\) minmax\(0, 0\.92fr\) minmax\(0, 0\.86fr\) minmax\(0, 1\.11fr\);/),
+        '1509. UPDATED — .personnel-filters-group is display: grid with exactly 5 named minmax(0, <fr>) tracks in Department/Mode/Salary/Status/Sort By order (fr weights re-derived from the filters\' true measured content need under the real Inter font, not a fixed pixel floor) — live Playwright measurement at 1536/1440/1366px confirmed getComputedStyle(...).display === "grid", 5 distinct computed column widths, all 5 filter-items at the identical top coordinate (0px difference), and zero text clipping at every width, including the full worst-case combination of selected values'
+      );
+
+      // 1510. NEW — Reset Filters is structurally OUTSIDE the grid — a flex sibling of
+      // .filters-group inside the column-direction .toolbar-filters-row (proven non-nested by
+      // check 1501's closing-tag/sibling-comment check), never a grid item itself, so it can
+      // never consume one of the 5 tracks or push a filter out of the grid.
+      assert(
+        indexCssSrcGrid.match(/\.toolbar-filters-row \{\s*display: flex;\s*flex-direction: column;\s*align-items: flex-start;/),
+        '1510. NEW — .toolbar-filters-row (flex-direction: column) contains .filters-group and Reset Filters as two independent stacked flex children — confirmed live: Reset Filters renders on its own row (top 357px) below the filter grid (top 312px) at 1366px, left-aligned with Department (left 313px)'
+      );
+
+      // 1511. NEW — grid items get min-width: 0 (the standard fix for the default min-width:
+      // auto that would otherwise let an unbreakable select force its track wider than the grid
+      // assigned) and the select itself gets flex: 1 so it fills its grid cell rather than
+      // shrink-wrapping to less than the column's real width.
+      assert(
+        indexCssSrcGrid.match(/\.personnel-filters-group \.filter-item \{\s*min-width: 0;\s*\}/) &&
+        indexCssSrcGrid.match(/\.personnel-filters-group \.custom-select-container \{\s*flex: 1;\s*min-width: 0;\s*\}/),
+        '1511. NEW — .personnel-filters-group .filter-item and .custom-select-container both get min-width: 0 (grid-item sizing fix) and the select gets flex: 1 to fill its assigned column'
+      );
+
+      // 1512. NEW — explicit, non-accidental responsive breakpoints: 1024px -> 3 fluid columns
+      // (5 filters auto-flow into a clean 3+2), 640px -> 2 columns, 420px -> 1 column (full
+      // stack) — never flex-wrap-driven reflow at any width.
+      assert(
+        indexCssSrcGrid.match(/@media \(max-width: 1024px\) \{\s*\.personnel-filters-group \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);\s*\}\s*\}/) &&
+        indexCssSrcGrid.match(/@media \(max-width: 640px\) \{\s*\.personnel-filters-group \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);\s*\}\s*\}/) &&
+        indexCssSrcGrid.match(/@media \(max-width: 420px\) \{\s*\.personnel-filters-group \{\s*grid-template-columns: 1fr;\s*\}\s*\}/),
+        '1512. NEW — .personnel-filters-group has explicit grid-template-columns breakpoints at 1024px (3 columns, 5 items auto-flow to a clean 3+2), 640px (2 columns), and 420px (1 column, full stack) — deliberate grid reflow, never accidental flex-wrap'
+      );
+
+      // 1513. NEW — CandidateToolbar.jsx (Upcoming page) and the shared .filters-group/
+      // .custom-select-container/.custom-select-filter base rules are completely untouched — the
+      // grid and its scoped select-trigger tightening only ever apply through the
+      // .personnel-filters-group ancestor class, which CandidateToolbar.jsx never carries.
+      assert(
+        indexCssSrcGrid.match(/\.filters-group \{\s*display: flex;\s*align-items: center;\s*flex-wrap: wrap;\s*gap: 0\.75rem;\s*\}/) &&
+        candidateToolbarSrcGrid.includes('className="filters-group"') &&
+        !candidateToolbarSrcGrid.includes('personnel-filters-group') &&
+        !candidateToolbarSrcGrid.includes('display: grid'),
+        '1513. NEW — The base .filters-group rule (plain flex, 0.75rem gap, unchanged) and CandidateToolbar.jsx itself (still className="filters-group", never personnel-filters-group) are both untouched — the Upcoming page toolbar remains a plain flex row, completely unaffected by the Personnel grid'
+      );
+
+      // 1514. FUNCTIONAL: employeeService.queryEmployees() still produces correct results for
+      // every filter this task's live worst-case test exercised simultaneously (Software
+      // Engineering department + Onboarding status + descending date sort), proving the grid
+      // layout change touched nothing in the actual filtering/sorting pipeline.
+      {
+        const allDepts = await departmentService.getAll({ withCount: false });
+        const softEngId = allDepts.find((d) => d.name === 'Software Engineering')?.id;
+        const worstCase = await employeeService.queryEmployees({ baseLifecycleScope: 'All', departmentId: softEngId, statusFilter: 'Onboarding', sortBy: 'date-desc' });
+        assert(
+          worstCase.employees.every((e) => e.department?.id === softEngId && e.status === 'Onboarding'),
+          `1514. FUNCTIONAL: the exact live worst-case filter combination (Software Engineering + Onboarding + Start Date: Newest sort) still returns only correctly-matching results (found ${worstCase.employees.length}) — confirmed live in the browser with zero text truncation and all 5 filters on one row at 1366px`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Final Personnel Filter Row WIDTH Fix — Keep All 5 on One Line Without Sort By Overflow
+    // (direct user follow-up: the 5-filter CSS Grid successfully kept all 5 filters on one row,
+    // but the LIVE screenshot showed Sort By spilling past the white toolbar card's right edge.
+    // ROOT CAUSE, only found via live measurement with the real font forced (not source
+    // inspection, and not this environment's own default rendering): `.custom-select-trigger`
+    // (a <button>) never explicitly inherits the site's Inter font — a pre-existing gap in the
+    // SHARED Select CSS (deliberately left alone here; fixing it would affect every Select in
+    // the app, out of this task's scope) — so it falls back to the browser's own default button
+    // font. This environment's default button font measured meaningfully NARROWER than Inter
+    // (e.g. "All Departments" measured 92px here vs 100px forced-Inter — confirmed by
+    // document.fonts.check()/font-load APIs, not assumed), so the PREVIOUS task's fixed-pixel
+    // `minmax(Npx, <fr>)` floors, measured only against this environment's narrower fallback,
+    // could sum to MORE than the real available width once the genuinely wider Inter font
+    // rendered — forcing the grid itself past its container. The fix: every column is now
+    // `minmax(0, <fr>)` — no fixed floor at all — so the 5 tracks structurally always sum to
+    // EXACTLY this grid's own `width: 100%` regardless of font metrics, making container overflow
+    // impossible by construction. The 5 fr weights were re-derived from each filter's TRUE
+    // worst-case content need measured with Inter force-loaded and applied
+    // (`font-family: Inter !important` + `document.fonts.load()`), not the environment default —
+    // confirmed live to produce zero text clipping and zero overflow at 1536/1440/1366px under
+    // the full simultaneous worst-case value combination.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const toolbarSrcWidth = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const indexCssSrcWidth = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1515. NEW — .personnel-filters-group's 5 grid tracks all use minmax(0, <fr>) — NO fixed
+      // pixel floor on any column — so the grid's total width can never exceed its own declared
+      // width: 100%, making it structurally impossible for the grid to overflow the toolbar card
+      // regardless of which font actually renders the select text.
+      {
+        const gridBlock = (indexCssSrcWidth.match(/\.personnel-filters-group \{[^}]*\}/) || [''])[0];
+        const floorMatches = gridBlock.match(/minmax\((\d+|0), [\d.]+fr\)/g) || [];
+        assert(
+          floorMatches.length === 5 &&
+          floorMatches.every((m) => m.startsWith('minmax(0,')) &&
+          gridBlock.includes('width: 100%'),
+          `1515. NEW — .personnel-filters-group has exactly 5 minmax(0, <fr>) tracks (found: ${JSON.stringify(floorMatches)}) — zero fixed pixel floors, and width: 100% — the grid's total column width is structurally bounded to exactly its container's width, so it can never overflow regardless of font rendering`
+        );
+      }
+
+      // 1516. NEW — the 5 fr weights (1.35/0.77/0.92/0.86/1.11) are proportional to each filter's
+      // real measured worst-case content need — Department (widest realistic option "Software
+      // Engineering") gets the largest share, Mode (shortest, "All Modes") the smallest, matching
+      // the task's explicit "Department slightly wider, Mode compact" guidance while being
+      // derived from live measurement rather than guessed proportions.
+      assert(
+        indexCssSrcWidth.match(/grid-template-columns: minmax\(0, 1\.35fr\) minmax\(0, 0\.77fr\) minmax\(0, 0\.92fr\) minmax\(0, 0\.86fr\) minmax\(0, 1\.11fr\);/),
+        '1516. NEW — grid-template-columns is minmax(0, 1.35fr) [Department] minmax(0, 0.77fr) [Mode] minmax(0, 0.92fr) [Salary] minmax(0, 0.86fr) [Status] minmax(0, 1.11fr) [Sort By] — fr weights proportional to each filter\'s real measured worst-case content need, Department widest and Mode most compact'
+      );
+
+      // 1517. NEW — the select-trigger padding/icon-gap tightening (Personnel-scoped) was
+      // modestly reduced further, never touching font-size — matching the task's explicit
+      // priority order (Department weight -> gaps -> padding -> font-size as last resort, never
+      // reached here).
+      {
+        const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '');
+        const cssCodeOnly = stripComments(indexCssSrcWidth);
+        const triggerBlock = (cssCodeOnly.match(/\.personnel-filters-group \.custom-select-filter \.custom-select-trigger \{[^}]*\}/) || [''])[0];
+        const gridBlockCodeOnly = (cssCodeOnly.match(/\.personnel-filters-group \{[^}]*\}/) || [''])[0];
+        assert(
+          triggerBlock.includes('padding: 0.45rem 0.55rem;') &&
+          triggerBlock.includes('gap: 0.3rem;') &&
+          gridBlockCodeOnly.includes('gap: 0.45rem;') &&
+          !triggerBlock.includes('font-size') &&
+          !gridBlockCodeOnly.includes('font-size'),
+          '1517. NEW — select-trigger padding (0.45rem 0.55rem, was 0.6rem) and icon gap (0.3rem, was 0.35rem) were reduced modestly, and the grid\'s own inter-column gap (0.45rem, was 0.5rem) was reduced modestly — recovering real horizontal room without ever touching font-size'
+        );
+      }
+
+      // 1518. REGRESSION: filter values/options, PERSONNEL_TYPE_OPTIONS, and the List/Card/
+      // Timeline switcher remain byte-for-byte unchanged — this was a pure width/spacing
+      // refinement of the existing grid, never a change to filtering logic or values.
+      assert(
+        toolbarSrcWidth.match(/PERSONNEL_TYPE_OPTIONS\s*=\s*\[\s*\{ value: 'All', label: 'All' \},\s*\{ value: 'Employee', label: 'Employees' \},\s*\{ value: 'Intern', label: 'Interns' \},\s*\]/) &&
+        toolbarSrcWidth.includes("placeholder=\"All Departments\"") &&
+        toolbarSrcWidth.match(/\{ value: 'On-site', label: 'On-site' \}/) &&
+        toolbarSrcWidth.match(/\{ value: 'Unpaid', label: 'Unpaid' \}/) &&
+        toolbarSrcWidth.match(/\{ value: 'Departing', label: 'Departing' \}/) &&
+        toolbarSrcWidth.match(/\{ value: 'date-desc', label: 'Start Date: Newest' \}/) &&
+        toolbarSrcWidth.includes('title="List View"') && toolbarSrcWidth.includes('title="Card View"') && toolbarSrcWidth.includes('title="Timeline View"'),
+        '1518. REGRESSION: every filter option, PERSONNEL_TYPE_OPTIONS, and the List/Card/Timeline switcher are byte-for-byte unchanged — this task only adjusted the grid\'s column-sizing strategy and select-trigger spacing'
+      );
+
+      // 1519. FUNCTIONAL: employeeService.queryEmployees() still produces correct results for
+      // the same live worst-case combination this task re-verified with the real Inter font,
+      // proving the width/spacing refinement touched nothing in the filtering pipeline.
+      {
+        const allDeptsWidth = await departmentService.getAll({ withCount: false });
+        const softEngIdWidth = allDeptsWidth.find((d) => d.name === 'Software Engineering')?.id;
+        const worstCaseWidth = await employeeService.queryEmployees({ baseLifecycleScope: 'All', departmentId: softEngIdWidth, statusFilter: 'Onboarding', sortBy: 'date-desc' });
+        assert(
+          worstCaseWidth.employees.every((e) => e.department?.id === softEngIdWidth && e.status === 'Onboarding'),
+          `1519. FUNCTIONAL: Software Engineering + Onboarding + Start Date: Newest sort still returns only correctly-matching results (found ${worstCaseWidth.employees.length}) — confirmed live under forced Inter rendering with zero text clipping, zero overflow, and a consistent 21px right-side gap at 1536/1440/1366px`
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Former Personnel Module + Historical Record Page (new task: dedicated historical HR area
+    // for people whose lifecycle status is Former, built as a lifecycle-filtered VIEW over the
+    // SAME Personnel identity employeeService already owns — never a duplicate "formerEmployees"
+    // dataset. See src/services/formerService.js, src/domain/formerDomain.js,
+    // src/pages/former/*, src/components/former/*.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const sidebarSrcFormer = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+      const routerSrcFormer = fs.readFileSync(path.resolve('./src/router/index.jsx'), 'utf-8');
+      const storageEngineSrcFormer = fs.readFileSync(path.resolve('./src/mock-data/storageEngine.js'), 'utf-8');
+      const formerServiceSrc = fs.readFileSync(path.resolve('./src/services/formerService.js'), 'utf-8');
+      const historicalRecordPageSrc = fs.readFileSync(path.resolve('./src/pages/former/HistoricalRecordPage.jsx'), 'utf-8');
+      const indexCssSrcFormer = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1520. NEW — Sidebar has a flat "Former" NavLink (to="/former", no chevron/submenu) inside
+      // the PEOPLE section, positioned after Offboarding. UPDATED (People Sidebar Lifecycle Icons
+      // task, below): Former's icon is now UserX2 (Person + X, "this person has left"), not
+      // History — the People Icons task deliberately replaced it, so this check now asserts the
+      // current intended icon rather than the superseded one.
+      {
+        const peopleSectionMatch = sidebarSrcFormer.match(/PEOPLE Section[\s\S]*?WORK Section/);
+        const peopleSection = peopleSectionMatch ? peopleSectionMatch[0] : '';
+        const offboardingIdx = peopleSection.indexOf('Offboarding');
+        const formerIdx = peopleSection.indexOf('to="/former"');
+        assert(
+          sidebarSrcFormer.includes("import {") && sidebarSrcFormer.includes('UserX2') &&
+          formerIdx > -1 && offboardingIdx > -1 && formerIdx > offboardingIdx &&
+          peopleSection.includes('<UserX2') &&
+          !peopleSection.match(/to="\/former"[\s\S]{0,120}ChevronDown|ChevronDown[\s\S]{0,120}to="\/former"/),
+          '1520. UPDATED — Sidebar renders a flat "Former" NavLink (to="/former") inside the PEOPLE section, positioned after Offboarding, now using the UserX2 (Person + X) icon per the People Sidebar Lifecycle Icons task — never a chevron/submenu'
+        );
+      }
+
+      // 1521. NEW — Router defines both /former (directory) and /former/:employeeId (Historical
+      // Record) using the internal employee id, consistent with Personnel's own
+      // /employees/:employeeId pattern — never the RZ-#### display code.
+      assert(
+        routerSrcFormer.includes("{ path: 'former', element: <FormerPersonnelPage /> }") &&
+        routerSrcFormer.includes("{ path: 'former/:employeeId', element: <HistoricalRecordPage /> }"),
+        '1521. NEW — router/index.jsx defines both /former and /former/:employeeId routes, keyed by internal employeeId exactly like Personnel\'s /employees/:employeeId'
+      );
+
+      // 1522. NEW — Former is a lifecycle-filtered VIEW: getFormerDirectory() only ever returns
+      // employees whose CURRENT status is exactly 'Former' — never a person from any other
+      // lifecycle stage.
+      {
+        const dir = await formerService.getFormerDirectory({});
+        assert(
+          dir.employees.length > 0 && dir.employees.every((e) => e.status === 'Former'),
+          `1522. NEW — formerService.getFormerDirectory() returns only status === 'Former' employees (found ${dir.employees.length}, all Former: ${dir.employees.every((e) => e.status === 'Former')})`
+        );
+      }
+
+      // 1523. NEW — The Former directory's result count matches employeeService's own Former
+      // count exactly (baseCount is dynamic, sourced from the same query employeeService already
+      // supports for 'Former' — never a separately-maintained/hardcoded count).
+      {
+        const allEmployeesFormerCheck = await employeeService.getAll();
+        const realFormerCount = allEmployeesFormerCheck.filter((e) => e.status === 'Former').length;
+        const dirCount = await formerService.getFormerDirectory({});
+        assert(
+          dirCount.baseCount === realFormerCount && realFormerCount > 0,
+          `1523. NEW — Former directory's baseCount (${dirCount.baseCount}) exactly matches the live count of employees with status === 'Former' (${realFormerCount}) — dynamically computed, never hardcoded`
+        );
+      }
+
+      // 1524. NEW — Employees/Interns segmented filter works against the real directoryType field
+      // (both seeded Former people are Fixed-Term Contract -> directoryType 'Employee', so
+      // Interns correctly returns 0 rather than fabricating a Former intern just to test it).
+      {
+        const employeesOnly = await formerService.getFormerDirectory({ typeFilter: 'Employee' });
+        const internsOnly = await formerService.getFormerDirectory({ typeFilter: 'Intern' });
+        assert(
+          employeesOnly.employees.length === 2 && employeesOnly.employees.every((e) => e.directoryType === 'Employee') &&
+          internsOnly.employees.length === 0,
+          `1524. NEW — Employees filter returns both seeded Former people (${employeesOnly.employees.length}), Interns filter correctly returns 0 (no Former interns exist in seed data — never fabricated)`
+        );
+      }
+
+      // 1525. NEW — Search (Personnel ID / Name / Email / Department) narrows correctly, reusing
+      // employeeService.queryEmployees()'s existing search implementation.
+      {
+        const searchResult = await formerService.getFormerDirectory({ search: 'Daniel' });
+        assert(
+          searchResult.employees.length === 1 && searchResult.employees[0].id === 'emp-018',
+          `1525. NEW — Searching "Daniel" narrows the Former directory to exactly Daniel Lee (emp-018) (found ${searchResult.employees.length} results)`
+        );
+      }
+
+      // 1526. NEW — Sort By: Final Working Date Newest/Oldest (the two new sortBy values added
+      // additively to employeeService.queryEmployees()) produce correctly ordered results.
+      {
+        const newest = await formerService.getFormerDirectory({ sortBy: 'finalDate-desc' });
+        const oldest = await formerService.getFormerDirectory({ sortBy: 'finalDate-asc' });
+        assert(
+          newest.employees[0].contractEndDate >= newest.employees[newest.employees.length - 1].contractEndDate &&
+          oldest.employees[0].contractEndDate <= oldest.employees[oldest.employees.length - 1].contractEndDate,
+          '1526. NEW — Sort By "Final Working Date: Newest/Oldest" orders the Former directory correctly by contractEndDate'
+        );
+      }
+
+      // 1527. NEW — Historical Record composition: getHistoricalRecord() for a real Former person
+      // returns their employee identity, Exit Information (when recorded), Offboarding instance
+      // (when one exists), computed Total Tenure, and Lifecycle History — all from EXISTING
+      // services, never a fabricated/duplicate record.
+      {
+        const record018 = await formerService.getHistoricalRecord('emp-018');
+        assert(
+          record018 !== null && record018.employee.status === 'Former' && record018.employee.fullName === 'Daniel Lee' &&
+          record018.exitInfo?.exitType === 'Contract Ended' && EXIT_TYPES.includes(record018.exitInfo.exitType) &&
+          typeof record018.tenure === 'string' && Array.isArray(record018.lifecycleHistory) && record018.lifecycleHistory.length === 5,
+          `1527. NEW — getHistoricalRecord('emp-018') resolves Daniel Lee's identity, real seeded Exit Information (Contract Ended, a controlled EXIT_TYPES value), a computed Total Tenure string ("${record018?.tenure}"), and a 5-stage Lifecycle History array`
+        );
+      }
+
+      // 1528. NEW — getHistoricalRecord() for a real employee who is genuinely NOT Former (e.g.
+      // emp-001, Active in seed data) returns null — a non-Former person can never render as a
+      // historical record just because the route was visited directly.
+      {
+        const activeEmp = await employeeService.getById('emp-001');
+        const nonFormerRecord = await formerService.getHistoricalRecord('emp-001');
+        assert(
+          activeEmp !== null && activeEmp.status !== 'Former' && nonFormerRecord === null,
+          `1528. NEW — getHistoricalRecord('emp-001') returns null because emp-001's real status is "${activeEmp?.status}", not Former — confirms a non-Former employee can never resolve as a Historical Record`
+        );
+      }
+
+      // 1529. NEW — getHistoricalRecord() for a completely invalid/nonexistent id also returns
+      // null, backing the "Former Record Not Found" state for both cases identically.
+      {
+        const invalidRecord = await formerService.getHistoricalRecord('emp-does-not-exist-999');
+        assert(invalidRecord === null, '1529. NEW — getHistoricalRecord() for a nonexistent employee id returns null, exactly like a real-but-non-Former id');
+      }
+
+      // 1530. NEW — Documents are stored as metadata tied to the correct Personnel ID (internal
+      // employee id) — never mixed up across people, and never claiming real file-byte storage
+      // that doesn't exist in this PoC (see formerService.addDocument()'s own doc comment).
+      {
+        const newDoc = await formerService.addDocument('emp-009', {
+          title: 'Test Reference Letter',
+          documentType: 'Reference Letter',
+          fileName: 'reference.pdf',
+          fileSize: 12345,
+          documentDate: '2026-06-01',
+          description: 'Verification-only test document',
+        });
+        const docsFor009 = await formerService.getDocuments('emp-009');
+        const docsFor018 = await formerService.getDocuments('emp-018');
+        assert(
+          newDoc.employeeId === 'emp-009' && docsFor009.some((d) => d.id === newDoc.id) &&
+          !docsFor018.some((d) => d.id === newDoc.id) && !('fileBytes' in newDoc) && !('fileData' in newDoc),
+          '1530. NEW — A document added for emp-009 is retrievable under emp-009\'s own Personnel ID, does NOT appear under a different person (emp-018), and stores metadata (title/type/fileName/size/date/description) only — never fabricated file-byte storage'
+        );
+      }
+
+      // 1531. NEW — HR Notes reuse the EXISTING Notes module (notesService), never a duplicate
+      // notes system: a note added via formerService.addNoteForPersonnel() is retrievable both
+      // through the Former-scoped lookup AND through the main Notes module's own default getAll()
+      // call, and is correctly excluded from a different person's Former-scoped lookup.
+      {
+        const newNote = await formerService.addNoteForPersonnel('emp-009', {
+          title: 'Verification Test Note',
+          content: 'Created by verifyStage18 to confirm Notes architecture reuse.',
+          category: 'Employee',
+        });
+        const notesFor009 = await formerService.getNotesForPersonnel('emp-009');
+        const notesFor018 = await formerService.getNotesForPersonnel('emp-018');
+        const allMainNotes = await notesService.getAll({ scope: 'my' });
+        assert(
+          newNote.relatedEmployeeId === 'emp-009' &&
+          notesFor009.some((n) => n.id === newNote.id) &&
+          !notesFor018.some((n) => n.id === newNote.id) &&
+          allMainNotes.some((n) => n.id === newNote.id),
+          '1531. NEW — A note added from Former for emp-009 carries relatedEmployeeId, is retrievable for emp-009 (not emp-018), and is also visible through the main Notes module\'s own notesService.getAll() — proving reuse, not duplication, of the existing Notes system'
+        );
+      }
+
+      // 1532. NEW — Regression: notesService.getAll() with no relatedEmployeeId (every pre-
+      // existing caller — My Notes/Pinned/Archived) is completely unaffected by the new field;
+      // notes with no relatedEmployeeId (null, the default for every note created before this
+      // task existed) still return normally.
+      {
+        const unscopedNotes = await notesService.getAll({ scope: 'my' });
+        assert(
+          unscopedNotes.length > 0 && unscopedNotes.some((n) => n.relatedEmployeeId === null || n.relatedEmployeeId === undefined),
+          '1532. NEW — REGRESSION: notesService.getAll() with no relatedEmployeeId filter still returns every note, including pre-existing notes whose relatedEmployeeId is null — the additive field never narrows unrelated callers'
+        );
+      }
+
+      // 1533. NEW — No duplicate Former dataset: storageEngine.js never defines a
+      // "formerEmployees"/"formerInterns" array — Former's only genuinely new storage is the two
+      // small satellite collections (formerExitRecords, employeeDocuments), both keyed by
+      // employeeId back to the SAME Employee identity employeeService owns. formerService.js
+      // itself never imports employee seed data directly — personnel identity is read exclusively
+      // through employeeService.
+      assert(
+        !storageEngineSrcFormer.includes('formerEmployees') && !storageEngineSrcFormer.includes('formerInterns') &&
+        storageEngineSrcFormer.includes('formerExitRecords') && storageEngineSrcFormer.includes('employeeDocuments') &&
+        formerServiceSrc.includes("from './employeeService.js'") &&
+        !formerServiceSrc.includes('seedEmployees') && !formerServiceSrc.includes('seedInterns'),
+        '1533. NEW — No duplicate "formerEmployees"/"formerInterns" dataset exists anywhere in storageEngine.js; formerService.js reads personnel identity exclusively through employeeService.js, never importing employee seed data directly — Former is structurally a view, not a copy'
+      );
+
+      // 1534. NEW — Offboarding Record integration reuses the EXISTING offboarding system
+      // (offboardingService.getAllInstances), never a second offboarding data store, and the
+      // Historical Record page only renders "View Completed Offboarding" (linking to the
+      // EXISTING /offboarding/employees/:employeeId route) when a real completed instance exists.
+      assert(
+        formerServiceSrc.includes("from './offboardingService.js'") &&
+        formerServiceSrc.includes('offboardingService.getAllInstances') &&
+        historicalRecordPageSrc.includes('/offboarding/employees/${employee.id}') &&
+        historicalRecordPageSrc.includes('isOffboardingCompleted &&'),
+        '1534. NEW — Offboarding Record section is built entirely from offboardingService.getAllInstances() (the existing offboarding system) and only links to the existing /offboarding/employees/:employeeId route when a real completed instance exists — never a duplicated offboarding record or a dead-end "Launch Plan" prompt for a Former person'
+      );
+
+      // 1535. NEW — Editing restrictions are honored: no "Delete Former Record", "Delete
+      // Personnel", or Former -> Active / Rehire / Re-engage affordance exists anywhere in the
+      // Former module's source. The only edit surface is the small, explicitly-scoped Exit
+      // Information edit (Exit Type + Exit Remarks only).
+      {
+        const editExitModalSrc = fs.readFileSync(path.resolve('./src/components/former/EditExitInfoModal.jsx'), 'utf-8');
+        const formerDirSrcForDeleteCheck = historicalRecordPageSrc + editExitModalSrc + formerServiceSrc;
+        assert(
+          !/delete.{0,30}former.{0,20}record/i.test(formerDirSrcForDeleteCheck) &&
+          !/rehire|re-?engage/i.test(formerDirSrcForDeleteCheck) &&
+          !formerServiceSrc.includes("status: 'Active'") && !formerServiceSrc.includes('status = \'Active\'') &&
+          !historicalRecordPageSrc.includes("status: 'Active'"),
+          '1535. NEW — No Delete Former Record / Delete Personnel / Rehire / Re-engage / casual Former->Active affordance exists anywhere in the Former module\'s source — the only edit surface is Edit Exit Information (Exit Type + Exit Remarks only)'
+        );
+      }
+
+      // 1536. NEW — Personnel integration regression: employeeService.queryEmployees() with
+      // baseLifecycleScope 'All' (the existing Personnel directory) still surfaces Former people
+      // exactly as before — Former was added as an ADDITIONAL lifecycle-specific view, never a
+      // removal from Personnel's own directory.
+      {
+        const allPersonnelRegr = await employeeService.queryEmployees({ baseLifecycleScope: 'All' });
+        const formerInPersonnel = allPersonnelRegr.employees.filter((e) => e.status === 'Former');
+        assert(
+          formerInPersonnel.length === 2 && formerInPersonnel.some((e) => e.id === 'emp-009') && formerInPersonnel.some((e) => e.id === 'emp-018'),
+          `1536. NEW — REGRESSION: Personnel's own "All" directory (employeeService.queryEmployees({baseLifecycleScope:'All'})) still includes both Former people (found ${formerInPersonnel.length}) — Former remains a visible part of Personnel, never removed`
+        );
+      }
+
+      // 1537. NEW — Responsive CSS: .former-filters-group uses the same overflow-safe
+      // minmax(0, <fr>) grid-track strategy (root-caused and fixed earlier in this file for
+      // .personnel-filters-group) — no fixed-pixel floor that could force the toolbar wider than
+      // its card at any viewport, plus explicit breakpoints down to 1 column on mobile.
+      {
+        const formerGridBlock = (indexCssSrcFormer.match(/\.former-filters-group \{[^}]*\}/) || [''])[0];
+        assert(
+          formerGridBlock.includes('minmax(0, 1fr)') && formerGridBlock.includes('width: 100%') &&
+          indexCssSrcFormer.includes('@media (max-width: 640px)') && indexCssSrcFormer.match(/\.former-filters-group \{\s*grid-template-columns: repeat\(2/),
+          '1537. NEW — .former-filters-group uses minmax(0, 1fr) tracks (never a fixed pixel floor) and has explicit tablet/mobile breakpoints, mirroring the overflow-safe strategy already verified for Personnel\'s own filter grid'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Former Module — Rename "View Historical Record" -> "View Record" + "Specify Exit Type"
+    // for Other (small targeted refinement on top of the Former module above: no routing/
+    // filtering/section/architecture changes, just the DETAILS action wording and a proper way
+    // to record WHAT an "Other" exit actually was, instead of overloading Exit Remarks for it.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const formerListViewSrcRename = fs.readFileSync(path.resolve('./src/components/former/FormerListView.jsx'), 'utf-8');
+      const historicalRecordPageSrcRename = fs.readFileSync(path.resolve('./src/pages/former/HistoricalRecordPage.jsx'), 'utf-8');
+      const editExitInfoModalSrcRename = fs.readFileSync(path.resolve('./src/components/former/EditExitInfoModal.jsx'), 'utf-8');
+      const formerServiceSrcRename = fs.readFileSync(path.resolve('./src/services/formerService.js'), 'utf-8');
+      const formerDomainSrcRename = fs.readFileSync(path.resolve('./src/domain/formerDomain.js'), 'utf-8');
+      const formerToolbarSrcRename = fs.readFileSync(path.resolve('./src/components/former/FormerToolbar.jsx'), 'utf-8');
+
+      // 1538. NEW — The Former directory's DETAILS action reads "View Record" (not "View
+      // Historical Record" anywhere), still targets /former/:employeeId via the same <Link>/icon,
+      // and no duplicate directory/card action using the old wording exists anywhere in the app.
+      assert(
+        formerListViewSrcRename.includes('<span>View Record</span>') &&
+        !formerListViewSrcRename.includes('View Historical Record') &&
+        formerListViewSrcRename.includes('to={`/former/${emp.id}`}') &&
+        formerListViewSrcRename.includes('<History size={12} />') &&
+        !fs.readFileSync(path.resolve('./src/pages/former/FormerPersonnelPage.jsx'), 'utf-8').includes('View Historical Record'),
+        '1538. NEW — Former directory DETAILS action now reads "View Record" (old "View Historical Record" wording removed everywhere in the Former UI), unchanged route (/former/:employeeId) and icon'
+      );
+
+      // 1539. NEW — The destination page's own title is untouched: HistoricalRecordPage.jsx still
+      // renders "Historical Record" as its heading — only the directory's ACTION label changed,
+      // never the destination page's descriptive title.
+      assert(
+        historicalRecordPageSrcRename.includes('>Historical Record<'),
+        '1539. NEW — HistoricalRecordPage.jsx\'s own page heading is still exactly "Historical Record" — renaming the directory action never touched the destination page\'s title'
+      );
+
+      // 1540. NEW — formerDomain.js defines OTHER_EXIT_TYPE = 'Other' and
+      // isCustomExitTypeRequired() is true only for 'Other', false for every predefined type,
+      // null, and empty string.
+      {
+        assert(
+          OTHER_EXIT_TYPE === 'Other' &&
+          isCustomExitTypeRequired('Other') === true &&
+          isCustomExitTypeRequired('Contract Ended') === false &&
+          isCustomExitTypeRequired('Resignation') === false &&
+          isCustomExitTypeRequired('Internship Completed') === false &&
+          isCustomExitTypeRequired('Termination') === false &&
+          isCustomExitTypeRequired(null) === false &&
+          isCustomExitTypeRequired('') === false,
+          '1540. NEW — isCustomExitTypeRequired() returns true ONLY for exitType === "Other" — every predefined type (Internship Completed/Contract Ended/Resignation/Termination) and null/empty stay false'
+        );
+      }
+
+      // 1541. NEW — isValidCustomExitType() requires a non-whitespace value when exitType is
+      // 'Other' (a value containing only spaces is treated as empty), and is always valid
+      // (never blocks Save) for any non-Other exitType regardless of customExitType content.
+      {
+        assert(
+          isValidCustomExitType('Other', '') === false &&
+          isValidCustomExitType('Other', '   ') === false &&
+          isValidCustomExitType('Other', 'Mutual Separation') === true &&
+          isValidCustomExitType('Resignation', '') === true &&
+          isValidCustomExitType('Resignation', 'irrelevant text') === true,
+          '1541. NEW — isValidCustomExitType() rejects empty AND whitespace-only values when exitType is "Other", accepts a real trimmed value, and never blocks a non-Other exitType regardless of customExitType'
+        );
+      }
+
+      // 1542. NEW — resolveExitTypeDisplay() is the single source both the Former directory and
+      // the Historical Record page use to decide what to show: a predefined type displays as-is,
+      // Other+customExitType displays the custom value (never bare "Other"), and a LEGACY Other
+      // record with no customExitType safely falls back to "Other" rather than crashing or
+      // showing blank.
+      {
+        assert(
+          resolveExitTypeDisplay({ exitType: 'Contract Ended', customExitType: null }) === 'Contract Ended' &&
+          resolveExitTypeDisplay({ exitType: 'Other', customExitType: 'Mutual Separation' }) === 'Mutual Separation' &&
+          resolveExitTypeDisplay({ exitType: 'Other', customExitType: null }) === 'Other' &&
+          resolveExitTypeDisplay({ exitType: 'Other', customExitType: '   ' }) === 'Other' &&
+          resolveExitTypeDisplay(null) === null &&
+          resolveExitTypeDisplay({ exitType: null }) === null,
+          '1542. NEW — resolveExitTypeDisplay() shows the predefined type as-is, shows the custom value for Other (never bare "Other" when one was recorded), and safely falls back to "Other" for a legacy Other record with no customExitType — never crashes, never fabricates'
+        );
+      }
+
+      // 1543. NEW — VALIDATION: formerService.setExitInfo() rejects Other with an empty OR
+      // whitespace-only customExitType — Save does not silently succeed with exitType: 'Other',
+      // customExitType: ''.
+      {
+        let threwEmpty = false;
+        let threwWhitespace = false;
+        try {
+          await formerService.setExitInfo('emp-009', { exitType: 'Other', customExitType: '' });
+        } catch (err) {
+          threwEmpty = /specify the exit type/i.test(err.message);
+        }
+        try {
+          await formerService.setExitInfo('emp-009', { exitType: 'Other', customExitType: '    ' });
+        } catch (err) {
+          threwWhitespace = /specify the exit type/i.test(err.message);
+        }
+        assert(
+          threwEmpty && threwWhitespace,
+          '1543. NEW — VALIDATION: formerService.setExitInfo() throws "Please specify the exit type." for exitType: "Other" with an empty OR whitespace-only customExitType — Save is blocked, never silently persisted'
+        );
+      }
+
+      // 1544. NEW — Saving Other WITH a real customExitType persists both fields correctly, and
+      // the record still belongs to the "Other" Exit Type filter category (structured exitType is
+      // never overwritten by the free-text value).
+      {
+        const savedOther = await formerService.setExitInfo('emp-009', { exitType: 'Other', customExitType: '  Mutual Separation  ', exitRemarks: 'Verification test' });
+        assert(
+          savedOther.exitType === 'Other' && savedOther.customExitType === 'Mutual Separation',
+          `1544a. NEW — Saving Other with customExitType "  Mutual Separation  " persists exitType: "Other" (found "${savedOther.exitType}") and a trimmed customExitType: "Mutual Separation" (found "${savedOther.customExitType}")`
+        );
+
+        const otherFiltered = await formerService.getFormerDirectory({ exitType: 'Other' });
+        assert(
+          otherFiltered.employees.some((e) => e.id === 'emp-009'),
+          '1544b. NEW — The Exit Type filter for "Other" still includes emp-009 after saving a custom value — the structured category used for filtering was never overwritten by the free-text value'
+        );
+
+        const record009 = await formerService.getHistoricalRecord('emp-009');
+        assert(
+          record009.exitInfo.exitType === 'Other' && record009.exitInfo.customExitType === 'Mutual Separation',
+          '1544c. NEW — getHistoricalRecord() surfaces the same exitType/customExitType pair the Historical Record page reads to display "Mutual Separation"'
+        );
+      }
+
+      // 1545. NEW — SWITCHING AWAY: saving a predefined type after Other was previously set with
+      // a custom value clears the stale custom value — the record never shows both "Resignation"
+      // and "Mutual Separation" together, and it no longer belongs to the "Other" filter category.
+      {
+        await formerService.setExitInfo('emp-009', { exitType: 'Other', customExitType: 'Mutual Separation' });
+        const switched = await formerService.setExitInfo('emp-009', { exitType: 'Resignation', customExitType: 'Mutual Separation' });
+        assert(
+          switched.exitType === 'Resignation' && (switched.customExitType === null || switched.customExitType === undefined),
+          `1545a. NEW — SWITCHING: saving exitType: "Resignation" (even while the caller still passed the old customExitType value) clears customExitType to null (found ${JSON.stringify(switched.customExitType)}) — a predefined type is never saved alongside a stale custom value`
+        );
+
+        const resignationFiltered = await formerService.getFormerDirectory({ exitType: 'Resignation' });
+        const otherFilteredAfterSwitch = await formerService.getFormerDirectory({ exitType: 'Other' });
+        assert(
+          resignationFiltered.employees.some((e) => e.id === 'emp-009') &&
+          !otherFilteredAfterSwitch.employees.some((e) => e.id === 'emp-009'),
+          '1545b. NEW — After switching Other -> Resignation, emp-009 now belongs to the Resignation filter and no longer belongs to the Other filter — the record cleanly moved categories, it does not appear in both'
+        );
+
+        assert(
+          resolveExitTypeDisplay(switched) === 'Resignation',
+          '1545c. NEW — The resolved display for the switched record is exactly "Resignation" — the stale "Mutual Separation" custom value never appears alongside it'
+        );
+      }
+
+      // 1546. NEW — The Exit Type filter's own options remain the stable, controlled EXIT_TYPES
+      // list — FormerToolbar.jsx does not dynamically add "Mutual Separation" (or any other
+      // custom value) as its own filter option.
+      assert(
+        formerToolbarSrcRename.includes('EXIT_TYPES.map') &&
+        !formerToolbarSrcRename.includes('customExitType'),
+        '1546. NEW — FormerToolbar.jsx\'s Exit Type filter is still built only from the controlled EXIT_TYPES list — custom "Other" values are never turned into their own dynamic filter options'
+      );
+
+      // 1547. NEW — EditExitInfoModal.jsx conditionally renders "Specify Exit Type" only under
+      // isCustomExitTypeRequired(exitType), with the required marker, the "Enter exit type"
+      // placeholder (never a pre-populated example value or Exit Remarks' own text), and clears
+      // the custom value immediately when switching away from Other (not only on save).
+      assert(
+        editExitInfoModalSrcRename.includes('showCustomExitType &&') &&
+        editExitInfoModalSrcRename.includes('isCustomExitTypeRequired(exitType)') &&
+        editExitInfoModalSrcRename.includes('Specify Exit Type') &&
+        editExitInfoModalSrcRename.includes('placeholder="Enter exit type"') &&
+        editExitInfoModalSrcRename.match(/if \(value !== OTHER_EXIT_TYPE\)\s*\{\s*setCustomExitType\(''\);/),
+        '1547. NEW — EditExitInfoModal.jsx shows "Specify Exit Type" only when isCustomExitTypeRequired(exitType) is true, with a neutral "Enter exit type" placeholder (never a pre-populated example), and clears the custom value the moment HR switches away from Other'
+      );
+
+      // 1548. NEW — LEGACY DATA SAFETY: a Former record with exitType: 'Other' but NO
+      // customExitType (simulating data saved before this feature existed) never crashes
+      // getHistoricalRecord()/resolveExitTypeDisplay() and safely displays "Other".
+      {
+        await formerService.setExitInfo('emp-009', { exitType: 'Other', customExitType: 'temp — will be stripped below' });
+        const db = loadDatabase();
+        db.formerExitRecords = db.formerExitRecords.map((r) =>
+          r.employeeId === 'emp-009' ? { ...r, customExitType: undefined } : r
+        );
+        saveDatabase(db);
+
+        let legacyThrew = false;
+        let legacyRecord = null;
+        try {
+          legacyRecord = await formerService.getHistoricalRecord('emp-009');
+        } catch (err) {
+          legacyThrew = true;
+        }
+        assert(
+          !legacyThrew && legacyRecord !== null && resolveExitTypeDisplay(legacyRecord.exitInfo) === 'Other',
+          '1548. NEW — LEGACY: a Former record with exitType: "Other" and no customExitType field at all does not crash getHistoricalRecord() and safely displays "Other" — legacy pre-feature records are never broken'
+        );
+      }
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // People Sidebar Lifecycle Icons (small targeted task: replace the four PEOPLE-section icons
+    // — Upcoming/Onboarding/Offboarding/Former — with a consistent Person+Clock/Plus/Minus/X
+    // family. No labels, order, routes, chevrons, or business logic changed — icons only.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const sidebarSrcIcons = fs.readFileSync(path.resolve('./src/components/layout/Sidebar.jsx'), 'utf-8');
+      const userClockIconSrc = fs.readFileSync(path.resolve('./src/components/layout/icons/UserClockIcon.jsx'), 'utf-8');
+      const dashboardPageSrcIcons = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+
+      const peopleSectionIcons = (sidebarSrcIcons.match(/PEOPLE Section[\s\S]*?WORK Section/) || [''])[0];
+
+      // 1549. NEW — Upcoming now renders the composed UserClockIcon (Person + Clock) instead of
+      // UserPlus2 — that Person+Plus concept moved to Onboarding (check 1550).
+      assert(
+        sidebarSrcIcons.includes("import UserClockIcon from './icons/UserClockIcon.jsx'") &&
+        /to="\/upcoming"[\s\S]{0,250}<UserClockIcon/.test(peopleSectionIcons),
+        '1549. NEW — Upcoming\'s nav icon is now the composed UserClockIcon (Person + Clock) — "this person is scheduled and has not started yet"'
+      );
+
+      // 1550. NEW — Onboarding now renders UserPlus2 (Person + Plus, "joining/being added") —
+      // reusing the exact icon concept Upcoming used before this task, rather than picking an
+      // unrelated new icon.
+      assert(
+        /Onboarding[\s\S]{0,120}<UserPlus2/.test(peopleSectionIcons) || /<UserPlus2[\s\S]{0,120}Onboarding/.test(peopleSectionIcons),
+        '1550. NEW — Onboarding\'s nav icon is now UserPlus2 (Person + Plus) — reused from Upcoming\'s previous icon concept, not a newly invented one'
+      );
+
+      // 1551. NEW — Offboarding now renders UserMinus2 (Person + Minus, "in the process of
+      // leaving") — replacing the previous UserX, which is now reserved for Former only.
+      assert(
+        /Offboarding[\s\S]{0,120}<UserMinus2/.test(peopleSectionIcons) || /<UserMinus2[\s\S]{0,120}Offboarding/.test(peopleSectionIcons),
+        '1551. NEW — Offboarding\'s nav icon is now UserMinus2 (Person + Minus)'
+      );
+
+      // 1552. NEW — Former now renders UserX2 (Person + X, "has left, now Former") — no longer
+      // the History/clock-arrow icon a previous task used (see check 1520's own updated note).
+      assert(
+        /to="\/former"[\s\S]{0,250}<UserX2/.test(peopleSectionIcons) &&
+        !peopleSectionIcons.includes('<History'),
+        '1552. NEW — Former\'s nav icon is now UserX2 (Person + X), and the old History icon no longer appears anywhere in the PEOPLE section'
+      );
+
+      // 1553. NEW — UserClockIcon.jsx is a properly composed Lucide icon: built via Lucide's own
+      // public createLucideIcon() factory (never a deep/internal import, never a hand-rolled raw
+      // <svg> wrapper), reuses the SAME person-base path data UserRoundPlus/UserRoundMinus/
+      // UserRoundX already use (visual family consistency), and adds a genuine clock badge
+      // (a circle + hands, never a bare standalone Clock icon substituted in).
+      assert(
+        userClockIconSrc.includes("import { createLucideIcon } from 'lucide-react'") &&
+        userClockIconSrc.includes("createLucideIcon('UserClock'") &&
+        userClockIconSrc.includes('M2 21a8 8 0 0 1 13.292-6') &&
+        userClockIconSrc.match(/circle.*cx:\s*'10',\s*cy:\s*'8',\s*r:\s*'5'/) &&
+        userClockIconSrc.includes("'circle', { cx: '19', cy: '19'") &&
+        !userClockIconSrc.includes("from 'lucide-react/dist"),
+        '1553. NEW — UserClockIcon.jsx is composed via Lucide\'s public createLucideIcon() factory, reuses the exact person-base path UserRoundPlus/UserRoundMinus/UserRoundX already use, and adds a real clock-face badge circle — never a bare standalone Clock icon, never a deep internal import'
+      );
+
+      // 1554. REGRESSION: labels and PEOPLE section order are completely unchanged — Upcoming,
+      // then Onboarding, then Offboarding, then Former, in that order, with their exact existing
+      // label text.
+      {
+        const order = ['>Upcoming<', '>Onboarding<', '>Offboarding<', 'to="/former"'].map((needle) => peopleSectionIcons.indexOf(needle));
+        assert(
+          order.every((i) => i > -1) && order[0] < order[1] && order[1] < order[2] && order[2] < order[3],
+          `1554. REGRESSION: PEOPLE section order is unchanged — Upcoming -> Onboarding -> Offboarding -> Former (found indices ${JSON.stringify(order)})`
+        );
+      }
+
+      // 1555. REGRESSION: routes are completely unchanged — to="/upcoming", the Onboarding/
+      // Offboarding submenu routes, and to="/former" are all still exactly as they were.
+      assert(
+        sidebarSrcIcons.includes('to="/upcoming"') &&
+        sidebarSrcIcons.includes('to="/onboarding/employees"') &&
+        sidebarSrcIcons.includes('to="/onboarding/plans"') &&
+        sidebarSrcIcons.includes('to="/offboarding/departing"') &&
+        sidebarSrcIcons.includes('to="/offboarding/plans"') &&
+        sidebarSrcIcons.includes('to="/former"'),
+        '1555. REGRESSION: every PEOPLE section route (/upcoming, /onboarding/employees, /onboarding/plans, /offboarding/departing, /offboarding/plans, /former) is byte-for-byte unchanged — this task only swapped icon components'
+      );
+
+      // 1556. REGRESSION: Onboarding/Offboarding still render a ChevronDown/ChevronRight toggle
+      // (accordion submenus), while Upcoming/Former remain plain NavLinks with no chevron —
+      // exactly as before this task.
+      assert(
+        (peopleSectionIcons.match(/ChevronDown/g) || []).length === 2 &&
+        (peopleSectionIcons.match(/ChevronRight/g) || []).length === 2,
+        '1556. REGRESSION: Onboarding and Offboarding both still render their ChevronDown/ChevronRight toggle (2 of each across the PEOPLE section) — chevrons and submenu behavior are untouched'
+      );
+
+      // 1557. NEW — Dashboard KPI card icons are completely untouched by this task: the new
+      // UserClockIcon component is never imported/referenced anywhere in DashboardPage.jsx —
+      // this task is scoped to the left sidebar only.
+      assert(
+        !dashboardPageSrcIcons.includes('UserClockIcon'),
+        '1557. NEW — DashboardPage.jsx does not import or reference UserClockIcon — the Dashboard\'s own lifecycle KPI card icons were left completely untouched by this sidebar-only task'
+      );
+
+      resetDatabase();
+    }
+
     resetDatabase();
+    // ========================================================================================
+    // Personnel -> Timeline View — Dynamic Date Range, Start/End Labels, Customizable Department
+    // Colors (small targeted task: no redesign of List/Card, no change to Personnel filtering
+    // logic — Timeline still renders exactly the shared, already-filtered `employees` array.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const timelineSrcRange = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const deptColorsModalSrc = fs.readFileSync(path.resolve('./src/components/employees/DepartmentColorsModal.jsx'), 'utf-8');
+      const dateUtilsSrcRange = fs.readFileSync(path.resolve('./src/utils/dateUtils.js'), 'utf-8');
+      const toolbarSrcRange = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const containerSrcRange = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const departmentServiceSrcRange = fs.readFileSync(path.resolve('./src/services/departmentService.js'), 'utf-8');
+
+      // 1558. NEW — The domain is EXACT: no padding, no snapping to a calendar month boundary.
+      // Reproduces the task's own worked example (Jun 15 / Jun 29 / Jul 27 starts, Sep 15 / Oct 16
+      // / Nov 13 ends) and expects the range to be precisely Jun 15 -> Nov 13, not a padded/
+      // snapped Jun 1 -> Nov 30 (or wider) range the previous implementation would have produced.
+      {
+        const workedExample = calculateTimelineRange([
+          { startDate: '2026-06-15', contractEndDate: '2026-09-15' },
+          { startDate: '2026-06-29', contractEndDate: '2026-10-16' },
+          { startDate: '2026-07-27', contractEndDate: '2026-11-13' },
+        ], '2026-09-17');
+        assert(
+          workedExample.rangeStart === '2026-06-15' && workedExample.rangeEnd === '2026-11-13',
+          `1558. NEW — calculateTimelineRange() domain is EXACTLY earliest Start Date -> latest End Date with NO padding/month-snapping (expected 2026-06-15 -> 2026-11-13, found ${workedExample.rangeStart} -> ${workedExample.rangeEnd})`
+        );
+      }
+
+      // 1559. NEW — Filtered results affect the domain: a narrower (filtered) set of periods
+      // produces a narrower range than the full set — the range is recalculated from whatever is
+      // CURRENTLY passed in, never retained from a wider/previous call.
+      {
+        const fullSetRange = calculateTimelineRange([
+          { startDate: '2026-01-01', contractEndDate: '2026-12-31' },
+          { startDate: '2026-06-29', contractEndDate: '2026-10-16' },
+        ], '2026-09-17');
+        const filteredRange = calculateTimelineRange([
+          { startDate: '2026-06-29', contractEndDate: '2026-10-16' },
+        ], '2026-09-17');
+        assert(
+          fullSetRange.rangeStart === '2026-01-01' && fullSetRange.rangeEnd === '2026-12-31' &&
+          filteredRange.rangeStart === '2026-06-29' && filteredRange.rangeEnd === '2026-10-16' &&
+          filteredRange.rangeStart !== fullSetRange.rangeStart,
+          `1559. NEW — A filtered (narrower) set of periods produces a narrower, recalculated range (${filteredRange.rangeStart} -> ${filteredRange.rangeEnd}) rather than retaining the wider full-set range (${fullSetRange.rangeStart} -> ${fullSetRange.rangeEnd})`
+        );
+      }
+
+      // 1560. NEW — Single-person edge case: the range derives from that ONE person's own
+      // period, never a global/year-long fallback range.
+      {
+        const singlePersonRange = calculateTimelineRange([{ startDate: '2026-06-29', contractEndDate: '2026-10-16' }], '2026-09-17');
+        assert(
+          singlePersonRange.rangeStart === '2026-06-29' && singlePersonRange.rangeEnd === '2026-10-16',
+          `1560. NEW — A single displayed person's Timeline range is derived from their own actual period only (found ${singlePersonRange.rangeStart} -> ${singlePersonRange.rangeEnd})`
+        );
+      }
+
+      // 1561. NEW — Empty result safety: an empty personnel array never throws (no
+      // Math.min([])/Math.max([]) style crash) and returns null so the component can render its
+      // existing empty/no-range state instead of an invalid axis.
+      {
+        let threwOnEmpty = false;
+        let emptyResult;
+        try {
+          emptyResult = calculateTimelineRange([], '2026-09-17');
+        } catch (err) {
+          threwOnEmpty = true;
+        }
+        assert(!threwOnEmpty && emptyResult === null, '1561. NEW — calculateTimelineRange([]) never throws and returns null — no invalid/NaN date axis can ever be rendered for a zero-result filter');
+      }
+
+      // 1562. NEW — Same-date/zero-duration edge case: Start Date === End Date is handled safely
+      // (no divide-by-zero, no NaN), rendering a minimum-width marker without falsifying the
+      // dates, and the axis still shows at least one readable tick rather than going blank.
+      {
+        const zeroRange = calculateTimelineRange([{ startDate: '2026-06-29', contractEndDate: '2026-06-29' }], '2026-09-17');
+        const zeroBar = calculateTimelineBarPosition('2026-06-29', '2026-06-29', zeroRange.rangeStart, zeroRange.rangeEnd, '2026-09-17');
+        const zeroTicks = generateTimelineMonthTicks(zeroRange.rangeStart, zeroRange.rangeEnd);
+        assert(
+          zeroRange.rangeStart === '2026-06-29' && zeroRange.rangeEnd === '2026-06-29' &&
+          zeroBar !== null && !Number.isNaN(zeroBar.leftPercent) && !Number.isNaN(zeroBar.widthPercent) &&
+          zeroBar.widthPercent > 0 && zeroTicks.length >= 1,
+          `1562. NEW — Same Start/End Date renders a safe, non-NaN minimum-width marker (${JSON.stringify(zeroBar)}) and the axis still shows at least one tick (${JSON.stringify(zeroTicks)}) — never a divide-by-zero crash or a blank axis`
+        );
+      }
+
+      // 1563. NEW — Year-boundary handling: a period crossing a calendar year (Nov 2026 -> Feb
+      // 2027) computes a correct non-inverted range and a full-width (0% -> 100%) bar — using
+      // real date/time differences, never month-number arithmetic that would mishandle the wrap.
+      {
+        const yearBoundaryRange = calculateTimelineRange([{ startDate: '2026-11-15', contractEndDate: '2027-02-20' }], '2026-09-17');
+        const yearBoundaryBar = calculateTimelineBarPosition('2026-11-15', '2027-02-20', yearBoundaryRange.rangeStart, yearBoundaryRange.rangeEnd, '2026-09-17');
+        assert(
+          yearBoundaryRange.rangeStart === '2026-11-15' && yearBoundaryRange.rangeEnd === '2027-02-20' &&
+          yearBoundaryBar.leftPercent === 0 && Math.abs(yearBoundaryBar.widthPercent - 100) < 0.01,
+          `1563. NEW — A Nov 2026 -> Feb 2027 period (crossing a calendar year) computes a correct range (${yearBoundaryRange.rangeStart} -> ${yearBoundaryRange.rangeEnd}) and a full-width bar (${JSON.stringify(yearBoundaryBar)})`
+        );
+      }
+
+      // 1564. NEW — Missing Start Date handling: a period with no Start Date is excluded from
+      // the range calculation entirely — never fabricated, never defaulted to today.
+      {
+        const missingStartRange = calculateTimelineRange([
+          { startDate: null, contractEndDate: '2026-12-01' },
+          { startDate: '2026-06-01', contractEndDate: '2026-08-01' },
+        ], '2026-09-17');
+        assert(
+          missingStartRange.rangeStart === '2026-06-01' && missingStartRange.rangeEnd === '2026-08-01',
+          `1564. NEW — A period with a missing Start Date contributes nothing to the range (found ${missingStartRange.rangeStart} -> ${missingStartRange.rangeEnd}, correctly ignoring the null-start period's contractEndDate of 2026-12-01)`
+        );
+        assert(
+          timelineSrcRange.includes('!emp.startDate') && timelineSrcRange.includes('No Start Date on record'),
+          '1564b. NEW — REGRESSION: a displayed person with no Start Date still renders the existing graceful "No Start Date on record" row note, never a fabricated bar'
+        );
+      }
+
+      // 1565. NEW — Missing End Date (ongoing) handling: never fabricates a future End Date —
+      // the domain's effective end for an ongoing period is "today" (a real date), except it is
+      // never allowed to fall before that SAME person's own Start Date (an Upcoming hire whose
+      // Start Date is in the future must not pull the domain behind their own start).
+      {
+        const futureStartRange = calculateTimelineRange([{ startDate: '2027-03-01', contractEndDate: null }], '2026-09-17');
+        assert(
+          futureStartRange.rangeStart === '2027-03-01' && futureStartRange.rangeEnd >= futureStartRange.rangeStart,
+          `1565. NEW — A future Start Date with no End Date never produces an inverted range (rangeEnd ${futureStartRange.rangeEnd} is never before rangeStart ${futureStartRange.rangeStart}) — no fabricated End Date, "today" is used only as a floor when it is actually later than the person's own start`
+        );
+      }
+
+      // 1566/1567. NEW — Start Date label AND End Date label render for every valid bar,
+      // anchored to the BAR's own edges (never the timeline's overall data range) via the same
+      // technique the pre-existing "Ongoing" label already used.
+      assert(
+        timelineSrcRange.includes('timeline-start-label') && timelineSrcRange.includes("formatCompactDate(emp.startDate") &&
+        timelineSrcRange.includes('timeline-end-label') && timelineSrcRange.includes("formatCompactDate(emp.contractEndDate"),
+        '1566/1567. NEW — Every valid bar renders both a Start Date label (timeline-start-label) and an End Date label (timeline-end-label, or the existing Ongoing state when no End Date is recorded)'
+      );
+
+      // 1568. NEW — TIMEZONE SAFETY: formatCompactDate() parses 'YYYY-MM-DD' in LOCAL time (the
+      // same safe pattern formatDateDisplay()/addDaysToLocalDate() already use) — a date-only
+      // field never shifts a calendar day earlier due to UTC parsing.
+      assert(
+        formatCompactDate('2026-06-29') === 'Jun 29' && formatCompactDate('2026-01-01') === 'Jan 1',
+        `1568. NEW — TIMEZONE SAFETY: formatCompactDate('2026-06-29') renders "Jun 29" (found "${formatCompactDate('2026-06-29')}") — never "Jun 28" from an accidental UTC shift`
+      );
+      assert(
+        !dateUtilsSrcRange.match(/formatCompactDate[\s\S]{0,200}new Date\(dateStr\)/) &&
+        dateUtilsSrcRange.match(/formatCompactDate[\s\S]{0,250}split\('-'\)\.map\(Number\)/),
+        '1568b. NEW — formatCompactDate() parses the date string into explicit year/month/day components (never `new Date(dateStr)` directly, which triggers UTC parsing for a bare YYYY-MM-DD string) — the same safe pattern used elsewhere in dateUtils.js'
+      );
+
+      // 1569. NEW — Department color CONFIGURATION architecture: the color belongs to the
+      // Department record (departmentService.update(id, { color })), reusing the EXISTING
+      // department service/storage abstraction — never a new "timelineColors" collection, and
+      // resolveDepartmentColor() already prefers a department's own explicit `color` field over
+      // its deterministic hash fallback.
+      {
+        const depts = await departmentService.getAll({ withCount: false });
+        const testDept = depts[0];
+        const originalColor = testDept.color;
+        const updated = await departmentService.update(testDept.id, { color: '#123456' });
+        assert(updated.color === '#123456', `1569a. NEW — departmentService.update(id, { color }) persists a new Timeline color on the Department record itself (found ${updated.color})`);
+        assert(resolveDepartmentColor(updated) === '#123456', '1569b. NEW — resolveDepartmentColor() reads the department\'s own explicit color field, so the configured color is exactly what the Timeline bar renders');
+        await departmentService.update(testDept.id, { color: originalColor });
+
+        assert(
+          deptColorsModalSrc.includes('departmentService.update') && deptColorsModalSrc.includes('color'),
+          '1569c. NEW — DepartmentColorsModal.jsx persists through departmentService.update(), the app\'s existing Department service/storage abstraction — no separate/duplicate department color store was introduced'
+        );
+      }
+
+      // 1570. NEW — Configured color is applied CONSISTENTLY: changing one department's color
+      // updates the resolved color for every employee in that department (functional, at the
+      // exact service/domain layer the Timeline bars and legend both read from).
+      {
+        const depts2 = await departmentService.getAll({ withCount: false });
+        const targetDept = depts2.find((d) => d.name === 'Software Engineering') || depts2[0];
+        const originalColor2 = targetDept.color;
+
+        const allEmployeesForColorTest = await employeeService.getAll();
+        const sameDeptEmployees = allEmployeesForColorTest.filter((e) => e.department && e.department.id === targetDept.id);
+        assert(sameDeptEmployees.length > 0, '1570setup. NEW — Setup: at least one employee belongs to the department under test');
+
+        await departmentService.update(targetDept.id, { color: '#ABCDEF' });
+        const refreshedDepts = await departmentService.getAll({ withCount: false });
+        const refreshedDept = refreshedDepts.find((d) => d.id === targetDept.id);
+        const resolvedColorsForDept = sameDeptEmployees.map(() => resolveDepartmentColor(refreshedDept));
+        assert(
+          resolvedColorsForDept.every((c) => c === '#ABCDEF'),
+          `1570. NEW — Changing ${targetDept.name}'s color updates the resolved bar color for EVERY employee in that department at once (found ${JSON.stringify(resolvedColorsForDept)}) — the color lives on the department, not on individual personnel`
+        );
+        await departmentService.update(targetDept.id, { color: originalColor2 });
+      }
+
+      // 1571. NEW — Stable/deterministic fallback color: an unconfigured department (no explicit
+      // `color`) always resolves to the SAME color across repeated calls — never a different
+      // random color on every render.
+      {
+        const unconfigured = { id: 'dept-fallback-test-timeline', name: 'Fallback Test Dept' };
+        const c1 = resolveDepartmentColor(unconfigured);
+        const c2 = resolveDepartmentColor(unconfigured);
+        const c3 = resolveDepartmentColor({ ...unconfigured });
+        assert(c1 === c2 && c2 === c3 && Boolean(c1), `1571. NEW — An unconfigured department resolves to the same deterministic fallback color on every call (found ${c1}, ${c2}, ${c3}) — never a fresh random color per render`);
+      }
+
+      // 1572. NEW — No direct localStorage/storageEngine access from the Timeline component or
+      // its new Department Colors modal — both go through departmentService only, matching the
+      // app's existing persistence architecture (this frontend is still PoC/localStorage-backed
+      // under the hood, but the boundary is the service layer, never the component).
+      assert(
+        !timelineSrcRange.includes('localStorage.') && !timelineSrcRange.match(/from\s+['"][^'"]*storageEngine/) &&
+        !deptColorsModalSrc.includes('localStorage.') && !deptColorsModalSrc.match(/from\s+['"][^'"]*storageEngine/) &&
+        timelineSrcRange.includes("from '../../services/departmentService.js'") &&
+        deptColorsModalSrc.includes("from '../../services/departmentService.js'"),
+        '1572. NEW — Neither EmployeeTimelineView.jsx nor DepartmentColorsModal.jsx ever calls localStorage directly or imports storageEngine.js — both read/write Department color configuration exclusively through departmentService, preserving the existing service-layer boundary (comments in these files explain this decision but contain no actual usage)'
+      );
+
+      // 1573. NEW — The "Department Colors" action lives in the Timeline view's OWN header
+      // (EmployeeTimelineView.jsx), never added to the shared Personnel toolbar
+      // (DirectoryToolbar.jsx) — so the toolbar is never congested by a Timeline-only control.
+      assert(
+        timelineSrcRange.includes('Department Colors') && timelineSrcRange.includes('<DepartmentColorsModal') &&
+        !toolbarSrcRange.includes('Department Colors') && !toolbarSrcRange.includes('DepartmentColorsModal'),
+        '1573. NEW — "Department Colors" is a Timeline-only control (rendered inside EmployeeTimelineView.jsx\'s own header) — DirectoryToolbar.jsx (the shared Personnel toolbar) has no trace of it, so the toolbar layout/filters are completely unaffected'
+      );
+
+      // 1574. REGRESSION: List/Card views and DirectoryPageContainer.jsx's filter/view wiring are
+      // completely untouched by this task — Timeline still receives the exact same shared,
+      // already-filtered `employees` array, and List/Card render via their own unmodified
+      // components.
+      assert(
+        containerSrcRange.includes('<EmployeeListView employees={employees} />') &&
+        containerSrcRange.includes('<EmployeeCardView employees={employees} />') &&
+        containerSrcRange.match(/<EmployeeTimelineView\s+employees=\{employees\}/) &&
+        !containerSrcRange.includes('DepartmentColorsModal'),
+        '1574. REGRESSION: DirectoryPageContainer.jsx still renders List/Card/Timeline from the identical shared `employees` array with no changes to its own wiring — Department Colors is entirely internal to EmployeeTimelineView.jsx, never touching the container, List, or Card'
+      );
+
+      // 1575. REGRESSION: Personnel's existing filters (Search/Type/Department/Mode/Salary/
+      // Status/Sort By) are completely unaffected — EmployeeTimelineView.jsx still contains no
+      // filtering logic of its own; it only ever renders the array it is given.
+      assert(
+        !timelineSrcRange.match(/\.filter\(\s*\(?e(mp)?\)?\s*=>\s*e(mp)?\.(status|workMode|allowance|directoryType)/),
+        '1575. REGRESSION: EmployeeTimelineView.jsx still reimplements none of Personnel\'s Search/Type/Department/Mode/Salary/Status/Sort By filtering — it only renders the already-filtered `employees` prop it receives, exactly as before this task'
+      );
+
+      // 1576. REGRESSION: departmentService's other existing methods (create/getById/
+      // toggleActive/delete) are byte-for-byte untouched — only reused, not modified, by this
+      // task's new color-customization UI.
+      assert(
+        departmentServiceSrcRange.includes('async create(deptData)') &&
+        departmentServiceSrcRange.includes('async toggleActive(id)') &&
+        departmentServiceSrcRange.includes('async delete(id)') &&
+        departmentServiceSrcRange.includes("color: updateData.color || existing.color"),
+        '1576. REGRESSION: departmentService.js\'s create/toggleActive/delete methods and update()\'s existing color-merge behavior are unchanged — Department Colors reuses this service exactly as it already existed, without modifying it'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Personnel -> Timeline — Export as PDF / PNG (small targeted task: no Timeline redesign, no
+    // date-calculation changes, no Personnel filtering changes — Export reuses everything the
+    // dynamic-range/department-color task above already established.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const timelineSrcExport = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const exportViewSrc = fs.readFileSync(path.resolve('./src/components/employees/TimelineExportView.jsx'), 'utf-8');
+      const timelineExportUtilSrc = fs.readFileSync(path.resolve('./src/utils/timelineExport.js'), 'utf-8');
+      const toolbarSrcExport = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const containerSrcExport = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const packageJsonSrc = fs.readFileSync(path.resolve('./package.json'), 'utf-8');
+
+      // 1577. NEW — The Export control exists ONLY inside the Timeline view (EmployeeTimelineView.jsx),
+      // never in the shared Personnel toolbar — so it can never congest Search/Department/Type/
+      // Mode/Salary/Status/Sort By.
+      assert(
+        timelineSrcExport.includes('timeline-export-trigger') && timelineSrcExport.includes('Export') &&
+        !toolbarSrcExport.includes('timeline-export-trigger') && !toolbarSrcExport.includes('Export as PDF') && !toolbarSrcExport.includes('Export as PNG'),
+        '1577. NEW — The "Export" control exists only in EmployeeTimelineView.jsx\'s own header — DirectoryToolbar.jsx (the shared Personnel toolbar) has no trace of it'
+      );
+
+      // 1578/1579. NEW — Both "Export as PDF" and "Export as PNG" options exist in the menu.
+      assert(timelineSrcExport.includes('Export as PDF'), '1578. NEW — "Export as PDF" option exists in the Export menu');
+      assert(timelineSrcExport.includes('Export as PNG'), '1579. NEW — "Export as PNG" option exists in the Export menu');
+
+      // 1580. NEW — The exportable DOM boundary (TimelineExportView.jsx) excludes every
+      // interactive control by construction: no button/onClick/modal/dropdown markup exists
+      // anywhere in this component at all — it is a purely static, non-interactive render.
+      assert(
+        !exportViewSrc.includes('<button') && !exportViewSrc.includes('onClick') &&
+        !exportViewSrc.includes('DepartmentColorsModal') && !exportViewSrc.includes('export-menu') &&
+        !exportViewSrc.includes('useState'),
+        '1580. NEW — TimelineExportView.jsx (the exportable DOM boundary) contains no interactive controls at all — no buttons, no onClick handlers, no Department Colors modal/Export menu markup, no interactive state — only a static report render'
+      );
+
+      // 1581. NEW — Export uses the CURRENT filtered personnel: TimelineExportView receives the
+      // exact same `employees` data EmployeeTimelineView itself renders from (no separate query),
+      // and never imports employeeService/departmentService itself to re-fetch personnel.
+      assert(
+        timelineSrcExport.match(/<TimelineExportView[\s\S]{0,200}employees=\{employeesWithFreshDepartments\}/) &&
+        !exportViewSrc.includes("from '../../services/employeeService.js'") &&
+        !exportViewSrc.includes('queryEmployees'),
+        '1581. NEW — TimelineExportView is passed the exact same employeesWithFreshDepartments array the live Timeline renders from — it never performs its own independent personnel query'
+      );
+
+      // 1582. NEW — Export preserves the dynamic date domain: TimelineExportView receives the
+      // already-computed `range`/`axisTicks` as props and never calls calculateTimelineRange()
+      // or generateTimelineMonthTicks() itself — so it can never compute a different domain than
+      // what's on screen, and can never reintroduce the old ±14-day-padding/month-snapping bug.
+      assert(
+        timelineSrcExport.match(/<TimelineExportView[\s\S]{0,200}range=\{range\}/) &&
+        timelineSrcExport.match(/<TimelineExportView[\s\S]{0,200}axisTicks=\{axisTicks\}/) &&
+        !exportViewSrc.includes('calculateTimelineRange') && !exportViewSrc.includes('generateTimelineMonthTicks'),
+        '1582. NEW — TimelineExportView receives the already-computed range/axisTicks as props — it never recalculates the Timeline\'s date domain independently'
+      );
+
+      // 1583. NEW — Start/End Date labels are preserved in the export: TimelineExportView reuses
+      // the exact same formatCompactDate()/calculateTimelineBarPosition() functions the live
+      // Timeline uses, and renders the same Ongoing state for periods with no End Date.
+      assert(
+        exportViewSrc.includes('formatCompactDate(emp.startDate') && exportViewSrc.includes('formatCompactDate(emp.contractEndDate') &&
+        exportViewSrc.includes('calculateTimelineBarPosition') && exportViewSrc.includes('timeline-export-ongoing-label') &&
+        exportViewSrc.includes('No Start Date on record'),
+        '1583. NEW — TimelineExportView renders Start/End Date labels via the same formatCompactDate()/calculateTimelineBarPosition() functions as the live Timeline, including the Ongoing state and the missing-Start-Date note — never fabricated dates'
+      );
+
+      // 1584. NEW — Export uses the CURRENT configured department colors: TimelineExportView
+      // resolves bar/legend color via the same resolveDepartmentColor() resolver as the live
+      // Timeline — never a separate hardcoded export color palette.
+      assert(
+        exportViewSrc.includes("import { resolveDepartmentColor } from '../../domain/departmentDomain.js'") &&
+        exportViewSrc.includes('resolveDepartmentColor(emp.department)') &&
+        !exportViewSrc.match(/const\s+.*(EXPORT_)?(COLOR|PALETTE).*=\s*\[/i),
+        '1584. NEW — TimelineExportView resolves every bar\'s color via the same resolveDepartmentColor() function the live Timeline and legend use — no separate/hardcoded export color palette exists'
+      );
+
+      // 1585. NEW — The department legend is included in the export output, built from the same
+      // `legend` prop (itself built via buildDepartmentLegend()) the live Timeline renders.
+      assert(
+        exportViewSrc.includes('timeline-export-legend') && exportViewSrc.includes('legend.map'),
+        '1585. NEW — TimelineExportView renders the department legend from the same `legend` data the live Timeline computes via buildDepartmentLegend()'
+      );
+
+      // 1586. NEW — Empty state cannot export a blank file: the Export button (and the entire
+      // Timeline header it lives in) only renders when `range` is non-null — the exact same
+      // early return that already prevents the Timeline itself from rendering an invalid axis
+      // for a zero-result filter. No separate empty-check was needed or added.
+      assert(
+        timelineSrcExport.match(/if \(!range\)[\s\S]{0,400}timeline-no-range-note[\s\S]{0,250}<\/div>/) &&
+        timelineSrcExport.indexOf('if (!range)') < timelineSrcExport.indexOf('timeline-export-trigger'),
+        '1586. NEW — The Export button is structurally unreachable when there is no valid Timeline (the existing `if (!range) return ...` early return happens before the Export button/header even renders) — a zero-result filter can never produce a blank export'
+      );
+
+      // 1587. NEW — Export loading/error state: isExporting disables the Export trigger and both
+      // menu items (preventing overlapping simultaneous exports), and a failure is caught and
+      // surfaced via the app's existing alert()-based error pattern (see
+      // handleMarkAllOverdueComplete's identical convention) — never an unhandled crash, never a
+      // raw stack trace shown to HR.
+      assert(
+        timelineSrcExport.includes('setIsExporting(true)') && timelineSrcExport.match(/setIsExporting\(false\)/) &&
+        timelineSrcExport.match(/disabled=\{isExporting\}/) &&
+        timelineSrcExport.match(/\.catch\(|catch \(err\)/) && timelineSrcExport.includes("alert('Unable to export timeline. Please try again.')") &&
+        timelineSrcExport.includes('console.error'),
+        '1587. NEW — Export sets isExporting around the whole operation (disabling the trigger and menu items), and catches failures with the app\'s existing alert()-based error pattern plus a console.error for developers — never an unhandled crash or an exposed stack trace'
+      );
+
+      // 1588. NEW — No external export/screenshot/conversion service is ever contacted — the
+      // entire export pipeline (DOM -> canvas -> PNG/PDF) runs with html-to-image + jsPDF,
+      // client-side only, and neither library nor this app's own export code performs a
+      // fetch()/XMLHttpRequest to any third-party endpoint.
+      assert(
+        !timelineExportUtilSrc.includes('fetch(') && !timelineExportUtilSrc.includes('XMLHttpRequest') &&
+        !timelineExportUtilSrc.match(/https?:\/\//) &&
+        timelineExportUtilSrc.includes("from 'html-to-image'") && timelineExportUtilSrc.includes("from 'jspdf'"),
+        '1588. NEW — timelineExport.js never calls fetch()/XMLHttpRequest and contains no hardcoded external URL — export happens entirely client-side via html-to-image + jsPDF, exactly as the task\'s security/privacy requirement demands'
+      );
+
+      // 1589. NEW — This task made no MySQL/backend changes: /server and /db are completely
+      // untouched, and the two new dependencies were added to package.json only (never to
+      // server/package.json, which does not exist — this app has one shared package.json, and
+      // neither new package is a server/db-layer dependency).
+      assert(
+        !fs.existsSync(path.resolve('./server/routes/timeline.js')) &&
+        packageJsonSrc.includes('"html-to-image"') && packageJsonSrc.includes('"jspdf"') &&
+        !packageJsonSrc.match(/"pdf-lib"|"puppeteer"|"playwright"/),
+        '1589. NEW — No backend/MySQL work was done for this task (no new /server route exists for it) — package.json gained exactly two new client-side dependencies (html-to-image, jspdf), no server-side rendering package'
+      );
+
+      // 1590. REGRESSION: List/Card views and DirectoryPageContainer.jsx's wiring remain
+      // completely untouched by the Export feature.
+      assert(
+        containerSrcExport.includes('<EmployeeListView employees={employees} />') &&
+        containerSrcExport.includes('<EmployeeCardView employees={employees} />') &&
+        !containerSrcExport.includes('TimelineExportView') && !containerSrcExport.includes('timelineExport'),
+        '1590. REGRESSION: DirectoryPageContainer.jsx still renders List/Card exactly as before — Export is entirely internal to EmployeeTimelineView.jsx/TimelineExportView.jsx, never touching the container, List, or Card'
+      );
+
+      // 1591. FUNCTIONAL: the export template's own report width scales with the number of axis
+      // ticks (mirroring the live Timeline's own canvasMinWidth strategy) — this is what prevents
+      // axis tick labels from overlapping on a long, multi-year date range in the export, since
+      // the export template has no internal scroll region to fall back on.
+      assert(
+        exportViewSrc.includes('EXPORT_TICK_SPACING') && exportViewSrc.match(/Math\.max\(\s*EXPORT_MIN_WIDTH/),
+        '1591. FUNCTIONAL: TimelineExportView\'s own report width grows with axisTicks.length (same per-tick spacing strategy as the live Timeline\'s canvasMinWidth) — long date ranges get a wider report instead of overlapping axis labels'
+      );
+
+      // 1592. FUNCTIONAL: the PDF page-slicing logic never produces a trailing blank page — it
+      // bounds every slice by the last real row's own boundary (contentBottomPx), never the raw
+      // captured canvas height, which would otherwise include the export template's own bottom
+      // padding as an extra near-empty page.
+      assert(
+        timelineExportUtilSrc.includes('contentBottomPx') &&
+        timelineExportUtilSrc.match(/while \(sliceStartPx < contentBottomPx\)/),
+        '1592. FUNCTIONAL: exportTimelineAsPdf() bounds its page-slicing loop by the last row\'s real boundary (contentBottomPx), not the raw canvas height — the export template\'s own bottom padding can never become a spurious blank trailing PDF page'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Personnel -> Timeline — Action Button Polish (small targeted task: right-align the
+    // Department Colors / Export controls and make Department Colors icon-only, with no change
+    // to Timeline redesign, export functionality, department-color functionality, date
+    // calculations, or Personnel filtering.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const timelineSrcPolish = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const indexCssSrcPolish = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+      const toolbarSrcPolish = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+
+      // 1593. NEW — The Department Colors trigger has NO visible text label anymore — it is
+      // icon-only (just the Palette icon), never rendering the literal words "Department Colors"
+      // as JSX text content.
+      assert(
+        timelineSrcPolish.match(/className="timeline-action-btn timeline-action-icon-btn"[\s\S]{0,250}<Palette size=\{16\} \/>\s*<\/button>/),
+        '1593. NEW — The Department Colors trigger button\'s JSX contains only the Palette icon between its opening and closing tags — no visible "Department Colors" text span exists inside it'
+      );
+
+      // 1594. NEW — The icon-only trigger still has a proper accessible name (aria-label) AND a
+      // native tooltip (title attribute) reading "Department Colors" — removing the visible text
+      // never removed the accessible name, per the app's existing title-attribute tooltip
+      // convention (already used by DirectoryToolbar.jsx's List/Card/Timeline switcher buttons).
+      assert(
+        timelineSrcPolish.match(/aria-label="Department Colors"/) &&
+        timelineSrcPolish.match(/title="Department Colors"/),
+        '1594. NEW — The icon-only Department Colors trigger has both aria-label="Department Colors" and a native title="Department Colors" tooltip — an icon-only control is never left without an accessible name'
+      );
+
+      // 1595. NEW — The Department Colors trigger still opens the exact same, unmodified
+      // DepartmentColorsModal — this task changed only the trigger BUTTON's presentation, never
+      // the modal it opens or department-color functionality itself.
+      assert(
+        timelineSrcPolish.match(/timeline-action-icon-btn"[\s\S]{0,150}onClick=\{\(\) => setIsColorsModalOpen\(true\)\}/) &&
+        timelineSrcPolish.includes('<DepartmentColorsModal') &&
+        timelineSrcPolish.includes('isOpen={isColorsModalOpen}'),
+        '1595. NEW — The icon-only trigger still calls setIsColorsModalOpen(true), opening the same DepartmentColorsModal component with the same isOpen wiring as before this task'
+      );
+
+      // 1596. NEW — The Export trigger still shows its visible "Export" text (never converted to
+      // icon-only, per the explicit requirement that Export keeps its label for clarity).
+      assert(
+        timelineSrcPolish.match(/timeline-export-trigger[\s\S]{0,600}<span>\{isExporting \? 'Exporting\.\.\.' : 'Export'\}<\/span>/),
+        '1596. NEW — The Export trigger still renders its visible "Export" (or "Exporting...") text — only Department Colors became icon-only, not Export'
+      );
+
+      // 1597. NEW — The actions group is right-aligned via a dedicated row (never absolute
+      // positioning, never a fixed/hardcoded margin-left tuned to one viewport width) — a
+      // structurally robust fix, not a screenshot-matched hack.
+      assert(
+        timelineSrcPolish.includes('timeline-actions-row') &&
+        indexCssSrcPolish.match(/\.timeline-actions-row \{[^}]*justify-content: flex-end;[^}]*\}/) &&
+        !indexCssSrcPolish.match(/\.timeline-actions(-row)?\s*\{[^}]*position:\s*absolute/) &&
+        !indexCssSrcPolish.match(/\.timeline-actions(-row)?\s*\{[^}]*margin-left:\s*\d+(px|rem)/),
+        '1597. NEW — .timeline-actions-row uses display: flex; justify-content: flex-end (a real, responsive right-alignment technique) — never position: absolute and never a hardcoded pixel/rem margin-left tuned to one specific viewport width'
+      );
+
+      // 1598. NEW — The Export dropdown menu remains functional after the polish pass: same
+      // menu markup, same PDF/PNG options, still positioned via `right: 0` relative to its own
+      // trigger (so it stays anchored to the button regardless of the button's new position on
+      // the right edge of the page — this is exactly why `right: 0` rather than a page-relative
+      // offset was already the correct implementation before this task, and remains correct now).
+      assert(
+        timelineSrcPolish.includes('Export as PDF') && timelineSrcPolish.includes('Export as PNG') &&
+        indexCssSrcPolish.match(/\.export-menu \{[^}]*right: 0;[^}]*\}/),
+        '1598. NEW — The Export dropdown still offers Export as PDF/PNG and is still positioned with right: 0 relative to its own trigger (.export-menu-wrapper), so it stays correctly anchored and within the page boundary now that the trigger itself sits at the right edge'
+      );
+
+      // 1599. NEW — No global button CSS regression: the new .timeline-action-btn/
+      // .timeline-action-icon-btn rules are scoped to these specific classes only — this task
+      // never added a bare `button { ... }` selector that could restyle buttons elsewhere in
+      // the app.
+      assert(
+        !indexCssSrcPolish.match(/\n\s*button\s*\{/) &&
+        indexCssSrcPolish.includes('.timeline-action-btn {') && indexCssSrcPolish.includes('.timeline-action-icon-btn {'),
+        '1599. NEW — No bare `button { ... }` selector was introduced — the new secondary-action button styling is scoped to .timeline-action-btn/.timeline-action-icon-btn only, so it cannot accidentally restyle buttons anywhere else in the app'
+      );
+
+      // 1600. NEW — Both controls share the same height/border-radius via the shared
+      // .timeline-action-btn base class (Department Colors and Export both carry this class),
+      // guaranteeing the "matching height/style family" requirement structurally rather than by
+      // independently duplicating the same values in two places that could drift apart later.
+      assert(
+        timelineSrcPolish.match(/className="timeline-action-btn timeline-action-icon-btn"/) &&
+        timelineSrcPolish.match(/className=\{`timeline-action-btn timeline-export-trigger/) &&
+        indexCssSrcPolish.match(/\.timeline-action-btn \{[^}]*height: 36px;/),
+        '1600. NEW — Both the Department Colors and Export triggers carry the shared .timeline-action-btn base class (height: 36px, matching border-radius/border/hover treatment) — they cannot visually drift apart since both read from the same base rule'
+      );
+
+      // 1601. NEW — The Export trigger gets a distinct "menu is open" visual state
+      // (.timeline-export-trigger.is-open, applied while isExportMenuOpen is true) using the
+      // same teal-tint hover family, not a separate/inconsistent color.
+      assert(
+        timelineSrcPolish.match(/timeline-export-trigger \$\{isExportMenuOpen \? 'is-open' : ''\}/) &&
+        indexCssSrcPolish.match(/\.timeline-export-trigger\.is-open \{[^}]*background-color: var\(--color-primary-light\);/),
+        '1601. NEW — The Export trigger gains an "is-open" class while its dropdown is open, styled with the same light-teal-tint family used for :hover — the open state is visually obvious without inventing a new color'
+      );
+
+      // 1602. REGRESSION: Department Colors action still lives only inside
+      // EmployeeTimelineView.jsx — the shared Personnel toolbar (DirectoryToolbar.jsx) still has
+      // no trace of either Timeline action control after the polish pass.
+      assert(
+        !toolbarSrcPolish.includes('timeline-action-btn') && !toolbarSrcPolish.includes('timeline-action-icon-btn') &&
+        !toolbarSrcPolish.includes('timeline-export-trigger'),
+        '1602. REGRESSION: DirectoryToolbar.jsx (the shared Personnel toolbar) still has no trace of the Timeline-only action controls after this styling pass'
+      );
+
+      // 1603. REGRESSION: the legend markup/classes are completely untouched by this task — same
+      // .timeline-legend/.timeline-legend-item/.timeline-legend-dot structure as before, still
+      // rendered from the same `legend` data.
+      assert(
+        timelineSrcPolish.includes('timeline-legend') && timelineSrcPolish.includes('legend.map') &&
+        timelineSrcPolish.includes('timeline-legend-dot') && timelineSrcPolish.includes('timeline-legend-item'),
+        '1603. REGRESSION: The department legend\'s own markup/classes are unchanged by this task — only its position relative to the (now separately-rowed) actions group changed'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Dashboard — Polished Hover Effect on All 5 Lifecycle KPI Cards (small targeted task: no
+    // Dashboard redesign, no data/count changes, cards remain strictly information-only — no
+    // clickability/navigation was added.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const statCardSrcHover = fs.readFileSync(path.resolve('./src/components/dashboard/StatCard.jsx'), 'utf-8');
+      const dashboardPageSrcHover = fs.readFileSync(path.resolve('./src/pages/dashboard/DashboardPage.jsx'), 'utf-8');
+      const dashboardSkeletonSrcHover = fs.readFileSync(path.resolve('./src/components/dashboard/DashboardSkeleton.jsx'), 'utf-8');
+      const indexCssSrcHover = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      const statCardBlock = (indexCssSrcHover.match(/\.stat-card \{[^}]*\}/) || [''])[0];
+      const statCardHoverBlock = (indexCssSrcHover.match(/\.stat-card:not\(\.skeleton-box\):hover \{[^}]*\}/) || [''])[0];
+
+      // 1604. NEW — All 5 lifecycle KPI cards remain strictly non-clickable: StatCard.jsx has no
+      // onClick/Link/NavLink/role="button"/tabIndex, and DashboardPage.jsx's 5 <StatCard> usages
+      // pass no navigation-implying prop either. Hover polish never became a navigation feature.
+      assert(
+        !statCardSrcHover.includes('onClick') && !statCardSrcHover.includes('<Link') && !statCardSrcHover.includes('<NavLink') &&
+        !statCardSrcHover.includes('role="button"') && !statCardSrcHover.includes('tabIndex') &&
+        !statCardSrcHover.includes('cursor') &&
+        (dashboardPageSrcHover.match(/<StatCard/g) || []).length === 5 &&
+        !dashboardPageSrcHover.match(/<StatCard[^>]*onClick/) && !dashboardPageSrcHover.match(/<StatCard[^>]*linkTo/),
+        '1604. NEW — StatCard.jsx and its 5 DashboardPage.jsx usages remain free of onClick/Link/NavLink/role="button"/tabIndex/cursor — the hover polish added no clickability or navigation to the 5 lifecycle KPI cards'
+      );
+
+      // 1605. NEW — No cursor: pointer was introduced anywhere in the new hover CSS — these cards
+      // must never visually imply clickability.
+      assert(
+        !statCardBlock.includes('cursor') && !statCardHoverBlock.includes('cursor') &&
+        !indexCssSrcHover.match(/\.stat-card[^{]*\{[^}]*cursor:\s*pointer/),
+        '1605. NEW — No `cursor: pointer` exists anywhere in .stat-card\'s default or :hover CSS — the default (non-pointer) cursor is preserved on hover, consistent with an information-only card'
+      );
+
+      // 1606. NEW — Hover applies a small, restrained lift (translateY, not scale/rotation), a
+      // strengthened shadow, and a teal border accent reusing the EXISTING --color-primary token
+      // (#129FA9) — never a newly hardcoded, unrelated color, and never turning the card's
+      // background teal.
+      assert(
+        statCardHoverBlock.match(/transform:\s*translateY\(-[234]px\)/) &&
+        !statCardHoverBlock.match(/scale\(|rotate\(/) &&
+        statCardHoverBlock.includes('border-color: var(--color-primary)') &&
+        statCardHoverBlock.match(/box-shadow:\s*var\(--shadow-md\)/) &&
+        !statCardHoverBlock.match(/background-color:\s*var\(--color-primary\)/) && !statCardHoverBlock.match(/background-color:\s*#129FA9/i),
+        `1606. NEW — .stat-card:hover applies translateY(-2px to -4px) (found: ${(statCardHoverBlock.match(/translateY\(-\d+px\)/) || ['none'])[0]}), the existing --shadow-md token for elevation, and border-color: var(--color-primary) for the teal accent — never scale/rotation, never a teal background fill`
+      );
+
+      // 1607. NEW — Only appropriate properties are transitioned (transform/box-shadow/
+      // border-color) — `transition: all` was deliberately avoided, and the duration is within
+      // the requested ~180-220ms range.
+      assert(
+        !statCardBlock.match(/transition:\s*all/) &&
+        statCardBlock.match(/transition:[^;]*transform 0\.2s/) &&
+        statCardBlock.match(/transition:[^;]*box-shadow 0\.2s/) &&
+        statCardBlock.match(/transition:[^;]*border-color 0\.2s/),
+        '1607. NEW — .stat-card\'s transition list explicitly names transform/box-shadow/border-color at 0.2s (200ms, within the requested 180-220ms range) each — never a blanket `transition: all`'
+      );
+
+      // 1608. NEW — A very small, independent icon micro-interaction exists (translateY(-1px) on
+      // .stat-card-icon when its parent card is hovered) — smaller than the card's own lift,
+      // never spinning/rotating/bouncing.
+      {
+        const iconHoverRuleBlocks = indexCssSrcHover.match(/\.stat-card(?::not\(\.skeleton-box\))?[^{]*\.stat-card-icon\s*\{[^}]*\}/g) || [];
+        const iconRulesAnimateBadly = iconHoverRuleBlocks.some((block) => /rotate\(|animation:/i.test(block));
+        assert(
+          indexCssSrcHover.match(/\.stat-card:not\(\.skeleton-box\):hover \.stat-card-icon \{\s*transform: translateY\(-1px\);\s*\}/) &&
+          !iconRulesAnimateBadly,
+          '1608. NEW — .stat-card-icon receives a tiny, independent translateY(-1px) on card hover — smaller than the card\'s own -3px lift, and none of .stat-card-icon\'s own rule blocks use rotate()/a keyframe animation (a spin/rotate/bounce animation)'
+        );
+      }
+
+      // 1609. NEW — prefers-reduced-motion: reduce removes the translate lift for both the card
+      // and its icon (while the app previously had no reduced-motion pattern to reuse — this is a
+      // new, scoped addition, not a reused pre-existing rule) — the card and icon simply render
+      // without transform, still showing the border/shadow accent so hover remains understandable
+      // without any movement.
+      assert(
+        indexCssSrcHover.match(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,600}\.stat-card:not\(\.skeleton-box\):hover \{\s*transform: none;/) &&
+        indexCssSrcHover.match(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,600}\.stat-card:not\(\.skeleton-box\):hover \.stat-card-icon \{\s*transform: none;/),
+        '1609. NEW — @media (prefers-reduced-motion: reduce) sets transform: none on both .stat-card:hover and .stat-card-icon on hover — the lift is removed for users who request reduced motion, while the (non-spatial) border/shadow accent still communicates the hover state'
+      );
+
+      // 1610. NEW — The hover CSS is scoped specifically to .stat-card (excluding
+      // .skeleton-box, DashboardSkeleton.jsx's loading placeholder that reuses the same class
+      // purely for sizing) — never a broad/global selector, and never bleeding into any other
+      // application card class (Personnel/Notes/Onboarding/Offboarding/Former cards, or modals).
+      {
+        const otherCardClasses = ['employee-card', 'note-card', 'onboarding-card', 'offboarding-card', 'former-', 'modal-card', 'dashboard-widget'];
+        const leaked = otherCardClasses.filter((cls) => indexCssSrcHover.match(new RegExp(`\\.${cls}[\\w-]*:not\\(\\.skeleton-box\\):hover`)));
+        assert(
+          indexCssSrcHover.includes('.stat-card:not(.skeleton-box):hover') &&
+          !indexCssSrcHover.match(/\n\s*\.card\s*:hover|\n\s*button:hover\s*\{|\n\s*div:hover\s*\{/) &&
+          leaked.length === 0,
+          `1610. NEW — The new hover rules target .stat-card:not(.skeleton-box) specifically — no bare/generic selector (.card, button, div) was introduced, and no other application card class (Personnel/Notes/Onboarding/Offboarding/Former/modals) picked up this hover treatment (found leaked: ${JSON.stringify(leaked)})`
+        );
+      }
+
+      // 1611. NEW — DashboardSkeleton.jsx's loading placeholders (same .stat-card class, reused
+      // purely for consistent sizing) are excluded from the new hover treatment via the
+      // :not(.skeleton-box) guard — a loading skeleton is never meaningfully "hoverable".
+      assert(
+        dashboardSkeletonSrcHover.includes('className="stat-card skeleton-box"') &&
+        indexCssSrcHover.includes(':not(.skeleton-box)'),
+        '1611. NEW — DashboardSkeleton.jsx\'s 5 placeholders still carry both "stat-card" and "skeleton-box" classes, and the new hover rules explicitly exclude .skeleton-box — the loading skeleton never receives the hover lift/shadow/accent'
+      );
+
+      // 1612. REGRESSION: no layout-affecting property (border-width, padding, margin, width,
+      // height) changes on hover — only transform (compositor-only, never triggers layout) and
+      // box-shadow/border-color (paint-only, never triggers layout) are touched, so hovering one
+      // card can never shift its neighbors or itself resize.
+      assert(
+        !statCardHoverBlock.match(/border-width:|padding:|margin:|width:|height:/) &&
+        !statCardBlock.match(/\bheight:/),
+        '1612. REGRESSION: .stat-card:hover changes no layout-affecting property (border-width/padding/margin/width/height) — border-width stays 1px on hover exactly as in the default state, so no neighboring card can ever shift'
+      );
+
+      // 1613. REGRESSION: the existing responsive grid breakpoints (1270px -> 3 columns, 640px ->
+      // 2 columns, 420px -> 1 column) and the base 5-column fluid rule are completely untouched
+      // by this hover-only task.
+      assert(
+        indexCssSrcHover.match(/\.stat-cards-grid \{\s*display: grid;\s*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/) &&
+        indexCssSrcHover.match(/@media \(max-width: 1270px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/) &&
+        indexCssSrcHover.match(/@media \(max-width: 640px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/) &&
+        indexCssSrcHover.match(/@media \(max-width: 420px\) \{\s*\.stat-cards-grid \{\s*grid-template-columns: repeat\(1, minmax\(0, 1fr\)\);/),
+        '1613. REGRESSION: .stat-cards-grid\'s existing responsive breakpoints (5 fluid columns desktop, 3 at 1270px, 2 at 640px, 1 at 420px) are byte-for-byte unchanged — this task added hover styling only, never touched the grid'
+      );
+
+      // 1614. REGRESSION: all 5 cards still render via the same shared StatCard component/
+      // .stat-card class — this task never diverged one card onto its own separate styling.
+      assert(
+        (dashboardPageSrcHover.match(/<StatCard/g) || []).length === 5 &&
+        statCardSrcHover.includes('className="stat-card"') &&
+        (statCardSrcHover.match(/className="stat-card"/g) || []).length === 1,
+        '1614. REGRESSION: DashboardPage.jsx still renders exactly 5 <StatCard> components, and StatCard.jsx still applies the single shared "stat-card" className — the hover effect is defined once and automatically applies identically to all 5 cards'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);

@@ -6,6 +6,7 @@ import DashboardPage from '../pages/dashboard/DashboardPage';
 
 // Employees Page
 import AllEmployeesPage from '../pages/employees/AllEmployeesPage';
+import PersonnelDetailsPage from '../pages/employees/PersonnelDetailsPage';
 
 // Upcoming (Candidate / Offer Workflow) Page
 import UpcomingPage from '../pages/upcoming/UpcomingPage';
@@ -28,6 +29,10 @@ import MyNotesPage from '../pages/notes/MyNotesPage';
 import PinnedNotesPage from '../pages/notes/PinnedNotesPage';
 import ArchivedNotesPage from '../pages/notes/ArchivedNotesPage';
 
+// Former Personnel (historical record view over the same Personnel identity, status: Former)
+import FormerPersonnelPage from '../pages/former/FormerPersonnelPage';
+import HistoricalRecordPage from '../pages/former/HistoricalRecordPage';
+
 import NotFoundPage from '../pages/NotFoundPage';
 
 export const router = createBrowserRouter([
@@ -40,6 +45,7 @@ export const router = createBrowserRouter([
 
       // Employees route (Single Employee Directory)
       { path: 'employees', element: <AllEmployeesPage /> },
+      { path: 'employees/:employeeId', element: <PersonnelDetailsPage /> },
 
       // Upcoming route (shortlisted candidate / offer workflow, pre-onboarding)
       { path: 'upcoming', element: <UpcomingPage /> },
@@ -74,6 +80,11 @@ export const router = createBrowserRouter([
           { path: 'plans/:personType/department/:departmentId', element: <OffboardingPlanEditorPage /> },
         ],
       },
+
+      // Former Personnel routes (historical, lifecycle-filtered view — status: Former — over the
+      // same Personnel identity employeeService already owns; no duplicate dataset)
+      { path: 'former', element: <FormerPersonnelPage /> },
+      { path: 'former/:employeeId', element: <HistoricalRecordPage /> },
 
       // Notes routes (personal HR notepad)
       {

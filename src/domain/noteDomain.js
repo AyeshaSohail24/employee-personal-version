@@ -233,12 +233,16 @@ export function resolveNoteContentHtml(note) {
 }
 
 /**
- * Filters notes by search text (title/content/tags) and category.
+ * Filters notes by search text (title/content/tags), category, and — additively, for the Former
+ * Historical Record page's "HR Notes" section (the first caller to ever need it) — the optional
+ * relatedEmployeeId link. Every other existing caller (My Notes/Pinned/Archived) never passes
+ * relatedEmployeeId, so this clause is a no-op for them.
  */
-export function filterNotes(notes = [], { search = '', category = '' } = {}) {
+export function filterNotes(notes = [], { search = '', category = '', relatedEmployeeId = '' } = {}) {
   const query = search.trim().toLowerCase();
 
   return notes.filter((note) => {
+    if (relatedEmployeeId && note.relatedEmployeeId !== relatedEmployeeId) return false;
     if (category && note.category !== category) return false;
 
     if (query) {

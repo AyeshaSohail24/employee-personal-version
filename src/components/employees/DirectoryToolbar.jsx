@@ -2,6 +2,16 @@ import React from 'react';
 import { Search, LayoutGrid, List, GanttChartSquare, RotateCcw } from 'lucide-react';
 import { Select } from '../common/Select.jsx';
 
+// Personnel type segmented filter — replaces the old Type dropdown (Employee/Intern) with the
+// same All/Employees/Interns pattern already used by the Dashboard's own personnel-type filter.
+// Values ('All'/'Employee'/'Intern') match employeeService.queryEmployees()'s typeFilter and the
+// hydrated employee.directoryType field exactly, so no value translation is needed anywhere.
+const PERSONNEL_TYPE_OPTIONS = [
+  { value: 'All', label: 'All' },
+  { value: 'Employee', label: 'Employees' },
+  { value: 'Intern', label: 'Interns' },
+];
+
 export default function DirectoryToolbar({
   search,
   onSearchChange,
@@ -26,8 +36,10 @@ export default function DirectoryToolbar({
 }) {
   return (
     <div className="directory-toolbar-card">
-      <div className="toolbar-top-row">
-        {/* Search Input */}
+      {/* Search — its own row (deliberately NOT sharing a row with the view-mode switcher
+          anymore; see .toolbar-search-row's comment in index.css for why this uses a dedicated
+          class rather than the shared .toolbar-top-row CandidateToolbar.jsx still uses). */}
+      <div className="toolbar-search-row">
         <div className="toolbar-search-box">
           <Search size={18} className="toolbar-search-icon" />
           <input
@@ -38,8 +50,28 @@ export default function DirectoryToolbar({
             onChange={(e) => onSearchChange(e.target.value)}
           />
         </div>
+      </div>
 
-        {/* View Switcher Toggle */}
+      {/* Two independent high-level segmented controls, same row: All/Employees/Interns (WHICH
+          personnel — left) and List/Card/Timeline (HOW they're displayed — right). Each reuses
+          the exact same .view-switcher-group/.view-btn pattern (teal active-state styling) but
+          they remain two separate groups, never merged into one control. */}
+      <div className="toolbar-controls-row">
+        <div className="view-switcher-group" role="tablist" aria-label="Personnel type filter">
+          {PERSONNEL_TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              role="tab"
+              aria-selected={selectedType === opt.value}
+              className={`view-btn ${selectedType === opt.value ? 'active' : ''}`}
+              onClick={() => onTypeChange(opt.value)}
+            >
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+
         <div className="view-switcher-group">
           <button
             className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
@@ -71,9 +103,17 @@ export default function DirectoryToolbar({
         </div>
       </div>
 
-      <div className="toolbar-bottom-row">
-        {/* Filters Group */}
-        <div className="filters-group">
+      {/* Detailed filters row — deliberately a NEW class (.toolbar-filters-row), not the shared
+          .toolbar-bottom-row CandidateToolbar.jsx still uses. Stacks two independent sub-rows:
+          the 5 filters (an explicit CSS Grid, always one row on desktop — see
+          .personnel-filters-group's own comment in index.css for exactly how that's guaranteed),
+          and, only when a filter is active, Reset Filters UNDERNEATH on its own row — never a
+          grid item itself, so it can never consume a column or push Sort By out of the grid. */}
+      <div className="toolbar-filters-row">
+        {/* Filters Group — .personnel-filters-group is a Personnel-only modifier on the shared
+            .filters-group class (still used as-is, unmodified, by CandidateToolbar.jsx); it
+            switches this row from flex to an explicit 5-column CSS Grid. */}
+        <div className="filters-group personnel-filters-group">
           {/* Department Filter */}
           <div className="filter-item">
             <label htmlFor="dept-filter">Department:</label>
@@ -84,22 +124,6 @@ export default function DirectoryToolbar({
               onChange={(e) => onDeptChange(e.target.value)}
               placeholder="All Departments"
               options={departments.map((d) => ({ value: d.id, label: d.name }))}
-            />
-          </div>
-
-          {/* Type Filter (normalized directory classification: Employee | Intern) */}
-          <div className="filter-item">
-            <label htmlFor="type-filter">Type:</label>
-            <Select
-              id="type-filter"
-              variant="filter"
-              value={selectedType}
-              onChange={(e) => onTypeChange(e.target.value)}
-              options={[
-                { value: 'All', label: 'All Types' },
-                { value: 'Employee', label: 'Employee' },
-                { value: 'Intern', label: 'Intern' },
-              ]}
             />
           </div>
 
@@ -177,7 +201,9 @@ export default function DirectoryToolbar({
           </div>
         </div>
 
-        {/* Clear Filters Button */}
+        {/* Reset Filters — its OWN row underneath the 5 filters (never a sibling competing for
+            horizontal space on the same line), left-aligned with them, shown only when a filter
+            is active. */}
         {hasActiveFilters && (
           <button className="clear-filters-btn" onClick={onResetFilters} type="button">
             <RotateCcw size={14} />

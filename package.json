@@ -11,6 +11,8 @@
     "start": "node server/index.js"
   },
   "dependencies": {
+    "html-to-image": "^1.11.13",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.344.0",
     "mysql2": "^3.9.7",
     "nodemailer": "^10.0.10",

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Eye } from 'lucide-react';
 import { formatDateDisplay, calculateDurationProgress } from '../../utils/dateUtils.js';
 
@@ -52,7 +53,7 @@ function DurationCell({ startDate, contractEndDate }) {
   );
 }
 
-export default function EmployeeListView({ employees = [], onViewProfile }) {
+export default function EmployeeListView({ employees = [] }) {
   return (
     <div className="directory-table-card">
       <div className="widget-table-wrapper">
@@ -68,7 +69,7 @@ export default function EmployeeListView({ employees = [], onViewProfile }) {
               <th style={{ width: '7%' }}>SALARY</th>
               <th style={{ width: '10%' }}>STATUS</th>
               <th style={{ width: '10%' }}>DURATION</th>
-              <th style={{ width: '11%' }}>PROFILE</th>
+              <th style={{ width: '11%' }}>DETAILS</th>
             </tr>
           </thead>
           <tbody>
@@ -154,17 +155,14 @@ export default function EmployeeListView({ employees = [], onViewProfile }) {
                     <DurationCell startDate={emp.startDate} contractEndDate={emp.contractEndDate} />
                   </td>
 
-                  {/* 10. PROFILE */}
+                  {/* 10. DETAILS — navigates to the dedicated Personnel Details page instead of
+                      opening PersonnelProfileModal (per direct user request: a person's record
+                      can grow to include CV/resume PDFs, which don't fit comfortably in a modal). */}
                   <td>
-                    <button
-                      type="button"
-                      className="btn-compact-override"
-                      style={{ whiteSpace: 'nowrap' }}
-                      onClick={() => onViewProfile && onViewProfile(emp.id)}
-                    >
+                    <Link to={`/employees/${emp.id}`} className="btn-compact-override" style={{ whiteSpace: 'nowrap', textDecoration: 'none' }}>
                       <Eye size={12} />
-                      <span>View Profile</span>
-                    </button>
+                      <span>View Details</span>
+                    </Link>
                   </td>
                 </tr>
               );

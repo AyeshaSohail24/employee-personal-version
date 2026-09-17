@@ -13,7 +13,6 @@ import EmployeeTimelineView from './EmployeeTimelineView';
 import DirectoryEmptyState from './DirectoryEmptyState';
 import DirectorySkeleton from './DirectorySkeleton';
 import CreateEmployeeModal from './CreateEmployeeModal';
-import PersonnelProfileModal from './PersonnelProfileModal';
 
 export default function DirectoryPageContainer({
   title = 'Personnel Directory',
@@ -129,11 +128,6 @@ export default function DirectoryPageContainer({
     await fetchEmployees();
   };
 
-  // View Profile — a single modal instance shared by List/Card view, keyed by the selected
-  // person's id, so the same profile UI/data-loading path is used regardless of which view
-  // triggered it.
-  const [profileEmployeeId, setProfileEmployeeId] = useState(null);
-
   // Reset interactive filters & clear URL query parameters without overriding route baseLifecycleScope!
   const handleResetFilters = () => {
     setSearch('');
@@ -240,9 +234,9 @@ export default function DirectoryPageContainer({
         ) : employees.length === 0 ? (
           <DirectoryEmptyState onResetFilters={handleResetFilters} />
         ) : viewMode === 'list' ? (
-          <EmployeeListView employees={employees} onViewProfile={setProfileEmployeeId} />
+          <EmployeeListView employees={employees} />
         ) : viewMode === 'card' ? (
-          <EmployeeCardView employees={employees} onViewProfile={setProfileEmployeeId} />
+          <EmployeeCardView employees={employees} />
         ) : (
           <EmployeeTimelineView employees={employees} />
         )}
@@ -253,13 +247,6 @@ export default function DirectoryPageContainer({
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onSubmit={handleCreateSubmit}
-      />
-
-      {/* Personnel Profile Modal — shared by List/Card view */}
-      <PersonnelProfileModal
-        isOpen={Boolean(profileEmployeeId)}
-        onClose={() => setProfileEmployeeId(null)}
-        employeeId={profileEmployeeId}
       />
     </div>
   );

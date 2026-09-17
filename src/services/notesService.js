@@ -50,6 +50,10 @@ export const notesService = {
       search = '',
       category = '',
       sortBy = NOTE_SORT_OPTIONS.UPDATED,
+      // Optional — narrows to notes linked to one personnel record (see formerDomain's "HR
+      // Notes" section, the first caller to use this). Every pre-existing caller omits it and is
+      // completely unaffected.
+      relatedEmployeeId = '',
     } = options;
 
     const db = loadDatabase();
@@ -64,7 +68,7 @@ export const notesService = {
       scoped = allNotes.filter((n) => !n.isArchived);
     }
 
-    const filtered = filterNotes(scoped, { search, category });
+    const filtered = filterNotes(scoped, { search, category, relatedEmployeeId });
     return sortNotes(filtered, sortBy);
   },
 
@@ -108,6 +112,12 @@ export const notesService = {
       isArchived: false,
       colorAccent: payload.colorAccent || 'default',
       ownerId: CURRENT_USER_ID,
+      // Optional link to a Personnel record's internal id — set only when a note is created from
+      // Former → Historical Record → Add Note (see formerService.addNoteForPersonnel). null for
+      // every other note in the app, exactly as before this field existed; the note still shows
+      // up in the main Notes module either way, since this is an additive field, not a separate
+      // notes system.
+      relatedEmployeeId: payload.relatedEmployeeId || null,
       createdAt: nowIso,
       updatedAt: nowIso,
       // Reminders are entirely optional and off by default — a new note never has one unless

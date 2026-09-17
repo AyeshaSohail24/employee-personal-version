@@ -4,8 +4,8 @@ import {
   LayoutDashboard,
   Users,
   UserPlus2,
-  UserCheck,
-  UserX,
+  UserMinus2,
+  UserX2,
   NotebookPen,
   FileText,
   Pin,
@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
+import UserClockIcon from './icons/UserClockIcon.jsx';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const location = useLocation();
@@ -89,7 +90,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             onClick={closeMobile}
           >
-            <UserPlus2 className="nav-icon" size={18} />
+            <UserClockIcon className="nav-icon" size={18} />
             <span>Upcoming</span>
           </NavLink>
 
@@ -100,7 +101,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
               onClick={() => toggleSection('onboarding')}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <UserCheck size={18} />
+                <UserPlus2 size={18} />
                 <span>Onboarding</span>
               </span>
               {openSections.onboarding ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -132,7 +133,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
               onClick={() => toggleSection('offboarding')}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <UserX size={18} />
+                <UserMinus2 size={18} />
                 <span>Offboarding</span>
               </span>
               {openSections.offboarding ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -156,6 +157,16 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
               </div>
             )}
           </div>
+
+          {/* Former — historical record view over the same Personnel identity (status: Former) */}
+          <NavLink
+            to="/former"
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            onClick={closeMobile}
+          >
+            <UserX2 className="nav-icon" size={18} />
+            <span>Former</span>
+          </NavLink>
         </div>
 
         {/* WORK Section */}

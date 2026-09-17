@@ -962,129 +962,362 @@ body {
    Dashboard UI & Component Layout CSS
    ========================================================================== */
 
-/* Stat Cards Grid */
+/* Stat Cards Grid — 5 lifecycle count cards (Upcoming/Onboarding/Active/Offboarding/Former).
+   FINAL STRATEGY (Fix Actual 3+2 Layout Bug task) — several earlier iterations tried FIXED pixel
+   column widths (150px, 175px, 190px) paired with an early "switch to 3 columns" breakpoint
+   (1240px/1320px). That combination is what caused the reported bug: on any real browser window
+   narrower than the fixed breakpoint — which covers a lot of ordinary laptop/desktop widths, not
+   just some exotic narrow case — the grid silently fell back to 3 columns even though the
+   Dashboard content area still had comfortable room for 5. A per-card max-width + justify-self
+   cap (an even earlier iteration) had the same root problem from the other direction: it also
+   fights the grid's natural fluid sizing instead of using it.
+   The fix: the five cards are a genuinely FLUID grid (repeat(5, minmax(0, 1fr))) that always
+   shares the full available row width, exactly like a normal 5-column layout — no per-card
+   max-width, no grid max-width cap, no justify-content centering hack. Card width is therefore
+   whatever 1/5 of the real Dashboard content width is (minus gaps), which is why this is the
+   ONLY strategy in this file's history that can never desync from the actual rendered width the
+   way a fixed-pixel value can. The one responsive breakpoint below exists purely to prevent the
+   cards from becoming genuinely too narrow to read — see that rule's own comment for exactly how
+   its threshold was determined. */
 .stat-cards-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.25rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.85rem;
 }
 
-@media (max-width: 1200px) {
+/* Falls back to 3 fluid columns only once 5 fluid columns would genuinely make each card too
+   narrow for its content — threshold measured empirically with Playwright (binary search across
+   a sweep of viewport widths, checking .stat-card-subtitle's rendered height) against the CURRENT
+   card typography/padding below, not carried over from an earlier iteration's smaller fonts.
+   1536/1440/1366/1280px all keep 5 fluid columns with zero wrapping (measured card widths
+   232/212/198/180px); the description first starts wrapping to 2 lines at a 1270px viewport
+   (~178px card) and below, which is exactly where this breakpoint switches to 3 columns. */
+@media (max-width: 1270px) {
   .stat-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px) {
   .stat-cards-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+@media (max-width: 420px) {
+  .stat-cards-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}
+
+/* KPI cards — pure information-display cards (no Link, no navigation arrow, no click-implying
+   hover — see StatCard.jsx). min-width: 0 is required: without it, the ONBOARDING/OFFBOARDING
+   title's white-space: nowrap forces a min-content width wider than an evenly-divided 1fr column
+   at narrower widths, overflowing the grid horizontally instead of letting the title
+   ellipsis-truncate as intended. .stat-card is effectively Dashboard-only (StatCard.jsx has no
+   other consumer), so this is safe to tighten/restyle directly without a wrapper scope.
+   FINAL STRATEGY (Fix Actual 3+2 Layout Bug task) — padding, icon, and typography were restored
+   to a "medium" size proportionate to the card's now-fluid, naturally wider width — several
+   iterations had progressively shrunk all three in service of forcing a fixed narrow card width
+   to fit; none of that shrinking is needed anymore since width is no longer fixed. Horizontal
+   padding was measured and kept moderate (not the widest possible) specifically so 5 fluid
+   columns keep fitting comfortably down to ~1280px content width without the description
+   wrapping — see .stat-card-subtitle's own note for the other half of that same measurement.
+   Height is still not a fixed pixel value — it stays purely content-driven (padding + 3 lines). */
 .stat-card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 1.25rem;
+  padding: 0.95rem 0.85rem;
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-width: 0;
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out;
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+/* Subtle hover lift — :not(.skeleton-box) excludes DashboardSkeleton.jsx's identical `.stat-card`
+   loading placeholders (same class, reused purely for consistent sizing while real KPI data
+   loads — never meaningfully "hoverable" content, and unlike the real cards it has no
+   .stat-card-icon child for the icon micro-interaction below to target anyway). Deliberately no
+   cursor: pointer and no dimension/border-width change — these five cards stay strictly
+   information-only (see StatCard.jsx's own doc comment); only transform/box-shadow/border-color
+   are animated, never `transition: all`. The lift itself never affects layout (CSS transforms are
+   compositor-only, so hovering one card can never shift its neighbors), and the small teal-tinted
+   shadow layer is the "restrained accent" — border-color shifts to the same primary teal already
+   used throughout the app, not a new color. */
+.stat-card:not(.skeleton-box):hover {
+  transform: translateY(-3px);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md), 0 0 0 1px rgba(18, 159, 169, 0.08);
 }
 
-.stat-card-header {
+@media (prefers-reduced-motion: reduce) {
+  .stat-card:not(.skeleton-box) {
+    transition: box-shadow 0.2s ease-out, border-color 0.2s ease-out;
+  }
+  .stat-card:not(.skeleton-box):hover {
+    transform: none;
+  }
+  .stat-card-icon {
+    transition: none;
+  }
+  .stat-card:not(.skeleton-box):hover .stat-card-icon {
+    transform: none;
+  }
+}
+
+.stat-card-title-group {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.75rem;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .stat-card-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stat-card-link {
-  color: var(--text-muted);
-  padding: 0.35rem;
+  width: 22px;
+  height: 22px;
   border-radius: var(--radius-sm);
-  transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease-out;
 }
 
-.stat-card-link:hover {
-  background-color: var(--border-subtle);
-  color: var(--color-primary);
+/* Very small, restrained icon micro-interaction (see task's own "tiny translateY(-1px)"
+   suggestion) — independent of and smaller than the card's own -3px lift, never a rotation
+   or bounce animation. */
+.stat-card:not(.skeleton-box):hover .stat-card-icon {
+  transform: translateY(-1px);
+}
+
+.stat-card-icon svg {
+  width: 13px;
+  height: 13px;
 }
 
 .stat-card-title {
-  font-size: 0.825rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Left-aligned KPI layout (label+icon top, count middle, description bottom). */
+.stat-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .stat-card-value {
-  font-size: 1.875rem;
+  font-size: 1.6rem;
   font-weight: 800;
   color: var(--color-navy-header);
-  line-height: 1.2;
-  margin: 0.25rem 0;
+  line-height: 1.15;
+  margin: 0.15rem 0;
 }
 
+/* font-size measured empirically with Playwright at 1280px width (5-column, ~180px/card): 0.75rem
+   made "Currently active personnel"/"Historical personnel records" wrap to 2 lines at that width;
+   0.7rem (paired with .stat-card's own moderate horizontal padding above) does not. Still well
+   above the ~0.66rem this file's earlier "compact strip" era used — never "tiny", just tuned to
+   the card's real fluid width instead of a fixed one. */
 .stat-card-subtitle {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
+  line-height: 1.3;
+  margin-top: 0.15rem;
 }
 
-/* Dashboard Widgets & Cards */
+/* Dashboard Widgets & Cards — .dashboard-widget/.widget-* are effectively Dashboard-only now
+   (only EndingWithin7DaysWidget.jsx and SoonestDueTasksWidget.jsx use them, since
+   LifecycleDistribution.jsx — a previous third consumer — was removed as redundant), so these
+   are safe to tighten directly. Padding/margins cut for the Compact HR Dashboard task; icon badge
+   reduced moderately to match the smaller stat-card icon treatment. */
+/* UPDATED — padding increased again per a direct user follow-up ("increase spacing... in and out
+   of the cards"), even though the text inside got smaller — more breathing room, smaller type.
+   UPDATED (Small Controlled Enlargement task) — padding nudged up once more (0.95rem/1.05rem ->
+   1.05rem/1.15rem) per direct user request that both lower widgets "feel slightly small" — a
+   moderate, controlled increase, not a redesign. */
 .dashboard-widget {
   background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 1.5rem;
+  padding: 1.05rem 1.15rem;
   box-shadow: var(--shadow-sm);
+  min-width: 0;
 }
 
+/* NEW (Squarer Stat Cards + Soonest Due Tasks task) — Ending Within 7 Days and Soonest Due Tasks
+   now sit SIDE BY SIDE as two half-width cards instead of one full-width stretched bar, per
+   direct user request ("don't make Ending Within 7 Days AND Soonest Due Tasks horizontal or
+   stretched out"). Wraps to a single column on narrow viewports so neither card gets squeezed.
+   Gap widened (1rem -> 1.25rem) per a later direct user request for more spacing between them. */
+.dashboard-widgets-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .dashboard-widgets-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* UPDATED — this list is now only ever rendered while a widget is EXPANDED ("See more" clicked);
+   the default collapsed view renders just the latest/soonest 2 rows directly (no scroll needed at
+   all), per direct user request ("in dashboard it should only show latest 2 only"). Height grew
+   slightly (155px -> 180px) now that the shorter stat cards freed up vertical room on the page,
+   then again (180px -> 195px) alongside the "Small Controlled Enlargement" task's slightly taller
+   rows, so the expanded view keeps roughly the same number of visible rows before scrolling. */
+.dashboard-widget-scroll-list {
+  max-height: 195px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+/* NEW — Soonest Due Tasks row (mirrors the visual weight of an Ending Within 7 Days row, but for
+   a notification rather than a person). Padding increased, per direct user request, alongside the
+   smaller text below.
+   UPDATED (Small Controlled Enlargement task) — padding nudged up slightly again (0.55rem/0.75rem
+   -> 0.6rem/0.8rem) alongside the widget's own moderate size increase. */
+.dashboard-task-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.dashboard-task-row:hover {
+  border-color: var(--color-primary);
+}
+
+.dashboard-task-row-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: #EFF6FF;
+  color: #2563EB;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dashboard-task-row-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.dashboard-task-row-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.dashboard-task-row-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-task-row-message {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-task-row-time {
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* NEW — "See more (N)" / "Show less" toggle shown under either widget's row list, only when there
+   are more than 2 items to reveal — per direct user request ("add see more for both cards as in
+   dashboard it should only show latest 2 only"). */
+.dashboard-widget-see-more {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: none;
+  border: none;
+  padding: 0.4rem 0;
+  margin-top: 0.5rem;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.dashboard-widget-see-more:hover {
+  text-decoration: underline;
+}
+
+/* UPDATED — the widget header (title/subtitle/icon badge) shrank along with the row list below,
+   per direct user request to decrease the text and size of these two boxes so the Dashboard reads
+   with more ample, proportionate spacing overall. Margin-bottom widened again (0.4rem -> 0.55rem)
+   per a later direct user request for more spacing in and out of the cards, then once more
+   (0.55rem -> 0.65rem) for "slightly more comfortable header/body spacing" — icon size, colors,
+   and heading text/typography all stayed exactly as-is per that same request. */
 .widget-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.65rem;
 }
 
 .widget-title {
-  font-size: 1.1rem;
+  font-size: 0.85rem;
   font-weight: 700;
   color: var(--color-navy-header);
 }
 
 .widget-subtitle {
-  font-size: 0.825rem;
+  font-size: 0.65rem;
   color: var(--text-muted);
 }
 
 .widget-icon-badge {
-  width: 38px;
-  height: 38px;
+  width: 26px;
+  height: 26px;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.widget-icon-badge svg {
+  width: 13px;
+  height: 13px;
 }
 
 .widget-action-link {
@@ -1114,49 +1347,6 @@ body {
   .dashboard-content-grid {
     grid-template-columns: 1fr;
   }
-}
-
-/* Legend Grid for Lifecycle Distribution */
-.lifecycle-legend-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0.75rem;
-}
-
-@media (max-width: 768px) {
-  .lifecycle-legend-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.legend-item-card {
-  padding: 0.6rem 0.75rem;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.legend-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.legend-label {
-  font-size: 0.775rem;
-  font-weight: 700;
-}
-
-.legend-count {
-  font-size: 0.725rem;
-  color: var(--text-muted);
 }
 
 /* Widget Data Table */
@@ -1275,11 +1465,14 @@ body {
   white-space: nowrap;
 }
 
+/* Now used only by EndingWithin7DaysWidget.jsx's empty state — the old 2rem vertical padding
+   left a large blank area beneath a single sentence; compacted for the Compact HR Dashboard
+   task. */
 .empty-widget-text {
-  font-size: 0.875rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   text-align: center;
-  padding: 2rem 0;
+  padding: 0.4rem 0;
 }
 
 /* Department Snapshot Widget Rows */
@@ -1482,6 +1675,29 @@ body {
   }
 }
 
+/* Dashboard header — same "wrap, then stack at narrow widths" pattern as
+   .employees-page-header above, so the title/description block and the
+   All/Employees/Interns filter never overlap or overflow at 375px. margin-bottom is
+   overridden here (scoped to Dashboard only, never the shared base .page-header rule other
+   pages use) as part of the Compact HR Dashboard density pass.
+   UPDATED (Final KPI Micro-Adjustment task) — margin-bottom nudged up (0.3rem -> 0.7rem) per
+   direct user request: the subtitle ("Personnel lifecycle counts and upcoming end dates") sat
+   too close to the top edge of the lifecycle cards. This only adds space BELOW the header block
+   (title + subtitle + filter row) — the gap between the "HR Dashboard" title and its own
+   subtitle is a separate rule (.page-description's margin-top) and was not touched. */
+.dashboard-page-header {
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+
+@media (max-width: 768px) {
+  .dashboard-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 .directory-toolbar-card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-light);
@@ -1598,12 +1814,50 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+/* Personnel Directory toolbar's own search-only row — deliberately a SEPARATE class from the
+   shared .toolbar-top-row (still used as-is by CandidateToolbar.jsx's search+actions row; never
+   touched here), since this toolbar's search box now occupies a full row by itself with no
+   sibling view switcher. display:flex keeps .toolbar-search-box's existing flex:1 behaving
+   exactly as it already does in every other toolbar that reuses it. */
+.toolbar-search-row {
+  display: flex;
+}
+
+/* Personnel Directory toolbar's second row — the two HIGH-LEVEL segmented controls for the
+   result set: All/Employees/Interns (WHICH personnel) on the left, List/Card/Timeline (HOW they
+   are displayed) on the right. Two independent .view-switcher-group instances, never merged into
+   one control. justify-content: space-between spreads them to the row's edges with comfortable
+   room between; flex-wrap + gap let them stack cleanly (each still fully visible/tappable) on
+   narrow viewports instead of overlapping or requiring a brittle fixed-width breakpoint.
+   Superseded the earlier single-control .toolbar-type-row now that this row holds two controls. */
+.toolbar-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .toolbar-bottom-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.75rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Personnel Directory toolbar's detailed-filters area — a NEW class, not the shared
+   .toolbar-bottom-row above (still used as-is by CandidateToolbar.jsx). column direction so
+   .filters-group (the 5 filters) and Reset Filters ALWAYS render as two independent, stacked
+   rows — Reset Filters can never sit on the same line as the filters, so it can never compete
+   with them for width or push Sort By onto a second line, regardless of viewport. */
+.toolbar-filters-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
   padding-top: 0.85rem;
   border-top: 1px solid var(--border-subtle);
 }
@@ -1615,6 +1869,91 @@ body {
   gap: 0.75rem;
 }
 
+/* Personnel-only modifier on the shared .filters-group above (CandidateToolbar.jsx's own
+   .filters-group is untouched — it never gets this class, and the base .filters-group rule
+   above is never edited). ROOT CAUSE, finally fixed structurally: every .custom-select-container
+   is `display: inline-block` with no width of its own (see Select.jsx), so each select's
+   rendered width was entirely driven by whichever option happened to be CURRENTLY selected —
+   combined with .filters-group's flex-wrap, the 5-filters-on-one-row outcome depended on the
+   exact combined natural width of whatever values were selected versus the exact available row
+   width, which is why gap/padding tightening passes kept needing readjustment. Replacing
+   flex-wrap with an EXPLICIT CSS GRID removed the WRAPPING failure mode (CSS Grid has no
+   wrapping mechanism — an item only moves row if grid-template-rows says so), but a fixed-pixel
+   `minmax(Npx, ...)` FLOOR per column reintroduced a DIFFERENT failure mode: pixel widths were
+   measured against this environment's own font rendering, and `.custom-select-trigger` (a
+   <button>) never explicitly inherits the site's Inter font (a pre-existing gap in the SHARED
+   Select CSS, intentionally left alone here — fixing it is out of this task's scope and would
+   affect every Select in the app) — so the ACTUAL rendered font (and therefore true worst-case
+   text width) varies by browser/OS in a way this environment cannot fully reproduce. A fixed-px
+   floor whose sum exceeds the real available width forces the GRID itself wider than its
+   container. The robust fix: `minmax(0, <fr>)` — NO fixed floor on any column, so the 5 tracks
+   always sum to EXACTLY this grid's own `width: 100%`, making it structurally IMPOSSIBLE for the
+   grid to exceed its parent card regardless of font metrics. If real content ever needs more
+   than its fr-allocated share, the existing ellipsis on .custom-select-value degrades gracefully
+   *inside* that column — never as layout overflow. The 5 fr weights themselves (1.35/0.77/0.92/
+   0.86/1.11) are proportional to each filter's REAL measured worst-case content need under the
+   actual Inter font (257/146/175/163/211px respectively, measured live by temporarily forcing
+   `font-family: Inter` and cycling every option of every filter — not this environment's default
+   button-font fallback, and not guessed), so the fixed 971px of real available column space at
+   1366px (the tightest required desktop width) distributes with a comfortable, verified margin
+   on every column, including Department, whose "Software Engineering" was clipping under the
+   previous (Arial-fallback-measured) weights the instant the real, wider Inter font rendered it. */
+.personnel-filters-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.77fr) minmax(0, 0.92fr) minmax(0, 0.86fr) minmax(0, 1.11fr);
+  align-items: end;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+/* Scoped select-trigger tightening (padding + internal icon gap only — never font-size),
+   recovering a modest amount of horizontal room per select so realistic content fits comfortably
+   within its fr-allocated column share. Scoped through .personnel-filters-group as the ancestor,
+   so the shared .custom-select-trigger/.custom-select-filter rules used by every other Select in
+   the app (ReportFilterBar, EmailDraftsPanel, NotesPage, CandidateThreadPage, UpcomingPage,
+   CandidateToolbar) are completely untouched. */
+.personnel-filters-group .custom-select-filter .custom-select-trigger {
+  padding: 0.45rem 0.55rem;
+  gap: 0.3rem;
+}
+
+/* min-width: 0 overrides the browser's default min-width: auto on a grid item — without it, the
+   Select's own (inline-block, content-driven) natural width could force its column wider than
+   the grid assigned it, the same min-width: auto gotcha CSS Grid/Flexbox both have. flex: 1 (on
+   .custom-select-container specifically, a scoped override — the shared .custom-select-container
+   rule itself, used by every other Select consumer in the app, is never touched) lets the select
+   fill the remainder of its .filter-item row after the label, so it visually fills its grid cell
+   rather than shrink-wrapping to less than the column's real width. */
+.personnel-filters-group .filter-item {
+  min-width: 0;
+}
+
+.personnel-filters-group .custom-select-container {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Tablet: 3 columns (5 filters auto-flow into a clean 3+2), still a real grid — never flex-wrap.
+   Small: 2 columns. Mobile: 1 column, fully stacked. Explicit breakpoints, not accidental
+   reflow. */
+@media (max-width: 1024px) {
+  .personnel-filters-group {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .personnel-filters-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .personnel-filters-group {
+    grid-template-columns: 1fr;
+  }
+}
+
 .filter-item {
   display: flex;
   align-items: center;
@@ -1622,6 +1961,32 @@ body {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-muted);
+}
+
+/* Former Personnel toolbar's 3-filter modifier on the shared .filters-group (Department / Exit
+   Type / Sort By — no Mode/Salary/Status filters here). Unlike .personnel-filters-group's 5
+   hand-measured fr weights (needed there to fit 5 columns tightly at 1366px), 3 even 1fr columns
+   comfortably fit every realistic option label at any of this app's supported widths, so no
+   per-column measurement was needed. minmax(0, 1fr) still avoids the same font-metrics-driven
+   grid-overflow failure mode documented on .personnel-filters-group above. */
+.former-filters-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .former-filters-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .former-filters-group {
+    grid-template-columns: 1fr;
+  }
 }
 
 .filter-select {
@@ -1792,13 +2157,153 @@ body {
   padding: 2rem 0;
 }
 
+/* Stacks the department legend (row 1) above the Timeline action controls (row 2) — a column
+   layout, deliberately NOT a single wrapping flex row. A shared row with justify-content:
+   space-between only right-aligns correctly while both the legend and the actions fit on one
+   line; once the legend's own 8 department entries wrap onto their own line at typical desktop
+   widths, a lone flex item on its own wrapped line sits at the START of that line under
+   space-between (nothing to distribute "between"), not the end — which is exactly the "actions
+   end up on the left" bug this column structure avoids structurally, at any viewport width. */
+.timeline-header-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Occupies the full Timeline content width and pushes .timeline-actions to the right edge —
+   robust regardless of legend wrapping or viewport width (never absolute positioning, never a
+   fixed margin-left tuned to one screenshot's width). */
+.timeline-actions-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Groups the icon-only "Department Colors" control and the "Export" dropdown together — both
+   Timeline-only secondary actions, never the shared Personnel toolbar. */
+.timeline-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Shared "secondary Timeline utility" button family — Department Colors (icon-only) and Export
+   (icon + label + chevron) both use this base so they always match in height, border radius,
+   and hover/focus treatment, per the app's existing light-teal-tint hover convention (already
+   used throughout index.css: var(--color-primary-light) background + var(--color-primary-active)
+   text/icon) rather than a new visual system. Intentionally a plain bordered surface, not a
+   filled primary-teal button — these are secondary tools, not the page's main call to action. */
+.timeline-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 36px;
+  padding: 0 0.7rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--color-navy-header);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.timeline-action-btn:hover {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary-active);
+}
+
+/* Same accessible focus ring already used elsewhere on Timeline's own interactive elements (see
+   .timeline-bar:focus-visible) — never the browser's bare default outline, never no outline at
+   all. */
+.timeline-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--color-primary);
+}
+
+.timeline-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Department Colors' icon-only variant — a compact square (~36px, matching .timeline-action-btn's
+   own height exactly so both controls align on the same baseline), centered palette icon, no
+   visible text (an accessible name is provided via aria-label + a native title tooltip instead). */
+.timeline-action-icon-btn {
+  width: 36px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+/* While the Export menu is open, give the trigger the same tinted "active" treatment as :hover,
+   so it stays visually obvious which control the open dropdown belongs to. */
+.timeline-export-trigger {
+  flex-shrink: 0;
+}
+
+.timeline-export-trigger.is-open {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary-active);
+}
+
+.export-menu-wrapper {
+  position: relative;
+}
+
+.export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 170px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  z-index: 30;
+}
+
+.export-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+}
+
+.export-menu-item:hover {
+  background-color: var(--bg-subtle);
+}
+
+.export-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .timeline-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
-  padding-bottom: 1rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--border-subtle);
 }
 
 .timeline-legend-item {
@@ -1866,11 +2371,6 @@ body {
   margin-top: 0.1rem;
 }
 
-.timeline-dates-cell {
-  font-size: 0.7rem;
-  margin-top: 0.25rem;
-}
-
 .type-badge-mini {
   font-size: 0.625rem;
   font-weight: 700;
@@ -1885,6 +2385,22 @@ body {
   position: relative;
   flex: 1;
   min-height: 1.1rem;
+}
+
+/* The actual 0%-100% plotting coordinate system bars/ticks are positioned against — inset from
+   .timeline-track-area's own edges by a small fixed gutter (78px, wide enough for the longest
+   compact label this Timeline ever renders, "Jun 29, 2026", at this font size) purely so a
+   Start/End Date label has room to render outside the very first/last bar without being
+   clipped. This is a VISUAL LABEL-SPACE reservation only — bars are positioned as percentages of
+   THIS inset box, but the underlying data domain (range.rangeStart/rangeEnd, and therefore the
+   axis ticks' own dates) is never widened or padded to create it. Both the axis row and every
+   data row share this exact class, so ticks and bars always align vertically. */
+.timeline-plot-area {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 78px;
+  right: 78px;
 }
 
 .timeline-axis-tick {
@@ -1925,15 +2441,37 @@ body {
   box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--color-primary);
 }
 
-.timeline-ongoing-label {
+/* Start/End Date labels — children of .timeline-bar, anchored to the BAR's own edges (never to
+   the timeline's overall data domain), exactly mirroring how .timeline-ongoing-label already
+   anchors itself to a bar's right edge. .timeline-start-label sits at `right: 100%` (the bar's
+   own left edge) and grows further left; .timeline-end-label sits at `left: 100%` (the bar's own
+   right edge) and grows further right. Kept as normal readable app text (not colored to match
+   the bar) per the readability requirement — only the bar itself carries the department color. */
+.timeline-start-label,
+.timeline-end-label {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.timeline-start-label {
+  right: 100%;
+  margin-right: 6px;
+}
+
+.timeline-end-label {
+  left: 100%;
   margin-left: 6px;
+}
+
+.timeline-ongoing-label {
   font-size: 0.65rem;
   font-weight: 700;
   color: var(--text-muted);
-  white-space: nowrap;
 }
 
 .timeline-missing-date-note {
@@ -1974,6 +2512,268 @@ body {
   .timeline-name-col {
     width: 150px;
   }
+}
+
+/* ==========================================================================
+   Timeline EXPORT-ONLY report template (TimelineExportView.jsx) — deliberately a completely
+   separate class namespace from the on-screen .timeline-* rules above, never shared, so styling
+   this report can never accidentally affect (or be affected by) the live interactive Timeline.
+   Rendered off-screen at all times (see .timeline-export-offscreen-host) and rasterized by
+   src/utils/timelineExport.js. Plain, static, high-contrast "report" presentation: no hover/
+   focus states exist in this markup at all, since none of its elements are interactive.
+   ========================================================================== */
+
+/* Keeps the export template fully laid out (so html-to-image can measure/capture its real
+   content size) while never appearing in the visible viewport or affecting page scroll/layout.
+   Deliberately position:fixed + a large negative offset, NOT display:none/visibility:hidden —
+   both of those prevent a DOM-capture library from rendering the node's content at all. */
+.timeline-export-offscreen-host {
+  position: fixed;
+  top: 0;
+  left: -99999px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.timeline-export-root {
+  background-color: #FFFFFF;
+  color: #111A2E;
+  padding: 32px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  box-sizing: border-box;
+}
+
+.timeline-export-title-block {
+  margin-bottom: 20px;
+}
+
+.timeline-export-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #111A2E;
+}
+
+.timeline-export-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  margin-top: 4px;
+}
+
+.timeline-export-generated {
+  font-size: 11px;
+  color: #94A3B8;
+  margin-top: 2px;
+}
+
+.timeline-export-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.timeline-export-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.timeline-export-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.timeline-export-chart {
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-export-axis-row {
+  display: flex;
+  padding-bottom: 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.timeline-export-name-col-spacer {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.timeline-export-name-col {
+  width: 240px;
+  flex-shrink: 0;
+  padding-right: 16px;
+  box-sizing: border-box;
+}
+
+.timeline-export-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.timeline-export-emp-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: #111A2E;
+}
+
+.timeline-export-emp-id {
+  display: block;
+  font-size: 11px;
+  color: #64748B;
+  margin-top: 2px;
+}
+
+.timeline-export-type-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Same inset-gutter technique as the live .timeline-plot-area (see its own comment above) — a
+   fixed 80px reserved on each side purely so Start/End labels never clip the report's edges. */
+.timeline-export-track-area {
+  position: relative;
+  flex: 1;
+  min-height: 18px;
+}
+
+.timeline-export-plot-area {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 80px;
+  right: 80px;
+}
+
+.timeline-export-axis-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.timeline-export-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #F1F5F9;
+  min-height: 48px;
+}
+
+.timeline-export-row:last-child {
+  border-bottom: none;
+}
+
+.timeline-export-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 16px;
+  border-radius: 4px;
+}
+
+.timeline-export-start-label,
+.timeline-export-end-label {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: #111A2E;
+  white-space: nowrap;
+}
+
+.timeline-export-start-label {
+  right: 100%;
+  margin-right: 6px;
+}
+
+.timeline-export-end-label {
+  left: 100%;
+  margin-left: 6px;
+}
+
+.timeline-export-ongoing-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748B;
+}
+
+.timeline-export-missing-note {
+  font-size: 12px;
+  color: #94A3B8;
+  font-style: italic;
+}
+
+/* Department Colors modal — one row per department, reusing the shared modal-card/form
+   conventions (see CreateEmployeeModal.jsx) rather than introducing a new modal shell. */
+.dept-color-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.dept-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+.dept-color-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.dept-color-input-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.dept-color-swatch-input {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+}
+
+.dept-color-hex {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted);
+  min-width: 64px;
 }
 
 /* ==========================================================================

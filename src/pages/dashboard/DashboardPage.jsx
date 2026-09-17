@@ -1,23 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { Users, UserCheck, UserPlus, UserMinus, UserX, AlertCircle, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { UserCheck, UserPlus, UserMinus, UserX, Clock, AlertCircle, RefreshCw } from 'lucide-react';
 import { dashboardService } from '../../services/dashboardService';
 import StatCard from '../../components/dashboard/StatCard';
-import LifecycleDistribution from '../../components/dashboard/LifecycleDistribution';
-import NewJoinersWidget from '../../components/dashboard/NewJoinersWidget';
-import DepartingWidget from '../../components/dashboard/DepartingWidget';
-import DepartmentSnapshotWidget from '../../components/dashboard/DepartmentSnapshotWidget';
+import EndingWithin7DaysWidget from '../../components/dashboard/EndingWithin7DaysWidget';
+import SoonestDueTasksWidget from '../../components/dashboard/SoonestDueTasksWidget';
 import DashboardSkeleton from '../../components/dashboard/DashboardSkeleton';
+import PersonnelProfileModal from '../../components/employees/PersonnelProfileModal';
+
+// Same 3-way segmented control style already used elsewhere in the app (e.g. Launch Plan's
+// employee/intern picker) — this is a PERSONNEL TYPE filter, not a lifecycle status filter.
+const PERSONNEL_TYPE_OPTIONS = [
+  { value: 'All', label: 'All' },
+  { value: 'Employee', label: 'Employees' },
+  { value: 'Intern', label: 'Interns' },
+];
 
 export default function DashboardPage() {
+  const [personnelType, setPersonnelType] = useState('All');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [profileEmployeeId, setProfileEmployeeId] = useState(null);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const summary = await dashboardService.getDashboardSummary();
+      const summary = await dashboardService.getDashboardSummary({ personnelType });
       setData(summary);
     } catch (err) {
       console.error('DashboardPage: Failed to fetch dashboard summary', err);
@@ -25,20 +34,36 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [personnelType]);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [fetchDashboardData]);
+
+  const personnelTypeSwitcher = (
+    <div className="view-switcher-group">
+      {PERSONNEL_TYPE_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          className={`view-btn ${personnelType === opt.value ? 'active' : ''}`}
+          onClick={() => setPersonnelType(opt.value)}
+        >
+          <span>{opt.label}</span>
+        </button>
+      ))}
+    </div>
+  );
 
   if (loading) {
     return (
       <div>
-        <div className="page-header">
+        <div className="page-header dashboard-page-header">
           <div>
             <h1 className="page-title">HR Dashboard</h1>
-            <p className="page-description">Workforce headcount, lifecycle distribution, and organization snapshot</p>
+            <p className="page-description">Personnel lifecycle counts and upcoming end dates</p>
           </div>
+          {personnelTypeSwitcher}
         </div>
         <DashboardSkeleton />
       </div>
@@ -48,11 +73,12 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div>
-        <div className="page-header">
+        <div className="page-header dashboard-page-header">
           <div>
             <h1 className="page-title">HR Dashboard</h1>
-            <p className="page-description">Workforce headcount, lifecycle distribution, and organization snapshot</p>
+            <p className="page-description">Personnel lifecycle counts and upcoming end dates</p>
           </div>
+          {personnelTypeSwitcher}
         </div>
         <div className="placeholder-card" style={{ borderColor: '#FCA5A5' }}>
           <div className="placeholder-icon" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
@@ -67,82 +93,84 @@ export default function DashboardPage() {
     );
   }
 
-  const { metrics, lifecycleDistribution, newJoinersAndUpcoming, departingEmployees, departmentSnapshot } = data;
-  const currentWorkforceHeadcount = metrics.activeCount + metrics.onboardingCount + metrics.departingCount;
+  const { metrics, endingWithin7Days } = data;
 
   return (
     <div className="dashboard-page-wrapper">
-      {/* Header Title */}
-      <div className="page-header">
+      {/* Header Title + Personnel Type Filter */}
+      <div className="page-header dashboard-page-header">
         <div>
           <h1 className="page-title">HR Dashboard</h1>
-          <p className="page-description">Workforce headcount, lifecycle distribution, and organization snapshot</p>
+          <p className="page-description">Personnel lifecycle counts and upcoming end dates</p>
         </div>
+        {personnelTypeSwitcher}
       </div>
 
-      {/* 1. Stat Cards Grid */}
+      {/* 1. Five Lifecycle Count Cards — information-only (no navigation/linkTo): these summarize
+          counts, they don't drill into Personnel. See Personnel module for detailed records. */}
       <div className="stat-cards-grid">
         <StatCard
-          icon={UserCheck}
-          title="Active Employees"
-          value={metrics.activeCount}
-          subtitle="Currently employed workforce"
-          linkTo="/employees?status=Active"
-          badgeBg="#ECFDF5"
-          badgeColor="#059669"
+          icon={Clock}
+          title="Upcoming"
+          value={metrics.upcomingCount}
+          subtitle="Scheduled to start"
+          badgeBg="#EFF6FF"
+          badgeColor="#2563EB"
         />
 
         <StatCard
           icon={UserPlus}
-          title="New Joiners & Upcoming"
-          value={metrics.newJoinersGroupCount}
-          subtitle={`${metrics.onboardingCount} Onboarding · ${metrics.upcomingCount} Upcoming`}
-          linkTo="/employees?status=Onboarding"
+          title="Onboarding"
+          value={metrics.onboardingCount}
+          subtitle="Currently onboarding"
           badgeBg="var(--color-primary-light)"
           badgeColor="var(--color-primary)"
         />
 
         <StatCard
+          icon={UserCheck}
+          title="Active"
+          value={metrics.activeCount}
+          subtitle="Currently active personnel"
+          badgeBg="#ECFDF5"
+          badgeColor="#059669"
+        />
+
+        <StatCard
           icon={UserMinus}
-          title="Departing Employees"
+          title="Offboarding"
           value={metrics.departingCount}
-          subtitle="Undergoing offboarding transition"
-          linkTo="/employees?status=Departing"
+          subtitle="Currently in offboarding"
           badgeBg="#FFFBEB"
           badgeColor="#D97706"
         />
 
         <StatCard
           icon={UserX}
-          title="Former Employees"
+          title="Former"
           value={metrics.formerCount}
-          subtitle="Archived historical records"
-          linkTo="/employees?status=Former"
+          subtitle="Historical personnel records"
           badgeBg="#F1F5F9"
           badgeColor="#64748B"
         />
       </div>
 
-      {/* 2. Lifecycle Distribution Section */}
-      <div style={{ marginTop: '1.5rem' }}>
-        <LifecycleDistribution distribution={lifecycleDistribution} />
+      {/* 2. Ending Within 7 Days + Soonest Due Tasks — side by side (never a single stretched
+          full-width bar), each with its OWN internal vertical scroll past a bounded height so a
+          widget with many rows never grows the page itself taller. Workforce Lifecycle
+          Distribution was removed earlier (redundant with the 5 lifecycle count cards above). */}
+      <div className="dashboard-widgets-row" style={{ marginTop: '2.25rem' }}>
+        <EndingWithin7DaysWidget people={endingWithin7Days} onViewProfile={setProfileEmployeeId} />
+        <SoonestDueTasksWidget />
       </div>
 
-      {/* 3. Main Dashboard Widgets Grid */}
-      <div className="dashboard-content-grid" style={{ marginTop: '1.5rem' }}>
-        {/* Left Column: New Joiners & Departing Widgets */}
-        <div className="dashboard-column-main">
-          <NewJoinersWidget employees={newJoinersAndUpcoming} />
-          <div style={{ marginTop: '1.5rem' }}>
-            <DepartingWidget employees={departingEmployees} />
-          </div>
-        </div>
-
-        {/* Right Column: Organization Snapshot Widget */}
-        <div className="dashboard-column-side">
-          <DepartmentSnapshotWidget departments={departmentSnapshot} totalActiveWorkforce={currentWorkforceHeadcount} />
-        </div>
-      </div>
+      {/* Personnel Profile Modal — reuses the SAME modal the Personnel directory's own View
+          Profile action uses; no second profile implementation. */}
+      <PersonnelProfileModal
+        isOpen={Boolean(profileEmployeeId)}
+        onClose={() => setProfileEmployeeId(null)}
+        employeeId={profileEmployeeId}
+      />
     </div>
   );
 }

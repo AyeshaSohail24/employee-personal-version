@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Building2, Calendar, Mail, Eye } from 'lucide-react';
 import { formatDateDisplay, calculateDurationProgress } from '../../utils/dateUtils.js';
 
@@ -32,7 +33,7 @@ const DURATION_FILL_CLASS = {
   completed: 'duration-bar-fill completed',
 };
 
-export default function EmployeeCardView({ employees = [], onViewProfile }) {
+export default function EmployeeCardView({ employees = [] }) {
   return (
     <div className="employee-card-grid">
       {employees.map((emp) => {
@@ -66,15 +67,13 @@ export default function EmployeeCardView({ employees = [], onViewProfile }) {
                 <Mail size={14} className="detail-icon" />
                 <span className="detail-text" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{emp.workEmail}</span>
               </div>
-              <button
-                type="button"
-                className="btn-compact-override"
-                style={{ marginTop: '0.5rem' }}
-                onClick={() => onViewProfile && onViewProfile(emp.id)}
-              >
+              {/* Navigates to the dedicated Personnel Details page instead of opening
+                  PersonnelProfileModal (per direct user request: a person's record can grow to
+                  include CV/resume PDFs, which don't fit comfortably in a modal). */}
+              <Link to={`/employees/${emp.id}`} className="btn-compact-override" style={{ marginTop: '0.5rem', textDecoration: 'none' }}>
                 <Eye size={12} />
-                <span>View Profile</span>
-              </button>
+                <span>View Details</span>
+              </Link>
             </div>
 
             {/* BODY: Department, Type, Mode */}
