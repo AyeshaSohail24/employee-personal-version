@@ -287,7 +287,12 @@ export const offboardingService = {
    */
   async getScopesSummary(personType = 'employee') {
     const tasks = await this.getScopeTaskDefinitions();
-    const departments = await departmentService.getAll({ withCount: false });
+    // Departments are owned by the external Department Management service, not
+    // this app's own mock data (departmentService.js) — read through the real
+    // API so a department-scoped plan can only ever be configured for a
+    // department that actually exists there. See db/schema_employees.sql's
+    // architecture note.
+    const { departments } = await apiClient.get('/departments');
     const bySequence = (a, b) => (a.sequence || 0) - (b.sequence || 0);
 
     const universalScoped = tasks.filter((t) => t.scopeType === 'universal' && t.personType === personType).sort(bySequence);

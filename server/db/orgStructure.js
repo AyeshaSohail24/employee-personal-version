@@ -45,4 +45,5 @@ export const listDocumentTypes = ({ limit, offset } = {}) => listRows("document_
 // nothing is cached or duplicated locally, so a rename there is instantly
 // correct here (SS-13: a soft-referenced department_id/role_id, never a copy).
 export const listExternalDepartments = (search) => departmentsClient.listDepartments(search);
+export const getExternalDepartment = (id) => departmentsClient.getDepartment(id);
 export const listExternalRoles = () => internsClient.listRoles();

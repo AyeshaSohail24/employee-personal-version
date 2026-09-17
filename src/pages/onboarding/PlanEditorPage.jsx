@@ -12,7 +12,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
-import { departmentService } from '../../services/departmentService.js';
+import { apiClient } from '../../services/apiClient.js';
 import { activityService } from '../../services/activityService.js';
 import Select from '../../components/common/Select.jsx';
 
@@ -60,7 +60,15 @@ export default function PlanEditorPage() {
       setActivityTypes(types);
 
       if (scopeType === 'department') {
-        const dept = await departmentService.getById(departmentId);
+        // Departments are owned by the external Department Management service
+        // (see onboardingService.getScopesSummary()'s same comment) — this
+        // page's departmentId only ever came from that real list to begin with.
+        let dept = null;
+        try {
+          ({ department: dept } = await apiClient.get(`/departments/${departmentId}`));
+        } catch (err) {
+          if (err?.status !== 404) throw err;
+        }
         if (!dept) {
           setNotFound(true);
           setLoading(false);

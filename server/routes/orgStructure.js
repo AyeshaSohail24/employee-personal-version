@@ -71,6 +71,17 @@ export const routes = {
       sendJson(res, ctx.cid, 200, { departments: await db.listExternalDepartments(ctx.url.searchParams.get("search") ?? undefined) });
     },
   },
+  "/departments/{id}": {
+    async get(req, res, ctx) {
+      let department;
+      try {
+        department = await db.getExternalDepartment(ctx.params.id);
+      } catch {
+        throw new NotFoundError(`No department with id ${ctx.params.id}.`);
+      }
+      sendJson(res, ctx.cid, 200, { department });
+    },
+  },
   "/roles": {
     async get(req, res, ctx) {
       sendJson(res, ctx.cid, 200, { roles: await db.listExternalRoles() });

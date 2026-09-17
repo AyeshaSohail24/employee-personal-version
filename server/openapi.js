@@ -46,7 +46,7 @@ export const openapi = {
           description: "Positions, work locations, and schedules employees are assigned to.",
           does: ["List and create positions", "List and create locations", "List and create schedules", "List employee types and document types", "Resolve a department or intern role from the external directories"],
           best_for: "Setting up or looking up the shape of the organisation.",
-          endpoints: ["GET /positions", "POST /positions", "GET /positions/{id}", "PATCH /positions/{id}", "GET /locations", "POST /locations", "GET /schedules", "POST /schedules", "GET /employee-types", "GET /document-types", "GET /departments", "GET /roles"],
+          endpoints: ["GET /positions", "POST /positions", "GET /positions/{id}", "PATCH /positions/{id}", "GET /locations", "POST /locations", "GET /schedules", "POST /schedules", "GET /employee-types", "GET /document-types", "GET /departments", "GET /departments/{id}", "GET /roles"],
         },
         {
           name: "Run Onboarding",
@@ -296,6 +296,10 @@ export const openapi = {
     "/departments": {
       get: { summary: "Read-through list of departments from the external Department directory.", security: scoped("org-structure:read"),
         "x-rizurf": { name: "List Departments", purpose: "Resolve department ids to names, or populate a department picker", use_when: ["Showing a department name next to an employee/position", "Populating a department filter or picker"], do_not_use_when: ["Creating or editing a department — that service is owned by the Department Management team, not this app"], inputs: ["search"], outputs: ["departments[]"], requires: [], related_endpoints: ["GET /positions", "POST /applicants/{applicantId}/convert"], tags: ["departments", "directory", "external"] } },
+    },
+    "/departments/{id}": {
+      get: { summary: "Read-through fetch of one department from the external Department directory.", security: scoped("org-structure:read"),
+        "x-rizurf": { name: "Get Department", purpose: "Resolve one department id to its name/details", use_when: ["Showing a department-scoped page's header (e.g. an onboarding/offboarding Plan editor)"], do_not_use_when: ["Listing many departments — use GET /departments"], inputs: ["id"], outputs: ["department"], requires: [], related_endpoints: ["GET /departments"], tags: ["department", "get", "external"] } },
     },
     "/roles": {
       get: { summary: "Read-through list of assignable intern roles from the Interns database.", security: scoped("org-structure:read"),
