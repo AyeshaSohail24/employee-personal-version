@@ -48,3 +48,15 @@ export const EXTERNAL_CLIENTS = {
   interns: externalClient("INTERNS", "intern-database"),
   departments: externalClient("DEPARTMENTS", "department-api"),
 };
+
+// Not required at startup (like EXTERNAL_CLIENTS above) — server/messaging/
+// emailProvider.js throws its own clear error if this is asked to send
+// without being configured, same pattern as the external API clients.
+export const MAIL = {
+  host: process.env.MAIL_HOST ?? "",
+  port: Number(process.env.MAIL_PORT ?? 465),
+  username: process.env.MAIL_USERNAME ?? "",
+  password: process.env.MAIL_PASSWORD ?? "",
+  fromAddress: process.env.MAIL_FROM_ADDRESS ?? "",
+  fromName: process.env.MAIL_FROM_NAME ?? "",
+};
