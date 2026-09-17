@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
 import { apiClient } from '../../services/apiClient.js';
-import { activityService } from '../../services/activityService.js';
 import Select from '../../components/common/Select.jsx';
 
 const PERSON_TYPE_LABEL = {
@@ -56,8 +55,10 @@ export default function PlanEditorPage() {
     }
 
     try {
-      const types = await activityService.getActiveTypes();
-      setActivityTypes(types);
+      // Real catalog (GET /activity-types), not the mock Configuration > Activity
+      // Types subsystem — see server/db/orgStructure.js's listActivityTypes().
+      const { activityTypes: types } = await apiClient.get('/activity-types');
+      setActivityTypes(types.filter((t) => t.active !== false));
 
       if (scopeType === 'department') {
         // Departments are owned by the external Department Management service
@@ -101,7 +102,7 @@ export default function PlanEditorPage() {
       id: `temp-${Date.now()}`,
       title: '',
       description: '',
-      activityTypeId: activityTypes.length > 0 ? activityTypes[0].id : 'act-type-1',
+      activityTypeId: activityTypes.length > 0 ? activityTypes[0].id : 1,
       relativeOffsetDays: 0,
       // Required Task is no longer a configurable, HR-facing concept — this stays as an
       // internal compatibility field only (never rendered/edited in the UI). All tasks count

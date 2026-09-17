@@ -32,6 +32,26 @@ export const onboardingService = {
     return interns;
   },
 
+  /**
+   * The real onboarding plan instance already running for one (real) employee, plus its task
+   * instances — GET /onboarding/instances?employee_id=, backing the real-intern detail view
+   * (`plan: null` if nothing has been launched for them yet, e.g. no Universal/department task
+   * is configured). Entirely separate from getAllInstances()/getInstanceById() above, which stay
+   * on the mock localStorage model this file's older template/instance code still uses.
+   */
+  async getRealInstanceForEmployee(employeeId) {
+    return apiClient.get(`/onboarding/instances?employee_id=${encodeURIComponent(employeeId)}`);
+  },
+
+  /**
+   * Marks one real onboarding task instance done or reopens it — PATCH
+   * /onboarding/task-instances/{id}, the real counterpart to activityService.markComplete/reopen
+   * (which only ever operates on mock activities).
+   */
+  async setRealTaskInstanceCompleted(taskInstanceId, completed) {
+    const { taskInstance } = await apiClient.patch(`/onboarding/task-instances/${taskInstanceId}`, { completed });
+    return taskInstance;
+  },
 
   /**
    * Fetches all Onboarding PlanTemplates with optional task count enrichment.
@@ -246,13 +266,29 @@ export const onboardingService = {
   /**
    * Fetches all active, scope-tagged onboarding task definitions — each carrying both a
    * scopeType ('universal' | 'department') and a personType ('employee' | 'intern') — the raw
-   * building blocks composeOnboardingTasks() combines per employee. Legacy tasks without a
-   * scopeType/personType (pre-migration) are excluded here; the storageEngine migrations
-   * backfill both fields on every load so this should not occur.
+   * building blocks composeOnboardingTasks() combines per employee. Backed by the real
+   * GET /onboarding/scope-tasks (server/db/onboarding.js's listScopeTasks()) rather than mock
+   * localStorage — reshaped from the DB's snake_case row shape into the camelCase shape every
+   * caller here already expects, so nothing downstream (getScopesSummary/getScopeTasks/
+   * composeOnboardingTasks) needed to change.
    */
   async getScopeTaskDefinitions() {
-    const db = loadDatabase();
-    return (db.onboardingPlanTasks || []).filter((t) => t.active !== false && t.scopeType && t.personType);
+    const { tasks } = await apiClient.get('/onboarding/scope-tasks');
+    return tasks.map((t) => ({
+      id: t.id,
+      activityTypeId: t.activity_type_id,
+      title: t.title,
+      description: t.description || '',
+      assignmentRule: t.assignment_rule,
+      specificAssigneeId: t.specific_assignee_id,
+      relativeOffsetDays: t.relative_offset_days || 0,
+      required: Boolean(t.required),
+      sequence: t.sequence,
+      active: Boolean(t.active),
+      scopeType: t.scope_type,
+      personType: t.person_type,
+      scopeDepartmentId: t.scope_department_id,
+    }));
   },
 
   /**
@@ -320,47 +356,23 @@ export const onboardingService = {
    * unassigned path (resolveAssigneeForRule(null, ...)), same as every other
    * post-assignment-removal task.
    */
-  async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = [], currentUserId = 'emp-001') {
-    const db = loadDatabase();
-    const allTasks = db.onboardingPlanTasks || [];
-
-    const isSameScope = (t) => t.scopeType === scopeType && t.personType === personType && (scopeType !== 'department' || t.scopeDepartmentId === departmentId);
-    const otherTasks = allTasks.filter((t) => !isSameScope(t));
-
-    const newTasks = (tasksData || []).map((t, index) => ({
-      id: t.id && String(t.id).startsWith('pt-') ? t.id : `pt-scope-${personType}-${scopeType}${departmentId ? `-${departmentId}` : ''}-${index + 1}-${Date.now().toString().slice(-4)}`,
-      planTemplateId: null,
+  async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = []) {
+    await apiClient.put('/onboarding/scope-tasks', {
       scopeType,
       personType,
       scopeDepartmentId: scopeType === 'department' ? departmentId : null,
-      activityTypeId: t.activityTypeId || 'act-type-1',
-      title: (t.title || '').trim(),
-      description: (t.description || '').trim(),
-      assignmentRule: null,
-      specificAssigneeId: null,
-      relativeOffsetDays: parseInt(t.relativeOffsetDays || 0, 10),
-      // Required Task is no longer collected by the scope editor — this is an internal
-      // compatibility field only (all tasks now count equally toward progress; see
-      // calculatePlanProgress()). Defaults to true unless a caller explicitly passes false, so
-      // brand-new tasks are never silently marked required: false.
-      required: t.required !== false,
-      sequence: index + 1,
-      active: true,
-    }));
-
-    db.onboardingPlanTasks = [...otherTasks, ...newTasks];
-    saveDatabase(db);
-
-    try {
-      const scopeLabel = `${personType}-${scopeType}`;
-      await auditService.logAction(
-        currentUserId,
-        AUDIT_ACTIONS.ONBOARDING_TEMPLATE_UPDATED || 'ONBOARDING_TEMPLATE_UPDATED',
-        'OnboardingTaskScope',
-        departmentId ? `${scopeLabel}:${departmentId}` : scopeLabel,
-        `Updated ${scopeLabel} onboarding task scope${departmentId ? ` (${departmentId})` : ''} with ${newTasks.length} tasks`
-      );
-    } catch (err) {}
+      tasks: (tasksData || []).map((t) => ({
+        activityTypeId: Number(t.activityTypeId),
+        title: (t.title || '').trim(),
+        description: (t.description || '').trim(),
+        relativeOffsetDays: parseInt(t.relativeOffsetDays || 0, 10),
+        // Required Task is no longer collected by the scope editor — this is an internal
+        // compatibility field only (all tasks now count equally toward progress; see
+        // calculatePlanProgress()). Defaults to true unless a caller explicitly passes false, so
+        // brand-new tasks are never silently marked required: false.
+        required: t.required !== false,
+      })),
+    });
 
     return this.getScopeTasks(scopeType, personType, departmentId);
   },

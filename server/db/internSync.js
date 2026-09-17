@@ -4,6 +4,8 @@
 // here is a no-op for a non-intern employee.
 import { pool } from "./pool.js";
 import { getRow, insertRow } from "./crud.js";
+import { createEmployee, updateEmployee, createEmploymentRecord } from "./employees.js";
+import { getEmployeeTypeByCode } from "./orgStructure.js";
 import { internsClient } from "../clients/internsClient.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
 
@@ -48,6 +50,41 @@ export async function syncOffboardingLaunchToIntern(employeeId, anchorDate) {
       details: String(error.message ?? error),
     });
   }
+}
+
+// The local `employees` row already linked to this intern
+// (`intern_external_id`), or — for a real intern the Interns DB knows about
+// but this app has never touched (no Applicant conversion ever ran for
+// them) — one created on first use, so a plan has somewhere local to
+// attach its instance and activities. Mirrors applicantConversion.js's
+// Applicants -> employees push, in reverse.
+export async function resolveOrCreateEmployeeForIntern(internId) {
+  const [existing] = await pool.query("SELECT * FROM employees WHERE intern_external_id = ?", [internId]);
+  if (existing.length > 0) return existing[0];
+
+  const intern = await internsClient.getIntern(internId);
+  const internType = await getEmployeeTypeByCode("INTERN");
+
+  const employeeId = await createEmployee({
+    employeeCode: `RZ-${Date.now()}`,
+    firstName: intern.first_name,
+    lastName: intern.last_name,
+    workEmail: intern.email_address,
+    workPhone: intern.phone_number,
+    employeeTypeId: internType.id,
+    status: "Onboarding",
+    startDate: intern.internship_start_date,
+  });
+  await updateEmployee(employeeId, { internExternalId: intern.id, internRefNumber: intern.ref_number });
+
+  if (intern.department_id) {
+    await createEmploymentRecord(employeeId, {
+      departmentId: intern.department_id,
+      effectiveFrom: intern.internship_start_date,
+    });
+  }
+
+  return getRow("employees", employeeId);
 }
 
 function deriveStatus(tasks) {

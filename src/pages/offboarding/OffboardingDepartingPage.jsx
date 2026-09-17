@@ -7,21 +7,22 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Play,
 } from 'lucide-react';
 import { offboardingService } from '../../services/offboardingService.js';
-import LaunchOffboardingPlanModal from '../../components/offboarding/LaunchOffboardingPlanModal.jsx';
 
 // The real intern roster (Interns DB), joined server-side with whatever
 // local offboarding plan each person has — see
-// offboardingService.getInternsProgress() / server/db/internSync.js. Not the
-// deeper plan-template/task-editing system below in offboardingService.js,
-// which still runs on mock data — this page only needed the read side.
+// offboardingService.getInternsProgress() / server/db/internSync.js. Unlike
+// Onboarding, a plan here is NOT auto-launched: launching offboarding also
+// sets the intern's real internship_end_date in the Interns DB (see
+// server/db/internSync.js's syncOffboardingLaunchToIntern()), so it stays an
+// explicit, real-backed action (POST /offboarding/interns/{internId}/launch)
+// rather than something that fires the moment an intern appears — no UI
+// trigger for it exists yet.
 export default function OffboardingDepartingPage() {
   const [interns, setInterns] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -63,16 +64,6 @@ export default function OffboardingDepartingPage() {
           <p className="page-subtitle">
             View and track individual offboarding progress for interns.
           </p>
-        </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            className="btn-primary btn-header-action"
-            onClick={() => setIsLaunchModalOpen(true)}
-          >
-            <Play size={15} />
-            <span>Launch Offboarding Plan</span>
-          </button>
         </div>
       </div>
 
@@ -303,15 +294,6 @@ export default function OffboardingDepartingPage() {
           </div>
         )}
       </div>
-
-      {/* Launch Plan Modal — still reads/writes the mock employees table
-          (not yet rewired), so it won't show these real interns as
-          launch-eligible until that's connected too. */}
-      <LaunchOffboardingPlanModal
-        isOpen={isLaunchModalOpen}
-        onClose={() => setIsLaunchModalOpen(false)}
-        onSuccess={() => loadData()}
-      />
     </div>
   );
 }

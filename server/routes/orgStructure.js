@@ -62,6 +62,11 @@ export const routes = {
       sendJson(res, ctx.cid, 200, { documentTypes: await db.listDocumentTypes(parseListQuery(ctx.url)) });
     },
   },
+  "/activity-types": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { activityTypes: await db.listActivityTypes(parseListQuery(ctx.url)) });
+    },
+  },
   // Departments/Roles are read-through proxies to external services whose
   // own APIs don't support limit/offset (Departments takes `search`/`status`
   // only; Roles has no paging params at all) — SS-12 pagination doesn't

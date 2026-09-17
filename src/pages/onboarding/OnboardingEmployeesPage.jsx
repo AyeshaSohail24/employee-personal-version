@@ -7,21 +7,20 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Play,
 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
-import LaunchPlanModal from '../../components/onboarding/LaunchPlanModal.jsx';
 
 // The real intern roster (Interns DB), joined server-side with whatever
-// local onboarding plan each person has — see
-// onboardingService.getInternsProgress() / server/db/internSync.js. Not the
-// deeper plan-template/task-editing system below in onboardingService.js,
-// which still runs on mock data — this page only needed the read side.
+// local onboarding plan each person has, auto-launching one from Universal +
+// their department's active tasks the moment they show up with none — see
+// onboardingService.getInternsProgress() / server/db/onboarding.js's
+// listInternsWithAutoLaunchedOnboarding(). There is no manual "Launch"
+// action: HR configures tasks under Onboarding > Plans and every intern is
+// assigned automatically from there.
 export default function OnboardingEmployeesPage() {
   const [interns, setInterns] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -63,16 +62,6 @@ export default function OnboardingEmployeesPage() {
           <p className="page-subtitle">
             View and track individual onboarding progress for interns.
           </p>
-        </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            className="btn-primary btn-header-action"
-            onClick={() => setIsLaunchModalOpen(true)}
-          >
-            <Play size={15} />
-            <span>Launch Onboarding Plan</span>
-          </button>
         </div>
       </div>
 
@@ -303,15 +292,6 @@ export default function OnboardingEmployeesPage() {
           </div>
         )}
       </div>
-
-      {/* Launch Plan Modal — still reads/writes the mock employees table
-          (not yet rewired), so it won't show these real interns as
-          launch-eligible until that's connected too. */}
-      <LaunchPlanModal
-        isOpen={isLaunchModalOpen}
-        onClose={() => setIsLaunchModalOpen(false)}
-        onSuccess={() => loadData()}
-      />
     </div>
   );
 }

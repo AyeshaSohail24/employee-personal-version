@@ -370,7 +370,7 @@ CREATE TABLE IF NOT EXISTS `onboarding_plan_templates` (
 --     Department service's id, set only when scope_type = 'department'.
 CREATE TABLE IF NOT EXISTS `onboarding_plan_tasks` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
-    `plan_template_id` INT NOT NULL,
+    `plan_template_id` INT NULL, -- NULL for a scope-based (Universal/Department) task or instance, not tied to a reusable named template
     `activity_type_id` INT NOT NULL,
     `title` VARCHAR(255) NOT NULL,
     `description` TEXT NULL,
@@ -394,7 +394,7 @@ CREATE TABLE IF NOT EXISTS `onboarding_plan_tasks` (
 -- 17. ONBOARDING_PLAN_INSTANCES — one launched plan per employee
 CREATE TABLE IF NOT EXISTS `onboarding_plan_instances` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
-    `plan_template_id` INT NOT NULL,
+    `plan_template_id` INT NULL, -- NULL for a scope-based (Universal/Department) task or instance, not tied to a reusable named template
     `employee_id` INT NOT NULL,
     `started_at` DATE NOT NULL,
     `anchor_date` DATE NOT NULL,
@@ -454,7 +454,7 @@ CREATE TABLE IF NOT EXISTS `offboarding_plan_templates` (
 --     FK) to the external Department service's id.
 CREATE TABLE IF NOT EXISTS `offboarding_plan_tasks` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
-    `plan_template_id` INT NOT NULL,
+    `plan_template_id` INT NULL, -- NULL for a scope-based (Universal/Department) task or instance, not tied to a reusable named template
     `activity_type_id` INT NOT NULL,
     `title` VARCHAR(255) NOT NULL,
     `description` TEXT NULL,
@@ -478,7 +478,7 @@ CREATE TABLE IF NOT EXISTS `offboarding_plan_tasks` (
 -- 21. OFFBOARDING_PLAN_INSTANCES
 CREATE TABLE IF NOT EXISTS `offboarding_plan_instances` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
-    `plan_template_id` INT NOT NULL,
+    `plan_template_id` INT NULL, -- NULL for a scope-based (Universal/Department) task or instance, not tied to a reusable named template
     `employee_id` INT NOT NULL,
     `started_at` DATE NOT NULL,
     `anchor_date` DATE NOT NULL, -- the departing employee's last working day
