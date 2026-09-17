@@ -1,0 +1,13 @@
+{
+  "name": "rizurf-employees-api",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "mysql2": "^3.9.7",
+    "nodemailer": "^10.0.10"
+  }
+}
