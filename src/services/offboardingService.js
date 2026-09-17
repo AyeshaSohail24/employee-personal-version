@@ -1,4 +1,5 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
+import { apiClient } from './apiClient.js';
 import { employeeService } from './employeeService.js';
 import { employmentRecordService } from './employmentRecordService.js';
 import { departmentService } from './departmentService.js';
@@ -17,6 +18,33 @@ import {
 import { addDaysToLocalDate, getTodayLocalDateString } from '../utils/dateUtils.js';
 
 export const offboardingService = {
+  /**
+   * The real intern roster (Interns DB) with each person's offboarding plan
+   * status, if one exists locally — mirrors onboardingService.getInternsProgress().
+   * @returns {Promise<Array<Object>>}
+   */
+  async getInternsProgress() {
+    const { interns } = await apiClient.get('/offboarding/interns');
+    return interns;
+  },
+
+  /**
+   * The real offboarding plan instance already running for one (real) employee, plus its task
+   * instances — mirrors onboardingService.getRealInstanceForEmployee() exactly.
+   */
+  async getRealInstanceForEmployee(employeeId) {
+    return apiClient.get(`/offboarding/instances?employee_id=${encodeURIComponent(employeeId)}`);
+  },
+
+  /**
+   * Marks one real offboarding task instance done or reopens it — mirrors
+   * onboardingService.setRealTaskInstanceCompleted() exactly.
+   */
+  async setRealTaskInstanceCompleted(taskInstanceId, completed) {
+    const { taskInstance } = await apiClient.patch(`/offboarding/task-instances/${taskInstanceId}`, { completed });
+    return taskInstance;
+  },
+
   /**
    * Fetches all Offboarding PlanTemplates with optional task count enrichment.
    */
@@ -261,8 +289,22 @@ export const offboardingService = {
    * onboardingPlanTasks — offboarding scope tasks are never mixed with onboarding's.
    */
   async getScopeTaskDefinitions() {
-    const db = loadDatabase();
-    return (db.offboardingPlanTasks || []).filter((t) => t.active !== false && t.scopeType && t.personType);
+    const { tasks } = await apiClient.get('/offboarding/scope-tasks');
+    return tasks.map((t) => ({
+      id: t.id,
+      activityTypeId: t.activity_type_id,
+      title: t.title,
+      description: t.description || '',
+      assignmentRule: t.assignment_rule,
+      specificAssigneeId: t.specific_assignee_id,
+      relativeOffsetDays: t.relative_offset_days || 0,
+      required: Boolean(t.required),
+      sequence: t.sequence,
+      active: Boolean(t.active),
+      scopeType: t.scope_type,
+      personType: t.person_type,
+      scopeDepartmentId: t.scope_department_id,
+    }));
   },
 
   /**
@@ -276,7 +318,12 @@ export const offboardingService = {
    */
   async getScopesSummary(personType = 'employee') {
     const tasks = await this.getScopeTaskDefinitions();
-    const departments = await departmentService.getAll({ withCount: false });
+    // Departments are owned by the external Department Management service, not
+    // this app's own mock data (departmentService.js) — read through the real
+    // API so a department-scoped plan can only ever be configured for a
+    // department that actually exists there. See db/schema_employees.sql's
+    // architecture note.
+    const { departments } = await apiClient.get('/departments');
     const bySequence = (a, b) => (a.sequence || 0) - (b.sequence || 0);
 
     const universalScoped = tasks.filter((t) => t.scopeType === 'universal' && t.personType === personType).sort(bySequence);
@@ -318,45 +365,22 @@ export const offboardingService = {
    * before HR configures it). New tasks are never given an assignmentRule — offboarding launches
    * no longer resolve an assignee at all (every launched task instance is created unassigned).
    */
-  async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = [], currentUserId = 'emp-001') {
-    const db = loadDatabase();
-    const allTasks = db.offboardingPlanTasks || [];
-
-    const isSameScope = (t) => t.scopeType === scopeType && t.personType === personType && (scopeType !== 'department' || t.scopeDepartmentId === departmentId);
-    const otherTasks = allTasks.filter((t) => !isSameScope(t));
-
-    const newTasks = (tasksData || []).map((t, index) => ({
-      id: t.id && String(t.id).startsWith('pt-off-') ? t.id : `pt-off-scope-${personType}-${scopeType}${departmentId ? `-${departmentId}` : ''}-${index + 1}-${Date.now().toString().slice(-4)}`,
-      planTemplateId: null,
+  async saveScopeTasks(scopeType, personType, departmentId = null, tasksData = []) {
+    await apiClient.put('/offboarding/scope-tasks', {
       scopeType,
       personType,
       scopeDepartmentId: scopeType === 'department' ? departmentId : null,
-      activityTypeId: t.activityTypeId || 'act-type-1',
-      title: (t.title || '').trim(),
-      description: (t.description || '').trim(),
-      assignmentRule: null,
-      specificAssigneeId: null,
-      relativeOffsetDays: parseInt(t.relativeOffsetDays || 0, 10),
-      // Required Task is no longer collected by the scope editor — internal compatibility field
-      // only (all tasks now count equally toward progress; see calculateOffboardingProgress()).
-      required: t.required !== false,
-      sequence: index + 1,
-      active: true,
-    }));
-
-    db.offboardingPlanTasks = [...otherTasks, ...newTasks];
-    saveDatabase(db);
-
-    try {
-      const scopeLabel = `${personType}-${scopeType}`;
-      await auditService.logAction(
-        currentUserId,
-        AUDIT_ACTIONS.OFFBOARDING_TEMPLATE_UPDATED || 'OFFBOARDING_TEMPLATE_UPDATED',
-        'OffboardingTaskScope',
-        departmentId ? `${scopeLabel}:${departmentId}` : scopeLabel,
-        `Updated ${scopeLabel} offboarding task scope${departmentId ? ` (${departmentId})` : ''} with ${newTasks.length} tasks`
-      );
-    } catch (err) {}
+      tasks: (tasksData || []).map((t) => ({
+        activityTypeId: Number(t.activityTypeId),
+        title: (t.title || '').trim(),
+        description: (t.description || '').trim(),
+        relativeOffsetDays: parseInt(t.relativeOffsetDays || 0, 10),
+        // Required Task is no longer collected by the scope editor — internal compatibility
+        // field only (all tasks now count equally toward progress; see
+        // calculateOffboardingProgress()).
+        required: t.required !== false,
+      })),
+    });
 
     return this.getScopeTasks(scopeType, personType, departmentId);
   },

@@ -62,6 +62,11 @@ export const routes = {
       sendJson(res, ctx.cid, 200, { documentTypes: await db.listDocumentTypes(parseListQuery(ctx.url)) });
     },
   },
+  "/activity-types": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { activityTypes: await db.listActivityTypes(parseListQuery(ctx.url)) });
+    },
+  },
   // Departments/Roles are read-through proxies to external services whose
   // own APIs don't support limit/offset (Departments takes `search`/`status`
   // only; Roles has no paging params at all) — SS-12 pagination doesn't
@@ -69,6 +74,17 @@ export const routes = {
   "/departments": {
     async get(req, res, ctx) {
       sendJson(res, ctx.cid, 200, { departments: await db.listExternalDepartments(ctx.url.searchParams.get("search") ?? undefined) });
+    },
+  },
+  "/departments/{id}": {
+    async get(req, res, ctx) {
+      let department;
+      try {
+        department = await db.getExternalDepartment(ctx.params.id);
+      } catch {
+        throw new NotFoundError(`No department with id ${ctx.params.id}.`);
+      }
+      sendJson(res, ctx.cid, 200, { department });
     },
   },
   "/roles": {

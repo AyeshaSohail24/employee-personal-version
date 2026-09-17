@@ -2,40 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
-  User,
   Calendar,
   CheckCircle2,
-  AlertTriangle,
-  Clock,
-  Play,
-  FileText,
   RotateCcw,
-  Eye,
-  Plus,
-  Trash2,
-  Pencil,
-  XCircle,
+  FileText,
 } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
 import { onboardingService } from '../../services/onboardingService.js';
-import { activityService } from '../../services/activityService.js';
-import { PLAN_INSTANCE_STATUS, isActivePlanStatus } from '../../domain/onboardingDomain.js';
-import LaunchPlanModal from '../../components/onboarding/LaunchPlanModal.jsx';
-import AddTaskModal from '../../components/onboarding/AddTaskModal.jsx';
-import EditTaskModal from '../../components/onboarding/EditTaskModal.jsx';
-import DeleteOnboardingTaskModal from '../../components/onboarding/DeleteOnboardingTaskModal.jsx';
-import DropPlanModal from '../../components/onboarding/DropPlanModal.jsx';
 
+// Real-data onboarding detail view for one (real) intern's local employee
+// record — reached from OnboardingEmployeesPage's "View Progress" link. The
+// plan itself is never launched from here: it's auto-launched the moment the
+// intern first appears with no plan yet (server/db/onboarding.js's
+// listInternsWithAutoLaunchedOnboarding()), composed from Universal + their
+// department's active tasks. This page only views it and checks off tasks —
+// editing/dropping a plan has no real-backend equivalent yet.
 export default function OnboardingEmployeeDetailPage() {
   const { employeeId } = useParams();
   const [employee, setEmployee] = useState(null);
-  const [planInstance, setPlanInstance] = useState(null);
+  const [instance, setInstance] = useState(null);
+  const [taskInstances, setTaskInstances] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
-  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
-  const [taskPendingEdit, setTaskPendingEdit] = useState(null);
-  const [taskPendingDelete, setTaskPendingDelete] = useState(null);
-  const [isDropPlanModalOpen, setIsDropPlanModalOpen] = useState(false);
+  const [togglingId, setTogglingId] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -44,15 +32,13 @@ export default function OnboardingEmployeeDetailPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const emp = await employeeService.getById(employeeId);
+      const [emp, plan] = await Promise.all([
+        employeeService.getById(employeeId),
+        onboardingService.getRealInstanceForEmployee(employeeId),
+      ]);
       setEmployee(emp);
-
-      const instances = await onboardingService.getAllInstances({ employeeId });
-      if (instances && instances.length > 0) {
-        setPlanInstance(instances[0]);
-      } else {
-        setPlanInstance(null);
-      }
+      setInstance(plan.instance);
+      setTaskInstances(plan.taskInstances || []);
     } catch (err) {
       console.error('Failed to load onboarding employee detail:', err);
     } finally {
@@ -60,47 +46,15 @@ export default function OnboardingEmployeeDetailPage() {
     }
   };
 
-  // A Dropped plan is a permanent historical record — task modification triggers/modals must
-  // stop being offered once planInstance.derivedStatus === DROPPED. Deliberately NOT gated on
-  // isActivePlanStatus() (which also excludes COMPLETED): Completed plans keep their existing,
-  // unrelated behavior (e.g. Reopen remains available on a completed task) — only DROPPED is a
-  // new read-only rule. Re-evaluated on every planInstance change (e.g. right after Drop Plan
-  // succeeds and loadData() refreshes), so a modal that happened to be open at the moment of
-  // transition can never linger open against a now-read-only plan.
-  useEffect(() => {
-    if (planInstance && planInstance.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED) {
-      setIsAddTaskModalOpen(false);
-      setTaskPendingEdit(null);
-      setTaskPendingDelete(null);
-      setIsDropPlanModalOpen(false);
-    }
-  }, [planInstance]);
-
-  const handleEditTaskSuccess = async () => {
-    setTaskPendingEdit(null);
-    await loadData();
-  };
-
-  const handleDeleteTaskSuccess = async () => {
-    setTaskPendingDelete(null);
-    await loadData();
-  };
-
-  const handleDropPlanSuccess = async () => {
-    setIsDropPlanModalOpen(false);
-    await loadData();
-  };
-
-  const handleToggleTaskComplete = async (activityId, isCompleted) => {
+  const handleToggleTaskComplete = async (taskInstanceId, isCompleted) => {
+    setTogglingId(taskInstanceId);
     try {
-      if (isCompleted) {
-        await activityService.reopen(activityId);
-      } else {
-        await activityService.markComplete(activityId);
-      }
+      await onboardingService.setRealTaskInstanceCompleted(taskInstanceId, !isCompleted);
       await loadData();
     } catch (err) {
       alert(`Failed to update task state: ${err.message}`);
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -108,7 +62,7 @@ export default function OnboardingEmployeeDetailPage() {
     return (
       <div className="page-layout-container">
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Loading employee onboarding detail...
+          Loading onboarding detail...
         </div>
       </div>
     );
@@ -127,47 +81,23 @@ export default function OnboardingEmployeeDetailPage() {
     );
   }
 
-  const currentStartDate = employee.effectiveEmploymentRecord?.effectiveFrom || employee.startDate;
-  const isStartDateMismatch = planInstance && planInstance.anchorDate && currentStartDate && planInstance.anchorDate !== currentStartDate;
-  const isFormerEmployee = employee.status === 'Former';
-  // Dropped-only read-only gate — see the useEffect above for why this is intentionally narrower
-  // than isActivePlanStatus() (Completed plans are unaffected by this task).
-  const isDropped = Boolean(planInstance) && planInstance.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED;
+  const totalTasks = taskInstances.length;
+  const completedTasks = taskInstances.filter((t) => t.completed).length;
+  const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
     <div className="page-layout-container">
-      {/* Page-Level Navigation/Action Row — Back link on the left, Drop Plan (page-level
-          destructive action, not employee-card or plan-summary content) on the far right. Same
-          isActivePlanStatus() gate as before, just relocated here; when it doesn't apply this is
-          a plain single-child flex row, so no empty right-side placeholder is ever left behind. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+      <div style={{ marginBottom: '1rem' }}>
         <Link to="/onboarding/employees" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
           <ArrowLeft size={14} /> Back to Onboarding Progress
         </Link>
-
-        {/* Structurally matches the Add Task button below (className btn-* + identical
-            display/alignItems/gap/padding/fontSize/flexShrink) — filled destructive red
-            (.btn-danger) instead of filled primary teal (.btn-primary), since this is the
-            destructive counterpart in the same button family, not a differently-shaped button. */}
-        {planInstance && isActivePlanStatus(planInstance.derivedStatus) && (
-          <button
-            type="button"
-            className="btn-danger"
-            title="Drop onboarding plan"
-            onClick={() => setIsDropPlanModalOpen(true)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem', fontSize: '0.8rem', flexShrink: 0 }}
-          >
-            <XCircle size={14} />
-            <span>Drop Plan</span>
-          </button>
-        )}
       </div>
 
       {/* Header Summary Card */}
       <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
           <div className="emp-identity-block" style={{ gap: '1rem' }}>
-            <div className="emp-avatar-circle" style={{ width: '48px', height: '48px', fontSize: '1.1rem', background: isFormerEmployee ? '#64748B' : undefined }}>
+            <div className="emp-avatar-circle" style={{ width: '48px', height: '48px', fontSize: '1.1rem' }}>
               {employee.photo || 'EM'}
             </div>
             <div>
@@ -189,48 +119,22 @@ export default function OnboardingEmployeeDetailPage() {
             <div style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>Anchor Start Date</div>
             <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
               <Calendar size={14} style={{ color: 'var(--color-primary)' }} />
-              <span>{currentStartDate || 'N/A'}</span>
+              <span>{instance?.anchor_date || employee.startDate || 'N/A'}</span>
             </div>
           </div>
         </div>
-
-        {/* Warning Banners */}
-        {isStartDateMismatch && (
-          <div style={{ marginTop: '1rem', padding: '0.65rem 0.85rem', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '6px', fontSize: '0.815rem', color: '#B45309', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <AlertTriangle size={15} />
-            <span>
-              <strong>Start date changed since plan launch</strong> (Original Anchor: {planInstance.anchorDate}, Current Date: {currentStartDate}). Existing activity due dates remain intact.
-            </span>
-          </div>
-        )}
-
-        {isFormerEmployee && (
-          <div style={{ marginTop: '1rem', padding: '0.65rem 0.85rem', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', fontSize: '0.815rem', color: '#DC2626', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <AlertTriangle size={15} />
-            <span>
-              <strong>Employee status changed to Former</strong>. Plan execution is retained in history and marked Needs Attention.
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Workflow Progress Section */}
-      {!planInstance ? (
+      {!instance ? (
         <div className="table-container-card" style={{ padding: '3rem', textAlign: 'center' }}>
           <FileText size={36} style={{ color: 'var(--border-dark)', marginBottom: '0.5rem' }} />
           <h3>No Onboarding Plan Running</h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-            {employee.fullName} does not have an active onboarding plan launched.
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            {employee.fullName} doesn't have onboarding tasks yet. A plan launches automatically
+            once a Universal task, or a task for {employee.department?.name || 'their department'},
+            is configured under Onboarding &gt; Plans.
           </p>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => setIsLaunchModalOpen(true)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-          >
-            <Play size={14} />
-            <span>Launch Onboarding Plan</span>
-          </button>
         </div>
       ) : (
         <div>
@@ -238,211 +142,94 @@ export default function OnboardingEmployeeDetailPage() {
           <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
-                  {planInstance.template ? planInstance.template.name : 'Onboarding Plan'}
-                </h3>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Onboarding Plan</h3>
                 <span style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>
-                  Launched on {planInstance.createdAt ? planInstance.createdAt.slice(0, 10) : planInstance.startedAt}
+                  Launched on {instance.started_at}
                 </span>
               </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                <span
-                  className="presence-badge"
-                  style={
-                    planInstance.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED
-                      ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0', padding: '0.3rem 0.75rem', fontSize: '0.815rem' }
-                      : planInstance.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION
-                      ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA', padding: '0.3rem 0.75rem', fontSize: '0.815rem' }
-                      : planInstance.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED
-                      ? { backgroundColor: '#F1F5F9', color: '#64748B', borderColor: '#CBD5E1', padding: '0.3rem 0.75rem', fontSize: '0.815rem' }
-                      : { backgroundColor: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE', padding: '0.3rem 0.75rem', fontSize: '0.815rem' }
-                  }
-                >
-                  {planInstance.derivedStatus}
-                </span>
-
-                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                  {planInstance.progress.progressPercentage}%
-                </span>
-              </div>
+              <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+                {progressPercentage}%
+              </span>
             </div>
 
-            {/* Big Progress Bar */}
             <div style={{ width: '100%', height: '10px', background: '#E2E8F0', borderRadius: '5px', overflow: 'hidden', marginBottom: '0.5rem' }}>
               <div
                 style={{
-                  width: `${planInstance.progress.progressPercentage}%`,
+                  width: `${progressPercentage}%`,
                   height: '100%',
-                  background: planInstance.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION
-                    ? '#EF4444'
-                    : planInstance.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED
-                    ? '#94A3B8'
-                    : '#129FA9',
+                  background: '#129FA9',
                   transition: 'width 0.4s ease',
                 }}
               />
             </div>
 
             <div style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>
-              <strong>{planInstance.progress.completedTasksCount} of {planInstance.progress.totalTasks}</strong> tasks completed
+              <strong>{completedTasks} of {totalTasks}</strong> tasks completed
             </div>
           </div>
 
           {/* Task Breakdown Table */}
           <div className="table-container-card">
-            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-light)' }}>
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                Onboarding Task Breakdown & Operational Status
+                Onboarding Task Breakdown
               </h3>
-              {!isDropped && (
-                <button
-                  type="button"
-                  className="btn-primary"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem', fontSize: '0.8rem', flexShrink: 0 }}
-                  onClick={() => setIsAddTaskModalOpen(true)}
-                >
-                  <Plus size={14} />
-                  <span>Add Task</span>
-                </button>
-              )}
             </div>
 
             <div style={{ overflowX: 'auto' }}>
-            <table className="presence-data-table" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th style={{ width: '5%', textAlign: 'center' }}>#</th>
-                  <th style={{ width: '42%', textAlign: 'left' }}>Task Title</th>
-                  <th style={{ width: '15%', textAlign: 'center' }}>Relative Timing</th>
-                  <th style={{ width: '18%', textAlign: 'center' }}>Due Date</th>
-                  <th style={{ width: '20%', textAlign: 'center' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {planInstance.progress.tasks.map((task) => {
-                  const act = task.linkedActivity;
-                  const isDone = task.isCompleted;
+              <table className="presence-data-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '5%', textAlign: 'center' }}>#</th>
+                    <th style={{ width: '52%', textAlign: 'left' }}>Task Title</th>
+                    <th style={{ width: '15%', textAlign: 'center' }}>Relative Timing</th>
+                    <th style={{ width: '18%', textAlign: 'center' }}>Due Date</th>
+                    <th style={{ width: '10%', textAlign: 'center' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {taskInstances.map((task) => {
+                    const isDone = Boolean(task.completed);
 
-                  return (
-                    <tr key={task.id} className="presence-table-row" style={isDone ? { opacity: 0.8, backgroundColor: '#F8FAFC' } : undefined}>
-                      <td style={{ textAlign: 'center', fontWeight: 600 }}>{task.sequence}</td>
-                      <td>
-                        <div style={{ fontWeight: 600, color: 'var(--text-main)', textDecoration: isDone ? 'line-through' : 'none' }}>
-                          {task.currentTitle}
-                        </div>
-                        {task.description && (
-                          <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>{task.description}</div>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.725rem', fontWeight: 600 }}>
-                          Day {task.relativeOffsetDays >= 0 ? `+${task.relativeOffsetDays}` : task.relativeOffsetDays}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 600 }}>
-                        {task.currentDueDate}
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        {isDropped ? (
-                          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>—</span>
-                        ) : (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                            {act && (
-                              <button
-                                type="button"
-                                className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
-                                style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
-                                onClick={() => handleToggleTaskComplete(act.id, isDone)}
-                              >
-                                {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
-                                <span>{isDone ? 'Reopen' : 'Done'}</span>
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              title="Edit task"
-                              aria-label="Edit task"
-                              onClick={() => setTaskPendingEdit(task)}
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-btn icon-btn-danger"
-                              title="Delete task"
-                              aria-label="Delete task"
-                              onClick={() => setTaskPendingDelete(task)}
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                    return (
+                      <tr key={task.id} className="presence-table-row" style={isDone ? { opacity: 0.8, backgroundColor: '#F8FAFC' } : undefined}>
+                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{task.sequence}</td>
+                        <td>
+                          <div style={{ fontWeight: 600, color: 'var(--text-main)', textDecoration: isDone ? 'line-through' : 'none' }}>
+                            {task.title}
                           </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          {task.description && (
+                            <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>{task.description}</div>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.725rem', fontWeight: 600 }}>
+                            Day {task.relative_offset_days >= 0 ? `+${task.relative_offset_days}` : task.relative_offset_days}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                          {(task.due_date || task.originally_calculated_due_date || '').slice(0, 10)}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
+                            style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
+                            disabled={togglingId === task.id}
+                            onClick={() => handleToggleTaskComplete(task.id, isDone)}
+                          >
+                            {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
+                            <span>{isDone ? 'Reopen' : 'Done'}</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Launch Plan Modal */}
-      <LaunchPlanModal
-        isOpen={isLaunchModalOpen}
-        onClose={() => setIsLaunchModalOpen(false)}
-        preselectedEmployeeId={employee.id}
-        onSuccess={() => loadData()}
-      />
-
-      {/* Add Task Modal (employee-specific plan instance only) — never offered for a Dropped plan */}
-      {planInstance && !isDropped && (
-        <AddTaskModal
-          isOpen={isAddTaskModalOpen}
-          onClose={() => setIsAddTaskModalOpen(false)}
-          planInstanceId={planInstance.id}
-          employeeName={employee.fullName}
-          onSuccess={() => loadData()}
-        />
-      )}
-
-      {/* Edit Task Modal (employee-specific plan instance only — reusable Plans configuration untouched) — never offered for a Dropped plan */}
-      {planInstance && !isDropped && (
-        <EditTaskModal
-          isOpen={Boolean(taskPendingEdit)}
-          onClose={() => setTaskPendingEdit(null)}
-          planInstanceId={planInstance.id}
-          task={taskPendingEdit}
-          employeeName={employee.fullName}
-          anchorDate={planInstance.anchorDate}
-          onSuccess={handleEditTaskSuccess}
-        />
-      )}
-
-      {/* Delete Task Modal (employee-specific plan instance only — reusable Plans configuration untouched) — never offered for a Dropped plan */}
-      {planInstance && !isDropped && (
-        <DeleteOnboardingTaskModal
-          isOpen={Boolean(taskPendingDelete)}
-          onClose={() => setTaskPendingDelete(null)}
-          planInstanceId={planInstance.id}
-          task={taskPendingDelete}
-          employeeName={employee.fullName}
-          onSuccess={handleDeleteTaskSuccess}
-        />
-      )}
-
-      {/* Drop Plan Modal (only ever opened while the plan is active) */}
-      {planInstance && (
-        <DropPlanModal
-          isOpen={isDropPlanModalOpen}
-          onClose={() => setIsDropPlanModalOpen(false)}
-          planInstance={planInstance}
-          employeeName={employee.fullName}
-          onSuccess={handleDropPlanSuccess}
-        />
       )}
     </div>
   );

@@ -1,10 +1,44 @@
 import * as db from "../db/offboarding.js";
 import { getEmployee } from "../db/employees.js";
+import { listInternsWithOffboardingStatus, resolveOrCreateEmployeeForIntern } from "../db/internSync.js";
+import { internsClient } from "../clients/internsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
-import { sendJson, NotFoundError } from "../http/errors.js";
+import { sendJson, NotFoundError, ValidationError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
 
 export const routes = {
+  "/offboarding/interns": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { interns: await listInternsWithOffboardingStatus() });
+    },
+  },
+  "/offboarding/interns/{internId}/launch": {
+    async post(req, res, ctx) {
+      const body = await readJsonBody(req);
+      const intern = await internsClient.getIntern(ctx.params.internId);
+      const employee = await resolveOrCreateEmployeeForIntern(ctx.params.internId);
+      const instanceId = await db.launchInstance({
+        employeeId: employee.id,
+        personType: "intern",
+        departmentId: intern.department_id,
+        anchorDate: body.anchorDate,
+      });
+      sendJson(res, ctx.cid, 201, {
+        instance: await db.getInstance(instanceId),
+        taskInstances: await db.listInstanceTasks(instanceId),
+      });
+    },
+  },
+  "/offboarding/scope-tasks": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { tasks: await db.listScopeTasks() });
+    },
+    async put(req, res, ctx) {
+      const body = await readJsonBody(req);
+      const tasks = await db.saveScopeTasks(body);
+      sendJson(res, ctx.cid, 200, { tasks });
+    },
+  },
   "/offboarding/templates": {
     async get(req, res, ctx) {
       const templates = await db.listTemplates(ctx.url.searchParams.get("department_id") ?? undefined, parseListQuery(ctx.url));
@@ -34,6 +68,15 @@ export const routes = {
     },
   },
   "/offboarding/instances": {
+    async get(req, res, ctx) {
+      const employeeId = ctx.url.searchParams.get("employee_id");
+      if (!employeeId) throw new ValidationError("`employee_id` is required.");
+      const instance = await db.getLatestInstanceForEmployee(employeeId);
+      sendJson(res, ctx.cid, 200, {
+        instance,
+        taskInstances: instance ? await db.listInstanceTasks(instance.id) : [],
+      });
+    },
     async post(req, res, ctx) {
       const body = await readJsonBody(req);
       const id = await db.launchInstance(body);

@@ -44,25 +44,25 @@ export const openapi = {
           name: "Org Structure",
           icon: "🏢",
           description: "Positions, work locations, and schedules employees are assigned to.",
-          does: ["List and create positions", "List and create locations", "List and create schedules", "List employee types and document types", "Resolve a department or intern role from the external directories"],
+          does: ["List and create positions", "List and create locations", "List and create schedules", "List employee types, document types, and activity types", "Resolve a department or intern role from the external directories"],
           best_for: "Setting up or looking up the shape of the organisation.",
-          endpoints: ["GET /positions", "POST /positions", "GET /positions/{id}", "PATCH /positions/{id}", "GET /locations", "POST /locations", "GET /schedules", "POST /schedules", "GET /employee-types", "GET /document-types", "GET /departments", "GET /roles"],
+          endpoints: ["GET /positions", "POST /positions", "GET /positions/{id}", "PATCH /positions/{id}", "GET /locations", "POST /locations", "GET /schedules", "POST /schedules", "GET /employee-types", "GET /document-types", "GET /activity-types", "GET /departments", "GET /departments/{id}", "GET /roles"],
         },
         {
           name: "Run Onboarding",
           icon: "🚀",
           description: "Launch and track an onboarding checklist for a new employee — and, for an intern, see their live Interns DB record alongside it.",
-          does: ["List onboarding templates", "Create a template", "Launch a plan for an employee", "Mark a task done or reopen it"],
+          does: ["List onboarding templates", "Create a template", "Read or edit the real Universal/department task scopes", "List interns, auto-launching a plan for any real intern who doesn't have one yet", "Look up or launch a plan for a specific employee", "Mark a task done or reopen it"],
           best_for: "HR bringing a new hire through their first-days checklist.",
-          endpoints: ["GET /onboarding/templates", "POST /onboarding/templates", "GET /onboarding/templates/{id}", "PATCH /onboarding/templates/{id}", "POST /onboarding/instances", "GET /onboarding/instances/{id}", "PATCH /onboarding/task-instances/{id}"],
+          endpoints: ["GET /onboarding/interns", "GET /onboarding/scope-tasks", "PUT /onboarding/scope-tasks", "POST /onboarding/interns/{internId}/launch", "GET /onboarding/templates", "POST /onboarding/templates", "GET /onboarding/templates/{id}", "PATCH /onboarding/templates/{id}", "GET /onboarding/instances", "POST /onboarding/instances", "GET /onboarding/instances/{id}", "PATCH /onboarding/task-instances/{id}"],
         },
         {
           name: "Run Offboarding",
           icon: "🚪",
           description: "Launch and track a departure checklist for a leaving employee — for an intern, this also sets their real internship_end_date in the Interns DB.",
-          does: ["List offboarding templates", "Create a template", "Launch a plan for an employee (syncs the departure date to the Interns DB for an intern)", "Mark a task done or reopen it"],
+          does: ["List offboarding templates", "Create a template", "Read or edit the real Universal/department task scopes", "Launch a plan for an employee, or auto-assign one to a real intern by department (syncs the departure date to the Interns DB for an intern)", "Mark a task done or reopen it"],
           best_for: "HR taking a departing employee through clearance.",
-          endpoints: ["GET /offboarding/templates", "POST /offboarding/templates", "GET /offboarding/templates/{id}", "PATCH /offboarding/templates/{id}", "POST /offboarding/instances", "GET /offboarding/instances/{id}", "PATCH /offboarding/task-instances/{id}"],
+          endpoints: ["GET /offboarding/interns", "GET /offboarding/scope-tasks", "PUT /offboarding/scope-tasks", "POST /offboarding/interns/{internId}/launch", "GET /offboarding/templates", "POST /offboarding/templates", "GET /offboarding/templates/{id}", "PATCH /offboarding/templates/{id}", "GET /offboarding/instances", "POST /offboarding/instances", "GET /offboarding/instances/{id}", "PATCH /offboarding/task-instances/{id}"],
         },
         {
           name: "Track Activities",
@@ -293,15 +293,37 @@ export const openapi = {
       get: { summary: "List document type catalog entries.", security: scoped("org-structure:read"),
         "x-rizurf": { name: "List Document Types", purpose: "Read the fixed catalog of expected employee documents", use_when: ["Building a document checklist"], do_not_use_when: [], inputs: [], outputs: ["documentTypes[]"], requires: [], related_endpoints: [], tags: ["documents", "catalog"] } },
     },
+    "/activity-types": {
+      get: { summary: "List activity type catalog entries.", security: scoped("org-structure:read"),
+        "x-rizurf": { name: "List Activity Types", purpose: "Read the fixed catalog of activity/task kinds behind onboarding, offboarding, and general to-dos", use_when: ["Populating an activity-type picker, e.g. an onboarding/offboarding task's type"], do_not_use_when: [], inputs: [], outputs: ["activityTypes[]"], requires: [], related_endpoints: ["PUT /onboarding/scope-tasks", "PUT /offboarding/scope-tasks"], tags: ["activity types", "catalog"] } },
+    },
     "/departments": {
       get: { summary: "Read-through list of departments from the external Department directory.", security: scoped("org-structure:read"),
         "x-rizurf": { name: "List Departments", purpose: "Resolve department ids to names, or populate a department picker", use_when: ["Showing a department name next to an employee/position", "Populating a department filter or picker"], do_not_use_when: ["Creating or editing a department — that service is owned by the Department Management team, not this app"], inputs: ["search"], outputs: ["departments[]"], requires: [], related_endpoints: ["GET /positions", "POST /applicants/{applicantId}/convert"], tags: ["departments", "directory", "external"] } },
+    },
+    "/departments/{id}": {
+      get: { summary: "Read-through fetch of one department from the external Department directory.", security: scoped("org-structure:read"),
+        "x-rizurf": { name: "Get Department", purpose: "Resolve one department id to its name/details", use_when: ["Showing a department-scoped page's header (e.g. an onboarding/offboarding Plan editor)"], do_not_use_when: ["Listing many departments — use GET /departments"], inputs: ["id"], outputs: ["department"], requires: [], related_endpoints: ["GET /departments"], tags: ["department", "get", "external"] } },
     },
     "/roles": {
       get: { summary: "Read-through list of assignable intern roles from the Interns database.", security: scoped("org-structure:read"),
         "x-rizurf": { name: "List Intern Roles", purpose: "Resolve a role_id to a name, or populate a role picker", use_when: ["Converting an applicant into an intern and choosing their role"], do_not_use_when: [], inputs: [], outputs: ["roles[]"], requires: [], related_endpoints: ["POST /applicants/{applicantId}/convert"], tags: ["roles", "interns", "external"] } },
     },
 
+    "/onboarding/interns": {
+      get: { summary: "Every real intern (Interns DB), cross-referenced with their local onboarding plan — auto-launching one for any intern who doesn't have one yet.", security: scoped("onboarding:read"),
+        "x-rizurf": { name: "List Interns' Onboarding Progress", purpose: "The real intern roster joined with whatever onboarding progress this app itself knows about each person", use_when: ["Showing an onboarding progress table"], do_not_use_when: ["You need this app's own employees, not interns — that's a separate, currently-empty roster"], inputs: [], outputs: ["interns[]"], requires: ["No manual launch step: any real intern with no local plan yet has one auto-launched here from Universal + their department's active tasks, silently skipped if nothing is configured for their scope yet — see server/db/onboarding.js's listInternsWithAutoLaunchedOnboarding()"], related_endpoints: ["GET /onboarding/instances", "GET /onboarding/scope-tasks"], tags: ["onboarding", "interns", "progress", "roster", "auto-assign"] } },
+    },
+    "/onboarding/interns/{internId}/launch": {
+      post: { summary: "Launch an intern's onboarding plan, composed from Universal + their department's tasks.", security: scoped("onboarding:write"),
+        "x-rizurf": { name: "Launch Intern Onboarding", purpose: "Start a real intern's onboarding checklist, auto-assigned from their real department", use_when: ["A real intern (from GET /onboarding/interns) needs their onboarding plan launched"], do_not_use_when: ["The person isn't an intern, or already has a plan — use POST /onboarding/instances directly for a non-intern employee"], inputs: ["internId", "anchorDate"], outputs: ["instance", "taskInstances[]"], requires: ["At least one active Universal or matching-department onboarding task is configured — see GET/PUT /onboarding/scope-tasks", "Creates a local employee record linked to this intern (intern_external_id) on first use if one doesn't exist yet"], related_endpoints: ["GET /onboarding/interns", "GET /onboarding/scope-tasks", "GET /onboarding/instances/{id}"], tags: ["onboarding", "launch", "interns", "auto-assign", "department"] } },
+    },
+    "/onboarding/scope-tasks": {
+      get: { summary: "List active onboarding tasks, each scoped to Universal or one department.", security: scoped("onboarding:read"),
+        "x-rizurf": { name: "List Onboarding Scope Tasks", purpose: "Read the real task set a launch composes from — every active Universal task, plus every active per-department task", use_when: ["Editing the Universal Tasks list or a department's onboarding tasks"], do_not_use_when: [], inputs: [], outputs: ["tasks[]"], requires: [], related_endpoints: ["PUT /onboarding/scope-tasks", "POST /onboarding/interns/{internId}/launch"], tags: ["onboarding", "tasks", "universal", "department", "scope"] } },
+      put: { summary: "Replace the onboarding task set for one scope (Universal, or one department).", security: scoped("onboarding:write"),
+        "x-rizurf": { name: "Save Onboarding Scope Tasks", purpose: "Redefine the full task list for Universal or a specific department", use_when: ["Saving edits made in a Universal Tasks or department Plan editor"], do_not_use_when: ["Editing a task on an already-launched plan — task instances are a snapshot and don't change, see PATCH /onboarding/task-instances/{id}"], inputs: ["scopeType", "personType", "scopeDepartmentId", "tasks[]"], outputs: ["tasks[]"], requires: [], related_endpoints: ["GET /onboarding/scope-tasks"], tags: ["onboarding", "tasks", "save", "edit"] } },
+    },
     "/onboarding/templates": {
       get: { summary: "List onboarding plan templates.", security: scoped("onboarding:read"),
         "x-rizurf": { name: "List Onboarding Templates", purpose: "Browse reusable onboarding checklists", use_when: ["Choosing a template to launch"], do_not_use_when: [], inputs: ["department_id"], outputs: ["templates[]"], requires: [], related_endpoints: ["POST /onboarding/instances"], tags: ["onboarding", "templates", "checklist"] } },
@@ -315,8 +337,10 @@ export const openapi = {
         "x-rizurf": { name: "Update Onboarding Template", purpose: "Change a template's name, description or active state", use_when: ["Retiring or renaming a checklist"], do_not_use_when: ["Changing which tasks a launched plan has — task instances are a snapshot and don't change"], inputs: ["name", "description", "active"], outputs: ["template"], requires: ["Template exists"], related_endpoints: ["GET /onboarding/templates/{id}"], tags: ["onboarding", "update"] } },
     },
     "/onboarding/instances": {
-      post: { summary: "Launch an onboarding plan for an employee.", security: scoped("onboarding:write"),
-        "x-rizurf": { name: "Launch Onboarding", purpose: "Start a new hire's onboarding checklist", use_when: ["An employee's start date has arrived or is confirmed"], do_not_use_when: ["The employee already has an active onboarding plan"], inputs: ["planTemplateId", "employeeId", "anchorDate"], outputs: ["instance", "taskInstances[]"], requires: ["Employee exists", "Template exists"], related_endpoints: ["GET /onboarding/instances/{id}", "PATCH /onboarding/task-instances/{id}"], tags: ["onboarding", "launch", "start"] } },
+      get: { summary: "Fetch one employee's latest onboarding instance, if any.", security: scoped("onboarding:read"),
+        "x-rizurf": { name: "Get Employee's Onboarding Instance", purpose: "Look up the plan already running for one employee, by their employeeId, without knowing its instance id", use_when: ["Opening an employee's or intern's onboarding detail view"], do_not_use_when: ["You already have the instance id — use GET /onboarding/instances/{id} instead"], inputs: ["employee_id"], outputs: ["instance", "taskInstances[]"], requires: [], related_endpoints: ["GET /onboarding/instances/{id}", "GET /onboarding/interns"], tags: ["onboarding", "instance", "lookup"] } },
+      post: { summary: "Launch an onboarding plan for an employee, composed from Universal + their department's tasks.", security: scoped("onboarding:write"),
+        "x-rizurf": { name: "Launch Onboarding", purpose: "Start a new hire's onboarding checklist, composed from the real Universal + department task scopes", use_when: ["An employee's start date has arrived or is confirmed"], do_not_use_when: ["The employee already has an active onboarding plan", "Launching for a real intern by their Interns DB id — use POST /onboarding/interns/{internId}/launch instead, it resolves the local employee for you"], inputs: ["employeeId", "personType", "departmentId", "anchorDate"], outputs: ["instance", "taskInstances[]"], requires: ["Employee exists", "At least one active Universal or matching-department onboarding task is configured — see GET/PUT /onboarding/scope-tasks"], related_endpoints: ["GET /onboarding/instances/{id}", "PATCH /onboarding/task-instances/{id}", "GET /onboarding/scope-tasks"], tags: ["onboarding", "launch", "start"] } },
     },
     "/onboarding/instances/{id}": {
       get: { summary: "Fetch one onboarding instance with its task instances.", security: scoped("onboarding:read"),
@@ -327,6 +351,20 @@ export const openapi = {
         "x-rizurf": { name: "Update Onboarding Task", purpose: "Complete or reopen a single onboarding task", use_when: ["A step in the checklist is finished", "A step was marked done by mistake"], do_not_use_when: [], inputs: ["completed"], outputs: ["taskInstance"], requires: ["Task instance exists"], related_endpoints: ["GET /onboarding/instances/{id}"], tags: ["onboarding", "task", "complete"] } },
     },
 
+    "/offboarding/interns": {
+      get: { summary: "Every real intern (Interns DB), cross-referenced with their local offboarding plan if one exists.", security: scoped("offboarding:read"),
+        "x-rizurf": { name: "List Interns' Offboarding Progress", purpose: "The real intern roster joined with whatever offboarding progress this app itself knows about each person", use_when: ["Showing an offboarding progress table"], do_not_use_when: ["You need this app's own employees, not interns — that's a separate, currently-empty roster"], inputs: [], outputs: ["interns[]"], requires: [], related_endpoints: ["POST /offboarding/instances", "GET /offboarding/instances/{id}"], tags: ["offboarding", "interns", "progress", "roster"] } },
+    },
+    "/offboarding/interns/{internId}/launch": {
+      post: { summary: "Launch an intern's offboarding plan, composed from Universal + their department's tasks.", security: scoped("offboarding:write"),
+        "x-rizurf": { name: "Launch Intern Offboarding", purpose: "Start a real intern's clearance checklist, auto-assigned from their real department, and sync their departure date to the Interns DB", use_when: ["A real intern (from GET /offboarding/interns) is departing and needs their offboarding plan launched"], do_not_use_when: ["The person isn't an intern, or already has a plan — use POST /offboarding/instances directly for a non-intern employee"], inputs: ["internId", "anchorDate"], outputs: ["instance", "taskInstances[]"], requires: ["At least one active Universal or matching-department offboarding task is configured — see GET/PUT /offboarding/scope-tasks", "Creates a local employee record linked to this intern (intern_external_id) on first use if one doesn't exist yet", "Sets internship_end_date to anchorDate in the Interns DB, logged to audit_logs either way — see server/db/internSync.js"], related_endpoints: ["GET /offboarding/interns", "GET /offboarding/scope-tasks", "GET /offboarding/instances/{id}", "GET /audit-logs"], tags: ["offboarding", "launch", "interns", "auto-assign", "department"] } },
+    },
+    "/offboarding/scope-tasks": {
+      get: { summary: "List active offboarding tasks, each scoped to Universal or one department.", security: scoped("offboarding:read"),
+        "x-rizurf": { name: "List Offboarding Scope Tasks", purpose: "Read the real task set a launch composes from — every active Universal task, plus every active per-department task", use_when: ["Editing the Universal Tasks list or a department's offboarding tasks"], do_not_use_when: [], inputs: [], outputs: ["tasks[]"], requires: [], related_endpoints: ["PUT /offboarding/scope-tasks", "POST /offboarding/interns/{internId}/launch"], tags: ["offboarding", "tasks", "universal", "department", "scope"] } },
+      put: { summary: "Replace the offboarding task set for one scope (Universal, or one department).", security: scoped("offboarding:write"),
+        "x-rizurf": { name: "Save Offboarding Scope Tasks", purpose: "Redefine the full task list for Universal or a specific department", use_when: ["Saving edits made in a Universal Tasks or department Plan editor"], do_not_use_when: ["Editing a task on an already-launched plan — task instances are a snapshot and don't change, see PATCH /offboarding/task-instances/{id}"], inputs: ["scopeType", "personType", "scopeDepartmentId", "tasks[]"], outputs: ["tasks[]"], requires: [], related_endpoints: ["GET /offboarding/scope-tasks"], tags: ["offboarding", "tasks", "save", "edit"] } },
+    },
     "/offboarding/templates": {
       get: { summary: "List offboarding plan templates.", security: scoped("offboarding:read"),
         "x-rizurf": { name: "List Offboarding Templates", purpose: "Browse reusable departure checklists", use_when: ["Choosing a template to launch"], do_not_use_when: [], inputs: ["department_id"], outputs: ["templates[]"], requires: [], related_endpoints: ["POST /offboarding/instances"], tags: ["offboarding", "templates", "checklist"] } },
@@ -340,8 +378,10 @@ export const openapi = {
         "x-rizurf": { name: "Update Offboarding Template", purpose: "Change a template's name, description or active state", use_when: ["Retiring or renaming a checklist"], do_not_use_when: [], inputs: ["name", "description", "active"], outputs: ["template"], requires: ["Template exists"], related_endpoints: ["GET /offboarding/templates/{id}"], tags: ["offboarding", "update"] } },
     },
     "/offboarding/instances": {
-      post: { summary: "Launch an offboarding plan for an employee.", security: scoped("offboarding:write"),
-        "x-rizurf": { name: "Launch Offboarding", purpose: "Start a departing employee's clearance checklist", use_when: ["An employee's departure has been confirmed"], do_not_use_when: ["The employee already has an active offboarding plan"], inputs: ["planTemplateId", "employeeId", "anchorDate"], outputs: ["instance", "taskInstances[]"], requires: ["Employee exists", "Template exists", "For an intern (intern_external_id set): sets internship_end_date to anchorDate in the Interns DB, logged to audit_logs either way — see server/db/internSync.js"], related_endpoints: ["GET /offboarding/instances/{id}", "PATCH /offboarding/task-instances/{id}", "GET /audit-logs"], tags: ["offboarding", "launch", "departure", "interns"] } },
+      get: { summary: "Fetch one employee's latest offboarding instance, if any.", security: scoped("offboarding:read"),
+        "x-rizurf": { name: "Get Employee's Offboarding Instance", purpose: "Look up the clearance plan already running for one employee, by their employeeId, without knowing its instance id", use_when: ["Opening an employee's or intern's offboarding detail view"], do_not_use_when: ["You already have the instance id — use GET /offboarding/instances/{id} instead"], inputs: ["employee_id"], outputs: ["instance", "taskInstances[]"], requires: [], related_endpoints: ["GET /offboarding/instances/{id}", "GET /offboarding/interns"], tags: ["offboarding", "instance", "lookup"] } },
+      post: { summary: "Launch an offboarding plan for an employee, composed from Universal + their department's tasks.", security: scoped("offboarding:write"),
+        "x-rizurf": { name: "Launch Offboarding", purpose: "Start a departing employee's clearance checklist, composed from the real Universal + department task scopes", use_when: ["An employee's departure has been confirmed"], do_not_use_when: ["The employee already has an active offboarding plan", "Launching for a real intern by their Interns DB id — use POST /offboarding/interns/{internId}/launch instead, it resolves the local employee for you"], inputs: ["employeeId", "personType", "departmentId", "anchorDate"], outputs: ["instance", "taskInstances[]"], requires: ["Employee exists", "At least one active Universal or matching-department offboarding task is configured — see GET/PUT /offboarding/scope-tasks", "For an intern (intern_external_id set): sets internship_end_date to anchorDate in the Interns DB, logged to audit_logs either way — see server/db/internSync.js"], related_endpoints: ["GET /offboarding/instances/{id}", "PATCH /offboarding/task-instances/{id}", "GET /audit-logs", "GET /offboarding/scope-tasks"], tags: ["offboarding", "launch", "departure", "interns"] } },
     },
     "/offboarding/instances/{id}": {
       get: { summary: "Fetch one offboarding instance with its task instances.", security: scoped("offboarding:read"),
