@@ -1,7 +1,8 @@
 import { pool } from "./pool.js";
 import { listRows, getRow, insertRow, updateRow, RowNotFoundError } from "./crud.js";
+import { getLinkedIntern } from "./internSync.js";
 
-export { RowNotFoundError };
+export { RowNotFoundError, getLinkedIntern };
 
 export const listTemplates = (departmentId, { limit, offset } = {}) =>
   listRows("onboarding_plan_templates", { where: departmentId ? { department_id: departmentId } : {}, orderBy: "id", orderDir: "ASC", limit, offset });

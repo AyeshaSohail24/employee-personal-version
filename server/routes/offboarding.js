@@ -1,4 +1,5 @@
 import * as db from "../db/offboarding.js";
+import { getEmployee } from "../db/employees.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
@@ -46,7 +47,12 @@ export const routes = {
     async get(req, res, ctx) {
       const instance = await db.getInstance(ctx.params.id);
       if (!instance) throw new NotFoundError(`No offboarding instance with id ${ctx.params.id}.`);
-      sendJson(res, ctx.cid, 200, { instance, taskInstances: await db.listInstanceTasks(ctx.params.id) });
+      const employee = await getEmployee(instance.employee_id);
+      sendJson(res, ctx.cid, 200, {
+        instance,
+        taskInstances: await db.listInstanceTasks(ctx.params.id),
+        internRecord: await db.getLinkedIntern(employee), // read-through to the Interns DB, null for a non-intern
+      });
     },
   },
   "/offboarding/task-instances/{id}": {

@@ -1,5 +1,6 @@
 import { pool } from "./pool.js";
 import { listRows, getRow, insertRow, updateRow, RowNotFoundError } from "./crud.js";
+import { syncOffboardingLaunchToIntern, getLinkedIntern } from "./internSync.js";
 
 export { RowNotFoundError };
 
@@ -71,10 +72,13 @@ export async function launchInstance({ planTemplateId, employeeId, anchorDate })
     await pool.query("UPDATE offboarding_task_instances SET activity_id = ? WHERE id = ?", [activityId, taskInstanceId]);
   }
 
+  await syncOffboardingLaunchToIntern(employeeId, anchorDate);
+
   return instanceId;
 }
 
 export const getInstance = (id) => getRow("offboarding_plan_instances", id);
+export { getLinkedIntern };
 
 export async function listInstanceTasks(instanceId) {
   const [rows] = await pool.query(
