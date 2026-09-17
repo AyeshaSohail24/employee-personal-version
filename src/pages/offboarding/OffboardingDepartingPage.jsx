@@ -4,34 +4,24 @@ import {
   Users,
   Search,
   ArrowUpRight,
-  UsersRound,
-  GraduationCap,
   AlertTriangle,
   CheckCircle2,
   Clock,
   Play,
 } from 'lucide-react';
 import { offboardingService } from '../../services/offboardingService.js';
-import { activityService } from '../../services/activityService.js';
-import { OFFBOARDING_INSTANCE_STATUS } from '../../domain/offboardingDomain.js';
 import LaunchOffboardingPlanModal from '../../components/offboarding/LaunchOffboardingPlanModal.jsx';
-import OverdueOffboardingTasksModal from '../../components/offboarding/OverdueOffboardingTasksModal.jsx';
 
-// Canonical Offboarding Progress page — consolidates what used to be split across the separate
-// Offboarding Dashboard (KPI cards + overdue exit tasks panel) and Offboarding Employee Directory
-// ("Departing Employees", the filterable instance table) pages. Both of those routes/nav entries
-// were retired; this page keeps serving the existing /offboarding/departing route so no internal
-// link needed to change. Offboarding's own instance/status model (OFFBOARDING_INSTANCE_STATUS,
-// derivedStatus) is used throughout — nothing from onboardingDomain is imported here.
+// The real intern roster (Interns DB), joined server-side with whatever
+// local offboarding plan each person has — see
+// offboardingService.getInternsProgress() / server/db/internSync.js. Not the
+// deeper plan-template/task-editing system below in offboardingService.js,
+// which still runs on mock data — this page only needed the read side.
 export default function OffboardingDepartingPage() {
-  const [instances, setInstances] = useState([]);
-  const [overdueTasks, setOverdueTasks] = useState([]);
+  const [interns, setInterns] = useState([]);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all'); // 'all' | 'Employee' | 'Intern'
   const [loading, setLoading] = useState(true);
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
-  const [isOverdueModalOpen, setIsOverdueModalOpen] = useState(false);
-  const [isMarkingAllComplete, setIsMarkingAllComplete] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -40,79 +30,29 @@ export default function OffboardingDepartingPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const allInsts = await offboardingService.getAllInstances();
-      setInstances(allInsts);
-
-      // Fetch overdue activities that belong to Offboarding — and exclude any whose parent plan
-      // instance has been Dropped, since a Dropped plan must no longer contribute overdue alerts
-      // (or be reachable via "Mark All as Complete") even if it still has incomplete task
-      // instances left over from before it was dropped. Mirrors Onboarding's identical guard.
-      const overdues = await activityService.getOverdueActivities();
-      const droppedActivityIds = new Set(
-        allInsts
-          .filter((i) => i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.DROPPED)
-          .flatMap((i) => i.taskInstances.map((ti) => ti.activityId))
-      );
-      const offboardingOverdues = overdues.filter((a) => a.source === 'Offboarding' && !droppedActivityIds.has(a.id));
-      setOverdueTasks(offboardingOverdues);
+      setInterns(await offboardingService.getInternsProgress());
     } catch (err) {
-      console.error('Failed to load offboarding progress data:', err);
+      console.error('Failed to load interns:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Summary card metrics — same derivedStatus-based calculations the old Dashboard used.
-  const activeInstances = instances.filter((i) => i.derivedStatus !== OFFBOARDING_INSTANCE_STATUS.COMPLETED);
-  const inProgressCount = instances.filter((i) => i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.IN_PROGRESS).length;
-  const needsAttentionCount = instances.filter((i) => i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.NEEDS_ATTENTION).length;
-  const completedCount = instances.filter((i) => i.derivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED).length;
+  // Summary card metrics
+  const activeInterns = interns.filter((i) => i.plan && i.plan.status !== 'Completed');
+  const inProgressCount = interns.filter((i) => i.plan?.status === 'In Progress').length;
+  const needsAttentionCount = interns.filter((i) => i.plan?.status === 'Needs Attention').length;
+  const completedCount = interns.filter((i) => i.plan?.status === 'Completed').length;
 
-  // Offboarding progress population: everyone with a current (or historical) offboarding plan
-  // instance. Unlike Onboarding's Employees page, this intentionally does NOT also list
-  // Departing/Former employees who have no instance yet — that population was never shown here
-  // before this refactor, and inventing it is out of scope for a navigation/consolidation task.
-  const filteredInstances = instances.filter((inst) => {
-    const emp = inst.employee || {};
-
-    if (typeFilter !== 'all' && emp.directoryType !== typeFilter) return false;
-
+  const visibleInterns = interns.filter((intern) => {
     if (search.trim()) {
       const q = search.toLowerCase();
-      const matchName = emp.fullName?.toLowerCase().includes(q);
-      const matchId = emp.employeeId?.toLowerCase().includes(q);
-      const matchTemplate = inst.template?.name?.toLowerCase().includes(q);
-      if (!matchName && !matchId && !matchTemplate) return false;
+      const matchName = intern.fullName.toLowerCase().includes(q);
+      const matchRef = (intern.refNumber || '').toLowerCase().includes(q);
+      if (!matchName && !matchRef) return false;
     }
-
     return true;
   });
-
-  const handleMarkTaskComplete = async (actId) => {
-    try {
-      await activityService.markComplete(actId);
-      await loadData();
-    } catch (err) {
-      alert(`Failed to complete task: ${err.message}`);
-    }
-  };
-
-  // Mirrors the Onboarding Progress page's "Mark All as Complete" behavior exactly: executes
-  // immediately (no confirmation step), targets only the exact set of activity IDs shown in the
-  // popup at click time, and guards against a double-click firing the bulk completion twice.
-  const handleMarkAllOverdueComplete = async () => {
-    if (isMarkingAllComplete) return;
-    setIsMarkingAllComplete(true);
-    try {
-      const idsToComplete = overdueTasks.map((t) => t.id);
-      await activityService.markCompleteMany(idsToComplete);
-      await loadData();
-    } catch (err) {
-      alert(`Failed to complete overdue tasks: ${err.message}`);
-    } finally {
-      setIsMarkingAllComplete(false);
-    }
-  };
 
   return (
     <div className="page-layout-container">
@@ -121,21 +61,10 @@ export default function OffboardingDepartingPage() {
         <div className="header-text-group">
           <h1 className="page-title">Offboarding Progress</h1>
           <p className="page-subtitle">
-            View and track individual offboarding progress for employees and interns.
+            View and track individual offboarding progress for interns.
           </p>
         </div>
         <div className="header-actions">
-          <button
-            type="button"
-            className="btn-secondary btn-header-action candidate-notification-btn"
-            onClick={() => setIsOverdueModalOpen(true)}
-          >
-            <AlertTriangle size={15} />
-            <span>Overdue Tasks</span>
-            {overdueTasks.length > 0 && (
-              <span className="candidate-notification-badge">{overdueTasks.length}</span>
-            )}
-          </button>
           <button
             type="button"
             className="btn-primary btn-header-action"
@@ -164,7 +93,7 @@ export default function OffboardingDepartingPage() {
             </div>
           </div>
           <div className="summary-card-value" style={{ color: 'var(--color-primary-active)' }}>
-            {activeInstances.length}
+            {activeInterns.length}
           </div>
           <div className="summary-card-subtext">Departing staff actively offboarding</div>
         </div>
@@ -231,40 +160,13 @@ export default function OffboardingDepartingPage() {
       </div>
 
       {/* Filter Bar */}
-      <div className="table-toolbar-card" style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem', padding: '0.75rem 1rem', flexWrap: 'wrap' }}>
-        <div className="view-switcher-group">
-          <button
-            type="button"
-            className={`view-btn ${typeFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setTypeFilter('all')}
-          >
-            <Users size={15} />
-            <span>All</span>
-          </button>
-          <button
-            type="button"
-            className={`view-btn ${typeFilter === 'Employee' ? 'active' : ''}`}
-            onClick={() => setTypeFilter('Employee')}
-          >
-            <UsersRound size={15} />
-            <span>Employees</span>
-          </button>
-          <button
-            type="button"
-            className={`view-btn ${typeFilter === 'Intern' ? 'active' : ''}`}
-            onClick={() => setTypeFilter('Intern')}
-          >
-            <GraduationCap size={15} />
-            <span>Interns</span>
-          </button>
-        </div>
-
+      <div className="table-toolbar-card" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginBottom: '1.25rem', padding: '0.75rem 1rem', flexWrap: 'wrap' }}>
         <div className="toolbar-search-box" style={{ maxWidth: '280px' }}>
           <Search size={16} className="toolbar-search-icon" />
           <input
             type="text"
             className="toolbar-search-input"
-            placeholder="Search employee name or ID"
+            placeholder="Search intern name or ref number"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -275,14 +177,14 @@ export default function OffboardingDepartingPage() {
       <div className="table-container-card">
         {loading ? (
           <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-            Loading offboarding progress...
+            Loading interns...
           </div>
-        ) : filteredInstances.length === 0 ? (
+        ) : visibleInterns.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
             <Users size={32} style={{ marginBottom: '0.5rem', color: 'var(--border-dark)' }} />
-            <h3>No Offboarding Progress Found</h3>
+            <h3>No Interns Found</h3>
             <p style={{ fontSize: '0.85rem' }}>
-              No offboarding workflows currently match the selected filter or search query.
+              No interns currently match the search query.
             </p>
           </div>
         ) : (
@@ -290,7 +192,7 @@ export default function OffboardingDepartingPage() {
             <table className="presence-data-table onboarding-employees-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '22%', textAlign: 'left' }}>Employee</th>
+                  <th style={{ width: '22%', textAlign: 'left' }}>Intern</th>
                   <th style={{ width: '14%', textAlign: 'left' }}>Department</th>
                   <th style={{ width: '13%', textAlign: 'center' }}>Final Working Date</th>
                   <th style={{ width: '17%', textAlign: 'left' }}>Offboarding Plan</th>
@@ -300,87 +202,98 @@ export default function OffboardingDepartingPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredInstances.map((inst) => {
-                  const emp = inst.employee || {};
-                  const isCompleted = inst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.COMPLETED;
-                  const isNeedsAttn = inst.derivedStatus === OFFBOARDING_INSTANCE_STATUS.NEEDS_ATTENTION;
+                {visibleInterns.map((intern) => {
+                  const plan = intern.plan;
 
                   return (
-                    <tr key={inst.id} className="presence-table-row">
+                    <tr key={intern.internId} className="presence-table-row">
                       <td>
                         <div className="emp-identity-block">
                           <div className="emp-avatar-circle">
-                            {emp.photo || 'EM'}
+                            {intern.fullName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
                           </div>
                           <div className="emp-identity-text">
                             <div className="emp-name-text" style={{ whiteSpace: 'nowrap' }}>
-                              {emp.fullName || 'Unknown Employee'}
+                              {intern.fullName}
                             </div>
-                            <div className="emp-id-subtext">{emp.employeeId || 'N/A'}</div>
+                            <div className="emp-id-subtext">{intern.refNumber}</div>
                           </div>
                         </div>
                       </td>
 
                       <td>
                         <div style={{ fontSize: '0.815rem', color: 'var(--text-main)' }}>
-                          {emp.department?.name || 'Department N/A'}
+                          {intern.department?.name || 'Department N/A'}
                         </div>
                       </td>
 
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '0.815rem' }}>
-                        {inst.anchorDate}
+                        {plan ? plan.anchorDate : (intern.endDate || 'N/A')}
                       </td>
 
                       <td>
-                        <div style={{ fontWeight: 600, fontSize: '0.825rem', color: 'var(--text-main)' }}>
-                          {inst.template ? inst.template.name : 'Custom Exit Plan'}
-                        </div>
-                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
-                          {inst.progress.completedRequiredCount} / {inst.progress.requiredTasksCount} required tasks
+                        <div style={{ fontSize: '0.815rem', color: 'var(--text-main)' }}>
+                          {plan ? `${plan.taskCount} task${plan.taskCount === 1 ? '' : 's'}` : (
+                            <span style={{ color: 'var(--text-muted)' }}>No active plan</span>
+                          )}
                         </div>
                       </td>
 
                       <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}>
-                          <div style={{ width: '60px', height: '6px', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div
-                              style={{
-                                width: `${inst.progress.progressPercentage}%`,
-                                height: '100%',
-                                background: isNeedsAttn ? '#EF4444' : isCompleted ? '#10B981' : '#129FA9',
-                              }}
-                            />
+                        {plan ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}>
+                            <div style={{ width: '60px', height: '6px', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div
+                                style={{
+                                  width: `${plan.progressPercentage}%`,
+                                  height: '100%',
+                                  background: plan.status === 'Needs Attention' ? '#EF4444' : plan.status === 'Completed' ? '#10B981' : '#129FA9',
+                                }}
+                              />
+                            </div>
+                            <span style={{ fontSize: '0.735rem', fontWeight: 700 }}>
+                              {plan.progressPercentage}%
+                            </span>
                           </div>
-                          <span style={{ fontSize: '0.735rem', fontWeight: 700 }}>
-                            {inst.progress.progressPercentage}%
+                        ) : (
+                          <span style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>—</span>
+                        )}
+                      </td>
+
+                      <td style={{ textAlign: 'center' }}>
+                        {plan ? (
+                          <span
+                            className="presence-badge"
+                            style={
+                              plan.status === 'Completed'
+                                ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' }
+                                : plan.status === 'Needs Attention'
+                                ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA' }
+                                : { backgroundColor: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' }
+                            }
+                          >
+                            {plan.status}
                           </span>
-                        </div>
+                        ) : (
+                          <span className="presence-badge" style={{ backgroundColor: '#F1F5F9', color: '#64748B', borderColor: '#CBD5E1' }}>
+                            Not Started
+                          </span>
+                        )}
                       </td>
 
                       <td style={{ textAlign: 'center' }}>
-                        <span
-                          className="presence-badge"
-                          style={
-                            isCompleted
-                              ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' }
-                              : isNeedsAttn
-                              ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA' }
-                              : { backgroundColor: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' }
-                          }
-                        >
-                          {inst.derivedStatus}
-                        </span>
-                      </td>
-
-                      <td style={{ textAlign: 'center' }}>
-                        <Link
-                          to={`/offboarding/employees/${emp.id}`}
-                          className="btn-compact-override"
-                          style={{ padding: '0.2rem 0.4rem', fontSize: '0.72rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', whiteSpace: 'nowrap' }}
-                        >
-                          <span>View Progress</span>
-                          <ArrowUpRight size={11} />
-                        </Link>
+                        {intern.localEmployeeId ? (
+                          <Link
+                            to={`/offboarding/employees/${intern.localEmployeeId}`}
+                            className="btn-compact-override"
+                            style={{ padding: '0.2rem 0.4rem', fontSize: '0.72rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', whiteSpace: 'nowrap' }}
+                          >
+                            <span>View Progress</span>
+                            <ArrowUpRight size={11} />
+                          </Link>
+                        ) : (
+                          <span style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>—</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -391,21 +304,13 @@ export default function OffboardingDepartingPage() {
         )}
       </div>
 
-      {/* Launch Plan Modal */}
+      {/* Launch Plan Modal — still reads/writes the mock employees table
+          (not yet rewired), so it won't show these real interns as
+          launch-eligible until that's connected too. */}
       <LaunchOffboardingPlanModal
         isOpen={isLaunchModalOpen}
         onClose={() => setIsLaunchModalOpen(false)}
         onSuccess={() => loadData()}
-      />
-
-      {/* Overdue Tasks Modal — Mark All as Complete executes immediately (no confirmation step) */}
-      <OverdueOffboardingTasksModal
-        isOpen={isOverdueModalOpen}
-        onClose={() => setIsOverdueModalOpen(false)}
-        tasks={overdueTasks}
-        onMarkComplete={handleMarkTaskComplete}
-        onMarkAllComplete={handleMarkAllOverdueComplete}
-        isMarkingAllComplete={isMarkingAllComplete}
       />
     </div>
   );

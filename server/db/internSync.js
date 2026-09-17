@@ -2,8 +2,10 @@
 // a link to sync (`intern_external_id`) once POST /applicants/{id}/convert
 // has actually pushed them there (db/applicantConversion.js) — everything
 // here is a no-op for a non-intern employee.
+import { pool } from "./pool.js";
 import { getRow, insertRow } from "./crud.js";
 import { internsClient } from "../clients/internsClient.js";
+import { departmentsClient } from "../clients/departmentsClient.js";
 
 // Read-through: the live Interns DB record for display alongside an
 // onboarding/offboarding view, never cached or duplicated locally (SS-13 —
@@ -47,3 +49,82 @@ export async function syncOffboardingLaunchToIntern(employeeId, anchorDate) {
     });
   }
 }
+
+function deriveStatus(tasks) {
+  if (tasks.length === 0) return "In Progress";
+  const required = tasks.filter((t) => t.required);
+  const completedRequired = required.filter((t) => t.completed);
+  if (required.length > 0 && completedRequired.length === required.length) return "Completed";
+  const today = new Date().toISOString().slice(0, 10);
+  const needsAttention = required.some((t) => !t.completed && t.due_date && String(t.due_date).slice(0, 10) < today);
+  return needsAttention ? "Needs Attention" : "In Progress";
+}
+
+function progressPercentage(tasks) {
+  if (tasks.length === 0) return 0;
+  return Math.round((tasks.filter((t) => t.completed).length / tasks.length) * 100);
+}
+
+// Every real intern (Interns DB, external) cross-referenced with any local
+// employee/plan — the view every Onboarding/Offboarding progress page
+// actually wants: the real roster, joined with whatever this app itself
+// knows about each person, rather than this app's own (currently empty)
+// `employees` table treated as the roster.
+async function listInternsWithProgress(stage) {
+  const [{ interns }, departments] = await Promise.all([
+    internsClient.listInterns({ limit: 100 }),
+    departmentsClient.listDepartments().catch(() => []),
+  ]);
+  const departmentsById = new Map(departments.map((d) => [d.id, d]));
+
+  const [localEmployees] = await pool.query("SELECT * FROM employees WHERE intern_external_id IS NOT NULL");
+  const employeeByInternId = new Map(localEmployees.map((e) => [e.intern_external_id, e]));
+
+  const instanceTable = stage === "offboarding" ? "offboarding_plan_instances" : "onboarding_plan_instances";
+  const taskTable = stage === "offboarding" ? "offboarding_task_instances" : "onboarding_task_instances";
+
+  const results = [];
+  for (const intern of interns) {
+    const localEmployee = employeeByInternId.get(intern.id);
+    let plan = null;
+
+    if (localEmployee) {
+      const [[instance]] = await pool.query(
+        `SELECT * FROM ${instanceTable} WHERE employee_id = ? ORDER BY id DESC LIMIT 1`,
+        [localEmployee.id],
+      );
+      if (instance) {
+        const [tasks] = await pool.query(
+          `SELECT ti.*, a.completed, a.due_date FROM ${taskTable} ti LEFT JOIN activities a ON a.id = ti.activity_id WHERE ti.plan_instance_id = ?`,
+          [instance.id],
+        );
+        plan = {
+          instanceId: instance.id,
+          anchorDate: instance.anchor_date,
+          status: deriveStatus(tasks),
+          progressPercentage: progressPercentage(tasks),
+          taskCount: tasks.length,
+        };
+      }
+    }
+
+    const department = departmentsById.get(intern.department_id) ?? null;
+    results.push({
+      internId: intern.id,
+      refNumber: intern.ref_number,
+      fullName: `${intern.first_name} ${intern.last_name}`,
+      email: intern.email_address,
+      department: department ? { id: department.id, name: department.name } : null,
+      mode: intern.mode,
+      startDate: intern.internship_start_date,
+      endDate: intern.internship_end_date,
+      photoUrl: intern.photo_url,
+      localEmployeeId: localEmployee ? localEmployee.id : null,
+      plan,
+    });
+  }
+  return results;
+}
+
+export const listInternsWithOnboardingStatus = () => listInternsWithProgress("onboarding");
+export const listInternsWithOffboardingStatus = () => listInternsWithProgress("offboarding");

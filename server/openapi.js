@@ -54,7 +54,7 @@ export const openapi = {
           description: "Launch and track an onboarding checklist for a new employee — and, for an intern, see their live Interns DB record alongside it.",
           does: ["List onboarding templates", "Create a template", "Launch a plan for an employee", "Mark a task done or reopen it"],
           best_for: "HR bringing a new hire through their first-days checklist.",
-          endpoints: ["GET /onboarding/templates", "POST /onboarding/templates", "GET /onboarding/templates/{id}", "PATCH /onboarding/templates/{id}", "POST /onboarding/instances", "GET /onboarding/instances/{id}", "PATCH /onboarding/task-instances/{id}"],
+          endpoints: ["GET /onboarding/interns", "GET /onboarding/templates", "POST /onboarding/templates", "GET /onboarding/templates/{id}", "PATCH /onboarding/templates/{id}", "POST /onboarding/instances", "GET /onboarding/instances/{id}", "PATCH /onboarding/task-instances/{id}"],
         },
         {
           name: "Run Offboarding",
@@ -62,7 +62,7 @@ export const openapi = {
           description: "Launch and track a departure checklist for a leaving employee — for an intern, this also sets their real internship_end_date in the Interns DB.",
           does: ["List offboarding templates", "Create a template", "Launch a plan for an employee (syncs the departure date to the Interns DB for an intern)", "Mark a task done or reopen it"],
           best_for: "HR taking a departing employee through clearance.",
-          endpoints: ["GET /offboarding/templates", "POST /offboarding/templates", "GET /offboarding/templates/{id}", "PATCH /offboarding/templates/{id}", "POST /offboarding/instances", "GET /offboarding/instances/{id}", "PATCH /offboarding/task-instances/{id}"],
+          endpoints: ["GET /offboarding/interns", "GET /offboarding/templates", "POST /offboarding/templates", "GET /offboarding/templates/{id}", "PATCH /offboarding/templates/{id}", "POST /offboarding/instances", "GET /offboarding/instances/{id}", "PATCH /offboarding/task-instances/{id}"],
         },
         {
           name: "Track Activities",
@@ -302,6 +302,10 @@ export const openapi = {
         "x-rizurf": { name: "List Intern Roles", purpose: "Resolve a role_id to a name, or populate a role picker", use_when: ["Converting an applicant into an intern and choosing their role"], do_not_use_when: [], inputs: [], outputs: ["roles[]"], requires: [], related_endpoints: ["POST /applicants/{applicantId}/convert"], tags: ["roles", "interns", "external"] } },
     },
 
+    "/onboarding/interns": {
+      get: { summary: "Every real intern (Interns DB), cross-referenced with their local onboarding plan if one exists.", security: scoped("onboarding:read"),
+        "x-rizurf": { name: "List Interns' Onboarding Progress", purpose: "The real intern roster joined with whatever onboarding progress this app itself knows about each person", use_when: ["Showing an onboarding progress table"], do_not_use_when: ["You need this app's own employees, not interns — that's a separate, currently-empty roster"], inputs: [], outputs: ["interns[]"], requires: [], related_endpoints: ["POST /onboarding/instances", "GET /onboarding/instances/{id}"], tags: ["onboarding", "interns", "progress", "roster"] } },
+    },
     "/onboarding/templates": {
       get: { summary: "List onboarding plan templates.", security: scoped("onboarding:read"),
         "x-rizurf": { name: "List Onboarding Templates", purpose: "Browse reusable onboarding checklists", use_when: ["Choosing a template to launch"], do_not_use_when: [], inputs: ["department_id"], outputs: ["templates[]"], requires: [], related_endpoints: ["POST /onboarding/instances"], tags: ["onboarding", "templates", "checklist"] } },
@@ -327,6 +331,10 @@ export const openapi = {
         "x-rizurf": { name: "Update Onboarding Task", purpose: "Complete or reopen a single onboarding task", use_when: ["A step in the checklist is finished", "A step was marked done by mistake"], do_not_use_when: [], inputs: ["completed"], outputs: ["taskInstance"], requires: ["Task instance exists"], related_endpoints: ["GET /onboarding/instances/{id}"], tags: ["onboarding", "task", "complete"] } },
     },
 
+    "/offboarding/interns": {
+      get: { summary: "Every real intern (Interns DB), cross-referenced with their local offboarding plan if one exists.", security: scoped("offboarding:read"),
+        "x-rizurf": { name: "List Interns' Offboarding Progress", purpose: "The real intern roster joined with whatever offboarding progress this app itself knows about each person", use_when: ["Showing an offboarding progress table"], do_not_use_when: ["You need this app's own employees, not interns — that's a separate, currently-empty roster"], inputs: [], outputs: ["interns[]"], requires: [], related_endpoints: ["POST /offboarding/instances", "GET /offboarding/instances/{id}"], tags: ["offboarding", "interns", "progress", "roster"] } },
+    },
     "/offboarding/templates": {
       get: { summary: "List offboarding plan templates.", security: scoped("offboarding:read"),
         "x-rizurf": { name: "List Offboarding Templates", purpose: "Browse reusable departure checklists", use_when: ["Choosing a template to launch"], do_not_use_when: [], inputs: ["department_id"], outputs: ["templates[]"], requires: [], related_endpoints: ["POST /offboarding/instances"], tags: ["offboarding", "templates", "checklist"] } },

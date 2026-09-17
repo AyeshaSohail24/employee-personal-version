@@ -1,4 +1,5 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
+import { apiClient } from './apiClient.js';
 import { employeeService } from './employeeService.js';
 import { employmentRecordService } from './employmentRecordService.js';
 import { auditService, AUDIT_ACTIONS } from './auditService.js';
@@ -18,6 +19,20 @@ import { resolveCurrentRecord, resolveNextRecord } from '../domain/employmentDom
 import { addDaysToLocalDate, getTodayLocalDateString } from '../utils/dateUtils.js';
 
 export const onboardingService = {
+  /**
+   * The real intern roster (Interns DB) with each person's onboarding plan
+   * status, if one exists locally — calls the real backend directly rather
+   * than routing through the mock localStorage layer everything else in
+   * this file still uses. See server/db/internSync.js for how the two are
+   * joined server-side.
+   * @returns {Promise<Array<Object>>}
+   */
+  async getInternsProgress() {
+    const { interns } = await apiClient.get('/onboarding/interns');
+    return interns;
+  },
+
+
   /**
    * Fetches all Onboarding PlanTemplates with optional task count enrichment.
    */

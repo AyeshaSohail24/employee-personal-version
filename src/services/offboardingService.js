@@ -1,4 +1,5 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
+import { apiClient } from './apiClient.js';
 import { employeeService } from './employeeService.js';
 import { employmentRecordService } from './employmentRecordService.js';
 import { departmentService } from './departmentService.js';
@@ -17,6 +18,16 @@ import {
 import { addDaysToLocalDate, getTodayLocalDateString } from '../utils/dateUtils.js';
 
 export const offboardingService = {
+  /**
+   * The real intern roster (Interns DB) with each person's offboarding plan
+   * status, if one exists locally — mirrors onboardingService.getInternsProgress().
+   * @returns {Promise<Array<Object>>}
+   */
+  async getInternsProgress() {
+    const { interns } = await apiClient.get('/offboarding/interns');
+    return interns;
+  },
+
   /**
    * Fetches all Offboarding PlanTemplates with optional task count enrichment.
    */

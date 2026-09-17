@@ -4,30 +4,24 @@ import {
   Users,
   Search,
   ArrowUpRight,
-  UsersRound,
-  GraduationCap,
   AlertTriangle,
   CheckCircle2,
   Clock,
   Play,
 } from 'lucide-react';
-import { employeeService } from '../../services/employeeService.js';
 import { onboardingService } from '../../services/onboardingService.js';
-import { activityService } from '../../services/activityService.js';
-import { PLAN_INSTANCE_STATUS, isActivePlanStatus, resolveAllOnboardingHistory } from '../../domain/onboardingDomain.js';
 import LaunchPlanModal from '../../components/onboarding/LaunchPlanModal.jsx';
-import OverdueTasksModal from '../../components/onboarding/OverdueTasksModal.jsx';
 
+// The real intern roster (Interns DB), joined server-side with whatever
+// local onboarding plan each person has — see
+// onboardingService.getInternsProgress() / server/db/internSync.js. Not the
+// deeper plan-template/task-editing system below in onboardingService.js,
+// which still runs on mock data — this page only needed the read side.
 export default function OnboardingEmployeesPage() {
-  const [employees, setEmployees] = useState([]);
-  const [instances, setInstances] = useState([]);
-  const [overdueTasks, setOverdueTasks] = useState([]);
+  const [interns, setInterns] = useState([]);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all'); // 'all' | 'Employee' | 'Intern'
   const [loading, setLoading] = useState(true);
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
-  const [isOverdueModalOpen, setIsOverdueModalOpen] = useState(false);
-  const [isMarkingAllComplete, setIsMarkingAllComplete] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -36,103 +30,29 @@ export default function OnboardingEmployeesPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [allEmps, allInsts] = await Promise.all([
-        employeeService.getAll(),
-        onboardingService.getAllInstances(),
-      ]);
-      setEmployees(allEmps);
-      setInstances(allInsts);
-
-      // Fetch overdue activities that belong to Onboarding — and exclude any whose parent plan
-      // instance has been Dropped, since a Dropped plan must no longer contribute overdue
-      // alerts even if it still has incomplete task instances left over from before it was
-      // dropped.
-      const overdues = await activityService.getOverdueActivities();
-      const droppedActivityIds = new Set(
-        allInsts
-          .filter((i) => i.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED)
-          .flatMap((i) => i.taskInstances.map((ti) => ti.activityId))
-      );
-      const onboardingOverdues = overdues.filter((a) => a.source === 'Onboarding' && !droppedActivityIds.has(a.id));
-      setOverdueTasks(onboardingOverdues);
+      setInterns(await onboardingService.getInternsProgress());
     } catch (err) {
-      console.error('Failed to load onboarding employees:', err);
+      console.error('Failed to load interns:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Some employees may have more than one historical plan instance (e.g. Dropped/Completed
-  // followed by a replacement launch) — prefer the currently ACTIVE one for the table row, or
-  // else the most recently created one, rather than letting Map construction order pick
-  // whichever instance happens to be iterated last.
-  const instanceMap = new Map();
-  instances.forEach((inst) => {
-    const existing = instanceMap.get(inst.employeeId);
-    if (!existing) {
-      instanceMap.set(inst.employeeId, inst);
-      return;
-    }
-    const existingActive = isActivePlanStatus(existing.derivedStatus);
-    const currentActive = isActivePlanStatus(inst.derivedStatus);
-    if (currentActive && !existingActive) {
-      instanceMap.set(inst.employeeId, inst);
-    } else if (currentActive === existingActive) {
-      const existingTime = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
-      const currentTime = inst.createdAt ? new Date(inst.createdAt).getTime() : 0;
-      if (currentTime > existingTime) instanceMap.set(inst.employeeId, inst);
-    }
-  });
+  // Summary card metrics
+  const activeInterns = interns.filter((i) => i.plan && i.plan.status !== 'Completed');
+  const inProgressCount = interns.filter((i) => i.plan?.status === 'In Progress').length;
+  const needsAttentionCount = interns.filter((i) => i.plan?.status === 'Needs Attention').length;
+  const completedCount = interns.filter((i) => i.plan?.status === 'Completed').length;
 
-  // Summary card metrics — same calculations previously shown on the Onboarding Dashboard
-  const activeInstances = instances.filter((i) => isActivePlanStatus(i.derivedStatus));
-  const inProgressCount = instances.filter((i) => i.derivedStatus === PLAN_INSTANCE_STATUS.IN_PROGRESS).length;
-  const needsAttentionCount = instances.filter((i) => i.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION).length;
-  const completedCount = instances.filter((i) => i.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED).length;
-
-  // Onboarding progress population: everyone Upcoming/Onboarding, or who has (or had) a plan
-  const onboardingWorkforce = resolveAllOnboardingHistory(employees, instanceMap).filter((emp) => {
-    if (typeFilter !== 'all' && emp.directoryType !== typeFilter) return false;
-
+  const visibleInterns = interns.filter((intern) => {
     if (search.trim()) {
       const q = search.toLowerCase();
-      const matchName = emp.fullName.toLowerCase().includes(q);
-      const matchId = emp.employeeId.toLowerCase().includes(q);
-      if (!matchName && !matchId) return false;
+      const matchName = intern.fullName.toLowerCase().includes(q);
+      const matchRef = (intern.refNumber || '').toLowerCase().includes(q);
+      if (!matchName && !matchRef) return false;
     }
-
     return true;
   });
-
-  const handleMarkTaskComplete = async (actId) => {
-    try {
-      await activityService.markComplete(actId);
-      await loadData();
-    } catch (err) {
-      alert(`Failed to complete task: ${err.message}`);
-    }
-  };
-
-  // Executes immediately on click — no confirmation step. Captures the exact set of activity
-  // IDs currently shown in the Overdue Onboarding Tasks popup at click time, so "Mark All as
-  // Complete" only ever affects that same set — never a freshly re-derived list that could
-  // drift mid-operation. isMarkingAllComplete guards against a rapid double-click firing the
-  // bulk completion twice; on failure the overdue list/tasks are left untouched (loadData() is
-  // only called after a successful completion) and the error surfaces via the same alert()
-  // pattern already used by handleMarkTaskComplete above, rather than a new notification system.
-  const handleMarkAllOverdueComplete = async () => {
-    if (isMarkingAllComplete) return;
-    setIsMarkingAllComplete(true);
-    try {
-      const idsToComplete = overdueTasks.map((t) => t.id);
-      await activityService.markCompleteMany(idsToComplete);
-      await loadData();
-    } catch (err) {
-      alert(`Failed to complete overdue tasks: ${err.message}`);
-    } finally {
-      setIsMarkingAllComplete(false);
-    }
-  };
 
   return (
     <div className="page-layout-container">
@@ -141,21 +61,10 @@ export default function OnboardingEmployeesPage() {
         <div className="header-text-group">
           <h1 className="page-title">Onboarding Progress</h1>
           <p className="page-subtitle">
-            View and track individual onboarding progress for employees and interns.
+            View and track individual onboarding progress for interns.
           </p>
         </div>
         <div className="header-actions">
-          <button
-            type="button"
-            className="btn-secondary btn-header-action candidate-notification-btn"
-            onClick={() => setIsOverdueModalOpen(true)}
-          >
-            <AlertTriangle size={15} />
-            <span>Overdue Tasks</span>
-            {overdueTasks.length > 0 && (
-              <span className="candidate-notification-badge">{overdueTasks.length}</span>
-            )}
-          </button>
           <button
             type="button"
             className="btn-primary btn-header-action"
@@ -184,7 +93,7 @@ export default function OnboardingEmployeesPage() {
             </div>
           </div>
           <div className="summary-card-value" style={{ color: 'var(--color-primary-active)' }}>
-            {activeInstances.length}
+            {activeInterns.length}
           </div>
           <div className="summary-card-subtext">New joiners actively onboarding</div>
         </div>
@@ -251,58 +160,31 @@ export default function OnboardingEmployeesPage() {
       </div>
 
       {/* Filter Bar */}
-      <div className="table-toolbar-card" style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem', padding: '0.75rem 1rem', flexWrap: 'wrap' }}>
-        <div className="view-switcher-group">
-          <button
-            type="button"
-            className={`view-btn ${typeFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setTypeFilter('all')}
-          >
-            <Users size={15} />
-            <span>All</span>
-          </button>
-          <button
-            type="button"
-            className={`view-btn ${typeFilter === 'Employee' ? 'active' : ''}`}
-            onClick={() => setTypeFilter('Employee')}
-          >
-            <UsersRound size={15} />
-            <span>Employees</span>
-          </button>
-          <button
-            type="button"
-            className={`view-btn ${typeFilter === 'Intern' ? 'active' : ''}`}
-            onClick={() => setTypeFilter('Intern')}
-          >
-            <GraduationCap size={15} />
-            <span>Interns</span>
-          </button>
-        </div>
-
+      <div className="table-toolbar-card" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginBottom: '1.25rem', padding: '0.75rem 1rem', flexWrap: 'wrap' }}>
         <div className="toolbar-search-box" style={{ maxWidth: '280px' }}>
           <Search size={16} className="toolbar-search-icon" />
           <input
             type="text"
             className="toolbar-search-input"
-            placeholder="Search employee name or ID"
+            placeholder="Search intern name or ref number"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
       </div>
 
-      {/* Employees Table */}
+      {/* Interns Table */}
       <div className="table-container-card">
         {loading ? (
           <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-            Loading onboarding employees...
+            Loading interns...
           </div>
-        ) : onboardingWorkforce.length === 0 ? (
+        ) : visibleInterns.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
             <Users size={32} style={{ marginBottom: '0.5rem', color: 'var(--border-dark)' }} />
-            <h3>No Onboarding Employees Found</h3>
+            <h3>No Interns Found</h3>
             <p style={{ fontSize: '0.85rem' }}>
-              No employees currently match the selected filter or search query.
+              No interns currently match the search query.
             </p>
           </div>
         ) : (
@@ -310,7 +192,7 @@ export default function OnboardingEmployeesPage() {
             <table className="presence-data-table onboarding-employees-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '24%', textAlign: 'left' }}>Employee</th>
+                  <th style={{ width: '24%', textAlign: 'left' }}>Intern</th>
                   <th style={{ width: '15%', textAlign: 'left' }}>Department</th>
                   <th style={{ width: '12%', textAlign: 'center' }}>Start Date</th>
                   <th style={{ width: '17%', textAlign: 'left' }}>Onboarding Plan</th>
@@ -320,57 +202,57 @@ export default function OnboardingEmployeesPage() {
                 </tr>
               </thead>
               <tbody>
-                {onboardingWorkforce.map((emp) => {
-                  const inst = instanceMap.get(emp.id);
+                {visibleInterns.map((intern) => {
+                  const plan = intern.plan;
 
                   return (
-                    <tr key={emp.id} className="presence-table-row">
+                    <tr key={intern.internId} className="presence-table-row">
                       <td>
                         <div className="emp-identity-block">
-                          <div className="emp-avatar-circle" style={emp.status === 'Former' ? { background: '#64748B' } : undefined}>
-                            {emp.photo || 'EM'}
+                          <div className="emp-avatar-circle">
+                            {intern.fullName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
                           </div>
                           <div className="emp-identity-text">
                             <div className="emp-name-text" style={{ whiteSpace: 'nowrap' }}>
-                              {emp.fullName}
+                              {intern.fullName}
                             </div>
-                            <div className="emp-id-subtext">{emp.employeeId}</div>
+                            <div className="emp-id-subtext">{intern.refNumber}</div>
                           </div>
                         </div>
                       </td>
 
                       <td>
                         <div style={{ fontSize: '0.815rem', color: 'var(--text-main)' }}>
-                          {emp.department?.name || 'Department N/A'}
+                          {intern.department?.name || 'Department N/A'}
                         </div>
                       </td>
 
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '0.815rem' }}>
-                        {inst ? inst.anchorDate : (emp.effectiveEmploymentRecord?.effectiveFrom || emp.startDate || 'N/A')}
+                        {plan ? plan.anchorDate : (intern.startDate || 'N/A')}
                       </td>
 
                       <td>
                         <div style={{ fontSize: '0.815rem', color: 'var(--text-main)' }}>
-                          {inst ? (inst.template ? inst.template.name : 'Custom Plan') : (
+                          {plan ? `${plan.taskCount} task${plan.taskCount === 1 ? '' : 's'}` : (
                             <span style={{ color: 'var(--text-muted)' }}>No active plan</span>
                           )}
                         </div>
                       </td>
 
                       <td style={{ textAlign: 'center' }}>
-                        {inst ? (
+                        {plan ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}>
                             <div style={{ width: '60px', height: '6px', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
                               <div
                                 style={{
-                                  width: `${inst.progress.progressPercentage}%`,
+                                  width: `${plan.progressPercentage}%`,
                                   height: '100%',
-                                  background: inst.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION ? '#EF4444' : '#129FA9',
+                                  background: plan.status === 'Needs Attention' ? '#EF4444' : '#129FA9',
                                 }}
                               />
                             </div>
                             <span style={{ fontSize: '0.735rem', fontWeight: 700 }}>
-                              {inst.progress.progressPercentage}%
+                              {plan.progressPercentage}%
                             </span>
                           </div>
                         ) : (
@@ -379,20 +261,18 @@ export default function OnboardingEmployeesPage() {
                       </td>
 
                       <td style={{ textAlign: 'center' }}>
-                        {inst ? (
+                        {plan ? (
                           <span
                             className="presence-badge"
                             style={
-                              inst.derivedStatus === PLAN_INSTANCE_STATUS.COMPLETED
+                              plan.status === 'Completed'
                                 ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' }
-                                : inst.derivedStatus === PLAN_INSTANCE_STATUS.NEEDS_ATTENTION
+                                : plan.status === 'Needs Attention'
                                 ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA' }
-                                : inst.derivedStatus === PLAN_INSTANCE_STATUS.DROPPED
-                                ? { backgroundColor: '#F1F5F9', color: '#64748B', borderColor: '#CBD5E1' }
                                 : { backgroundColor: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' }
                             }
                           >
-                            {inst.derivedStatus}
+                            {plan.status}
                           </span>
                         ) : (
                           <span className="presence-badge" style={{ backgroundColor: '#F1F5F9', color: '#64748B', borderColor: '#CBD5E1' }}>
@@ -402,14 +282,18 @@ export default function OnboardingEmployeesPage() {
                       </td>
 
                       <td style={{ textAlign: 'center' }}>
-                        <Link
-                          to={`/onboarding/employees/${emp.id}`}
-                          className="btn-compact-override"
-                          style={{ padding: '0.2rem 0.4rem', fontSize: '0.72rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', whiteSpace: 'nowrap' }}
-                        >
-                          <span>View Progress</span>
-                          <ArrowUpRight size={11} />
-                        </Link>
+                        {intern.localEmployeeId ? (
+                          <Link
+                            to={`/onboarding/employees/${intern.localEmployeeId}`}
+                            className="btn-compact-override"
+                            style={{ padding: '0.2rem 0.4rem', fontSize: '0.72rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', whiteSpace: 'nowrap' }}
+                          >
+                            <span>View Progress</span>
+                            <ArrowUpRight size={11} />
+                          </Link>
+                        ) : (
+                          <span style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>—</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -420,21 +304,13 @@ export default function OnboardingEmployeesPage() {
         )}
       </div>
 
-      {/* Launch Plan Modal */}
+      {/* Launch Plan Modal — still reads/writes the mock employees table
+          (not yet rewired), so it won't show these real interns as
+          launch-eligible until that's connected too. */}
       <LaunchPlanModal
         isOpen={isLaunchModalOpen}
         onClose={() => setIsLaunchModalOpen(false)}
         onSuccess={() => loadData()}
-      />
-
-      {/* Overdue Tasks Modal — Mark All as Complete executes immediately (no confirmation step) */}
-      <OverdueTasksModal
-        isOpen={isOverdueModalOpen}
-        onClose={() => setIsOverdueModalOpen(false)}
-        tasks={overdueTasks}
-        onMarkComplete={handleMarkTaskComplete}
-        onMarkAllComplete={handleMarkAllOverdueComplete}
-        isMarkingAllComplete={isMarkingAllComplete}
       />
     </div>
   );

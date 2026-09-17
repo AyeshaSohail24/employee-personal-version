@@ -1,10 +1,16 @@
 import * as db from "../db/onboarding.js";
 import { getEmployee } from "../db/employees.js";
+import { listInternsWithOnboardingStatus } from "../db/internSync.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
 
 export const routes = {
+  "/onboarding/interns": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { interns: await listInternsWithOnboardingStatus() });
+    },
+  },
   "/onboarding/templates": {
     async get(req, res, ctx) {
       const templates = await db.listTemplates(ctx.url.searchParams.get("department_id") ?? undefined, parseListQuery(ctx.url));
