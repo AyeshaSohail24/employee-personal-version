@@ -2,12 +2,22 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, Search, Bell, ChevronRight, User } from 'lucide-react';
 import { useRole } from '../../state/RoleContext';
+import { useSession } from '../../state/SessionContext';
 import { useNotifications } from '../../state/NotificationContext';
 import NotificationPanel from './NotificationPanel';
+
+function initialsFor(name, email) {
+  const source = (name || email || '').trim();
+  if (!source) return '?';
+  const parts = source.split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 export default function Header({ toggleMobileSidebar }) {
   const location = useLocation();
   const { currentRole } = useRole();
+  const session = useSession();
   const { unreadCount } = useNotifications();
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
 
@@ -106,12 +116,14 @@ export default function Header({ toggleMobileSidebar }) {
           <NotificationPanel isOpen={isNotificationPanelOpen} onClose={() => setIsNotificationPanelOpen(false)} />
         </div>
 
-        {/* Profile Avatar Menu */}
+        {/* Profile Avatar Menu — the real signed-in identity from the gateway
+            session (SessionContext), not the app's own capability-role stub
+            (RoleContext, still fixed to 'HR' — see its own comment). */}
         <div className="user-profile-badge">
-          <div className="avatar">AZ</div>
+          <div className="avatar">{initialsFor(session.name, session.email)}</div>
           <div className="user-info">
-            <span className="user-name">Ayesha Z.</span>
-            <span className="user-role">{currentRole}</span>
+            <span className="user-name">{session.name || session.email}</span>
+            <span className="user-role">{session.role ? session.role.toUpperCase() : currentRole}</span>
           </div>
         </div>
       </div>
