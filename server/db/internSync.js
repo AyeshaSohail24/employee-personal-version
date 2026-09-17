@@ -70,6 +70,13 @@ function progressPercentage(tasks) {
 // actually wants: the real roster, joined with whatever this app itself
 // knows about each person, rather than this app's own (currently empty)
 // `employees` table treated as the roster.
+//
+// Batched, not a per-intern loop: the first version queried the plan
+// instance and its tasks separately for each intern (2 sequential
+// round-trips x 19 interns), which took ~5.5s end to end against the real
+// VPS database. Fetching every relevant row in one query per table and
+// joining in memory (this app's whole headcount is small — HR PoC scale)
+// keeps this to a handful of round-trips regardless of intern count.
 async function listInternsWithProgress(stage) {
   const [{ interns }, departments] = await Promise.all([
     internsClient.listInterns({ limit: 100 }),
@@ -79,25 +86,49 @@ async function listInternsWithProgress(stage) {
 
   const [localEmployees] = await pool.query("SELECT * FROM employees WHERE intern_external_id IS NOT NULL");
   const employeeByInternId = new Map(localEmployees.map((e) => [e.intern_external_id, e]));
+  const employeeIds = localEmployees.map((e) => e.id);
 
   const instanceTable = stage === "offboarding" ? "offboarding_plan_instances" : "onboarding_plan_instances";
   const taskTable = stage === "offboarding" ? "offboarding_task_instances" : "onboarding_task_instances";
 
-  const results = [];
-  for (const intern of interns) {
+  const latestInstanceByEmployeeId = new Map();
+  const tasksByInstanceId = new Map();
+
+  if (employeeIds.length > 0) {
+    const placeholders = employeeIds.map(() => "?").join(",");
+    const [instances] = await pool.query(
+      `SELECT * FROM ${instanceTable} WHERE employee_id IN (${placeholders}) ORDER BY id DESC`,
+      employeeIds,
+    );
+    // First row per employee_id wins — already ordered id DESC, so that's the latest.
+    for (const instance of instances) {
+      if (!latestInstanceByEmployeeId.has(instance.employee_id)) {
+        latestInstanceByEmployeeId.set(instance.employee_id, instance);
+      }
+    }
+
+    const instanceIds = [...latestInstanceByEmployeeId.values()].map((i) => i.id);
+    if (instanceIds.length > 0) {
+      const taskPlaceholders = instanceIds.map(() => "?").join(",");
+      const [tasks] = await pool.query(
+        `SELECT ti.*, a.completed, a.due_date FROM ${taskTable} ti LEFT JOIN activities a ON a.id = ti.activity_id WHERE ti.plan_instance_id IN (${taskPlaceholders})`,
+        instanceIds,
+      );
+      for (const task of tasks) {
+        if (!tasksByInstanceId.has(task.plan_instance_id)) tasksByInstanceId.set(task.plan_instance_id, []);
+        tasksByInstanceId.get(task.plan_instance_id).push(task);
+      }
+    }
+  }
+
+  return interns.map((intern) => {
     const localEmployee = employeeByInternId.get(intern.id);
     let plan = null;
 
     if (localEmployee) {
-      const [[instance]] = await pool.query(
-        `SELECT * FROM ${instanceTable} WHERE employee_id = ? ORDER BY id DESC LIMIT 1`,
-        [localEmployee.id],
-      );
+      const instance = latestInstanceByEmployeeId.get(localEmployee.id);
       if (instance) {
-        const [tasks] = await pool.query(
-          `SELECT ti.*, a.completed, a.due_date FROM ${taskTable} ti LEFT JOIN activities a ON a.id = ti.activity_id WHERE ti.plan_instance_id = ?`,
-          [instance.id],
-        );
+        const tasks = tasksByInstanceId.get(instance.id) ?? [];
         plan = {
           instanceId: instance.id,
           anchorDate: instance.anchor_date,
@@ -109,7 +140,7 @@ async function listInternsWithProgress(stage) {
     }
 
     const department = departmentsById.get(intern.department_id) ?? null;
-    results.push({
+    return {
       internId: intern.id,
       refNumber: intern.ref_number,
       fullName: `${intern.first_name} ${intern.last_name}`,
@@ -121,9 +152,8 @@ async function listInternsWithProgress(stage) {
       photoUrl: intern.photo_url,
       localEmployeeId: localEmployee ? localEmployee.id : null,
       plan,
-    });
-  }
-  return results;
+    };
+  });
 }
 
 export const listInternsWithOnboardingStatus = () => listInternsWithProgress("onboarding");
