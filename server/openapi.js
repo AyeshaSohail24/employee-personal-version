@@ -146,8 +146,30 @@ export const openapi = {
     },
   },
   paths: {
-    "/health": { get: { summary: "Liveness and dependency checks" } },
-    "/openapi.json": { get: { summary: "This document" } },
+    "/health": {
+      get: {
+        summary: "Liveness and dependency checks",
+        "x-rizurf": {
+          name: "Health Check", purpose: "Report whether this service and its database are reachable",
+          use_when: ["Monitoring the service", "Before routing traffic to it"],
+          do_not_use_when: ["You need actual HR data — use the relevant resource endpoint instead"],
+          inputs: [], outputs: ["status", "service", "version", "uptime_seconds", "checks"], requires: [],
+          related_endpoints: ["GET /openapi.json"], tags: ["health", "status", "liveness", "monitoring", "uptime"],
+        },
+      },
+    },
+    "/openapi.json": {
+      get: {
+        summary: "This document",
+        "x-rizurf": {
+          name: "API Document", purpose: "Describe every endpoint this service exposes",
+          use_when: ["Discovering the API", "Generating a client", "Gateway conformance checks"],
+          do_not_use_when: ["You need actual HR data — use the relevant resource endpoint instead"],
+          inputs: [], outputs: ["openapi", "info", "paths"], requires: [],
+          related_endpoints: ["GET /health"], tags: ["openapi", "schema", "spec", "discovery", "docs"],
+        },
+      },
+    },
 
     "/employees": {
       get: {

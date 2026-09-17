@@ -4,18 +4,18 @@
 // per request). Both just call handleServerlessRequest(req, res) — nothing
 // here knows or cares which one is calling it.
 import { randomUUID } from "node:crypto";
-import { SERVICE_ID, VERSION, assertRequiredEnv } from "./config.js";
+import { assertRequiredEnv } from "./config.js";
 import { openapi, requiredScopesFor, isPublicRoute } from "./openapi.js";
 import { buildRouteMatcher } from "./http/router.js";
-import { sendJson, sendError, NotFoundError, ValidationError, ConfigurationError, CORRELATION_HEADER, NO_STORE } from "./http/errors.js";
+import { sendError, NotFoundError, ValidationError, ConfigurationError, CORRELATION_HEADER, NO_STORE } from "./http/errors.js";
 import { authenticate, principalMayWrite } from "./http/authenticate.js";
 import { authorizeRedirectUrl, exchangeCodeForIdentity, CALLBACK_PATH } from "./auth/signin.js";
 import { serializeSessionCookie, readSession } from "./auth/session.js";
 import { gatewaySessionIsLive } from "./auth/introspect.js";
 import { distExists, serveIndexHtml, serveStaticAsset } from "./http/staticSite.js";
 import { runWithCorrelationId } from "./http/requestContext.js";
-import { pool } from "./db/pool.js";
 
+import { routes as metaRoutes } from "./routes/meta.js";
 import { routes as employeeRoutes } from "./routes/employees.js";
 import { routes as orgStructureRoutes } from "./routes/orgStructure.js";
 import { routes as onboardingRoutes } from "./routes/onboarding.js";
@@ -27,6 +27,7 @@ import { routes as noteRoutes } from "./routes/notes.js";
 import { routes as adminRoutes } from "./routes/admin.js";
 
 const routes = {
+  ...metaRoutes,
   ...employeeRoutes,
   ...orgStructureRoutes,
   ...onboardingRoutes,
@@ -39,7 +40,6 @@ const routes = {
 };
 
 const matchRoute = buildRouteMatcher(openapi);
-const started = Date.now();
 
 export async function handleServerlessRequest(req, res) {
   const supplied = req.headers[CORRELATION_HEADER];
@@ -83,25 +83,6 @@ async function handleRequest(req, res, { cid, url, pathname, method }) {
     });
     return res.end();
   }
-
-  if (pathname === "/health") {
-    // SS-2 — report `degraded` when the service is up but a dependency
-    // isn't; a hardcoded `true` here would make this endpoint worthless.
-    let databaseOk = true;
-    try {
-      await pool.query("SELECT 1");
-    } catch {
-      databaseOk = false;
-    }
-    return sendJson(res, cid, 200, {
-      status: databaseOk ? "ok" : "degraded",
-      service: SERVICE_ID,
-      version: VERSION,
-      uptime_seconds: Math.floor((Date.now() - started) / 1000),
-      checks: { database: databaseOk },
-    });
-  }
-  if (pathname === "/openapi.json") return sendJson(res, cid, 200, openapi);
 
   const matched = matchRoute(pathname);
 
