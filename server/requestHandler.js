@@ -4,10 +4,10 @@
 // per request). Both just call handleServerlessRequest(req, res) — nothing
 // here knows or cares which one is calling it.
 import { randomUUID } from "node:crypto";
-import { SERVICE_ID, VERSION } from "./config.js";
+import { SERVICE_ID, VERSION, assertRequiredEnv } from "./config.js";
 import { openapi, requiredScopesFor, isPublicRoute } from "./openapi.js";
 import { buildRouteMatcher } from "./http/router.js";
-import { sendJson, sendError, NotFoundError, ValidationError, CORRELATION_HEADER, NO_STORE } from "./http/errors.js";
+import { sendJson, sendError, NotFoundError, ValidationError, ConfigurationError, CORRELATION_HEADER, NO_STORE } from "./http/errors.js";
 import { authenticate, principalMayWrite } from "./http/authenticate.js";
 import { authorizeRedirectUrl, exchangeCodeForIdentity, CALLBACK_PATH } from "./auth/signin.js";
 import { serializeSessionCookie, readSession } from "./auth/session.js";
@@ -50,6 +50,12 @@ export async function handleServerlessRequest(req, res) {
   const method = (req.method ?? "GET").toUpperCase();
 
   try {
+    // On a serverless host, a missing env var has to surface here — inside
+    // the try/catch — rather than at import time, or it crashes the whole
+    // function before this ever runs and Vercel serves its own HTML error
+    // page instead of a JSON one (see config.js's assertRequiredEnv comment).
+    assertRequiredEnv();
+
     // Runs the whole request inside a correlation-id context so outbound
     // calls in server/clients/* can forward it (SS-4) without every
     // function from here down needing a `cid` parameter passed through.
@@ -57,6 +63,7 @@ export async function handleServerlessRequest(req, res) {
   } catch (error) {
     if (error instanceof NotFoundError) return sendError(res, cid, 404, "RESOURCE_NOT_FOUND", error.message);
     if (error instanceof ValidationError) return sendError(res, cid, 422, "VALIDATION_ERROR", error.message);
+    if (error instanceof ConfigurationError) return sendError(res, cid, 500, "SERVICE_MISCONFIGURED", error.message);
     console.error(error);
     // SS-5 — never leak SQL, stack traces, or connection strings to the caller.
     return sendError(res, cid, 500, "INTERNAL_ERROR", "Unexpected error.");

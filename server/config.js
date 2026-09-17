@@ -1,3 +1,5 @@
+import { ConfigurationError } from "./http/errors.js";
+
 const REQUIRED = [
   "GATEWAY_URL",
   "PUBLIC_URL",
@@ -9,19 +11,26 @@ const REQUIRED = [
   "DB_PASSWORD",
 ];
 
-for (const key of REQUIRED) {
-  if (!process.env[key]) {
-    console.error(`Missing required environment variable: ${key} (see .env.example)`);
-    process.exit(1);
+// Never throws at import time — a Vercel serverless function has no boot
+// phase separate from the first request, so a throw here would crash the
+// whole function before requestHandler.js's own try/catch ever runs,
+// producing Vercel's generic HTML error page instead of our JSON envelope.
+// index.js (the persistent-server entry point) calls this explicitly and
+// exits the process itself, which is where "fail loud at boot" (SS-20)
+// actually belongs for that shape.
+export function assertRequiredEnv() {
+  const missing = REQUIRED.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    throw new ConfigurationError(`Missing required environment variable(s): ${missing.join(", ")} (see .env.example)`);
   }
 }
 
 export const SERVICE_ID = process.env.SERVICE_ID ?? "rizurf-employees-api";
 export const VERSION = "1.0.0";
 export const PORT = Number(process.env.PORT ?? 3420);
-export const GATEWAY_URL = process.env.GATEWAY_URL.replace(/\/+$/, "");
-export const PUBLIC_URL = process.env.PUBLIC_URL.replace(/\/+$/, "");
-export const SESSION_SECRET = process.env.SESSION_SECRET;
+export const GATEWAY_URL = (process.env.GATEWAY_URL ?? "").replace(/\/+$/, "");
+export const PUBLIC_URL = (process.env.PUBLIC_URL ?? "").replace(/\/+$/, "");
+export const SESSION_SECRET = process.env.SESSION_SECRET ?? "";
 export const SESSION_TTL_SECONDS = 15 * 60;
 
 export const DB = {

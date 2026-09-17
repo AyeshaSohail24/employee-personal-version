@@ -1,90 +1,107 @@
-# Deploying `/server` (Vercel)
+# Deploying the backend on Vercel (same project as the frontend)
 
-The gateway can't connect to this app yet because `/server` has never run
-anywhere public — only on `127.0.0.1` locally. This is the manual path to
-fix that on Vercel, matching where the gateway, Interns DB, and Departments
-DB already live. I can't create the Vercel project or click deploy for you;
-this is what to do once you're in the dashboard.
+The gateway can't connect to this app yet because the backend has never run
+anywhere public — only on `127.0.0.1` locally. This app's frontend and
+backend now live in **one Vercel project** — the existing
+`employee-personal-version` one you already have — matching how the other
+microapps in this ecosystem are set up. No second project needed.
 
-## Why this needed code changes, not just a deploy
+## How one deployment serves both
 
-`server/index.js` used to be a persistent `http.createServer().listen()`
-process — that shape doesn't run on Vercel, which invokes a stateless
-function per request instead. The fix (already done, on `employees-final`):
+The frontend has page routes at `/employees`, `/upcoming`, `/onboarding`,
+etc. (`src/router/index.jsx`), and the backend API lives at those **same**
+root-level paths (`RIZURF_API_TEMPLATE.md`'s convention — plural nouns at
+the root, no `/api/` prefix, matching Interns DB and Departments DB). Same
+path, two different meanings depending on who's asking — so `vercel.json`
+disambiguates using the one signal that reliably tells them apart, the
+`Accept` header:
 
-- `server/requestHandler.js` — all the actual request logic, extracted so
-  both entry points below can share it.
-- `server/index.js` — now just wraps `handleServerlessRequest` in
-  `http.createServer()`, for local dev or any host that wants a persistent
-  process (Railway, Render, a VPS).
-- `server/api/handler.js` — the Vercel entry point. Same
+```json
+{
+  "rewrites": [
+    { "source": "/(.*)", "has": [{ "type": "header", "key": "accept", "value": "^text/html.*" }], "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/api/handler" }
+  ]
+}
+```
+
+- A real browser navigating or hard-refreshing any page sends
+  `Accept: text/html,...` first → served `index.html`, React Router takes
+  over client-side.
+- Everything else — `curl` (`Accept: */*`), `fetch()`, the gateway's
+  conformance checker, another service's `client_credentials` call — has no
+  `text/html` preference → routed to `api/handler.js`, our actual API.
+- A real static file (`/assets/index-abc123.js`, favicon, etc.) is served
+  directly by Vercel before either rewrite rule is ever consulted, so this
+  doesn't interfere with the built JS/CSS bundles.
+
+This is Vercel-native routing (the `has` header condition) — I can't fully
+test it without an actual Vercel deploy, so **verify step 2 below for real**
+once this is live; if a browser somehow gets JSON instead of the app, or
+`curl` gets HTML, that's the thing to debug first.
+
+## What's in the repo now
+
+- `server/requestHandler.js` — all the actual request logic (auth, routing,
+  every endpoint), used by both entry points below.
+- `server/index.js` — wraps it in `http.createServer()`, for local dev
+  (`npm run server`) or any host that wants a persistent process.
+- `api/handler.js` (repo root) — the Vercel entry point. Same
   `handleServerlessRequest`, invoked per-request by Vercel's Node runtime.
-- `server/vercel.json` — rewrites every path to `/api/handler`, so the
-  public API surface stays at the root (`/health`, `/employees`, ...) rather
-  than under `/api/*` — matching Interns DB and Departments DB's own shape.
-- `server/package.json` — its own dependency list (`mysql2`, `nodemailer`),
-  separate from the root one, since this becomes its own Vercel project
-  rooted at `server/`.
+- `vercel.json` (repo root) — the header-based routing above.
 
 ## Steps
 
-1. **New Vercel project** → **Import Git Repository** → same repo
-   (`AyeshaSohail24/employee-personal-version`), branch `employees-final`.
-   This is a **second, separate** Vercel project from the existing
-   `employee-personal-version` one (which only serves the frontend) — don't
-   reuse that project.
-2. In the import screen, set **Root Directory** to `server`, and
-   **Framework Preset** to **Other**. Leave Build Command empty (nothing to
-   build — it's plain Node).
-3. **Environment Variables** — same list as before, minus anything
-   host-specific:
+1. **Set environment variables** on the existing `employee-personal-version`
+   Vercel project (Settings → Environment Variables) — everything from
+   `.env.example`, with real values from local `.env`:
 
    | Variable | Value |
    |---|---|
    | `SERVICE_ID` | `rizurf-employees-api` |
    | `GATEWAY_URL` | `https://web-omega-two-47.vercel.app` |
-   | `PUBLIC_URL` | the `*.vercel.app` URL this project gets assigned (fill in **after** first deploy, then redeploy) |
+   | `PUBLIC_URL` | `https://employee-personal-version.vercel.app` (the existing domain — same one, now serving both) |
    | `SESSION_SECRET` | same as local `.env`, or a fresh one |
-   | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | same values as local `.env` (the VPS MySQL instance — see below) |
+   | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | same values as local `.env` (the VPS MySQL instance) |
    | `APPLICANTS_*` / `INTERNS_*` / `DEPARTMENTS_*` | same values as local `.env` |
    | `MAIL_*` | same values as local `.env` |
 
-   Vercel injects `PORT` itself for its runtime, and `server/config.js`
-   doesn't read it directly anyway (Vercel's Node functions don't bind a
-   port the way `index.js` does locally) — nothing to set there.
+   A missing variable here no longer crashes the deployment (see the
+   `assertRequiredEnv()` fix) — it returns a clear JSON `500` naming exactly
+   which one, instead of Vercel's own HTML error page.
 
-4. **Verify exactly like `RIZURF_API_TEMPLATE.md` §5 says to**, against the
-   real Vercel URL:
+2. **Push to `employees-final`** (already done as of this change) and let
+   Vercel redeploy, then verify **both** halves work — this is the part that
+   actually confirms the `Accept`-header routing is doing its job:
    ```bash
-   curl -i https://<your-project>.vercel.app/health
-   curl -i https://<your-project>.vercel.app/openapi.json
-   curl https://<your-project>.vercel.app/nonexistent
+   curl -i https://employee-personal-version.vercel.app/health
+   curl -i https://employee-personal-version.vercel.app/openapi.json
+   curl https://employee-personal-version.vercel.app/nonexistent
    ```
-   First two must be `200`. Third must be the JSON error envelope (via the
-   SPA-fallback redirect for a GET — see the note in `requestHandler.js` —
-   or a real `404` for a non-`GET`), not HTML.
+   First two must be `200` JSON. Third must be the JSON error envelope, not
+   HTML. Then open `https://employee-personal-version.vercel.app/dashboard`
+   in an actual browser — it should still load the app normally, not JSON.
 
-5. **Connect it to the gateway**: gateway console → Connect a service →
-   paste the Vercel URL from step 4 (not the frontend's URL — that one only
-   serves the SPA). Run **Conformance** there before requesting approval.
+3. **Connect it to the gateway**: gateway console → Connect a service →
+   paste `https://employee-personal-version.vercel.app`. Run
+   **Conformance** there before requesting approval.
 
 ## Database: a VPS-hosted MySQL instance
 
-Resolved — `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` in `.env`
-point at a real, network-reachable MySQL instance (`db.crevascale.com`),
-not `localhost`. This is the "traditional MySQL host reachable from Vercel"
-option from the tradeoff below: every `FOREIGN KEY` in
-`db/schema_employees.sql` stays exactly as written — no PlanetScale
-migration, no schema rework. The one caveat that comes with this choice is
-connection pooling under real concurrent load (a traditional pool doesn't
-behave identically across serverless invocations the way it does in a
-persistent process) — manageable at this app's scale with `db/pool.js`'s
-current `connectionLimit: 10`, worth revisiting only if usage grows a lot.
+`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` point at a real,
+network-reachable MySQL instance (`db.crevascale.com`), not `localhost` —
+every `FOREIGN KEY` in `db/schema_employees.sql` stays exactly as written,
+no PlanetScale migration needed. The one caveat is connection pooling under
+real concurrent load (a traditional pool doesn't behave identically across
+serverless invocations the way it does in a persistent process) —
+manageable at this app's scale with `db/pool.js`'s current
+`connectionLimit: 10`.
 
-Verified end-to-end against it locally: `/health`'s real `SELECT 1` ping,
-the dynamic `getEmployeeTypeByCode()` lookup, and a live Departments API
-pull all work identically to the local MySQL setup — same `DB_*` variables
-are what the Vercel deployment above should use, unchanged.
+**Known issue, unrelated to the deployment work above:** this VPS database
+is currently timing out on connection attempts (`connect ETIMEDOUT`),
+consistently, not a one-off blip — worth checking whether the VPS is up or
+its firewall/allowlist changed before assuming a Vercel deploy will reach
+it either.
 
 ## After this works
 

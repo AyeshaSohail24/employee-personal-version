@@ -2,8 +2,15 @@
 // Render, a VPS). For Vercel, see api/handler.js — same request logic,
 // different entry point, shared via requestHandler.js.
 import http from "node:http";
-import { PORT, SERVICE_ID } from "./config.js";
+import { PORT, SERVICE_ID, assertRequiredEnv } from "./config.js";
 import { handleServerlessRequest } from "./requestHandler.js";
+
+try {
+  assertRequiredEnv();
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
 http.createServer(handleServerlessRequest).listen(PORT, () => {
   console.log(`${SERVICE_ID} listening on http://127.0.0.1:${PORT}`);

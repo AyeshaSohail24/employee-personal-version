@@ -1,8 +1,12 @@
-// RIZURF_API_TEMPLATE.md SS-5 — the error envelope, and the two error types
-// that map onto it (a route handler throws one of these, index.js catches
-// and renders 404/422; anything else falls through to 500).
+// RIZURF_API_TEMPLATE.md SS-5 — the error envelope, and the error types that
+// map onto it (a route handler throws one of these, requestHandler.js
+// catches and renders the matching status; anything else falls through to a
+// generic 500 so nothing unexpected leaks).
 export class NotFoundError extends Error {}
 export class ValidationError extends Error {}
+// A missing/malformed env var — its message names only env var KEYS, never
+// values, so unlike a generic error it's safe (and useful) to send as-is.
+export class ConfigurationError extends Error {}
 
 const CORRELATION_HEADER = "x-correlation-id";
 const NO_STORE = {
