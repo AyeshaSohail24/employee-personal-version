@@ -127,7 +127,9 @@ export const openapi = {
           steps: ["GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "POST /applicants/{applicantId}/convert"],
         },
       ],
-      related_services: ["applicants-api", "interns-api", "departments-api"],
+      // Real ids confirmed against each service's own /health — except
+      // applicants-api, which is not live yet (no confirmed id to use).
+      related_services: ["applicants-api", "intern-database", "department-api"],
     },
   },
   components: {
