@@ -4,6 +4,11 @@ import { GATEWAY_URL, PUBLIC_URL } from "../config.js";
 import { verifyToken } from "./verifyToken.js";
 
 export const CALLBACK_PATH = "/auth/callback";
+// The frontend's actual "go sign in" trigger — a real top-level navigation
+// here always has to reach this backend (see vercel.json), since Vercel's
+// own Accept: text/html rewrite would otherwise just serve the SPA shell
+// again instead of ever redirecting anywhere.
+export const LOGIN_PATH = "/auth/login";
 
 export function authorizeRedirectUrl() {
   const redirectUri = `${PUBLIC_URL}${CALLBACK_PATH}`;

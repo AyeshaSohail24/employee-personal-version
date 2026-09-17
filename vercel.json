@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/auth/login", "destination": "/api/handler" },
+    { "source": "/auth/callback", "destination": "/api/handler" },
     {
       "source": "/(.*)",
       "has": [{ "type": "header", "key": "accept", "value": "^text/html.*" }],

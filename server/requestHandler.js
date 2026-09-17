@@ -9,7 +9,7 @@ import { openapi, requiredScopesFor, isPublicRoute } from "./openapi.js";
 import { buildRouteMatcher } from "./http/router.js";
 import { sendError, NotFoundError, ValidationError, ConfigurationError, CORRELATION_HEADER, NO_STORE } from "./http/errors.js";
 import { authenticate, principalMayWrite } from "./http/authenticate.js";
-import { authorizeRedirectUrl, exchangeCodeForIdentity, CALLBACK_PATH } from "./auth/signin.js";
+import { authorizeRedirectUrl, exchangeCodeForIdentity, CALLBACK_PATH, LOGIN_PATH } from "./auth/signin.js";
 import { serializeSessionCookie, readSession } from "./auth/session.js";
 import { gatewaySessionIsLive } from "./auth/introspect.js";
 import { distExists, serveIndexHtml, serveStaticAsset } from "./http/staticSite.js";
@@ -71,6 +71,14 @@ export async function handleServerlessRequest(req, res) {
 }
 
 async function handleRequest(req, res, { cid, url, pathname, method }) {
+  // MICROAPP_AUTH.md §4 step 1 — the frontend's actual "go sign in" trigger
+  // (see LOGIN_PATH's comment in auth/signin.js for why this needs to be an
+  // explicit route rather than the generic unmatched-route fallback below).
+  if (pathname === LOGIN_PATH && method === "GET") {
+    res.writeHead(302, { location: authorizeRedirectUrl(), ...NO_STORE });
+    return res.end();
+  }
+
   // MICROAPP_AUTH.md §4 step 4 — the code exchange, server-to-server only.
   if (pathname === CALLBACK_PATH && method === "GET") {
     const code = url.searchParams.get("code");
@@ -125,10 +133,12 @@ async function handleRequest(req, res, { cid, url, pathname, method }) {
     return sendError(res, cid, 405, "METHOD_NOT_ALLOWED", `${method} is not allowed on ${pathname}.`);
   }
 
+  let principal = null;
   if (!isPublicRoute(routeKey)) {
     const requiredScopes = requiredScopesFor(routeKey, method);
     const auth = await authenticate(req, requiredScopes);
     if (!auth.ok) return sendError(res, cid, auth.status, auth.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED", auth.message);
+    principal = auth.principal;
 
     const isWrite = method !== "GET";
     if (isWrite && !principalMayWrite(auth.principal)) {
@@ -139,5 +149,5 @@ async function handleRequest(req, res, { cid, url, pathname, method }) {
   const handler = routes[routeKey]?.[method.toLowerCase()];
   if (!handler) return sendError(res, cid, 501, "NOT_IMPLEMENTED", "Not implemented.");
 
-  await handler(req, res, { cid, url, params });
+  await handler(req, res, { cid, url, params, principal });
 }

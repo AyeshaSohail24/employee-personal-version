@@ -170,6 +170,19 @@ export const openapi = {
         },
       },
     },
+    "/session": {
+      get: {
+        summary: "Who the current session belongs to.",
+        security: scoped("session:read"),
+        "x-rizurf": {
+          name: "Get Session", purpose: "Check whether the caller is signed in, and as whom",
+          use_when: ["The SPA needs to know on load whether to redirect to sign-in"],
+          do_not_use_when: ["Calling from another service — this is for the browser's own session cookie, not a client_credentials caller"],
+          inputs: [], outputs: ["sub", "email", "name", "role"], requires: [],
+          related_endpoints: ["GET /health"], tags: ["session", "auth", "who am i", "sign in"],
+        },
+      },
+    },
 
     "/employees": {
       get: {

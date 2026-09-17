@@ -1,4 +1,5 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
+import { apiClient } from './apiClient.js';
 import {
   resolveHydratedEmployee,
   validateEmployeeCreation,
@@ -7,6 +8,26 @@ import {
   compareEmployeeIdNumeric,
 } from '../domain/employmentDomain.js';
 import { filterEmployeesByStatus } from '../domain/lifecycleDomain.js';
+
+// create()/createDirectoryEmployee() below still write to the mock
+// localStorage db (not yet rewired to the real API) — this keeps their
+// return value self-contained instead of routing through getById(), which
+// now fetches the real backend and would never find a mock-generated id.
+function hydrateFromMockDb(db, employeeId) {
+  const emp = (db.employees || []).find((e) => e.id === employeeId);
+  if (!emp) return null;
+  return resolveHydratedEmployee(
+    emp,
+    db.employmentRecords,
+    db.departments,
+    db.positions,
+    db.locations,
+    db.schedules,
+    db.employees,
+    db.employeeTypes,
+    db.employeeTags
+  );
+}
 
 /**
  * Service providing asynchronous data access and directory querying for Employee entities.
@@ -18,54 +39,27 @@ export const employeeService = {
    * @param {boolean} [options.hydrate=true]
    * @returns {Promise<Array<Object>>}
    */
-  async getAll({ hydrate = true } = {}) {
-    const db = loadDatabase();
-    const employees = db.employees || [];
-
-    if (!hydrate) {
-      return employees;
-    }
-
-    return employees.map((emp) =>
-      resolveHydratedEmployee(
-        emp,
-        db.employmentRecords,
-        db.departments,
-        db.positions,
-        db.locations,
-        db.schedules,
-        db.employees,
-        db.employeeTypes,
-        db.employeeTags
-      )
-    );
+  async getAll() {
+    // The API always returns pre-hydrated employees (server/db/employeeHydration.js
+    // mirrors this same shape server-side) — `hydrate: false` isn't a real
+    // option against the real backend, unlike the old localStorage version.
+    const { employees } = await apiClient.get('/employees?limit=200');
+    return employees;
   },
 
   /**
    * Retrieves a single employee by ID.
    * @param {string} id
-   * @param {Object} [options]
-   * @param {boolean} [options.hydrate=true]
    * @returns {Promise<Object|null>}
    */
-  async getById(id, { hydrate = true } = {}) {
-    const db = loadDatabase();
-    const emp = (db.employees || []).find((e) => e.id === id);
-    if (!emp) return null;
-
-    if (!hydrate) return emp;
-
-    return resolveHydratedEmployee(
-      emp,
-      db.employmentRecords,
-      db.departments,
-      db.positions,
-      db.locations,
-      db.schedules,
-      db.employees,
-      db.employeeTypes,
-      db.employeeTags
-    );
+  async getById(id) {
+    try {
+      const { employee } = await apiClient.get(`/employees/${id}`);
+      return employee;
+    } catch (error) {
+      if (error?.status === 404) return null;
+      throw error;
+    }
   },
 
   /**
@@ -350,7 +344,7 @@ export const employeeService = {
     }
 
     saveDatabase(db);
-    return this.getById(newId);
+    return hydrateFromMockDb(db, newId);
   },
 
   /**
@@ -433,7 +427,7 @@ export const employeeService = {
     db.employmentRecords = [...(db.employmentRecords || []), newRec];
     saveDatabase(db);
 
-    return this.getById(newId);
+    return hydrateFromMockDb(db, newId);
   },
 
   /**
