@@ -38,6 +38,7 @@ export const createSchedule = (data) =>
   });
 
 export const listEmployeeTypes = () => listRows("employee_types", { orderBy: "id", orderDir: "ASC" });
+export const getEmployeeTypeByCode = (code) => getRow("employee_types", code, "code");
 export const listDocumentTypes = () => listRows("document_types", { orderBy: "id", orderDir: "ASC" });
 
 // Read-through to the external Department directory / Interns role catalog —
