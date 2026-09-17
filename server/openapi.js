@@ -51,7 +51,7 @@ export const openapi = {
         {
           name: "Run Onboarding",
           icon: "🚀",
-          description: "Launch and track an onboarding checklist for a new employee.",
+          description: "Launch and track an onboarding checklist for a new employee — and, for an intern, see their live Interns DB record alongside it.",
           does: ["List onboarding templates", "Create a template", "Launch a plan for an employee", "Mark a task done or reopen it"],
           best_for: "HR bringing a new hire through their first-days checklist.",
           endpoints: ["GET /onboarding/templates", "POST /onboarding/templates", "GET /onboarding/templates/{id}", "PATCH /onboarding/templates/{id}", "POST /onboarding/instances", "GET /onboarding/instances/{id}", "PATCH /onboarding/task-instances/{id}"],
@@ -59,8 +59,8 @@ export const openapi = {
         {
           name: "Run Offboarding",
           icon: "🚪",
-          description: "Launch and track a departure checklist for a leaving employee.",
-          does: ["List offboarding templates", "Create a template", "Launch a plan for an employee", "Mark a task done or reopen it"],
+          description: "Launch and track a departure checklist for a leaving employee — for an intern, this also sets their real internship_end_date in the Interns DB.",
+          does: ["List offboarding templates", "Create a template", "Launch a plan for an employee (syncs the departure date to the Interns DB for an intern)", "Mark a task done or reopen it"],
           best_for: "HR taking a departing employee through clearance.",
           endpoints: ["GET /offboarding/templates", "POST /offboarding/templates", "GET /offboarding/templates/{id}", "PATCH /offboarding/templates/{id}", "POST /offboarding/instances", "GET /offboarding/instances/{id}", "PATCH /offboarding/task-instances/{id}"],
         },
@@ -307,7 +307,7 @@ export const openapi = {
     },
     "/onboarding/instances/{id}": {
       get: { summary: "Fetch one onboarding instance with its task instances.", security: scoped("onboarding:read"),
-        "x-rizurf": { name: "Get Onboarding Instance", purpose: "See a launched plan's progress", use_when: ["Viewing an employee's onboarding progress"], do_not_use_when: [], inputs: ["id"], outputs: ["instance", "taskInstances[]"], requires: [], related_endpoints: ["PATCH /onboarding/task-instances/{id}"], tags: ["onboarding", "progress"] } },
+        "x-rizurf": { name: "Get Onboarding Instance", purpose: "See a launched plan's progress, and the employee's live Interns DB record if they're an intern", use_when: ["Viewing an employee's onboarding progress"], do_not_use_when: [], inputs: ["id"], outputs: ["instance", "taskInstances[]", "internRecord"], requires: [], related_endpoints: ["PATCH /onboarding/task-instances/{id}"], tags: ["onboarding", "progress", "interns"] } },
     },
     "/onboarding/task-instances/{id}": {
       patch: { summary: "Mark an onboarding task done or reopen it.", security: scoped("onboarding:write"),
@@ -328,11 +328,11 @@ export const openapi = {
     },
     "/offboarding/instances": {
       post: { summary: "Launch an offboarding plan for an employee.", security: scoped("offboarding:write"),
-        "x-rizurf": { name: "Launch Offboarding", purpose: "Start a departing employee's clearance checklist", use_when: ["An employee's departure has been confirmed"], do_not_use_when: ["The employee already has an active offboarding plan"], inputs: ["planTemplateId", "employeeId", "anchorDate"], outputs: ["instance", "taskInstances[]"], requires: ["Employee exists", "Template exists"], related_endpoints: ["GET /offboarding/instances/{id}", "PATCH /offboarding/task-instances/{id}"], tags: ["offboarding", "launch", "departure"] } },
+        "x-rizurf": { name: "Launch Offboarding", purpose: "Start a departing employee's clearance checklist", use_when: ["An employee's departure has been confirmed"], do_not_use_when: ["The employee already has an active offboarding plan"], inputs: ["planTemplateId", "employeeId", "anchorDate"], outputs: ["instance", "taskInstances[]"], requires: ["Employee exists", "Template exists", "For an intern (intern_external_id set): sets internship_end_date to anchorDate in the Interns DB, logged to audit_logs either way — see server/db/internSync.js"], related_endpoints: ["GET /offboarding/instances/{id}", "PATCH /offboarding/task-instances/{id}", "GET /audit-logs"], tags: ["offboarding", "launch", "departure", "interns"] } },
     },
     "/offboarding/instances/{id}": {
       get: { summary: "Fetch one offboarding instance with its task instances.", security: scoped("offboarding:read"),
-        "x-rizurf": { name: "Get Offboarding Instance", purpose: "See a launched plan's progress", use_when: ["Viewing an employee's offboarding progress"], do_not_use_when: [], inputs: ["id"], outputs: ["instance", "taskInstances[]"], requires: [], related_endpoints: ["PATCH /offboarding/task-instances/{id}"], tags: ["offboarding", "progress"] } },
+        "x-rizurf": { name: "Get Offboarding Instance", purpose: "See a launched plan's progress, and the employee's live Interns DB record if they're an intern", use_when: ["Viewing an employee's offboarding progress"], do_not_use_when: [], inputs: ["id"], outputs: ["instance", "taskInstances[]", "internRecord"], requires: [], related_endpoints: ["PATCH /offboarding/task-instances/{id}"], tags: ["offboarding", "progress", "interns"] } },
     },
     "/offboarding/task-instances/{id}": {
       patch: { summary: "Mark an offboarding task done or reopen it.", security: scoped("offboarding:write"),
