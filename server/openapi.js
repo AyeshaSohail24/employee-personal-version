@@ -83,8 +83,8 @@ export const openapi = {
         {
           name: "Message Candidates",
           icon: "✉️",
-          description: "The offer-email conversation with a shortlisted applicant, and the reusable drafts behind it.",
-          does: ["Read a candidate's message thread", "Send a message to a candidate", "List, create and edit email drafts"],
+          description: "The conversation with a shortlisted applicant — over email or WhatsApp — and the reusable offer drafts behind it.",
+          does: ["Read a candidate's message thread", "Send a message to a candidate on email or WhatsApp", "List, create and edit email drafts"],
           best_for: "HR corresponding with candidates in the Upcoming pipeline before they're hired.",
           endpoints: ["GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "GET /email-templates", "POST /email-templates", "PATCH /email-templates/{id}"],
         },
@@ -146,8 +146,30 @@ export const openapi = {
     },
   },
   paths: {
-    "/health": { get: { summary: "Liveness and dependency checks" } },
-    "/openapi.json": { get: { summary: "This document" } },
+    "/health": {
+      get: {
+        summary: "Liveness and dependency checks",
+        "x-rizurf": {
+          name: "Health Check", purpose: "Report whether this service and its database are reachable",
+          use_when: ["Monitoring the service", "Before routing traffic to it"],
+          do_not_use_when: ["You need actual HR data — use the relevant resource endpoint instead"],
+          inputs: [], outputs: ["status", "service", "version", "uptime_seconds", "checks"], requires: [],
+          related_endpoints: ["GET /openapi.json"], tags: ["health", "status", "liveness", "monitoring", "uptime"],
+        },
+      },
+    },
+    "/openapi.json": {
+      get: {
+        summary: "This document",
+        "x-rizurf": {
+          name: "API Document", purpose: "Describe every endpoint this service exposes",
+          use_when: ["Discovering the API", "Generating a client", "Gateway conformance checks"],
+          do_not_use_when: ["You need actual HR data — use the relevant resource endpoint instead"],
+          inputs: [], outputs: ["openapi", "info", "paths"], requires: [],
+          related_endpoints: ["GET /health"], tags: ["openapi", "schema", "spec", "discovery", "docs"],
+        },
+      },
+    },
 
     "/employees": {
       get: {
@@ -349,7 +371,7 @@ export const openapi = {
       get: { summary: "Read a candidate's full message thread.", security: scoped("candidate-messaging:read"),
         "x-rizurf": { name: "Get Candidate Thread", purpose: "Read the sent/received messages for one applicant", use_when: ["Opening a candidate's conversation view"], do_not_use_when: [], inputs: ["applicantId"], outputs: ["messages[]"], requires: [], related_endpoints: ["POST /candidates/{applicantId}/messages"], tags: ["candidate", "messages", "email", "thread"] } },
       post: { summary: "Send a message to a candidate.", security: scoped("candidate-messaging:write"),
-        "x-rizurf": { name: "Send Candidate Message", purpose: "Email a shortlisted applicant", use_when: ["Replying to a candidate", "Sending an offer"], do_not_use_when: [], inputs: ["applicantId", "subject", "body"], outputs: ["message"], requires: [], related_endpoints: ["GET /email-templates"], tags: ["candidate", "email", "send", "offer"] } },
+        "x-rizurf": { name: "Send Candidate Message", purpose: "Message a shortlisted applicant on email or WhatsApp", use_when: ["Replying to a candidate", "Sending an offer"], do_not_use_when: [], inputs: ["applicantId", "channel", "toEmail", "ccEmail", "toPhone", "subject", "body"], outputs: ["message"], requires: ["No real email/WhatsApp provider is wired in yet — this records the message but doesn't deliver it"], related_endpoints: ["GET /email-templates"], tags: ["candidate", "email", "whatsapp", "send", "offer", "channel"] } },
     },
     "/email-templates": {
       get: { summary: "List offer-email drafts.", security: scoped("candidate-messaging:read"),
@@ -398,7 +420,7 @@ export const openapi = {
     },
 
     "/user-accounts": {
-      get: { summary: "List local user accounts.", security: scoped("admin:users"),
+      get: { summary: "List local user accounts.", security: scoped("users:read"),
         "x-rizurf": { name: "List User Accounts", purpose: "See local role assignments keyed to gateway identities", use_when: ["Reviewing who has HR/admin access in this app"], do_not_use_when: [], inputs: [], outputs: ["userAccounts[]"], requires: [], related_endpoints: [], tags: ["users", "accounts", "roles", "admin"] } },
     },
     "/audit-logs": {

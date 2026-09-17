@@ -35,7 +35,8 @@ export const routes = {
   },
   "/presence-overrides": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { overrides: await db.listPresenceOverrides(ctx.url.searchParams.get("employee_id") ?? undefined) });
+      const overrides = await db.listPresenceOverrides(ctx.url.searchParams.get("employee_id") ?? undefined, parseListQuery(ctx.url));
+      sendJson(res, ctx.cid, 200, { overrides });
     },
     async post(req, res, ctx) {
       const body = await readJsonBody(req);

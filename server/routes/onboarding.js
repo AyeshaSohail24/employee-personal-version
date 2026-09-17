@@ -1,12 +1,13 @@
 import * as db from "../db/onboarding.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
-import { readJsonBody } from "../http/util.js";
+import { parseListQuery, readJsonBody } from "../http/util.js";
 
 export const routes = {
   "/onboarding/templates": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { templates: await db.listTemplates(ctx.url.searchParams.get("department_id") ?? undefined) });
+      const templates = await db.listTemplates(ctx.url.searchParams.get("department_id") ?? undefined, parseListQuery(ctx.url));
+      sendJson(res, ctx.cid, 200, { templates });
     },
     async post(req, res, ctx) {
       const body = await readJsonBody(req);

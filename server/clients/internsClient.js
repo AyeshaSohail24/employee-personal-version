@@ -6,15 +6,21 @@
 // /openapi.json — this client is the only place that shape is known.
 import { EXTERNAL_CLIENTS } from "../config.js";
 import { getServiceAccessToken } from "./gatewayClientCredentials.js";
+import { getCorrelationId } from "../http/requestContext.js";
 
 const cfg = EXTERNAL_CLIENTS.interns;
 
 async function call(path, { method = "GET", body, scope = "intern:read" } = {}) {
   if (!cfg.baseUrl) throw new Error("INTERNS_API_BASE_URL is not configured.");
   const token = await getServiceAccessToken({ ...cfg, scope });
+  const cid = getCorrelationId();
   const response = await fetch(`${cfg.baseUrl}${path}`, {
     method,
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      ...(cid ? { "x-correlation-id": cid } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {

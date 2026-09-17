@@ -2,8 +2,8 @@ import { listRows, getRow, insertRow, updateRow } from "./crud.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
 import { internsClient } from "../clients/internsClient.js";
 
-export const listPositions = (departmentId) =>
-  listRows("positions", { where: departmentId ? { department_id: departmentId } : {}, orderBy: "id", orderDir: "ASC" });
+export const listPositions = (departmentId, { limit, offset } = {}) =>
+  listRows("positions", { where: departmentId ? { department_id: departmentId } : {}, orderBy: "id", orderDir: "ASC", limit, offset });
 export const getPosition = (id) => getRow("positions", id);
 export const createPosition = (data) =>
   insertRow("positions", {
@@ -23,11 +23,11 @@ export function updatePosition(id, data) {
   return updateRow("positions", id, columns);
 }
 
-export const listLocations = () => listRows("locations", { orderBy: "id", orderDir: "ASC" });
+export const listLocations = ({ limit, offset } = {}) => listRows("locations", { orderBy: "id", orderDir: "ASC", limit, offset });
 export const createLocation = (data) =>
   insertRow("locations", { name: data.name, type: data.type ?? "Office", address: data.address ?? null });
 
-export const listSchedules = () => listRows("schedules", { orderBy: "id", orderDir: "ASC" });
+export const listSchedules = ({ limit, offset } = {}) => listRows("schedules", { orderBy: "id", orderDir: "ASC", limit, offset });
 export const createSchedule = (data) =>
   insertRow("schedules", {
     name: data.name,
@@ -37,8 +37,9 @@ export const createSchedule = (data) =>
     weekly_hours: data.weeklyHours ?? 40,
   });
 
-export const listEmployeeTypes = () => listRows("employee_types", { orderBy: "id", orderDir: "ASC" });
-export const listDocumentTypes = () => listRows("document_types", { orderBy: "id", orderDir: "ASC" });
+export const listEmployeeTypes = ({ limit, offset } = {}) => listRows("employee_types", { orderBy: "id", orderDir: "ASC", limit, offset });
+export const getEmployeeTypeByCode = (code) => getRow("employee_types", code, "code");
+export const listDocumentTypes = ({ limit, offset } = {}) => listRows("document_types", { orderBy: "id", orderDir: "ASC", limit, offset });
 
 // Read-through to the external Department directory / Interns role catalog —
 // nothing is cached or duplicated locally, so a rename there is instantly

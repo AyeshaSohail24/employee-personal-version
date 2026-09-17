@@ -555,24 +555,30 @@ CREATE TABLE IF NOT EXISTS `applicant_conversions` (
     INDEX `idx_applicant_conversions_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 25. CANDIDATE_MESSAGES — the full email thread (sent + received) for a
+-- 25. CANDIDATE_MESSAGES — the full message thread (sent + received) for a
 --     still-in-pipeline applicant, powering the Upcoming page's Candidate
 --     Thread view. `applicant_id` is a soft ref (no FK) into the Applicants
 --     DB — this table exists here because message history is specific to
 --     THIS app's outreach workflow, not something the Applicants DB models.
+--     `channel` picks which provider a "sent" message goes out through
+--     (server/messaging/*) — `to_email`/`cc_email` apply to 'email',
+--     `to_phone` to 'whatsapp'. No real provider is wired in yet either way.
 CREATE TABLE IF NOT EXISTS `candidate_messages` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `applicant_id` INT NOT NULL, -- soft ref -> applicants.id (Applicants DB, external)
     `direction` VARCHAR(10) NOT NULL, -- sent | received
+    `channel` VARCHAR(20) NOT NULL DEFAULT 'email', -- email | whatsapp
     `to_email` VARCHAR(255) NULL,
     `cc_email` VARCHAR(255) NULL,
+    `to_phone` VARCHAR(50) NULL,
     `subject` VARCHAR(500) NOT NULL DEFAULT '',
     `body` LONGTEXT NULL,
     `is_seen` BOOLEAN NOT NULL DEFAULT FALSE, -- relevant for direction = 'received' only
     `sent_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX `idx_candidate_messages_applicant` (`applicant_id`),
-    INDEX `idx_candidate_messages_unseen` (`applicant_id`, `direction`, `is_seen`)
+    INDEX `idx_candidate_messages_unseen` (`applicant_id`, `direction`, `is_seen`),
+    INDEX `idx_candidate_messages_channel` (`channel`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 26. CANDIDATE_DOCUMENTS — the file-gathering step of the Upcoming pipeline:

@@ -5,10 +5,9 @@
 // a silent guess about what already happened.
 import { insertRow, updateRow, getRow } from "./crud.js";
 import { createEmployee, updateEmployee } from "./employees.js";
+import { getEmployeeTypeByCode } from "./orgStructure.js";
 import { applicantsClient } from "../clients/applicantsClient.js";
 import { internsClient } from "../clients/internsClient.js";
-
-const INTERN_EMPLOYEE_TYPE_ID = 3; // seeded as 'INTERN' in db/schema_employees.sql
 
 // The Interns API requires several fields (ic_passport_number, department_id,
 // role_id, mode, allowance, internship_end_date) that the Applicants DB's own
@@ -29,13 +28,18 @@ export async function convertApplicant(applicantId, {
 }) {
   const applicant = await applicantsClient.getApplicant(applicantId);
 
+  // Resolved by code, not a hardcoded id — employee_types.id depends on seed
+  // insertion order, which is not something to assume stays fixed.
+  const internType = await getEmployeeTypeByCode("INTERN");
+  const resolvedEmployeeTypeId = employeeTypeId ?? internType.id;
+
   const employeeId = await createEmployee({
     employeeCode: `RZ-${Date.now()}`,
     firstName: applicant.first_name,
     lastName: applicant.last_name,
     workEmail: applicant.email,
     workPhone: applicant.phone,
-    employeeTypeId: employeeTypeId ?? INTERN_EMPLOYEE_TYPE_ID,
+    employeeTypeId: resolvedEmployeeTypeId,
     status: "Onboarding",
     startDate,
     sourceApplicantId: applicantId,
@@ -48,7 +52,7 @@ export async function convertApplicant(applicantId, {
     status: "pending",
   });
 
-  if ((employeeTypeId ?? INTERN_EMPLOYEE_TYPE_ID) === INTERN_EMPLOYEE_TYPE_ID) {
+  if (resolvedEmployeeTypeId === internType.id) {
     try {
       const intern = await internsClient.createIntern({
         first_name: applicant.first_name,

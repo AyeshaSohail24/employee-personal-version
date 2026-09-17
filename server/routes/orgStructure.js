@@ -1,12 +1,13 @@
 import * as db from "../db/orgStructure.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
-import { readJsonBody } from "../http/util.js";
+import { parseListQuery, readJsonBody } from "../http/util.js";
 
 export const routes = {
   "/positions": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { positions: await db.listPositions(ctx.url.searchParams.get("department_id") ?? undefined) });
+      const positions = await db.listPositions(ctx.url.searchParams.get("department_id") ?? undefined, parseListQuery(ctx.url));
+      sendJson(res, ctx.cid, 200, { positions });
     },
     async post(req, res, ctx) {
       const body = await readJsonBody(req);
@@ -33,7 +34,7 @@ export const routes = {
   },
   "/locations": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { locations: await db.listLocations() });
+      sendJson(res, ctx.cid, 200, { locations: await db.listLocations(parseListQuery(ctx.url)) });
     },
     async post(req, res, ctx) {
       const body = await readJsonBody(req);
@@ -43,7 +44,7 @@ export const routes = {
   },
   "/schedules": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { schedules: await db.listSchedules() });
+      sendJson(res, ctx.cid, 200, { schedules: await db.listSchedules(parseListQuery(ctx.url)) });
     },
     async post(req, res, ctx) {
       const body = await readJsonBody(req);
@@ -53,14 +54,18 @@ export const routes = {
   },
   "/employee-types": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { employeeTypes: await db.listEmployeeTypes() });
+      sendJson(res, ctx.cid, 200, { employeeTypes: await db.listEmployeeTypes(parseListQuery(ctx.url)) });
     },
   },
   "/document-types": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { documentTypes: await db.listDocumentTypes() });
+      sendJson(res, ctx.cid, 200, { documentTypes: await db.listDocumentTypes(parseListQuery(ctx.url)) });
     },
   },
+  // Departments/Roles are read-through proxies to external services whose
+  // own APIs don't support limit/offset (Departments takes `search`/`status`
+  // only; Roles has no paging params at all) — SS-12 pagination doesn't
+  // apply to something the upstream service itself doesn't paginate.
   "/departments": {
     async get(req, res, ctx) {
       sendJson(res, ctx.cid, 200, { departments: await db.listExternalDepartments(ctx.url.searchParams.get("search") ?? undefined) });

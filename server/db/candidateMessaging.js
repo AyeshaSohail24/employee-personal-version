@@ -1,21 +1,31 @@
 import { listRows, getRow, insertRow, updateRow } from "./crud.js";
+import { sendCandidateMessage } from "../messaging/index.js";
 
-export function listMessages(applicantId) {
-  return listRows("candidate_messages", { where: { applicant_id: applicantId }, orderBy: "sent_at", orderDir: "ASC", limit: 500 });
+export function listMessages(applicantId, { limit, offset } = {}) {
+  return listRows("candidate_messages", { where: { applicant_id: applicantId }, orderBy: "sent_at", orderDir: "ASC", limit, offset });
 }
 
-export const createMessage = (applicantId, data) =>
-  insertRow("candidate_messages", {
+export async function createMessage(applicantId, data) {
+  const channel = data.channel ?? "email";
+  const id = await insertRow("candidate_messages", {
     applicant_id: applicantId,
     direction: "sent",
+    channel,
     to_email: data.toEmail ?? null,
-    subject: data.subject,
+    cc_email: data.ccEmail ?? null,
+    to_phone: data.toPhone ?? null,
+    subject: data.subject ?? "",
     body: data.body ?? null,
   });
+  // No real provider is wired in yet (server/messaging/*) — this call
+  // currently just logs what would have been sent.
+  await sendCandidateMessage({ channel, toEmail: data.toEmail, ccEmail: data.ccEmail, toPhone: data.toPhone, subject: data.subject, body: data.body });
+  return id;
+}
 
 export const getMessage = (id) => getRow("candidate_messages", id);
 
-export const listEmailTemplates = () => listRows("email_templates", { orderBy: "name", orderDir: "ASC", limit: 200 });
+export const listEmailTemplates = ({ limit, offset } = {}) => listRows("email_templates", { orderBy: "name", orderDir: "ASC", limit, offset });
 export const getEmailTemplate = (id) => getRow("email_templates", id);
 
 export const createEmailTemplate = (data) =>
@@ -39,8 +49,8 @@ export function updateEmailTemplate(id, data) {
 // The file-gathering step of the Upcoming pipeline — see candidate_documents'
 // comment in db/schema_employees.sql for why this is our own table rather
 // than a field pushed back into the Applicants DB.
-export function listDocuments(applicantId) {
-  return listRows("candidate_documents", { where: { applicant_id: applicantId }, orderBy: "requested_at", orderDir: "ASC" });
+export function listDocuments(applicantId, { limit, offset } = {}) {
+  return listRows("candidate_documents", { where: { applicant_id: applicantId }, orderBy: "requested_at", orderDir: "ASC", limit, offset });
 }
 
 export const getDocument = (id) => getRow("candidate_documents", id);

@@ -49,7 +49,8 @@ export const routes = {
   },
   "/notifications": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { notifications: await db.listNotifications(parseBoolParam(ctx.url.searchParams.get("is_read"))) });
+      const notifications = await db.listNotifications(parseBoolParam(ctx.url.searchParams.get("is_read")), parseListQuery(ctx.url));
+      sendJson(res, ctx.cid, 200, { notifications });
     },
   },
   "/notifications/{id}": {

@@ -26,8 +26,8 @@ export function updateLeave(id, data) {
   return updateRow("leaves", id, columns);
 }
 
-export function listPresenceOverrides(employeeId) {
-  return listRows("presence_overrides", { where: employeeId ? { employee_id: employeeId } : {} });
+export function listPresenceOverrides(employeeId, { limit, offset } = {}) {
+  return listRows("presence_overrides", { where: employeeId ? { employee_id: employeeId } : {}, limit, offset });
 }
 
 export const createPresenceOverride = (data) =>
