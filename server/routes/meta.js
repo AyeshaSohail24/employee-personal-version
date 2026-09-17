@@ -35,4 +35,19 @@ export const routes = {
       sendJson(res, ctx.cid, 200, openapi);
     },
   },
+  // Not part of the public API catalog (SS-8) in spirit — it's how the SPA
+  // itself finds out whether its session is still live, since Vercel's own
+  // static rewrite for a real page load bypasses the backend entirely (see
+  // requestHandler.js's comment on the acceptsHtml branch). A 401 here is
+  // the frontend's actual signal to redirect to sign-in.
+  "/session": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, {
+        sub: ctx.principal.sub,
+        email: ctx.principal.email ?? null,
+        name: ctx.principal.name ?? null,
+        role: ctx.principal.role ?? null,
+      });
+    },
+  },
 };
