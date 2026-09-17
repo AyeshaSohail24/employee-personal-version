@@ -19,6 +19,7 @@ import {
   getTodayLocalDateString,
   addDaysToLocalDate,
   getDaysDifference,
+  formatCompactDate,
 } from '../utils/dateUtils.js';
 import { employeeService } from './employeeService.js';
 import { upcomingCandidateService } from './upcomingCandidateService.js';
@@ -13740,6 +13741,268 @@ export async function verifyStage18() {
     }
 
     resetDatabase();
+    // ========================================================================================
+    // Personnel -> Timeline View — Dynamic Date Range, Start/End Labels, Customizable Department
+    // Colors (small targeted task: no redesign of List/Card, no change to Personnel filtering
+    // logic — Timeline still renders exactly the shared, already-filtered `employees` array.)
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const timelineSrcRange = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const deptColorsModalSrc = fs.readFileSync(path.resolve('./src/components/employees/DepartmentColorsModal.jsx'), 'utf-8');
+      const dateUtilsSrcRange = fs.readFileSync(path.resolve('./src/utils/dateUtils.js'), 'utf-8');
+      const toolbarSrcRange = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+      const containerSrcRange = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const departmentServiceSrcRange = fs.readFileSync(path.resolve('./src/services/departmentService.js'), 'utf-8');
+
+      // 1558. NEW — The domain is EXACT: no padding, no snapping to a calendar month boundary.
+      // Reproduces the task's own worked example (Jun 15 / Jun 29 / Jul 27 starts, Sep 15 / Oct 16
+      // / Nov 13 ends) and expects the range to be precisely Jun 15 -> Nov 13, not a padded/
+      // snapped Jun 1 -> Nov 30 (or wider) range the previous implementation would have produced.
+      {
+        const workedExample = calculateTimelineRange([
+          { startDate: '2026-06-15', contractEndDate: '2026-09-15' },
+          { startDate: '2026-06-29', contractEndDate: '2026-10-16' },
+          { startDate: '2026-07-27', contractEndDate: '2026-11-13' },
+        ], '2026-09-17');
+        assert(
+          workedExample.rangeStart === '2026-06-15' && workedExample.rangeEnd === '2026-11-13',
+          `1558. NEW — calculateTimelineRange() domain is EXACTLY earliest Start Date -> latest End Date with NO padding/month-snapping (expected 2026-06-15 -> 2026-11-13, found ${workedExample.rangeStart} -> ${workedExample.rangeEnd})`
+        );
+      }
+
+      // 1559. NEW — Filtered results affect the domain: a narrower (filtered) set of periods
+      // produces a narrower range than the full set — the range is recalculated from whatever is
+      // CURRENTLY passed in, never retained from a wider/previous call.
+      {
+        const fullSetRange = calculateTimelineRange([
+          { startDate: '2026-01-01', contractEndDate: '2026-12-31' },
+          { startDate: '2026-06-29', contractEndDate: '2026-10-16' },
+        ], '2026-09-17');
+        const filteredRange = calculateTimelineRange([
+          { startDate: '2026-06-29', contractEndDate: '2026-10-16' },
+        ], '2026-09-17');
+        assert(
+          fullSetRange.rangeStart === '2026-01-01' && fullSetRange.rangeEnd === '2026-12-31' &&
+          filteredRange.rangeStart === '2026-06-29' && filteredRange.rangeEnd === '2026-10-16' &&
+          filteredRange.rangeStart !== fullSetRange.rangeStart,
+          `1559. NEW — A filtered (narrower) set of periods produces a narrower, recalculated range (${filteredRange.rangeStart} -> ${filteredRange.rangeEnd}) rather than retaining the wider full-set range (${fullSetRange.rangeStart} -> ${fullSetRange.rangeEnd})`
+        );
+      }
+
+      // 1560. NEW — Single-person edge case: the range derives from that ONE person's own
+      // period, never a global/year-long fallback range.
+      {
+        const singlePersonRange = calculateTimelineRange([{ startDate: '2026-06-29', contractEndDate: '2026-10-16' }], '2026-09-17');
+        assert(
+          singlePersonRange.rangeStart === '2026-06-29' && singlePersonRange.rangeEnd === '2026-10-16',
+          `1560. NEW — A single displayed person's Timeline range is derived from their own actual period only (found ${singlePersonRange.rangeStart} -> ${singlePersonRange.rangeEnd})`
+        );
+      }
+
+      // 1561. NEW — Empty result safety: an empty personnel array never throws (no
+      // Math.min([])/Math.max([]) style crash) and returns null so the component can render its
+      // existing empty/no-range state instead of an invalid axis.
+      {
+        let threwOnEmpty = false;
+        let emptyResult;
+        try {
+          emptyResult = calculateTimelineRange([], '2026-09-17');
+        } catch (err) {
+          threwOnEmpty = true;
+        }
+        assert(!threwOnEmpty && emptyResult === null, '1561. NEW — calculateTimelineRange([]) never throws and returns null — no invalid/NaN date axis can ever be rendered for a zero-result filter');
+      }
+
+      // 1562. NEW — Same-date/zero-duration edge case: Start Date === End Date is handled safely
+      // (no divide-by-zero, no NaN), rendering a minimum-width marker without falsifying the
+      // dates, and the axis still shows at least one readable tick rather than going blank.
+      {
+        const zeroRange = calculateTimelineRange([{ startDate: '2026-06-29', contractEndDate: '2026-06-29' }], '2026-09-17');
+        const zeroBar = calculateTimelineBarPosition('2026-06-29', '2026-06-29', zeroRange.rangeStart, zeroRange.rangeEnd, '2026-09-17');
+        const zeroTicks = generateTimelineMonthTicks(zeroRange.rangeStart, zeroRange.rangeEnd);
+        assert(
+          zeroRange.rangeStart === '2026-06-29' && zeroRange.rangeEnd === '2026-06-29' &&
+          zeroBar !== null && !Number.isNaN(zeroBar.leftPercent) && !Number.isNaN(zeroBar.widthPercent) &&
+          zeroBar.widthPercent > 0 && zeroTicks.length >= 1,
+          `1562. NEW — Same Start/End Date renders a safe, non-NaN minimum-width marker (${JSON.stringify(zeroBar)}) and the axis still shows at least one tick (${JSON.stringify(zeroTicks)}) — never a divide-by-zero crash or a blank axis`
+        );
+      }
+
+      // 1563. NEW — Year-boundary handling: a period crossing a calendar year (Nov 2026 -> Feb
+      // 2027) computes a correct non-inverted range and a full-width (0% -> 100%) bar — using
+      // real date/time differences, never month-number arithmetic that would mishandle the wrap.
+      {
+        const yearBoundaryRange = calculateTimelineRange([{ startDate: '2026-11-15', contractEndDate: '2027-02-20' }], '2026-09-17');
+        const yearBoundaryBar = calculateTimelineBarPosition('2026-11-15', '2027-02-20', yearBoundaryRange.rangeStart, yearBoundaryRange.rangeEnd, '2026-09-17');
+        assert(
+          yearBoundaryRange.rangeStart === '2026-11-15' && yearBoundaryRange.rangeEnd === '2027-02-20' &&
+          yearBoundaryBar.leftPercent === 0 && Math.abs(yearBoundaryBar.widthPercent - 100) < 0.01,
+          `1563. NEW — A Nov 2026 -> Feb 2027 period (crossing a calendar year) computes a correct range (${yearBoundaryRange.rangeStart} -> ${yearBoundaryRange.rangeEnd}) and a full-width bar (${JSON.stringify(yearBoundaryBar)})`
+        );
+      }
+
+      // 1564. NEW — Missing Start Date handling: a period with no Start Date is excluded from
+      // the range calculation entirely — never fabricated, never defaulted to today.
+      {
+        const missingStartRange = calculateTimelineRange([
+          { startDate: null, contractEndDate: '2026-12-01' },
+          { startDate: '2026-06-01', contractEndDate: '2026-08-01' },
+        ], '2026-09-17');
+        assert(
+          missingStartRange.rangeStart === '2026-06-01' && missingStartRange.rangeEnd === '2026-08-01',
+          `1564. NEW — A period with a missing Start Date contributes nothing to the range (found ${missingStartRange.rangeStart} -> ${missingStartRange.rangeEnd}, correctly ignoring the null-start period's contractEndDate of 2026-12-01)`
+        );
+        assert(
+          timelineSrcRange.includes('!emp.startDate') && timelineSrcRange.includes('No Start Date on record'),
+          '1564b. NEW — REGRESSION: a displayed person with no Start Date still renders the existing graceful "No Start Date on record" row note, never a fabricated bar'
+        );
+      }
+
+      // 1565. NEW — Missing End Date (ongoing) handling: never fabricates a future End Date —
+      // the domain's effective end for an ongoing period is "today" (a real date), except it is
+      // never allowed to fall before that SAME person's own Start Date (an Upcoming hire whose
+      // Start Date is in the future must not pull the domain behind their own start).
+      {
+        const futureStartRange = calculateTimelineRange([{ startDate: '2027-03-01', contractEndDate: null }], '2026-09-17');
+        assert(
+          futureStartRange.rangeStart === '2027-03-01' && futureStartRange.rangeEnd >= futureStartRange.rangeStart,
+          `1565. NEW — A future Start Date with no End Date never produces an inverted range (rangeEnd ${futureStartRange.rangeEnd} is never before rangeStart ${futureStartRange.rangeStart}) — no fabricated End Date, "today" is used only as a floor when it is actually later than the person's own start`
+        );
+      }
+
+      // 1566/1567. NEW — Start Date label AND End Date label render for every valid bar,
+      // anchored to the BAR's own edges (never the timeline's overall data range) via the same
+      // technique the pre-existing "Ongoing" label already used.
+      assert(
+        timelineSrcRange.includes('timeline-start-label') && timelineSrcRange.includes("formatCompactDate(emp.startDate") &&
+        timelineSrcRange.includes('timeline-end-label') && timelineSrcRange.includes("formatCompactDate(emp.contractEndDate"),
+        '1566/1567. NEW — Every valid bar renders both a Start Date label (timeline-start-label) and an End Date label (timeline-end-label, or the existing Ongoing state when no End Date is recorded)'
+      );
+
+      // 1568. NEW — TIMEZONE SAFETY: formatCompactDate() parses 'YYYY-MM-DD' in LOCAL time (the
+      // same safe pattern formatDateDisplay()/addDaysToLocalDate() already use) — a date-only
+      // field never shifts a calendar day earlier due to UTC parsing.
+      assert(
+        formatCompactDate('2026-06-29') === 'Jun 29' && formatCompactDate('2026-01-01') === 'Jan 1',
+        `1568. NEW — TIMEZONE SAFETY: formatCompactDate('2026-06-29') renders "Jun 29" (found "${formatCompactDate('2026-06-29')}") — never "Jun 28" from an accidental UTC shift`
+      );
+      assert(
+        !dateUtilsSrcRange.match(/formatCompactDate[\s\S]{0,200}new Date\(dateStr\)/) &&
+        dateUtilsSrcRange.match(/formatCompactDate[\s\S]{0,250}split\('-'\)\.map\(Number\)/),
+        '1568b. NEW — formatCompactDate() parses the date string into explicit year/month/day components (never `new Date(dateStr)` directly, which triggers UTC parsing for a bare YYYY-MM-DD string) — the same safe pattern used elsewhere in dateUtils.js'
+      );
+
+      // 1569. NEW — Department color CONFIGURATION architecture: the color belongs to the
+      // Department record (departmentService.update(id, { color })), reusing the EXISTING
+      // department service/storage abstraction — never a new "timelineColors" collection, and
+      // resolveDepartmentColor() already prefers a department's own explicit `color` field over
+      // its deterministic hash fallback.
+      {
+        const depts = await departmentService.getAll({ withCount: false });
+        const testDept = depts[0];
+        const originalColor = testDept.color;
+        const updated = await departmentService.update(testDept.id, { color: '#123456' });
+        assert(updated.color === '#123456', `1569a. NEW — departmentService.update(id, { color }) persists a new Timeline color on the Department record itself (found ${updated.color})`);
+        assert(resolveDepartmentColor(updated) === '#123456', '1569b. NEW — resolveDepartmentColor() reads the department\'s own explicit color field, so the configured color is exactly what the Timeline bar renders');
+        await departmentService.update(testDept.id, { color: originalColor });
+
+        assert(
+          deptColorsModalSrc.includes('departmentService.update') && deptColorsModalSrc.includes('color'),
+          '1569c. NEW — DepartmentColorsModal.jsx persists through departmentService.update(), the app\'s existing Department service/storage abstraction — no separate/duplicate department color store was introduced'
+        );
+      }
+
+      // 1570. NEW — Configured color is applied CONSISTENTLY: changing one department's color
+      // updates the resolved color for every employee in that department (functional, at the
+      // exact service/domain layer the Timeline bars and legend both read from).
+      {
+        const depts2 = await departmentService.getAll({ withCount: false });
+        const targetDept = depts2.find((d) => d.name === 'Software Engineering') || depts2[0];
+        const originalColor2 = targetDept.color;
+
+        const allEmployeesForColorTest = await employeeService.getAll();
+        const sameDeptEmployees = allEmployeesForColorTest.filter((e) => e.department && e.department.id === targetDept.id);
+        assert(sameDeptEmployees.length > 0, '1570setup. NEW — Setup: at least one employee belongs to the department under test');
+
+        await departmentService.update(targetDept.id, { color: '#ABCDEF' });
+        const refreshedDepts = await departmentService.getAll({ withCount: false });
+        const refreshedDept = refreshedDepts.find((d) => d.id === targetDept.id);
+        const resolvedColorsForDept = sameDeptEmployees.map(() => resolveDepartmentColor(refreshedDept));
+        assert(
+          resolvedColorsForDept.every((c) => c === '#ABCDEF'),
+          `1570. NEW — Changing ${targetDept.name}'s color updates the resolved bar color for EVERY employee in that department at once (found ${JSON.stringify(resolvedColorsForDept)}) — the color lives on the department, not on individual personnel`
+        );
+        await departmentService.update(targetDept.id, { color: originalColor2 });
+      }
+
+      // 1571. NEW — Stable/deterministic fallback color: an unconfigured department (no explicit
+      // `color`) always resolves to the SAME color across repeated calls — never a different
+      // random color on every render.
+      {
+        const unconfigured = { id: 'dept-fallback-test-timeline', name: 'Fallback Test Dept' };
+        const c1 = resolveDepartmentColor(unconfigured);
+        const c2 = resolveDepartmentColor(unconfigured);
+        const c3 = resolveDepartmentColor({ ...unconfigured });
+        assert(c1 === c2 && c2 === c3 && Boolean(c1), `1571. NEW — An unconfigured department resolves to the same deterministic fallback color on every call (found ${c1}, ${c2}, ${c3}) — never a fresh random color per render`);
+      }
+
+      // 1572. NEW — No direct localStorage/storageEngine access from the Timeline component or
+      // its new Department Colors modal — both go through departmentService only, matching the
+      // app's existing persistence architecture (this frontend is still PoC/localStorage-backed
+      // under the hood, but the boundary is the service layer, never the component).
+      assert(
+        !timelineSrcRange.includes('localStorage.') && !timelineSrcRange.match(/from\s+['"][^'"]*storageEngine/) &&
+        !deptColorsModalSrc.includes('localStorage.') && !deptColorsModalSrc.match(/from\s+['"][^'"]*storageEngine/) &&
+        timelineSrcRange.includes("from '../../services/departmentService.js'") &&
+        deptColorsModalSrc.includes("from '../../services/departmentService.js'"),
+        '1572. NEW — Neither EmployeeTimelineView.jsx nor DepartmentColorsModal.jsx ever calls localStorage directly or imports storageEngine.js — both read/write Department color configuration exclusively through departmentService, preserving the existing service-layer boundary (comments in these files explain this decision but contain no actual usage)'
+      );
+
+      // 1573. NEW — The "Department Colors" action lives in the Timeline view's OWN header
+      // (EmployeeTimelineView.jsx), never added to the shared Personnel toolbar
+      // (DirectoryToolbar.jsx) — so the toolbar is never congested by a Timeline-only control.
+      assert(
+        timelineSrcRange.includes('Department Colors') && timelineSrcRange.includes('<DepartmentColorsModal') &&
+        !toolbarSrcRange.includes('Department Colors') && !toolbarSrcRange.includes('DepartmentColorsModal'),
+        '1573. NEW — "Department Colors" is a Timeline-only control (rendered inside EmployeeTimelineView.jsx\'s own header) — DirectoryToolbar.jsx (the shared Personnel toolbar) has no trace of it, so the toolbar layout/filters are completely unaffected'
+      );
+
+      // 1574. REGRESSION: List/Card views and DirectoryPageContainer.jsx's filter/view wiring are
+      // completely untouched by this task — Timeline still receives the exact same shared,
+      // already-filtered `employees` array, and List/Card render via their own unmodified
+      // components.
+      assert(
+        containerSrcRange.includes('<EmployeeListView employees={employees} />') &&
+        containerSrcRange.includes('<EmployeeCardView employees={employees} />') &&
+        containerSrcRange.match(/<EmployeeTimelineView\s+employees=\{employees\}/) &&
+        !containerSrcRange.includes('DepartmentColorsModal'),
+        '1574. REGRESSION: DirectoryPageContainer.jsx still renders List/Card/Timeline from the identical shared `employees` array with no changes to its own wiring — Department Colors is entirely internal to EmployeeTimelineView.jsx, never touching the container, List, or Card'
+      );
+
+      // 1575. REGRESSION: Personnel's existing filters (Search/Type/Department/Mode/Salary/
+      // Status/Sort By) are completely unaffected — EmployeeTimelineView.jsx still contains no
+      // filtering logic of its own; it only ever renders the array it is given.
+      assert(
+        !timelineSrcRange.match(/\.filter\(\s*\(?e(mp)?\)?\s*=>\s*e(mp)?\.(status|workMode|allowance|directoryType)/),
+        '1575. REGRESSION: EmployeeTimelineView.jsx still reimplements none of Personnel\'s Search/Type/Department/Mode/Salary/Status/Sort By filtering — it only renders the already-filtered `employees` prop it receives, exactly as before this task'
+      );
+
+      // 1576. REGRESSION: departmentService's other existing methods (create/getById/
+      // toggleActive/delete) are byte-for-byte untouched — only reused, not modified, by this
+      // task's new color-customization UI.
+      assert(
+        departmentServiceSrcRange.includes('async create(deptData)') &&
+        departmentServiceSrcRange.includes('async toggleActive(id)') &&
+        departmentServiceSrcRange.includes('async delete(id)') &&
+        departmentServiceSrcRange.includes("color: updateData.color || existing.color"),
+        '1576. REGRESSION: departmentService.js\'s create/toggleActive/delete methods and update()\'s existing color-merge behavior are unchanged — Department Colors reuses this service exactly as it already existed, without modifying it'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);

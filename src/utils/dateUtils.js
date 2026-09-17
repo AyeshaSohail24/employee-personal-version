@@ -119,55 +119,84 @@ export function calculateDurationProgress(startDate, contractEndDate, referenceD
 
 /**
  * Calculates the visible calendar range for a Timeline visualization from a set of
- * employment periods. Derived entirely from actual data (earliest Start Date, latest
- * End Date/today for ongoing records) — never a hardcoded year — with a small padding
- * and snapping to whole calendar months for a clean, readable axis.
+ * employment periods. The domain is EXACTLY the earliest Start Date through the latest
+ * effective End Date among the periods supplied — never padded, never snapped to a calendar
+ * month boundary. Callers that filter/search the underlying personnel list before calling this
+ * (e.g. the Personnel directory's Timeline view) automatically get a range that reflects only
+ * what is currently displayed — this function has no independent filtering of its own.
+ *
+ * An "effective End Date" for a still-ongoing period (no `contractEndDate`) is the reference
+ * date (today), EXCEPT it is never allowed to fall before that same person's own Start Date —
+ * this matters for an Upcoming hire whose Start Date is in the future: their bar's domain
+ * contribution must not be pulled behind their own start just because "today" is earlier than
+ * it. No End Date is ever fabricated; this is purely how far the shared AXIS needs to extend to
+ * plot an ongoing bar truthfully through "now" (or through the person's own start, whichever is
+ * later) — see calculateTimelineBarPosition() for how each bar is actually drawn.
  *
  * @param {Array<{startDate: string, contractEndDate: string|null}>} periods
  * @param {string} [referenceDate] 'YYYY-MM-DD', defaults to today (local)
- * @returns {{ rangeStart: string, rangeEnd: string }|null} Padded 'YYYY-MM-DD' bounds, or null if no valid Start Dates exist
+ * @returns {{ rangeStart: string, rangeEnd: string }|null} Exact 'YYYY-MM-DD' bounds, or null if no valid Start Dates exist
  */
 export function calculateTimelineRange(periods = [], referenceDate = getTodayLocalDateString()) {
-  const validStarts = periods.map((p) => p && p.startDate).filter(Boolean);
-  if (validStarts.length === 0) return null;
+  const validPeriods = periods.filter((p) => p && p.startDate);
+  if (validPeriods.length === 0) return null;
 
-  const minStart = validStarts.reduce((min, d) => (d < min ? d : min), validStarts[0]);
+  const rangeStart = validPeriods.reduce((min, p) => (p.startDate < min ? p.startDate : min), validPeriods[0].startDate);
 
-  let maxEnd = referenceDate;
-  periods.forEach((p) => {
-    if (!p || !p.startDate) return;
-    const effectiveEnd = p.contractEndDate || referenceDate;
-    if (effectiveEnd > maxEnd) maxEnd = effectiveEnd;
-  });
-
-  const paddedStart = addDaysToLocalDate(minStart, -14);
-  const paddedEnd = addDaysToLocalDate(maxEnd, 14);
-
-  const rangeStart = `${paddedStart.slice(0, 7)}-01`;
-  const [endYear, endMonth] = paddedEnd.slice(0, 7).split('-').map(Number);
-  const lastDayOfMonth = new Date(endYear, endMonth, 0).getDate();
-  const rangeEnd = `${paddedEnd.slice(0, 7)}-${String(lastDayOfMonth).padStart(2, '0')}`;
+  const rangeEnd = validPeriods.reduce((max, p) => {
+    const effectiveEnd = p.contractEndDate || (referenceDate > p.startDate ? referenceDate : p.startDate);
+    return effectiveEnd > max ? effectiveEnd : max;
+  }, rangeStart);
 
   return { rangeStart, rangeEnd };
 }
 
 /**
- * Generates month-boundary axis ticks (label + horizontal position ratio 0-1) across a
- * Timeline date range. Includes the year in each label whenever the range spans more than
- * one calendar year, so multi-year data is never visually ambiguous.
+ * Formats a 'YYYY-MM-DD' date in a short, compact style ("Jun 29"), including the year
+ * ("Jun 29, 2026") only when `includeYear` is true. Used for the Timeline's axis ticks AND its
+ * per-bar Start/End Date labels — the app's existing formatDateDisplay() always includes the
+ * year ("Jun 29, 2026"), which is unnecessarily verbose for a dense Timeline row; this is the
+ * single shared compact formatter both call sites use, so they can never drift apart.
  *
- * @param {string} rangeStart 'YYYY-MM-DD'
- * @param {string} rangeEnd 'YYYY-MM-DD'
- * @returns {Array<{ label: string, ratio: number }>}
+ * @param {string} dateStr 'YYYY-MM-DD'
+ * @param {boolean} [includeYear=false]
+ * @returns {string}
  */
-export function generateTimelineMonthTicks(rangeStart, rangeEnd) {
-  if (!rangeStart || !rangeEnd) return [];
-  const totalDays = getDaysDifference(rangeEnd, rangeStart);
-  if (totalDays <= 0) return [];
+export function formatCompactDate(dateStr, includeYear = false) {
+  const [year, month, day] = dateStr.slice(0, 10).split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  return d.toLocaleDateString('en-US', includeYear
+    ? { month: 'short', day: 'numeric', year: 'numeric' }
+    : { month: 'short', day: 'numeric' });
+}
 
+/**
+ * Generates axis ticks at a fixed day interval across a range, labeled with the specific date —
+ * used for short ranges where whole-month boundaries would produce too few (or zero) ticks to be
+ * a useful axis. Always includes a final tick exactly at rangeEnd so the last date is legible.
+ */
+function generateDayIntervalTicks(rangeStart, totalDays, stepDays, spansMultipleYears) {
+  const ticks = [];
+  for (let offset = 0; offset <= totalDays; offset += stepDays) {
+    const tickDate = addDaysToLocalDate(rangeStart, offset);
+    ticks.push({ label: formatCompactDate(tickDate, spansMultipleYears), ratio: offset / totalDays });
+  }
+  const lastRatio = ticks.length > 0 ? ticks[ticks.length - 1].ratio : -1;
+  if (lastRatio < 1) {
+    ticks.push({ label: formatCompactDate(addDaysToLocalDate(rangeStart, totalDays), spansMultipleYears), ratio: 1 });
+  }
+  return ticks;
+}
+
+/**
+ * Generates axis ticks at whole-calendar-month boundaries, every `stepMonths` months (1 for a
+ * normal multi-month range, a larger step such as 3 for a long multi-year range so the axis
+ * never becomes overcrowded). Includes the year in each label whenever the range spans more than
+ * one calendar year, so multi-year data is never visually ambiguous.
+ */
+function generateMonthBoundaryTicks(rangeStart, rangeEnd, totalDays, stepMonths, spansMultipleYears) {
   const [startYear, startMonthNum] = rangeStart.slice(0, 7).split('-').map(Number);
   const [endYear, endMonthNum] = rangeEnd.slice(0, 7).split('-').map(Number);
-  const spansMultipleYears = startYear !== endYear;
 
   const ticks = [];
   let year = startYear;
@@ -175,15 +204,16 @@ export function generateTimelineMonthTicks(rangeStart, rangeEnd) {
 
   while (year < endYear || (year === endYear && month <= endMonthNum)) {
     const tickDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const dayOffset = getDaysDifference(tickDate, rangeStart);
-    const ratio = Math.min(1, Math.max(0, dayOffset / totalDays));
-    const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+    if (tickDate >= rangeStart) {
+      const dayOffset = getDaysDifference(tickDate, rangeStart);
+      const ratio = Math.min(1, Math.max(0, dayOffset / totalDays));
+      const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+      ticks.push({ label: spansMultipleYears ? `${monthLabel} ${year}` : monthLabel, ratio });
+    }
 
-    ticks.push({ label: spansMultipleYears ? `${monthLabel} ${year}` : monthLabel, ratio });
-
-    month += 1;
-    if (month > 12) {
-      month = 1;
+    month += stepMonths;
+    while (month > 12) {
+      month -= 12;
       year += 1;
     }
   }
@@ -192,10 +222,46 @@ export function generateTimelineMonthTicks(rangeStart, rangeEnd) {
 }
 
 /**
+ * Generates axis ticks (label + horizontal position ratio 0-1) across a Timeline date range,
+ * choosing a human-readable interval from the ACTUAL span rather than a fixed calendar
+ * convention: specific dates every few days for a short range, weekly for a range of a month or
+ * two, whole months for a typical multi-month/multi-year range, and a coarser quarterly step for
+ * a long multi-year range so the axis never becomes overcrowded. A true single-point range (one
+ * person, or every displayed person sharing an identical Start Date and effective End Date)
+ * still renders exactly one readable tick naming that date, never an empty axis.
+ *
+ * @param {string} rangeStart 'YYYY-MM-DD'
+ * @param {string} rangeEnd 'YYYY-MM-DD'
+ * @returns {Array<{ label: string, ratio: number }>}
+ */
+export function generateTimelineMonthTicks(rangeStart, rangeEnd) {
+  if (!rangeStart || !rangeEnd) return [];
+  const totalDays = getDaysDifference(rangeEnd, rangeStart);
+  const spansMultipleYears = rangeStart.slice(0, 4) !== rangeEnd.slice(0, 4);
+
+  if (totalDays <= 0) {
+    return [{ label: formatCompactDate(rangeStart, spansMultipleYears), ratio: 0 }];
+  }
+  if (totalDays <= 21) {
+    return generateDayIntervalTicks(rangeStart, totalDays, Math.max(1, Math.round(totalDays / 5)), spansMultipleYears);
+  }
+  if (totalDays <= 70) {
+    return generateDayIntervalTicks(rangeStart, totalDays, 7, spansMultipleYears);
+  }
+  if (totalDays <= 730) {
+    return generateMonthBoundaryTicks(rangeStart, rangeEnd, totalDays, 1, spansMultipleYears);
+  }
+  return generateMonthBoundaryTicks(rangeStart, rangeEnd, totalDays, 3, spansMultipleYears);
+}
+
+/**
  * Computes a Timeline bar's horizontal position/width as percentages of a visible range,
  * clamped to that range, plus whether the underlying employment period is ongoing (no End
  * Date — the bar visually extends through the reference date without ever fabricating or
- * writing back a fake End Date).
+ * writing back a fake End Date). Guards the zero-width-domain edge case (a single plotted
+ * period, or every displayed period sharing an identical Start/effective-End date) by drawing
+ * one full-width marker instead of dividing by zero or hiding the bar entirely — the underlying
+ * dates are never altered, only this pixel math is guarded.
  *
  * @param {string} startDate 'YYYY-MM-DD'
  * @param {string|null} contractEndDate 'YYYY-MM-DD' or null
@@ -206,11 +272,14 @@ export function generateTimelineMonthTicks(rangeStart, rangeEnd) {
  */
 export function calculateTimelineBarPosition(startDate, contractEndDate, rangeStart, rangeEnd, referenceDate = getTodayLocalDateString()) {
   if (!startDate || !rangeStart || !rangeEnd) return null;
-  const totalDays = getDaysDifference(rangeEnd, rangeStart);
-  if (totalDays <= 0) return null;
 
   const isOngoing = !contractEndDate;
-  const effectiveEnd = contractEndDate || referenceDate;
+  const effectiveEnd = contractEndDate || (referenceDate > startDate ? referenceDate : startDate);
+
+  const totalDays = getDaysDifference(rangeEnd, rangeStart);
+  if (totalDays <= 0) {
+    return { leftPercent: 0, widthPercent: 100, isOngoing };
+  }
 
   const clampedStart = startDate < rangeStart ? rangeStart : startDate;
   const clampedEnd = effectiveEnd > rangeEnd ? rangeEnd : effectiveEnd;

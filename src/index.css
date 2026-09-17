@@ -2117,13 +2117,29 @@ body {
   padding: 2rem 0;
 }
 
+/* Wraps the department legend and the "Department Colors" action on one row — the button lives
+   here (Timeline's own header), never in the shared Personnel toolbar, so it can't congest the
+   toolbar's existing filters. justify-content: space-between keeps the button pinned to the
+   right even when the legend is empty (an empty <span /> placeholder keeps that alignment). */
+.timeline-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.timeline-colors-btn {
+  flex-shrink: 0;
+}
+
 .timeline-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
-  padding-bottom: 1rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--border-subtle);
 }
 
 .timeline-legend-item {
@@ -2191,11 +2207,6 @@ body {
   margin-top: 0.1rem;
 }
 
-.timeline-dates-cell {
-  font-size: 0.7rem;
-  margin-top: 0.25rem;
-}
-
 .type-badge-mini {
   font-size: 0.625rem;
   font-weight: 700;
@@ -2210,6 +2221,22 @@ body {
   position: relative;
   flex: 1;
   min-height: 1.1rem;
+}
+
+/* The actual 0%-100% plotting coordinate system bars/ticks are positioned against — inset from
+   .timeline-track-area's own edges by a small fixed gutter (78px, wide enough for the longest
+   compact label this Timeline ever renders, "Jun 29, 2026", at this font size) purely so a
+   Start/End Date label has room to render outside the very first/last bar without being
+   clipped. This is a VISUAL LABEL-SPACE reservation only — bars are positioned as percentages of
+   THIS inset box, but the underlying data domain (range.rangeStart/rangeEnd, and therefore the
+   axis ticks' own dates) is never widened or padded to create it. Both the axis row and every
+   data row share this exact class, so ticks and bars always align vertically. */
+.timeline-plot-area {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 78px;
+  right: 78px;
 }
 
 .timeline-axis-tick {
@@ -2250,15 +2277,37 @@ body {
   box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--color-primary);
 }
 
-.timeline-ongoing-label {
+/* Start/End Date labels — children of .timeline-bar, anchored to the BAR's own edges (never to
+   the timeline's overall data domain), exactly mirroring how .timeline-ongoing-label already
+   anchors itself to a bar's right edge. .timeline-start-label sits at `right: 100%` (the bar's
+   own left edge) and grows further left; .timeline-end-label sits at `left: 100%` (the bar's own
+   right edge) and grows further right. Kept as normal readable app text (not colored to match
+   the bar) per the readability requirement — only the bar itself carries the department color. */
+.timeline-start-label,
+.timeline-end-label {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.timeline-start-label {
+  right: 100%;
+  margin-right: 6px;
+}
+
+.timeline-end-label {
+  left: 100%;
   margin-left: 6px;
+}
+
+.timeline-ongoing-label {
   font-size: 0.65rem;
   font-weight: 700;
   color: var(--text-muted);
-  white-space: nowrap;
 }
 
 .timeline-missing-date-note {
@@ -2299,6 +2348,57 @@ body {
   .timeline-name-col {
     width: 150px;
   }
+}
+
+/* Department Colors modal — one row per department, reusing the shared modal-card/form
+   conventions (see CreateEmployeeModal.jsx) rather than introducing a new modal shell. */
+.dept-color-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.dept-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+.dept-color-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.dept-color-input-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.dept-color-swatch-input {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+}
+
+.dept-color-hex {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted);
+  min-width: 64px;
 }
 
 /* ==========================================================================
