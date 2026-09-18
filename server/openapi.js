@@ -36,7 +36,7 @@ export const openapi = {
           name: "Manage Employees",
           icon: "🧑‍💼",
           description: "The core employee record and its department/position/manager history.",
-          does: ["List employees", "Create an employee", "Update an employee", "View employment history", "Sync the roster from the Interns DB", "List Personnel status filter options"],
+          does: ["List employees (live-overlaid with each intern's current Interns DB data)", "Create an employee", "Update an employee", "View employment history", "Re-fetch the live-overlaid roster on demand", "List Personnel status filter options"],
           best_for: "Any app that needs to look up or maintain who works here.",
           endpoints: ["GET /employees", "POST /employees", "GET /employees/{id}", "PATCH /employees/{id}", "GET /employees/{id}/employment-records", "POST /employees/{id}/employment-records", "GET /employees/sync", "GET /employees/statuses"],
         },
@@ -185,12 +185,12 @@ export const openapi = {
 
     "/employees/sync": {
       get: {
-        summary: "Read-only refresh: the local roster with each intern-linked employee's Personnel ID/Mode/Allowance/Contract End Date overlaid from the Interns DB's current values.",
+        summary: "Read-only refresh: the same live-overlaid data GET /employees already returns, re-fetched on demand.",
         security: scoped("employees:read"),
         "x-rizurf": {
-          name: "Sync Personnel", purpose: "Retrieve the latest data from the Interns DB (the source of truth) and refresh what Personnel displays — never writes to the local roster or the Interns DB",
-          use_when: ["The 'Sync Personnel' button is clicked", "Refreshing the roster's display to reflect recent changes made directly in the Interns DB"],
-          do_not_use_when: ["Listing the current roster without a live Interns DB refresh — use GET /employees", "Creating local employee records for interns this app has never touched — that's a write, deliberately out of scope here"],
+          name: "Sync Personnel", purpose: "Retrieve the latest data from the Interns DB (the source of truth) and refresh what Personnel displays — never writes to the local roster or the Interns DB, so this never requires write permission",
+          use_when: ["The 'Sync Personnel' button is clicked", "Explicitly re-fetching the roster on demand rather than waiting for the page's own load"],
+          do_not_use_when: ["Creating local employee records for interns this app has never touched — that's a write, out of scope here; see syncAllInternsToEmployees()/the backfill script instead"],
           inputs: [], outputs: ["employees[]"],
           requires: [], related_endpoints: ["GET /employees", "POST /applicants/{applicantId}/convert"],
           tags: ["employees", "sync", "interns", "refresh", "read-only"],
@@ -213,10 +213,10 @@ export const openapi = {
     },
     "/employees": {
       get: {
-        summary: "List employees, optionally filtered by status or department.",
+        summary: "List employees, optionally filtered by status or department. Each intern-linked employee's Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date is live-overlaid from the Interns DB.",
         security: scoped("employees:read"),
         "x-rizurf": {
-          name: "List Employees", purpose: "Browse or search the employee roster",
+          name: "List Employees", purpose: "Browse or search the employee roster, always reflecting each intern's current Interns DB data rather than a possibly-stale local snapshot",
           use_when: ["Populating the employee directory", "Looking up an employee by status or department"],
           do_not_use_when: ["Looking up one employee you already have the id for — use GET /employees/{id}"],
           inputs: ["status", "department_id", "limit", "offset"], outputs: ["employees[]"],

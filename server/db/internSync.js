@@ -186,34 +186,33 @@ export async function syncAllInternsToEmployees({ onItem } = {}) {
   return { created, updated, unchanged, failed, total: interns?.length ?? 0 };
 }
 
-// Powers the "Sync Personnel" button. By explicit instruction this is strictly read → retrieve →
-// refresh/display: it never calls createEmployee/updateEmployee/createEmploymentRecord, so it
-// writes nothing to either the local employees/employment_records tables or the Interns DB —
-// unlike syncAllInternsToEmployees() above (which still backs the one-off terminal repair script,
-// server/scripts/backfillContractEndDates.js, untouched). It reads the local roster, hydrates it
-// (still read-only — see employeeHydration.js), then overlays each intern-linked employee's
-// Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date with whatever the Interns DB
-// reports right now, in memory only — the same set of fields createLocalEmployeeFromIntern()
-// pulls from the Interns DB when a record is first created, so a refresh shows exactly what
-// creating them fresh today would. A real intern the Interns DB knows about but this app has never locally created
-// a record for (no applicant conversion, never touched by syncAllInternsToEmployees()) has no
-// local row to overlay and so — deliberately — will not newly appear from this action; making
-// them appear would require a write (createEmployee), which this action must never do.
-export async function getRefreshedEmployeesFromInterns() {
-  const [localEmployeeRows] = await pool.query("SELECT * FROM employees");
-  const hydrated = await hydrateEmployees(localEmployeeRows);
+// Read-only live overlay, applied to an already-hydrated employee list: every intern-linked
+// employee's Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date is replaced in
+// memory with whatever the Interns DB (the source of truth) currently reports — the same set of
+// fields createLocalEmployeeFromIntern() pulls from there when a record is first created. Nothing
+// is written to either the local employees table or the Interns DB; nothing here calls
+// createEmployee/updateEmployee/createEmploymentRecord or internsClient.createIntern/updateIntern/
+// deleteIntern. Wired into GET /employees itself (not only the Sync button — see
+// server/routes/employees.js), so a full browser refresh shows the same live values Sync does,
+// instead of reverting to a stale local snapshot the next time the page loads; "Sync Personnel" is
+// then just an explicit, on-demand re-fetch of this same always-live data via GET /employees/sync.
+// A real intern the Interns DB knows about but this app has never locally created a record for has
+// no local row here to overlay onto and so never appears from this alone — that would require a
+// write (createEmployee), which this never does.
+export async function overlayInternFields(hydratedEmployees) {
+  if (!hydratedEmployees.some((e) => e.internExternalId)) return hydratedEmployees;
 
   let interns;
   try {
     ({ interns } = await internsClient.listInterns({ limit: 100 }));
   } catch {
-    // The live Interns DB is unreachable — fall back to the local snapshot rather than failing
-    // the refresh outright; every already-mirrored field still displays, just not freshened.
-    return hydrated;
+    // The live Interns DB is unreachable — show the local snapshot as-is rather than failing the
+    // whole page load over it.
+    return hydratedEmployees;
   }
   const internsById = new Map((interns ?? []).map((intern) => [intern.id, intern]));
 
-  return hydrated.map((employee) => {
+  return hydratedEmployees.map((employee) => {
     const intern = employee.internExternalId ? internsById.get(employee.internExternalId) : null;
     if (!intern) return employee;
     return {

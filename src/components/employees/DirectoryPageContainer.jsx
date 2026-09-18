@@ -136,10 +136,9 @@ export default function DirectoryPageContainer({
       setSyncMessage('Personnel data refreshed');
     } catch (err) {
       console.error('Failed to sync employees:', err);
-      // Surface the server's actual reason (e.g. "Your role does not permit write access.",
-      // an Interns DB connectivity error) instead of a generic message that hides it — the
-      // previous "Sync failed — please try again" gave no way to tell a permissions problem
-      // from a real outage without opening DevTools.
+      // Surface the server's actual reason (e.g. an Interns DB connectivity error) instead of a
+      // generic message that hides it — "Sync failed — please try again" alone gave no way to
+      // tell what actually went wrong without opening DevTools.
       const detail = err instanceof ApiError && err.message ? err.message : null;
       setSyncMessage(detail ? `Sync failed — ${detail}` : 'Sync failed — please try again');
     } finally {

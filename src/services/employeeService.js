@@ -457,15 +457,15 @@ export const employeeService = {
   },
 
   /**
-   * Refreshes what Personnel displays from the actual source of truth: GETs /employees/sync
-   * (server/db/internSync.js's getRefreshedEmployeesFromInterns()), which reads the local roster
-   * and overlays each intern-linked employee's Personnel ID/Mode/Allowance/Contract End Date with
-   * the Interns DB's current values, in memory only. Strictly read → retrieve → refresh/display:
-   * this performs no INSERT/UPDATE/DELETE against either the local database or the Interns DB, so
-   * unlike the old write-based sync, the result has to be the list that actually gets displayed
-   * (see DirectoryPageContainer.jsx's handleSync(), which passes it into queryEmployees() as
-   * sourceEmployees) rather than discarded in favor of a plain GET /employees re-read, which would
-   * just show the same unchanged local data again.
+   * Refreshes Personnel from the actual source of truth: GETs /employees/sync (server/routes/
+   * employees.js's listEmployeesLive(), the same read-only path GET /employees itself already
+   * uses — see internSync.js's overlayInternFields()). Every intern-linked employee's Personnel
+   * ID/Status/Mode/Allowance/Start Date/Contract End Date is read live from the Interns DB, in
+   * memory only — nothing is written to either the local database or the Interns DB, and nothing
+   * here needs write permission. Because GET /employees already applies this same overlay, a
+   * plain page load or full browser refresh shows the same fresh data this explicit action does;
+   * this exists as its own call purely so the Sync Personnel button has something distinct to
+   * trigger on demand.
    * @returns {Promise<Array<Object>>}
    */
   async syncEmployees() {
