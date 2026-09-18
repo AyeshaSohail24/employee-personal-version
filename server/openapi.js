@@ -135,9 +135,8 @@ export const openapi = {
           steps: ["GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/documents", "PATCH /candidate-documents/{id}", "POST /applicants/{applicantId}/convert"],
         },
       ],
-      // Real ids confirmed against each service's own /health — except
-      // applicants-api, which is not live yet (no confirmed id to use).
-      related_services: ["applicants-api", "intern-database", "department-api"],
+      // Real ids confirmed against each service's own /health.
+      related_services: ["recruitment-api", "intern-database", "department-api"],
     },
   },
   components: {
@@ -448,7 +447,7 @@ export const openapi = {
     },
     "/applicants/{applicantId}/convert": {
       post: { summary: "Accept an applicant: create their employee record and (for interns) push them to the Interns database.", security: scoped("applicant-conversion:write"),
-        "x-rizurf": { name: "Convert Applicant", purpose: "Turn an accepted applicant into an employee", use_when: ["A candidate in Upcoming is accepted"], do_not_use_when: ["The person isn't from Upcoming — use POST /employees directly"], inputs: ["applicantId", "employeeTypeId", "startDate", "icPassportNumber", "internshipEndDate", "departmentId", "roleId", "mode", "allowance", "photoUrl"], outputs: ["employee", "conversion"], requires: ["Applicant exists in the Applicants DB", "icPassportNumber/departmentId/roleId for an Intern hire — the Applicants DB has no columns for these"], related_endpoints: ["POST /employees", "GET /employees/{id}", "GET /positions"], tags: ["applicant", "convert", "hire", "accept"] } },
+        "x-rizurf": { name: "Convert Applicant", purpose: "Turn an accepted applicant into an employee, and move them to the `completed` phase in the real Recruitment API", use_when: ["A candidate in Upcoming (confirmation phase) is accepted"], do_not_use_when: ["The person isn't from Upcoming — use POST /employees directly"], inputs: ["applicantId", "employeeTypeId", "startDate", "icPassportNumber", "internshipEndDate", "departmentId", "roleId", "mode", "allowance", "photoUrl", "homeAddress"], outputs: ["employee", "conversion"], requires: ["Applicant exists in the Applicants API (recruitment-api) at phase=confirmation", "icPassportNumber/departmentId/roleId/homeAddress for an Intern hire — the Recruitment API only ever has name/email/phone/linkedin/github for an applicant"], related_endpoints: ["POST /employees", "GET /employees/{id}", "GET /positions"], tags: ["applicant", "convert", "hire", "accept"] } },
     },
 
     "/notes": {
