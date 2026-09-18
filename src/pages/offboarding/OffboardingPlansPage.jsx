@@ -2,29 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { Globe2, GraduationCap, Building2, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 import { offboardingService } from '../../services/offboardingService.js';
 
-function formatRelativeOffset(days) {
-  const value = days || 0;
-  if (value === 0) return 'Day 0';
-  return value > 0 ? `Day +${value}` : `Day ${value}`;
-}
-
 // One task row — mirrors onboarding/OnboardingPlansPage.jsx's TaskRow exactly. Click the pencil
-// to edit its title/timing in place (Enter/the check saves, Escape/the X cancels), or the trash
-// to delete it.
+// to edit its title in place (Enter/the check saves, Escape/the X cancels), or the trash to
+// delete it. Timing (relativeOffsetDays) is no longer shown or edited here — every task managed
+// from this page stays Day 0.
 function TaskRow({ task, saving, onDelete, onEdit }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
-  const [offset, setOffset] = useState(task.relativeOffsetDays || 0);
 
   useEffect(() => {
     setTitle(task.title);
-    setOffset(task.relativeOffsetDays || 0);
-  }, [task.title, task.relativeOffsetDays]);
+  }, [task.title]);
 
   const startEdit = () => {
     if (saving) return;
     setTitle(task.title);
-    setOffset(task.relativeOffsetDays || 0);
     setEditing(true);
   };
 
@@ -32,10 +24,8 @@ function TaskRow({ task, saving, onDelete, onEdit }) {
 
   const commit = async () => {
     const trimmed = title.trim();
-    if (!trimmed) return cancel();
-    const numericOffset = parseInt(offset, 10) || 0;
-    if (trimmed === task.title && numericOffset === (task.relativeOffsetDays || 0)) return cancel();
-    await onEdit(task.id, { title: trimmed, relativeOffsetDays: numericOffset });
+    if (!trimmed || trimmed === task.title) return cancel();
+    await onEdit(task.id, { title: trimmed });
     setEditing(false);
   };
 
@@ -58,16 +48,6 @@ function TaskRow({ task, saving, onDelete, onEdit }) {
             onKeyDown={handleKeyDown}
           />
         </td>
-        <td className="onboarding-scope-task-timing-cell">
-          <input
-            type="number"
-            className="form-input onboarding-scope-task-edit-offset"
-            value={offset}
-            disabled={saving}
-            onChange={(e) => setOffset(e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-        </td>
         <td className="onboarding-scope-task-action-cell">
           <button type="button" className="icon-btn" title="Save" disabled={saving} onClick={commit}>
             <Check size={13} />
@@ -83,9 +63,6 @@ function TaskRow({ task, saving, onDelete, onEdit }) {
   return (
     <tr>
       <td className="onboarding-scope-task-title">{task.title}</td>
-      <td className="onboarding-scope-task-timing-cell">
-        <span className="onboarding-scope-task-timing">{formatRelativeOffset(task.relativeOffsetDays)}</span>
-      </td>
       <td className="onboarding-scope-task-action-cell">
         <button type="button" className="icon-btn" title="Edit task" aria-label={`Edit ${task.title}`} disabled={saving} onClick={startEdit}>
           <Pencil size={13} />

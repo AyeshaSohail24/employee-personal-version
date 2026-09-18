@@ -5450,9 +5450,9 @@ input.form-control:focus {
   max-width: 460px;
 }
 
-/* Read-only inline preview of a scope's configured tasks (title + relative timing only — no
-   description, no scroll container). A plain table that grows with its row count; the card
-   around it grows too rather than clipping/scrolling an inner region. */
+/* Read-only inline preview of a scope's configured tasks (title only — no description, no
+   timing, no scroll container). A plain table that grows with its row count; the card around
+   it grows too rather than clipping/scrolling an inner region. */
 .onboarding-scope-task-table {
   width: 100%;
   margin-top: 0.6rem;
@@ -5478,23 +5478,6 @@ input.form-control:focus {
   color: var(--text-main);
 }
 
-.onboarding-scope-task-timing-cell {
-  text-align: right;
-  white-space: nowrap;
-  width: 1%;
-  padding-left: 0.6rem;
-}
-
-.onboarding-scope-task-timing {
-  display: inline-block;
-  background: #EFF6FF;
-  color: #1D4ED8;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.68rem;
-  font-weight: 600;
-}
-
 .onboarding-scope-task-action-cell {
   text-align: right;
   white-space: nowrap;
@@ -5506,18 +5489,11 @@ input.form-control:focus {
   margin-left: 0.15rem;
 }
 
-/* Inline edit inputs replace the title/timing cells in place, same row height as the
-   read display so a row being edited doesn't jump the rest of the table. */
+/* Inline edit input replaces the title cell in place, same row height as the read display so a
+   row being edited doesn't jump the rest of the table. */
 .onboarding-scope-task-edit-title {
   font-size: 0.83rem;
   padding: 0.25rem 0.5rem;
-}
-
-.onboarding-scope-task-edit-offset {
-  font-size: 0.8rem;
-  padding: 0.25rem 0.4rem;
-  width: 4.5rem;
-  text-align: right;
 }
 
 .onboarding-scope-task-list-empty {
