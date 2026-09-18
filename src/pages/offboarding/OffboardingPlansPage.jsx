@@ -1,19 +1,84 @@
 import React, { useState, useEffect } from 'react';
-import { Globe2, GraduationCap, Building2, Plus, Trash2 } from 'lucide-react';
+import { Globe2, GraduationCap, Building2, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 import { offboardingService } from '../../services/offboardingService.js';
 
-function formatRelativeOffset(days) {
-  const value = days || 0;
-  if (value === 0) return 'Day 0';
-  return value > 0 ? `Day +${value}` : `Day ${value}`;
+// One task row — mirrors onboarding/OnboardingPlansPage.jsx's TaskRow exactly. Click the pencil
+// to edit its title in place (Enter/the check saves, Escape/the X cancels), or the trash to
+// delete it. Timing (relativeOffsetDays) is no longer shown or edited here — every task managed
+// from this page stays Day 0.
+function TaskRow({ task, saving, onDelete, onEdit }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(task.title);
+
+  useEffect(() => {
+    setTitle(task.title);
+  }, [task.title]);
+
+  const startEdit = () => {
+    if (saving) return;
+    setTitle(task.title);
+    setEditing(true);
+  };
+
+  const cancel = () => setEditing(false);
+
+  const commit = async () => {
+    const trimmed = title.trim();
+    if (!trimmed || trimmed === task.title) return cancel();
+    await onEdit(task.id, { title: trimmed });
+    setEditing(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') commit();
+    if (e.key === 'Escape') cancel();
+  };
+
+  if (editing) {
+    return (
+      <tr>
+        <td>
+          <input
+            type="text"
+            className="form-input onboarding-scope-task-edit-title"
+            value={title}
+            autoFocus
+            disabled={saving}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+        </td>
+        <td className="onboarding-scope-task-action-cell">
+          <button type="button" className="icon-btn" title="Save" disabled={saving} onClick={commit}>
+            <Check size={13} />
+          </button>
+          <button type="button" className="icon-btn" title="Cancel" disabled={saving} onClick={cancel}>
+            <X size={13} />
+          </button>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr>
+      <td className="onboarding-scope-task-title">{task.title}</td>
+      <td className="onboarding-scope-task-action-cell">
+        <button type="button" className="icon-btn" title="Edit task" aria-label={`Edit ${task.title}`} disabled={saving} onClick={startEdit}>
+          <Pencil size={13} />
+        </button>
+        <button type="button" className="icon-btn icon-btn-danger" title="Delete task" aria-label={`Delete ${task.title}`} disabled={saving} onClick={() => onDelete(task.id)}>
+          <Trash2 size={13} />
+        </button>
+      </td>
+    </tr>
+  );
 }
 
 // A scope's configured tasks, editable right here — no separate "Manage Tasks" page. Mirrors
-// onboarding/OnboardingPlansPage.jsx's ScopeCard exactly (same add/delete contract), just wired
-// to offboardingService. Add appends a task (Day 0, default activity type — fine-grained
-// timing/description/activity-type stays a job for a later dedicated editor if this app ever
-// needs one); delete removes one.
-function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCount, onAddTask, onDeleteTask, compact = false, emphasized = false }) {
+// onboarding/OnboardingPlansPage.jsx's ScopeCard exactly (same add/edit/delete contract), just
+// wired to offboardingService.
+function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCount, onAddTask, onDeleteTask, onEditTask, compact = false, emphasized = false }) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -30,32 +95,29 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
     emphasized ? 'onboarding-scope-card-icon--emphasized' : '',
   ].filter(Boolean).join(' ');
 
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    const trimmed = newTaskTitle.trim();
-    if (!trimmed || saving) return;
+  const runMutation = async (action, errorLabel) => {
     setSaving(true);
     try {
-      await onAddTask(trimmed);
-      setNewTaskTitle('');
+      await action();
     } catch (err) {
-      alert(`Failed to add task: ${err.message}`);
+      alert(`Failed to ${errorLabel}: ${err.message}`);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (taskId) => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      await onDeleteTask(taskId);
-    } catch (err) {
-      alert(`Failed to delete task: ${err.message}`);
-    } finally {
-      setSaving(false);
-    }
+  const handleAdd = (e) => {
+    e.preventDefault();
+    const trimmed = newTaskTitle.trim();
+    if (!trimmed || saving) return;
+    runMutation(async () => {
+      await onAddTask(trimmed);
+      setNewTaskTitle('');
+    }, 'add task');
   };
+
+  const handleDelete = (taskId) => runMutation(() => onDeleteTask(taskId), 'delete task');
+  const handleEdit = (taskId, updates) => runMutation(() => onEditTask(taskId, updates), 'save task');
 
   return (
     <div className={cardClassName}>
@@ -81,24 +143,7 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
         <table className="onboarding-scope-task-table">
           <tbody>
             {tasks.map((task) => (
-              <tr key={task.id}>
-                <td className="onboarding-scope-task-title">{task.title}</td>
-                <td className="onboarding-scope-task-timing-cell">
-                  <span className="onboarding-scope-task-timing">{formatRelativeOffset(task.relativeOffsetDays)}</span>
-                </td>
-                <td className="onboarding-scope-task-delete-cell">
-                  <button
-                    type="button"
-                    className="icon-btn icon-btn-danger"
-                    title="Delete task"
-                    aria-label={`Delete ${task.title}`}
-                    disabled={saving}
-                    onClick={() => handleDelete(task.id)}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </td>
-              </tr>
+              <TaskRow key={task.id} task={task} saving={saving} onDelete={handleDelete} onEdit={handleEdit} />
             ))}
           </tbody>
         </table>
@@ -139,8 +184,7 @@ const PERSON_TYPE_META = {
     icon: <GraduationCap size={15} />,
     universalSubtitle: 'Included for every intern or apprentice regardless of department.',
     universalEmptyState: "No universal tasks configured yet. Add tasks here to include them in every intern's offboarding plan.",
-    departmentCardDescription: 'Tasks added specifically for Interns in this department.',
-    departmentEmptyState: 'No intern-specific tasks configured for this department. Intern Universal Tasks will still apply.',
+    departmentEmptyState: 'No department-specific tasks yet.',
   },
 };
 
@@ -166,7 +210,7 @@ export default function OffboardingPlansPage() {
     }
   };
 
-  // Shared add/delete for both the Universal card and every Department card — mirrors
+  // Shared add/edit/delete for both the Universal card and every Department card — mirrors
   // onboarding/OnboardingPlansPage.jsx's identical helpers exactly, wired to offboardingService.
   const existingTasksFor = (scopeType, departmentId) =>
     scopeType === 'universal'
@@ -178,6 +222,12 @@ export default function OffboardingPlansPage() {
       ...existingTasksFor(scopeType, departmentId),
       { title, activityTypeId: 1, relativeOffsetDays: 0 },
     ];
+    await offboardingService.saveScopeTasks(scopeType, personType, departmentId, newTasks);
+    await loadSummary();
+  };
+
+  const handleEditTask = async (scopeType, departmentId, taskId, updates) => {
+    const newTasks = existingTasksFor(scopeType, departmentId).map((t) => (t.id === taskId ? { ...t, ...updates } : t));
     await offboardingService.saveScopeTasks(scopeType, personType, departmentId, newTasks);
     await loadSummary();
   };
@@ -207,10 +257,7 @@ export default function OffboardingPlansPage() {
         </div>
       ) : (
         <div className="onboarding-scope-sections">
-          {/* Universal Tasks — full width. Content depends entirely on the selected filter:
-              Employee Universal and Intern Universal are two separate, non-overlapping task
-              sets, even though the card title itself stays the generic "Universal Tasks" (the
-              active filter already provides the person-type context). */}
+          {/* Universal Tasks — full width. */}
           <section>
             <ScopeCard
               emphasized
@@ -221,14 +268,13 @@ export default function OffboardingPlansPage() {
               emptyStateMessage={meta.universalEmptyState}
               taskCount={summary.universal.taskCount}
               onAddTask={(title) => handleAddTask('universal', null, title)}
+              onEditTask={(taskId, updates) => handleEditTask('universal', null, taskId, updates)}
               onDeleteTask={(taskId) => handleDeleteTask('universal', null, taskId)}
             />
           </section>
 
           {/* Department-Specific Tasks — compact scalable grid, rendered dynamically from every
-              real department. Each card means "tasks added specifically for the selected person
-              type in this department" — never a mix of Employee and Intern tasks for the same
-              department. */}
+              real department. */}
           <section>
             <h2 className="onboarding-scope-section-title">Department-Specific Tasks</h2>
             {summary.departments.length === 0 ? (
@@ -243,11 +289,11 @@ export default function OffboardingPlansPage() {
                     compact
                     icon={<Building2 size={16} />}
                     title={row.department.name}
-                    description={meta.departmentCardDescription}
                     tasks={row.tasks}
                     emptyStateMessage={meta.departmentEmptyState}
                     taskCount={row.taskCount}
                     onAddTask={(title) => handleAddTask('department', row.department.id, title)}
+                    onEditTask={(taskId, updates) => handleEditTask('department', row.department.id, taskId, updates)}
                     onDeleteTask={(taskId) => handleDeleteTask('department', row.department.id, taskId)}
                   />
                 ))}
