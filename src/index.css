@@ -5495,6 +5495,12 @@ input.form-control:focus {
   font-weight: 600;
 }
 
+.onboarding-scope-task-delete-cell {
+  text-align: right;
+  width: 1%;
+  padding-left: 0.5rem;
+}
+
 .onboarding-scope-task-list-empty {
   margin-top: 0.9rem;
   padding: 0.8rem 0.9rem;
@@ -5503,6 +5509,27 @@ input.form-control:focus {
   font-size: 0.77rem;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+/* Inline "add a task" row directly on a Plans scope card — no separate editor page. */
+.onboarding-scope-add-task-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.onboarding-scope-add-task-row .form-input {
+  flex: 1;
+  font-size: 0.83rem;
+}
+
+.onboarding-scope-add-task-row .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .onboarding-scope-card-footer {
@@ -5523,15 +5550,6 @@ input.form-control:focus {
   color: var(--text-main);
 }
 
-.onboarding-scope-card-action {
-  padding: 0.3rem 0.65rem;
-  font-size: 0.78rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  text-decoration: none;
-  flex-shrink: 0;
-}
 
 @media (max-width: 1024px) {
   .onboarding-scope-grid-dept {
