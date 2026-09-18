@@ -855,6 +855,15 @@ body {
   margin-top: 0.25rem;
 }
 
+/* Personnel directory only — tells users the List view's rows are clickable (replaced the old
+   separate "View Details" button), shown only while viewMode === 'list' since Card/Timeline
+   views don't share that same whole-row click behavior. */
+.directory-row-click-hint {
+  font-size: 0.78rem;
+  color: var(--text-light, var(--text-muted));
+  margin-top: 0.3rem;
+}
+
 /* Placeholder Card Component for Stage 1 */
 .placeholder-card {
   background-color: var(--bg-card);

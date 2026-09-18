@@ -10472,6 +10472,17 @@ export async function verifyStage18() {
         '1317b. NEW — EmployeeListView.jsx\'s clickable row is keyboard-accessible: tabIndex={0} plus an Enter/Space onKeyDown handler that triggers the same navigation as a click'
       );
 
+      // 1317c. NEW — a short hint under the Personnel page's subtitle tells users the List
+      // rows are clickable (per direct user request, since the old "View Details" button made
+      // this obvious but the row-click affordance alone might not be). Shown only in List view
+      // (viewMode === 'list') — Card/Timeline don't share the whole-row click behavior, so
+      // showing it there would be misleading.
+      assert(
+        directoryContainerSrc.match(/viewMode === 'list' && \([\s\S]{0,80}directory-row-click-hint/) &&
+        directoryContainerSrc.includes('Note: Click any personnel row to view their full details.'),
+        '1317c. NEW — DirectoryPageContainer.jsx renders "Note: Click any personnel row to view their full details." below the page description, gated on viewMode === \'list\' so it never shows in Card/Timeline'
+      );
+
       // 1318. SUPERSEDED (Personnel Details Page task) — Card view also navigates to the
       // dedicated Personnel Details page (person-level action available consistently, not
       // List-only), same "View Details" wording and Link-based navigation as List view.
