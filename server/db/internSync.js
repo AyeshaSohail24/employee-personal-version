@@ -192,8 +192,10 @@ export async function syncAllInternsToEmployees({ onItem } = {}) {
 // unlike syncAllInternsToEmployees() above (which still backs the one-off terminal repair script,
 // server/scripts/backfillContractEndDates.js, untouched). It reads the local roster, hydrates it
 // (still read-only — see employeeHydration.js), then overlays each intern-linked employee's
-// Personnel ID/Mode/Allowance/Contract End Date with whatever the Interns DB reports right now,
-// in memory only. A real intern the Interns DB knows about but this app has never locally created
+// Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date with whatever the Interns DB
+// reports right now, in memory only — the same set of fields createLocalEmployeeFromIntern()
+// pulls from the Interns DB when a record is first created, so a refresh shows exactly what
+// creating them fresh today would. A real intern the Interns DB knows about but this app has never locally created
 // a record for (no applicant conversion, never touched by syncAllInternsToEmployees()) has no
 // local row to overlay and so — deliberately — will not newly appear from this action; making
 // them appear would require a write (createEmployee), which this action must never do.
@@ -217,8 +219,10 @@ export async function getRefreshedEmployeesFromInterns() {
     return {
       ...employee,
       employeeId: intern.ref_number ?? employee.employeeId,
+      status: intern.status ?? employee.status,
       workMode: intern.mode ?? employee.workMode,
       allowance: intern.allowance ?? employee.allowance,
+      startDate: intern.internship_start_date ?? employee.startDate,
       contractEndDate: intern.internship_end_date ?? employee.contractEndDate,
     };
   });
