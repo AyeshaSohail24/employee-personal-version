@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
   Search,
-  ArrowUpRight,
   AlertTriangle,
   CheckCircle2,
   Clock,
@@ -18,6 +17,7 @@ import { onboardingService } from '../../services/onboardingService.js';
 // action: HR configures tasks under Onboarding > Plans and every intern is
 // assigned automatically from there.
 export default function OnboardingEmployeesPage() {
+  const navigate = useNavigate();
   const [interns, setInterns] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -181,21 +181,26 @@ export default function OnboardingEmployeesPage() {
             <table className="presence-data-table onboarding-employees-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '24%', textAlign: 'left' }}>Intern</th>
-                  <th style={{ width: '15%', textAlign: 'left' }}>Department</th>
-                  <th style={{ width: '12%', textAlign: 'center' }}>Start Date</th>
-                  <th style={{ width: '17%', textAlign: 'left' }}>Onboarding Plan</th>
-                  <th style={{ width: '13%', textAlign: 'center' }}>Progress</th>
-                  <th style={{ width: '10%', textAlign: 'center' }}>Status</th>
-                  <th style={{ width: '9%', textAlign: 'center' }}>Action</th>
+                  <th style={{ width: '26%', textAlign: 'left' }}>Intern</th>
+                  <th style={{ width: '16%', textAlign: 'left' }}>Department</th>
+                  <th style={{ width: '13%', textAlign: 'center' }}>Start Date</th>
+                  <th style={{ width: '19%', textAlign: 'left' }}>Onboarding Plan</th>
+                  <th style={{ width: '14%', textAlign: 'center' }}>Progress</th>
+                  <th style={{ width: '12%', textAlign: 'center' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleInterns.map((intern) => {
                   const plan = intern.plan;
+                  const isClickable = Boolean(intern.localEmployeeId);
 
                   return (
-                    <tr key={intern.internId} className="presence-table-row">
+                    <tr
+                      key={intern.internId}
+                      className="presence-table-row"
+                      onClick={isClickable ? () => navigate(`/onboarding/employees/${intern.localEmployeeId}`) : undefined}
+                      style={isClickable ? { cursor: 'pointer' } : undefined}
+                    >
                       <td>
                         <div className="emp-identity-block">
                           <div className="emp-avatar-circle">
@@ -267,21 +272,6 @@ export default function OnboardingEmployeesPage() {
                           <span className="presence-badge" style={{ backgroundColor: '#F1F5F9', color: '#64748B', borderColor: '#CBD5E1' }}>
                             Not Started
                           </span>
-                        )}
-                      </td>
-
-                      <td style={{ textAlign: 'center' }}>
-                        {intern.localEmployeeId ? (
-                          <Link
-                            to={`/onboarding/employees/${intern.localEmployeeId}`}
-                            className="btn-compact-override"
-                            style={{ padding: '0.2rem 0.4rem', fontSize: '0.72rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', whiteSpace: 'nowrap' }}
-                          >
-                            <span>View Progress</span>
-                            <ArrowUpRight size={11} />
-                          </Link>
-                        ) : (
-                          <span style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>—</span>
                         )}
                       </td>
                     </tr>
