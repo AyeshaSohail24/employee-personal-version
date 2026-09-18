@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
   Search,
-  ArrowUpRight,
   AlertTriangle,
   CheckCircle2,
   Clock,
 } from 'lucide-react';
 import { offboardingService } from '../../services/offboardingService.js';
+import { formatDateDisplay } from '../../utils/dateUtils.js';
 
 // The real intern roster (Interns DB), joined server-side with whatever
 // local offboarding plan each person has — see
@@ -20,6 +20,7 @@ import { offboardingService } from '../../services/offboardingService.js';
 // rather than something that fires the moment an intern appears — no UI
 // trigger for it exists yet.
 export default function OffboardingDepartingPage() {
+  const navigate = useNavigate();
   const [interns, setInterns] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -183,21 +184,25 @@ export default function OffboardingDepartingPage() {
             <table className="presence-data-table onboarding-employees-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '22%', textAlign: 'left' }}>Intern</th>
-                  <th style={{ width: '14%', textAlign: 'left' }}>Department</th>
-                  <th style={{ width: '13%', textAlign: 'center' }}>Final Working Date</th>
-                  <th style={{ width: '17%', textAlign: 'left' }}>Offboarding Plan</th>
-                  <th style={{ width: '12%', textAlign: 'center' }}>Progress</th>
-                  <th style={{ width: '12%', textAlign: 'center' }}>Status</th>
-                  <th style={{ width: '10%', textAlign: 'center' }}>Action</th>
+                  <th style={{ width: '28%', textAlign: 'left' }}>Intern</th>
+                  <th style={{ width: '18%', textAlign: 'left' }}>Department</th>
+                  <th style={{ width: '18%', textAlign: 'center' }}>Final Working Date</th>
+                  <th style={{ width: '18%', textAlign: 'center' }}>Progress</th>
+                  <th style={{ width: '18%', textAlign: 'center' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleInterns.map((intern) => {
                   const plan = intern.plan;
+                  const isClickable = Boolean(intern.localEmployeeId);
 
                   return (
-                    <tr key={intern.internId} className="presence-table-row">
+                    <tr
+                      key={intern.internId}
+                      className="presence-table-row"
+                      onClick={isClickable ? () => navigate(`/offboarding/employees/${intern.localEmployeeId}`) : undefined}
+                      style={isClickable ? { cursor: 'pointer' } : undefined}
+                    >
                       <td>
                         <div className="emp-identity-block">
                           <div className="emp-avatar-circle">
@@ -219,15 +224,7 @@ export default function OffboardingDepartingPage() {
                       </td>
 
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '0.815rem' }}>
-                        {plan ? plan.anchorDate : (intern.endDate || 'N/A')}
-                      </td>
-
-                      <td>
-                        <div style={{ fontSize: '0.815rem', color: 'var(--text-main)' }}>
-                          {plan ? `${plan.taskCount} task${plan.taskCount === 1 ? '' : 's'}` : (
-                            <span style={{ color: 'var(--text-muted)' }}>No active plan</span>
-                          )}
-                        </div>
+                        {formatDateDisplay(String(plan ? plan.anchorDate : intern.endDate || '').slice(0, 10))}
                       </td>
 
                       <td style={{ textAlign: 'center' }}>
@@ -269,21 +266,6 @@ export default function OffboardingDepartingPage() {
                           <span className="presence-badge" style={{ backgroundColor: '#F1F5F9', color: '#64748B', borderColor: '#CBD5E1' }}>
                             Not Started
                           </span>
-                        )}
-                      </td>
-
-                      <td style={{ textAlign: 'center' }}>
-                        {intern.localEmployeeId ? (
-                          <Link
-                            to={`/offboarding/employees/${intern.localEmployeeId}`}
-                            className="btn-compact-override"
-                            style={{ padding: '0.2rem 0.4rem', fontSize: '0.72rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', whiteSpace: 'nowrap' }}
-                          >
-                            <span>View Progress</span>
-                            <ArrowUpRight size={11} />
-                          </Link>
-                        ) : (
-                          <span style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>—</span>
                         )}
                       </td>
                     </tr>
