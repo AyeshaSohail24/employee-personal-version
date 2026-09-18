@@ -163,6 +163,8 @@ export default function PersonnelDetailsPage() {
         <ProfileField label="Last Name" value={profile.personal.lastName} />
         <ProfileField label="Email" value={profile.personal.email} />
         <ProfileField label="Contact Number" value={profile.personal.contactNumber} />
+        <ProfileField label="IC / Passport Number" value={profile.personal.icPassportNumber} />
+        <ProfileField label="Home Address" value={profile.personal.homeAddress} />
         <ProfileField label="Nationality" value={profile.personal.nationality} />
       </ProfileSection>
 

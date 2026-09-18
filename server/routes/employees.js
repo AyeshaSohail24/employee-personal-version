@@ -1,6 +1,6 @@
 import * as db from "../db/employees.js";
 import { hydrateEmployees, hydrateEmployee } from "../db/employeeHydration.js";
-import { syncAllInternsToEmployees } from "../db/internSync.js";
+import { syncAllInternsToEmployees, getInternPersonalDetails } from "../db/internSync.js";
 import { internsClient } from "../clients/internsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
@@ -47,10 +47,16 @@ export const routes = {
     },
   },
   "/employees/{id}": {
+    // Only this single-employee read fetches the live Interns DB record (icPassportNumber/
+    // homeAddress, for the Personnel Details page's Personal Information section) — never the
+    // bulk GET /employees list, which would mean one extra external call per row on every
+    // Personnel page load for data that page doesn't even display.
     async get(req, res, ctx) {
       const employee = await db.getEmployee(ctx.params.id);
       if (!employee) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);
-      sendJson(res, ctx.cid, 200, { employee: await hydrateEmployee(employee) });
+      const hydrated = await hydrateEmployee(employee);
+      const internPersonalDetails = await getInternPersonalDetails(employee);
+      sendJson(res, ctx.cid, 200, { employee: { ...hydrated, ...internPersonalDetails } });
     },
     async patch(req, res, ctx) {
       const body = await readJsonBody(req);

@@ -14803,6 +14803,57 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Personnel Details' Personal Information — IC/Passport Number and Home Address read live
+    // from the Interns DB (never mirrored locally), scoped to the single-employee detail read
+    // only, never the bulk Personnel list.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const internSyncSrcDetails = fs.readFileSync(path.resolve('./server/db/internSync.js'), 'utf-8');
+      const employeeRoutesSrcDetails = fs.readFileSync(path.resolve('./server/routes/employees.js'), 'utf-8');
+      const employeeServiceSrcDetails = fs.readFileSync(path.resolve('./src/services/employeeService.js'), 'utf-8');
+      const detailsPageSrcPersonal = fs.readFileSync(path.resolve('./src/pages/employees/PersonnelDetailsPage.jsx'), 'utf-8');
+      const profileModalSrcPersonal = fs.readFileSync(path.resolve('./src/components/employees/PersonnelProfileModal.jsx'), 'utf-8');
+
+      // 1641. NEW — internSync.js exports getInternPersonalDetails(), reading IC/Passport Number
+      // and Home Address from the live Interns DB record (getLinkedIntern()), returning null for
+      // a non-intern employee rather than fabricating values.
+      assert(
+        internSyncSrcDetails.includes('export async function getInternPersonalDetails(employee)') &&
+        internSyncSrcDetails.includes('icPassportNumber: intern.ic_passport_number') &&
+        internSyncSrcDetails.includes('homeAddress: intern.home_address'),
+        '1641. NEW — internSync.js exports getInternPersonalDetails(), reading icPassportNumber/homeAddress from the live Interns DB record'
+      );
+
+      // 1642. NEW — only GET /employees/{id} (the Personnel Details page's own read) merges this
+      // in, never the bulk GET /employees list — avoids one extra external call per row on every
+      // Personnel page load for fields that list doesn't even display.
+      const employeesByIdBlock = (employeeRoutesSrcDetails.match(/"\/employees\/\{id\}": \{[\s\S]*?\n  \},/) || [''])[0];
+      assert(
+        employeesByIdBlock.includes('getInternPersonalDetails(employee)') &&
+        !employeeRoutesSrcDetails.match(/"\/employees": \{[\s\S]{0,300}getInternPersonalDetails/),
+        '1642. NEW — GET /employees/{id} merges getInternPersonalDetails() into its response; GET /employees (the bulk list) does not call it at all'
+      );
+
+      // 1643. NEW — employeeService.getProfile() surfaces these as profile.personal.icPassportNumber/
+      // homeAddress (never fabricated for a non-intern employee — both fall back to null), and
+      // both PersonnelDetailsPage.jsx and PersonnelProfileModal.jsx render them so the page and
+      // the (still-live, Dashboard-used) modal never diverge in what data they show.
+      assert(
+        employeeServiceSrcDetails.includes('icPassportNumber: employee.icPassportNumber || null') &&
+        employeeServiceSrcDetails.includes('homeAddress: employee.homeAddress || null') &&
+        detailsPageSrcPersonal.includes('label="IC / Passport Number" value={profile.personal.icPassportNumber}') &&
+        detailsPageSrcPersonal.includes('label="Home Address" value={profile.personal.homeAddress}') &&
+        profileModalSrcPersonal.includes('label="IC / Passport Number" value={profile.personal.icPassportNumber}') &&
+        profileModalSrcPersonal.includes('label="Home Address" value={profile.personal.homeAddress}'),
+        '1643. NEW — employeeService.getProfile() surfaces icPassportNumber/homeAddress; PersonnelDetailsPage.jsx and PersonnelProfileModal.jsx both render them'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);

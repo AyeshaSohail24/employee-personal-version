@@ -21,6 +21,25 @@ export async function getLinkedIntern(employee) {
   }
 }
 
+// Personnel Details' Personal Information section — IC/Passport Number and Home Address are
+// collected by the Interns DB at intake but were never mirrored into this app's own `employees`
+// table (unlike start/end date, mode, allowance, department), so they're read through live here
+// rather than duplicated locally. null for a non-intern employee (no linked Interns DB record to
+// read from at all) or if the read-through fails — never fabricated, same fallback contract as
+// getLinkedIntern() above. Deliberately NOT resolving role_id here for a "Position" field: that
+// service's Roles are an access-control concept for its own admin UI (Admin/Employee/Intern/
+// Manager/Supervisor), not a job title — every intern would just show "Intern", duplicating the
+// Type field already shown, so it's left out rather than wiring in a technically-present but
+// meaningless value.
+export async function getInternPersonalDetails(employee) {
+  const intern = await getLinkedIntern(employee);
+  if (!intern) return null;
+  return {
+    icPassportNumber: intern.ic_passport_number ?? null,
+    homeAddress: intern.home_address ?? null,
+  };
+}
+
 // AGENTS.md rule 6 — departure automation must be reversible and logged,
 // never framed as instant/irreversible. Launching offboarding sets the
 // intern's real end date in the Interns DB (the one field that's actually
