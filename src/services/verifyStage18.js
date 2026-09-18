@@ -14776,15 +14776,16 @@ export async function verifyStage18() {
         '1638. NEW — internsClient.js exports getStatusEnum(), reading the Interns DB\'s own OpenAPI-published status enum'
       );
 
-      // 1639. NEW — GET /employees/statuses is registered (openapi.js — required for the router
-      // to recognize it) and maps the Interns DB's "Offboarding" onto this app's own "Departing"
-      // term, always including "Upcoming" (a stage the Interns DB has no concept of).
+      // 1639. UPDATED — GET /employees/statuses is registered (openapi.js — required for the
+      // router to recognize it) and passes the Interns DB's own status terms through verbatim —
+      // no local rename/mapping (by direct instruction) — appending only "Upcoming", a stage
+      // that service has no concept of at all.
       assert(
         employeeRoutesSrcStatus.includes('"/employees/statuses"') &&
-        employeeRoutesSrcStatus.includes('Offboarding: "Departing"') &&
-        employeeRoutesSrcStatus.includes('mapped.add("Upcoming")') &&
+        employeeRoutesSrcStatus.includes('[...internStatuses, "Upcoming"]') &&
+        !employeeRoutesSrcStatus.includes('Offboarding: "Departing"') &&
         openapiSrcStatus.match(/"\/employees\/statuses": \{\s*get: \{[\s\S]{0,200}security: scoped\("employees:read"\)/),
-        '1639. NEW — GET /employees/statuses is registered with security: scoped("employees:read"), maps Offboarding->Departing, and always includes Upcoming'
+        '1639. UPDATED — GET /employees/statuses is registered with security: scoped("employees:read") and returns [...internStatuses, "Upcoming"] verbatim, no Offboarding->Departing rename'
       );
 
       // 1640. NEW — the Personnel Status filter's options come from that endpoint, not a
