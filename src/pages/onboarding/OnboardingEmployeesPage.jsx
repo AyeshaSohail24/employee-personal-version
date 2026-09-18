@@ -222,7 +222,7 @@ export default function OnboardingEmployeesPage() {
                       </td>
 
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '0.815rem' }}>
-                        {formatDateDisplay(String(plan ? plan.anchorDate : intern.startDate || '').slice(0, 10))}
+                        {formatDateDisplay(String(plan ? plan.anchorDate : intern.startDate || ''))}
                       </td>
 
                       <td style={{ textAlign: 'center' }}>

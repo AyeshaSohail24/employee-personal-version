@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Globe2, UsersRound, GraduationCap, Building2, Settings2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Globe2, GraduationCap, Building2, Settings2 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
 
 function formatRelativeOffset(days) {
@@ -12,7 +12,8 @@ function formatRelativeOffset(days) {
 // Read-only preview of a scope's configured tasks, in their existing configured sequence order
 // (never re-sorted here — the order already comes pre-sorted by sequence from
 // onboardingService.getScopesSummary()). No Edit/Delete/Move controls live here; those only
-// exist in the "Manage Tasks" editor this card links to.
+// exist in the "Manage Tasks" editor this card links to. Title + timing only — the description
+// is configuration detail, not something this glance-level preview needs.
 function ScopeTaskList({ tasks, emptyStateMessage }) {
   if (!tasks || tasks.length === 0) {
     return (
@@ -23,17 +24,18 @@ function ScopeTaskList({ tasks, emptyStateMessage }) {
   }
 
   return (
-    <div className="onboarding-scope-task-list app-scroll-area">
-      {tasks.map((task) => (
-        <div key={task.id} className="onboarding-scope-task-row">
-          <span className="onboarding-scope-task-title">{task.title}</span>
-          {task.description && (
-            <p className="onboarding-scope-task-description">{task.description}</p>
-          )}
-          <span className="onboarding-scope-task-timing">{formatRelativeOffset(task.relativeOffsetDays)}</span>
-        </div>
-      ))}
-    </div>
+    <table className="onboarding-scope-task-table">
+      <tbody>
+        {tasks.map((task) => (
+          <tr key={task.id}>
+            <td className="onboarding-scope-task-title">{task.title}</td>
+            <td className="onboarding-scope-task-timing-cell">
+              <span className="onboarding-scope-task-timing">{formatRelativeOffset(task.relativeOffsetDays)}</span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -84,17 +86,11 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
 
 // Single source of truth for every piece of copy that depends on which person type is
 // currently selected — the Universal card's subtitle/empty-state and each Department card's
-// description/empty-state all read from here, so Employees vs Interns wording can never drift
-// between the two card types.
+// description/empty-state all read from here. Only 'intern' is reachable right now (the
+// Employees tab is removed for now — see OnboardingEmployeesPage.jsx's identical scoping);
+// the 'employee' scope-task data model underneath is untouched, so restoring it later is just
+// re-adding the tab, not rebuilding this.
 const PERSON_TYPE_META = {
-  employee: {
-    label: 'Employees',
-    icon: <UsersRound size={15} />,
-    universalSubtitle: 'Included for every employee regardless of department.',
-    universalEmptyState: "No universal tasks configured yet. Add tasks here to include them in every employee's onboarding plan.",
-    departmentCardDescription: 'Tasks added specifically for Employees in this department.',
-    departmentEmptyState: 'No employee-specific tasks configured for this department. Employee Universal Tasks will still apply.',
-  },
   intern: {
     label: 'Interns',
     icon: <GraduationCap size={15} />,
@@ -106,21 +102,14 @@ const PERSON_TYPE_META = {
 };
 
 export default function OnboardingPlansPage() {
-  const location = useLocation();
-
-  // The selected filter is local component state only (per design — not over-engineered into
-  // a persisted preference). It does default sensibly though: arriving back here from the
-  // "Manage Tasks" editor (via its Cancel/Back link or after Save Tasks) carries the personType
-  // that was just being edited via router state, so the filter doesn't silently reset to
-  // Employees mid-workflow. A normal/fresh visit (no state) defaults to Employees.
-  const [personType, setPersonType] = useState(location.state?.personType === 'intern' ? 'intern' : 'employee');
+  const personType = 'intern';
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [personType]);
+  }, []);
 
   const loadSummary = async () => {
     setLoading(true);
@@ -142,36 +131,9 @@ export default function OnboardingPlansPage() {
         <div className="onboarding-plans-header">
           <h1 className="page-title">Onboarding Plans</h1>
           <p className="page-subtitle">
-            Configure reusable onboarding tasks for employees and interns. Universal and department-specific tasks are combined automatically when onboarding is launched.
+            Configure reusable onboarding tasks for interns. Universal and department-specific tasks are combined automatically when onboarding is launched.
           </p>
         </div>
-      </div>
-
-      {/* Employees / Interns filter — represents the PERSON TYPE whose onboarding
-          configuration is being viewed below. Reuses the existing .view-switcher-group/
-          .view-btn segmented-control pattern (already used for Notes' Card/Document View and
-          inside LaunchPlanModal) rather than introducing a new control or a dropdown. */}
-      <div className="view-switcher-group onboarding-person-type-switcher" role="tablist" aria-label="Onboarding plan person type">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={personType === 'employee'}
-          className={`view-btn ${personType === 'employee' ? 'active' : ''}`}
-          onClick={() => setPersonType('employee')}
-        >
-          <UsersRound size={15} />
-          <span>Employees</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={personType === 'intern'}
-          className={`view-btn ${personType === 'intern' ? 'active' : ''}`}
-          onClick={() => setPersonType('intern')}
-        >
-          <GraduationCap size={15} />
-          <span>Interns</span>
-        </button>
       </div>
 
       {loading || !summary ? (

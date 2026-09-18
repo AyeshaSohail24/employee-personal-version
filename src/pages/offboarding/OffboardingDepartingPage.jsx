@@ -224,7 +224,7 @@ export default function OffboardingDepartingPage() {
                       </td>
 
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '0.815rem' }}>
-                        {formatDateDisplay(String(plan ? plan.anchorDate : intern.endDate || '').slice(0, 10))}
+                        {formatDateDisplay(String(plan ? plan.anchorDate : intern.endDate || ''))}
                       </td>
 
                       <td style={{ textAlign: 'center' }}>
