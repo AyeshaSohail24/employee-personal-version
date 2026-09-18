@@ -75,6 +75,8 @@ export async function resolveOrCreateEmployeeForIntern(internId) {
     status: "Onboarding",
     startDate: intern.internship_start_date,
     contractEndDate: intern.internship_end_date,
+    workMode: intern.mode,
+    allowance: intern.allowance,
   });
   await updateEmployee(employeeId, { internExternalId: intern.id, internRefNumber: intern.ref_number });
 
