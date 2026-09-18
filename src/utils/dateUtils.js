@@ -18,14 +18,15 @@ export function getTodayLocalDateString() {
 }
 
 /**
- * Formats a YYYY-MM-DD string into a human-friendly format (e.g., 'Sep 02, 2026').
- * 
- * @param {string} dateStr 'YYYY-MM-DD' date string
+ * Formats a YYYY-MM-DD (or full ISO timestamp, e.g. from the live API — '2026-07-27T00:00:00.000Z')
+ * string into a human-friendly format (e.g., 'Sep 02, 2026').
+ *
+ * @param {string} dateStr 'YYYY-MM-DD' date string, or an ISO timestamp starting with one
  * @returns {string} Formatted date string
  */
 export function formatDateDisplay(dateStr) {
   if (!dateStr) return 'No Date';
-  const parts = dateStr.split('-');
+  const parts = dateStr.slice(0, 10).split('-');
   if (parts.length !== 3) return dateStr;
   
   const [year, month, day] = parts.map(Number);
