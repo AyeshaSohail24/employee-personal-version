@@ -95,7 +95,14 @@ export const employeeService = {
         lastName: employee.lastName || null,
         email: employee.workEmail || null,
         contactNumber: employee.workPhone || null,
-        // Not yet collected anywhere in the current data model — reserved for future intake.
+        // Live-read from the Interns DB for an intern-linked employee (server's GET /employees/{id}
+        // — see internSync.js's getInternPersonalDetails()); null for a non-intern employee, since
+        // there's no Interns DB record to read from at all.
+        icPassportNumber: employee.icPassportNumber || null,
+        homeAddress: employee.homeAddress || null,
+        // Confirmed NOT tracked anywhere in the Interns DB's own schema either (checked its
+        // published OpenAPI Intern properties directly) — genuinely no source to read this from,
+        // not just "not yet collected".
         nationality: null,
       },
       // Reserved for the future application/shortlisting microapp integration — none of this
@@ -120,6 +127,11 @@ export const employeeService = {
       employment: {
         personnelId: employee.employeeId,
         type: employee.directoryType || null,
+        // This app's own local positions table, keyed by employment_records.position_id — never
+        // populated for an intern-synced employee (checked: the Interns DB's role_id is an
+        // access-control concept for ITS OWN admin UI — Admin/Employee/Intern/Manager/Supervisor —
+        // not a job title; every intern would resolve to the same "Intern" value, just duplicating
+        // the Type field above, so it's intentionally not wired to that instead).
         position: employee.position ? employee.position.name : null,
         department: employee.department ? employee.department.name : null,
         workMode: employee.workMode || null,
@@ -440,18 +452,16 @@ export const employeeService = {
   },
 
   /**
-   * Refreshes Employees Directory data from the current source of truth.
-   *
-   * CURRENT (PoC, no backend): re-reads the local storage-engine database, identically
-   * to getAll(). FUTURE: swap the implementation to fetch the latest employees from a
-   * backend API/database — the call signature and hydrated-array return shape stay the
-   * same, so callers (the Sync Employees button) require no changes when that happens.
-   *
-   * @param {Object} [options]
+   * Refreshes Employees Directory data from the actual source of truth: POSTs to
+   * /employees/sync (server/db/internSync.js's syncAllInternsToEmployees()), which pulls every
+   * intern from the external Interns DB and creates/reconciles their local employee record —
+   * not just a re-read of whatever this app's own database already had cached — then re-fetches
+   * the now-current roster.
    * @returns {Promise<Array<Object>>}
    */
-  async syncEmployees(options = {}) {
-    return this.getAll({ hydrate: true, ...options });
+  async syncEmployees() {
+    await apiClient.post('/employees/sync');
+    return this.getAll();
   },
 };
 

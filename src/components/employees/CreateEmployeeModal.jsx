@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus, AlertCircle } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
-import { departmentService } from '../../services/departmentService.js';
+import { apiClient } from '../../services/apiClient.js';
 import { validateEmployeeCreation } from '../../domain/employmentDomain.js';
 import { getTodayLocalDateString } from '../../utils/dateUtils.js';
 import { Select } from '../common/Select.jsx';
@@ -68,8 +68,11 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSubmit }) {
   const loadReferenceOptions = async () => {
     setLoadingOptions(true);
     try {
-      const [depts, emps] = await Promise.all([
-        departmentService.getAll({ withCount: false }),
+      // Departments come from the real Departments service (department-zeta.vercel.app, via
+      // GET /departments), same as the Personnel directory's own filter — not the mock
+      // departmentService.js, whose department list was hardcoded/out of sync with the real one.
+      const [{ departments: depts }, emps] = await Promise.all([
+        apiClient.get('/departments'),
         employeeService.getAll(),
       ]);
       setDepartments(depts);

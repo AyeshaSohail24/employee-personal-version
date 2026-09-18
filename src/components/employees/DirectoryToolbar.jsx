@@ -23,14 +23,13 @@ export default function DirectoryToolbar({
   onTypeChange,
   selectedMode = 'All',
   onModeChange,
-  selectedAllowance = 'All',
-  onAllowanceChange,
   selectedSort,
   onSortChange,
   viewMode,
   onViewModeChange,
   onResetFilters,
   departments = [],
+  statuses = [],
   showStatusFilter = false,
   hasActiveFilters = false,
 }) {
@@ -105,7 +104,7 @@ export default function DirectoryToolbar({
 
       {/* Detailed filters row — deliberately a NEW class (.toolbar-filters-row), not the shared
           .toolbar-bottom-row CandidateToolbar.jsx still uses. Stacks two independent sub-rows:
-          the 5 filters (an explicit CSS Grid, always one row on desktop — see
+          the 4 filters (an explicit CSS Grid, always one row on desktop — see
           .personnel-filters-group's own comment in index.css for exactly how that's guaranteed),
           and, only when a filter is active, Reset Filters UNDERNEATH on its own row — never a
           grid item itself, so it can never consume a column or push Sort By out of the grid. */}
@@ -144,23 +143,13 @@ export default function DirectoryToolbar({
             />
           </div>
 
-          {/* Salary Filter (user-facing label only; underlying data remains the existing Paid/Unpaid allowance field) */}
-          <div className="filter-item">
-            <label htmlFor="allowance-filter">Salary:</label>
-            <Select
-              id="allowance-filter"
-              variant="filter"
-              value={selectedAllowance}
-              onChange={(e) => onAllowanceChange(e.target.value)}
-              options={[
-                { value: 'All', label: 'Paid & Unpaid' },
-                { value: 'Paid', label: 'Paid' },
-                { value: 'Unpaid', label: 'Unpaid' },
-              ]}
-            />
-          </div>
-
-          {/* Status Filter (Only visible on /employees route) */}
+          {/* Status Filter (Only visible on /employees route) — options come from the Interns
+              DB's own status vocabulary (GET /employees/statuses), not a hardcoded list; see
+              that route's own doc comment in server/routes/employees.js for the Offboarding ->
+              Departing mapping and why Upcoming is always added. 'All' stays a real option (not
+              the Select's own placeholder, which would use value: '' instead) because
+              statusFilter's existing "no filter" sentinel is the string 'All' everywhere else in
+              this container (URL param default, hasActiveFilters, handleResetFilters). */}
           {showStatusFilter && (
             <div className="filter-item">
               <label htmlFor="status-filter">Status:</label>
@@ -169,14 +158,7 @@ export default function DirectoryToolbar({
                 variant="filter"
                 value={selectedStatus}
                 onChange={(e) => onStatusChange(e.target.value)}
-                options={[
-                  { value: 'All', label: 'All Statuses' },
-                  { value: 'Active', label: 'Active' },
-                  { value: 'Onboarding', label: 'Onboarding' },
-                  { value: 'Upcoming', label: 'Upcoming' },
-                  { value: 'Departing', label: 'Departing' },
-                  { value: 'Former', label: 'Former' },
-                ]}
+                options={[{ value: 'All', label: 'All Statuses' }, ...statuses.map((s) => ({ value: s, label: s }))]}
               />
             </div>
           )}

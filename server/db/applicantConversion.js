@@ -50,6 +50,8 @@ export async function convertApplicant(applicantId, {
     status: "Onboarding",
     startDate,
     contractEndDate: internshipEndDate ?? null,
+    workMode: mode ?? "On-site",
+    allowance: allowance ?? "Paid",
     sourceApplicantId: applicantId,
   });
 

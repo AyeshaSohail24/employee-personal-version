@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Plus } from 'lucide-react';
 import { employeeService } from '../../services/employeeService';
-import { departmentService } from '../../services/departmentService';
 import { employeeTypeService } from '../../services/employeeTypeService';
 import { locationService } from '../../services/locationService';
+import { apiClient } from '../../services/apiClient';
 
 import DirectoryToolbar from './DirectoryToolbar';
 import EmployeeListView from './EmployeeListView';
@@ -31,7 +31,6 @@ export default function DirectoryPageContainer({
   const urlDeptId = searchParams.get('departmentId') || '';
   const urlType = searchParams.get('type') || 'All';
   const urlMode = searchParams.get('mode') || 'All';
-  const urlAllowance = searchParams.get('allowance') || 'All';
 
   // Filter & Search states
   const [search, setSearch] = useState('');
@@ -39,7 +38,6 @@ export default function DirectoryPageContainer({
   const [departmentId, setDepartmentId] = useState(urlDeptId);
   const [typeFilter, setTypeFilter] = useState(urlType);
   const [modeFilter, setModeFilter] = useState(urlMode);
-  const [allowanceFilter, setAllowanceFilter] = useState(urlAllowance);
   const [sortBy, setSortBy] = useState('name-asc');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'card' | 'timeline'
 
@@ -49,23 +47,43 @@ export default function DirectoryPageContainer({
     setDepartmentId(urlDeptId);
     setTypeFilter(urlType);
     setModeFilter(urlMode);
-    setAllowanceFilter(urlAllowance);
-  }, [urlStatus, urlDeptId, urlType, urlMode, urlAllowance]);
+  }, [urlStatus, urlDeptId, urlType, urlMode]);
 
-  // Dropdown Options
+  // Dropdown Options — read through to the real Departments service (department-zeta.vercel.app,
+  // via GET /departments — server/routes/orgStructure.js), not the mock departmentService.js:
+  // real employee records' department.id (server/db/employeeHydration.js) already comes from
+  // there, so the filter's own option values have to match that same source or "Department"
+  // filtering silently matches nothing.
   const [departments, setDepartments] = useState([]);
 
-  useEffect(() => {
-    async function loadOptions() {
-      try {
-        const depts = await departmentService.getAll({ withCount: false });
-        setDepartments(depts);
-      } catch (err) {
-        console.error('Failed to load filter options:', err);
-      }
+  const loadDepartments = useCallback(async () => {
+    try {
+      const { departments: depts } = await apiClient.get('/departments');
+      setDepartments(depts);
+    } catch (err) {
+      console.error('Failed to load department filter options:', err);
     }
-    loadOptions();
   }, []);
+
+  // Status filter options — derived from the Interns DB's own status vocabulary (GET
+  // /employees/statuses), not hardcoded; see that route's doc comment in
+  // server/routes/employees.js for the Offboarding -> Departing mapping and why Upcoming is
+  // always included even though the Interns DB has no equivalent stage.
+  const [statuses, setStatuses] = useState([]);
+
+  const loadStatuses = useCallback(async () => {
+    try {
+      const { statuses: list } = await apiClient.get('/employees/statuses');
+      setStatuses(list);
+    } catch (err) {
+      console.error('Failed to load status filter options:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDepartments();
+    loadStatuses();
+  }, [loadDepartments, loadStatuses]);
 
   // Fetch queried employees whenever scope or filter states change
   const fetchEmployees = useCallback(async () => {
@@ -77,7 +95,6 @@ export default function DirectoryPageContainer({
         departmentId,
         typeFilter,
         modeFilter,
-        allowanceFilter,
         search,
         sortBy,
       });
@@ -90,16 +107,16 @@ export default function DirectoryPageContainer({
     } finally {
       setLoading(false);
     }
-  }, [baseLifecycleScope, statusFilter, departmentId, typeFilter, modeFilter, allowanceFilter, search, sortBy]);
+  }, [baseLifecycleScope, statusFilter, departmentId, typeFilter, modeFilter, search, sortBy]);
 
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  // Sync Employees: refreshes the current source-of-truth via the service layer, then
-  // re-queries with existing filters/sort/view intact. CURRENT implementation reloads
-  // the local PoC database; swapping employeeService.syncEmployees() for a backend
-  // fetch later requires no change here.
+  // Sync Employees: reconciles the roster from the Interns DB (employeeService.syncEmployees(),
+  // POST /employees/sync), then re-reads the employee list AND both filter-option lists that
+  // ultimately come from that same Interns DB — a department or status term added/renamed at
+  // the source should show up here too, not just employees.
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
 
@@ -109,7 +126,7 @@ export default function DirectoryPageContainer({
     setSyncMessage('');
     try {
       await employeeService.syncEmployees();
-      await fetchEmployees();
+      await Promise.all([fetchEmployees(), loadDepartments(), loadStatuses()]);
       setSyncMessage('Personnel data refreshed');
     } catch (err) {
       console.error('Failed to sync employees:', err);
@@ -135,7 +152,6 @@ export default function DirectoryPageContainer({
     setDepartmentId('');
     setTypeFilter('All');
     setModeFilter('All');
-    setAllowanceFilter('All');
     setSortBy('name-asc');
     setSearchParams({}); // Clears URL query parameters cleanly
   };
@@ -146,7 +162,6 @@ export default function DirectoryPageContainer({
     Boolean(departmentId) ||
     typeFilter !== 'All' ||
     modeFilter !== 'All' ||
-    allowanceFilter !== 'All' ||
     sortBy !== 'name-asc';
 
   // Result count formatting — "personnel" is already collective/plural, so it reads correctly
@@ -163,6 +178,9 @@ export default function DirectoryPageContainer({
         <div>
           <h1 className="page-title">{title}</h1>
           <p className="page-description">{description}</p>
+          {viewMode === 'list' && (
+            <p className="directory-row-click-hint">Note: Click any personnel row to view their full details.</p>
+          )}
         </div>
         <div className="header-actions">
           <div className="directory-count-badge">{resultCountText}</div>
@@ -215,14 +233,13 @@ export default function DirectoryPageContainer({
         onTypeChange={setTypeFilter}
         selectedMode={modeFilter}
         onModeChange={setModeFilter}
-        selectedAllowance={allowanceFilter}
-        onAllowanceChange={setAllowanceFilter}
         selectedSort={sortBy}
         onSortChange={setSortBy}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onResetFilters={handleResetFilters}
         departments={departments}
+        statuses={statuses}
         showStatusFilter={baseLifecycleScope === 'All'}
         hasActiveFilters={hasActiveFilters}
       />

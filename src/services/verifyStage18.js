@@ -10439,29 +10439,48 @@ export async function verifyStage18() {
         '1315. REGRESSION: router/index.jsx still routes \'employees\' to <AllEmployeesPage /> unchanged — preserving route compatibility was preferred over introducing a /personnel migration for this task'
       );
 
-      // 1316. UPDATED (Personnel Details Page task) — List table: final DETAILS column added
-      // (was PROFILE — renamed alongside the View Profile -> View Details wording change below,
-      // since a column still labeled PROFILE next to a "View Details" button would read as
-      // inconsistent), ID still first, 10 columns total.
+      // 1316. SUPERSEDED (Row-click navigation task) — List table no longer has a separate
+      // DETAILS column at all; the whole row navigates instead (see 1317). ID still first,
+      // exactly 9 columns now (was 10 with DETAILS).
       assert(
-        employeeListViewSrc.match(/<th style=\{\{ width: '6%' \}\}>ID<\/th>/) &&
-        employeeListViewSrc.match(/<th[^>]*>DETAILS<\/th>\s*<\/tr>/) &&
+        employeeListViewSrc.match(/<th style=\{\{ width: '7%' \}\}>ID<\/th>/) &&
+        !employeeListViewSrc.match(/<th[^>]*>DETAILS<\/th>/) &&
         !employeeListViewSrc.match(/<th[^>]*>PROFILE<\/th>/) &&
-        (employeeListViewSrc.match(/<th style=/g) || []).length === 10,
-        '1316. UPDATED — EmployeeListView.jsx\'s table header keeps ID first and adds DETAILS (was PROFILE) as the FINAL column — exactly 10 <th> columns total (ID/NAME/DEPARTMENT/TYPE/MODE/DATES/SALARY/STATUS/DURATION/DETAILS)'
+        (employeeListViewSrc.match(/<th style=/g) || []).length === 9,
+        '1316. SUPERSEDED — EmployeeListView.jsx\'s table header has no DETAILS (or PROFILE) column anymore — exactly 9 <th> columns total (ID/NAME/DEPARTMENT/TYPE/MODE/DATES/SALARY/STATUS/DURATION), ID still first'
       );
 
-      // 1317. SUPERSEDED (Personnel Details Page task) — the per-row action no longer opens
-      // PersonnelProfileModal via an onViewProfile(emp.id) callback; it now navigates to the
-      // dedicated Personnel Details page via a real <Link to={`/employees/${emp.id}`}>, reading
-      // "View Details" instead of "View Profile" — per direct user request, since a person's
-      // record can grow to include CV/resume PDFs that don't fit comfortably in a modal.
+      // 1317. SUPERSEDED (Row-click navigation task) — the per-row action is no longer a
+      // separate "View Details" button/column; clicking (or pressing Enter/Space on) the row
+      // itself navigates to the dedicated Personnel Details page via useNavigate(), per direct
+      // user request to replace the button with a clickable row.
       assert(
-        employeeListViewSrc.match(/<Link to=\{`\/employees\/\$\{emp\.id\}`\} className="btn-compact-override"/) &&
-        employeeListViewSrc.includes('<span>View Details</span>') &&
+        employeeListViewSrc.includes("import { useNavigate } from 'react-router-dom';") &&
+        employeeListViewSrc.includes('const navigate = useNavigate();') &&
+        employeeListViewSrc.match(/const goToDetails = \(\) => navigate\(`\/employees\/\$\{emp\.id\}`\);/) &&
+        employeeListViewSrc.match(/className="directory-table-row"[\s\S]{0,150}onClick=\{goToDetails\}/) &&
+        !employeeListViewSrc.includes('View Details') &&
         !employeeListViewSrc.includes('View Profile') &&
         !employeeListViewSrc.includes('onViewProfile'),
-        '1317. SUPERSEDED — EmployeeListView.jsx\'s DETAILS cell renders a <Link to={`/employees/${emp.id}`}> reading "View Details" for every row — no onViewProfile callback, no "View Profile" text remains'
+        '1317. SUPERSEDED — EmployeeListView.jsx has no more per-row "View Details" button; each <tr> carries className="directory-table-row" and navigates via onClick={goToDetails} (useNavigate to /employees/${emp.id}) — no onViewProfile callback, no "View Details"/"View Profile" text remains'
+      );
+
+      // 1317b. NEW — the clickable row is also keyboard-operable (Enter/Space), not mouse-only.
+      assert(
+        employeeListViewSrc.match(/onKeyDown=\{\(e\) => \{[\s\S]{0,120}e\.key === 'Enter' \|\| e\.key === ' '/) &&
+        employeeListViewSrc.includes('tabIndex={0}'),
+        '1317b. NEW — EmployeeListView.jsx\'s clickable row is keyboard-accessible: tabIndex={0} plus an Enter/Space onKeyDown handler that triggers the same navigation as a click'
+      );
+
+      // 1317c. NEW — a short hint under the Personnel page's subtitle tells users the List
+      // rows are clickable (per direct user request, since the old "View Details" button made
+      // this obvious but the row-click affordance alone might not be). Shown only in List view
+      // (viewMode === 'list') — Card/Timeline don't share the whole-row click behavior, so
+      // showing it there would be misleading.
+      assert(
+        directoryContainerSrc.match(/viewMode === 'list' && \([\s\S]{0,80}directory-row-click-hint/) &&
+        directoryContainerSrc.includes('Note: Click any personnel row to view their full details.'),
+        '1317c. NEW — DirectoryPageContainer.jsx renders "Note: Click any personnel row to view their full details." below the page description, gated on viewMode === \'list\' so it never shows in Card/Timeline'
       );
 
       // 1318. SUPERSEDED (Personnel Details Page task) — Card view also navigates to the
@@ -12390,10 +12409,10 @@ export async function verifyStage18() {
         '1471. REGRESSION: DirectoryPageContainer.jsx\'s Department/Type/Mode/Salary/Status filters, Sort By, and List/Card/Timeline view-mode wiring are all still passed to DirectoryToolbar exactly as before — this task changed only the per-row Details action'
       );
 
-      // 1472. REGRESSION: neither EmployeeListView.jsx nor EmployeeCardView.jsx import
-      // PersonnelProfileModal in actual code — both now navigate via react-router's <Link>, never
-      // a modal (an explanatory comment mentioning the component by name, e.g. "instead of
-      // opening PersonnelProfileModal", is expected and fine — only real import/usage is checked).
+      // 1472. REGRESSION/UPDATED: neither EmployeeListView.jsx nor EmployeeCardView.jsx import
+      // PersonnelProfileModal in actual code — navigation is still pure routing, never a modal.
+      // List navigates the whole row via useNavigate() (row-click task); Card still uses a
+      // per-card <Link> (unaffected — only List's Details column/button was replaced).
       {
         const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
         const listCodeOnly = stripComments(employeeListViewSrcDetails);
@@ -12401,9 +12420,10 @@ export async function verifyStage18() {
         assert(
           !listCodeOnly.includes('PersonnelProfileModal') &&
           !cardCodeOnly.includes('PersonnelProfileModal') &&
-          employeeListViewSrcDetails.includes("import { Link } from 'react-router-dom';") &&
+          employeeListViewSrcDetails.includes("import { useNavigate } from 'react-router-dom';") &&
+          !employeeListViewSrcDetails.includes("import { Link }") &&
           employeeCardViewSrcDetails.includes("import { Link } from 'react-router-dom';"),
-          '1472. REGRESSION: EmployeeListView.jsx and EmployeeCardView.jsx both import react-router-dom\'s Link and neither references PersonnelProfileModal in actual code (comments excluded) — the Personnel directory\'s View Details action is pure navigation'
+          '1472. REGRESSION/UPDATED: EmployeeListView.jsx now imports useNavigate (not Link — replaced by whole-row navigation) and EmployeeCardView.jsx still imports Link unchanged; neither references PersonnelProfileModal in actual code (comments excluded) — the Personnel directory\'s Details action is pure navigation either way'
         );
       }
 
@@ -14512,6 +14532,323 @@ export async function verifyStage18() {
       assert(
         /<NavLink\s+to="\/dashboard"\s+className="brand-title-group"\s+onClick=\{closeMobile\}>\s*<img/.test(sidebarSrcBrand),
         '1623. NEW/REGRESSION: the branding element is still wrapped in a NavLink to="/dashboard" with the same onClick={closeMobile} handler the old branding already had — click-through behavior is preserved exactly'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // "Sync Personnel" — actually reconciles from the Interns DB, not just a re-read of stale
+    // local data (fixes the same root cause as the missing end date/mode/salary bugs: an
+    // employee's fields only ever got set once, at creation, and never re-checked against the
+    // Interns DB afterward).
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const internSyncSrc = fs.readFileSync(path.resolve('./server/db/internSync.js'), 'utf-8');
+      const employeeRoutesSrc = fs.readFileSync(path.resolve('./server/routes/employees.js'), 'utf-8');
+      const openapiSrcSync = fs.readFileSync(path.resolve('./server/openapi.js'), 'utf-8');
+      const employeeServiceSrcSync = fs.readFileSync(path.resolve('./src/services/employeeService.js'), 'utf-8');
+
+      // 1624. NEW — a shared reconciliation function exists, covering both "create the local
+      // employee if this intern has never been touched" and "fix Mode/Salary/End Date if they've
+      // drifted from the Interns DB" in one pass, callable by both the live button and the
+      // terminal script (no duplicated logic between the two).
+      assert(
+        internSyncSrc.includes('export async function syncAllInternsToEmployees(') &&
+        internSyncSrc.includes('createLocalEmployeeFromIntern') &&
+        internSyncSrc.includes('computeInternReconciliation'),
+        '1624. NEW — internSync.js exports syncAllInternsToEmployees(), built from shared create/reconcile helpers also usable by resolveOrCreateEmployeeForIntern()'
+      );
+
+      // 1625. NEW — a single bad intern record can't abort the whole batch: each intern is
+      // processed in its own try/catch, tallied into a `failed` count, never thrown out of the loop.
+      assert(
+        /for \(const intern of interns[\s\S]{0,40}\{\s*try \{/.test(internSyncSrc) &&
+        internSyncSrc.includes('action: "failed"'),
+        '1625. NEW — syncAllInternsToEmployees() catches a per-intern failure and continues the batch (tracked in the returned `failed` count) rather than aborting the whole sync'
+      );
+
+      // 1626. NEW — POST /employees/sync exists, routed and scoped consistently with the other
+      // write endpoints on this resource (employees:write, same as POST/PATCH /employees).
+      assert(
+        employeeRoutesSrc.includes('"/employees/sync"') &&
+        employeeRoutesSrc.includes('syncAllInternsToEmployees()') &&
+        openapiSrcSync.match(/"\/employees\/sync": \{\s*post: \{[\s\S]{0,200}security: scoped\("employees:write"\)/),
+        '1626. NEW — POST /employees/sync is registered in openapi.js (required for the router to recognize it at all) with security: scoped("employees:write"), and its route handler calls syncAllInternsToEmployees()'
+      );
+
+      // 1627. UPDATED — the frontend "Sync Personnel" button (employeeService.syncEmployees())
+      // now actually triggers that server-side reconciliation before re-reading the roster,
+      // instead of just re-fetching whatever this app's own database already had cached.
+      assert(
+        employeeServiceSrcSync.match(/async syncEmployees\(\) \{\s*await apiClient\.post\('\/employees\/sync'\);\s*return this\.getAll\(\);/),
+        '1627. UPDATED — employeeService.syncEmployees() now POSTs to /employees/sync (triggering the real Interns DB reconciliation) before calling getAll() again — "Sync Personnel" gets genuinely fresh data, not a re-read of stale local rows'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Personnel's Department filter — reads from the real Departments service, not the mock
+    // departmentService.js (whose ids never matched real employees' actual department.id, so
+    // the filter silently matched nothing); "Sync Personnel" also refreshes it.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const directoryContainerSrcDept = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+
+      // 1628. NEW — the Department dropdown's options come from GET /departments (the real,
+      // external Departments service, read through server-side — see server/routes/
+      // orgStructure.js), not the mock departmentService.js, whose department ids never matched
+      // a real employee's actual department.id (itself sourced from the same real service via
+      // server/db/employeeHydration.js) — so filtering used to silently match nothing.
+      assert(
+        directoryContainerSrcDept.match(/const \{ departments: depts \} = await apiClient\.get\('\/departments'\);/) &&
+        !directoryContainerSrcDept.includes("from '../../services/departmentService'") &&
+        !directoryContainerSrcDept.includes('departmentService.getAll'),
+        '1628. NEW — DirectoryPageContainer.jsx loads Department filter options via apiClient.get(\'/departments\') (the real external service), no departmentService.js import/usage remains'
+      );
+
+      // 1629. NEW — clicking "Sync Personnel" refreshes the Department options too, not just
+      // the employee list, so a department added/renamed at the source shows up immediately.
+      assert(
+        directoryContainerSrcDept.match(/await Promise\.all\(\[fetchEmployees\(\), loadDepartments\(\)\]\);/),
+        '1629. NEW — handleSync() (the Sync Personnel button) re-runs loadDepartments() alongside fetchEmployees(), so the Department filter reflects the latest data from the real service too'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Create Personnel modal's Department dropdown — same fix as the Personnel directory's own
+    // filter: reads from the real Departments service, not the mock departmentService.js.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const createModalSrcDept = fs.readFileSync(path.resolve('./src/components/employees/CreateEmployeeModal.jsx'), 'utf-8');
+
+      // 1630. NEW — Create Personnel's Department options come from GET /departments (real,
+      // external), not the mock departmentService.js — whose hardcoded department list didn't
+      // match the real ones (e.g. "Executive Office"/"Product & UX" that don't actually exist).
+      assert(
+        createModalSrcDept.match(/const \[\{ departments: depts \}, emps\] = await Promise\.all\(\[\s*apiClient\.get\('\/departments'\)/) &&
+        !createModalSrcDept.includes("from '../../services/departmentService") &&
+        !createModalSrcDept.includes('departmentService.getAll'),
+        '1630. NEW — CreateEmployeeModal.jsx loads Department options via apiClient.get(\'/departments\') (the real external service), no departmentService.js import/usage remains'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Sweeping the mock departmentService.js out of every remaining real (reachable) consumer —
+    // Former Personnel's filter, and the Timeline's department identity/color flow. Upcoming and
+    // configurationService.js are deliberately left alone: Upcoming's candidates are still fully
+    // mock end to end (no real Applicants DB integration yet), so pointing its filter at real
+    // department ids would break it, not fix it; configurationService.js's department CRUD has
+    // no reachable UI at all since Configuration was removed from the app (Stage 18 checks
+    // 8-11), so it's dead code, not a live bug.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const formerPageSrcDept = fs.readFileSync(path.resolve('./src/pages/former/FormerPersonnelPage.jsx'), 'utf-8');
+      const timelineViewSrcDept = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const colorsModalSrcDept = fs.readFileSync(path.resolve('./src/components/employees/DepartmentColorsModal.jsx'), 'utf-8');
+      const colorStoreSrc = fs.existsSync(path.resolve('./src/services/departmentColorStore.js'))
+        ? fs.readFileSync(path.resolve('./src/services/departmentColorStore.js'), 'utf-8')
+        : '';
+      const offboardingSrcDept = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+      const onboardingSrcDept = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+
+      // 1631. NEW — Former Personnel's Department filter also reads from the real service now
+      // (former employees share employeeService.queryEmployees() with Personnel, so their
+      // department.id is real too — the same bug, the same fix).
+      assert(
+        formerPageSrcDept.match(/const \{ departments: depts \} = await apiClient\.get\('\/departments'\);/) &&
+        !formerPageSrcDept.includes("from '../../services/departmentService"),
+        '1631. NEW — FormerPersonnelPage.jsx loads Department filter options via apiClient.get(\'/departments\'), no departmentService.js import remains'
+      );
+
+      // 1632. NEW — a dedicated local-only color store exists: department Timeline colors are a
+      // pure UI preference (the real Departments service has no color field and this app never
+      // writes to it — see departmentsClient.js's own doc comment), so they belong in
+      // localStorage, keyed by real department id, not routed through any department service.
+      assert(
+        colorStoreSrc.includes('export const departmentColorStore') &&
+        colorStoreSrc.includes('setColor') &&
+        colorStoreSrc.includes('localStorage'),
+        '1632. NEW — departmentColorStore.js exists, exporting getAll()/setColor() backed by localStorage'
+      );
+
+      // 1633. NEW — EmployeeTimelineView.jsx and DepartmentColorsModal.jsx both read real
+      // departments (apiClient.get('/departments')) merged with locally-stored colors, and
+      // neither imports the mock departmentService.js anymore.
+      assert(
+        timelineViewSrcDept.includes("apiClient.get('/departments')") &&
+        timelineViewSrcDept.includes('departmentColorStore.getAll()') &&
+        !timelineViewSrcDept.includes("from '../../services/departmentService") &&
+        colorsModalSrcDept.includes("apiClient.get('/departments')") &&
+        colorsModalSrcDept.includes('departmentColorStore') &&
+        !colorsModalSrcDept.includes("from '../../services/departmentService"),
+        '1633. NEW — EmployeeTimelineView.jsx and DepartmentColorsModal.jsx both source departments from the real API and colors from departmentColorStore.js; neither imports departmentService.js'
+      );
+
+      // 1634. NEW — saving a color in DepartmentColorsModal writes to departmentColorStore, not
+      // departmentService.update() (which would silently fail against a real department id the
+      // mock array doesn't contain).
+      assert(
+        colorsModalSrcDept.includes('departmentColorStore.setColor(') &&
+        !colorsModalSrcDept.includes('departmentService.update('),
+        '1634. NEW — DepartmentColorsModal.jsx\'s save handler calls departmentColorStore.setColor(), never departmentService.update()'
+      );
+
+      // 1635. REGRESSION — onboardingService.js/offboardingService.js's now-dead
+      // departmentService.js imports (they already read real departments via
+      // apiClient.get('/departments') elsewhere in the same files) are cleaned up.
+      assert(
+        !offboardingSrcDept.includes("from './departmentService.js'") &&
+        !onboardingSrcDept.includes("from './departmentService.js'"),
+        '1635. REGRESSION — offboardingService.js and onboardingService.js no longer import the unused departmentService.js (they already read real departments via apiClient.get(\'/departments\') elsewhere)'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Timeline axis tick congestion fix, and Department Colors modal scroll/footer fix.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const timelineViewSrcWidth = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const colorsModalSrcScroll = fs.readFileSync(path.resolve('./src/components/employees/DepartmentColorsModal.jsx'), 'utf-8');
+      const indexCssSrcTimelineFix = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1636. NEW — canvasMinWidth now adds back the 220px name column + 156px (78px x2) label
+      // gutters on top of the 90px-per-tick budget, instead of carving that fixed chrome OUT of
+      // an already tick-count-sized width — the earlier formula squeezed every tick's real
+      // on-screen space well under 90px (worse for shorter/quarterly-tick ranges), running axis
+      // labels into each other.
+      assert(
+        timelineViewSrcWidth.match(/const canvasMinWidth = Math\.max\(760, axisTicks\.length \* 90 \+ 376\);/),
+        '1636. NEW — EmployeeTimelineView.jsx\'s canvasMinWidth is Math.max(760, axisTicks.length * 90 + 376), accounting for the 220px name column and 156px gutters the old formula didn\'t'
+      );
+
+      // 1637. NEW — Department Colors modal uses the app's existing modal-scroll-shell pattern
+      // (header/footer pinned, only the body scrolls) instead of the whole-card-scrolls default,
+      // and the inner .dept-color-list no longer has its own separate max-height/overflow — that
+      // combination used to create a nested double-scrollbar and push Cancel/Save Changes below
+      // the fold for a normal-sized department list.
+      const deptColorListBlock = (indexCssSrcTimelineFix.match(/\.dept-color-list \{[^}]*\}/) || [''])[0];
+      assert(
+        colorsModalSrcScroll.includes('className="modal-card modal-scroll-shell"') &&
+        !deptColorListBlock.includes('max-height') &&
+        !deptColorListBlock.includes('overflow-y'),
+        '1637. NEW — DepartmentColorsModal.jsx\'s modal-card carries modal-scroll-shell (pinned header/footer, single scroll region), and .dept-color-list no longer sets its own max-height/overflow-y'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Personnel Status filter — options derived from the Interns DB's own status vocabulary
+    // (GET /employees/statuses), not hardcoded.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const internsClientSrcStatus = fs.readFileSync(path.resolve('./server/clients/internsClient.js'), 'utf-8');
+      const employeeRoutesSrcStatus = fs.readFileSync(path.resolve('./server/routes/employees.js'), 'utf-8');
+      const openapiSrcStatus = fs.readFileSync(path.resolve('./server/openapi.js'), 'utf-8');
+      const directoryContainerSrcStatus = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const directoryToolbarSrcStatus = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+
+      // 1638. NEW — internsClient.js reads the Interns DB's own status enum from its published
+      // OpenAPI contract (components.schemas.Intern.properties.status.enum), not a guess.
+      assert(
+        internsClientSrcStatus.includes('async getStatusEnum()') &&
+        internsClientSrcStatus.includes('spec?.components?.schemas?.Intern?.properties?.status?.enum'),
+        '1638. NEW — internsClient.js exports getStatusEnum(), reading the Interns DB\'s own OpenAPI-published status enum'
+      );
+
+      // 1639. UPDATED — GET /employees/statuses is registered (openapi.js — required for the
+      // router to recognize it) and passes the Interns DB's own status terms through verbatim —
+      // no local rename/mapping (by direct instruction) — appending only "Upcoming", a stage
+      // that service has no concept of at all.
+      assert(
+        employeeRoutesSrcStatus.includes('"/employees/statuses"') &&
+        employeeRoutesSrcStatus.includes('[...internStatuses, "Upcoming"]') &&
+        !employeeRoutesSrcStatus.includes('Offboarding: "Departing"') &&
+        openapiSrcStatus.match(/"\/employees\/statuses": \{\s*get: \{[\s\S]{0,200}security: scoped\("employees:read"\)/),
+        '1639. UPDATED — GET /employees/statuses is registered with security: scoped("employees:read") and returns [...internStatuses, "Upcoming"] verbatim, no Offboarding->Departing rename'
+      );
+
+      // 1640. NEW — the Personnel Status filter's options come from that endpoint, not a
+      // hardcoded array, while still using 'All' (not the Select's own '' placeholder value) as
+      // the "no filter" sentinel — statusFilter's existing convention elsewhere in this
+      // container (URL param default, hasActiveFilters, handleResetFilters) all use 'All'.
+      assert(
+        directoryContainerSrcStatus.includes("await apiClient.get('/employees/statuses')") &&
+        directoryContainerSrcStatus.includes('statuses={statuses}') &&
+        directoryToolbarSrcStatus.match(/options=\{\[\{ value: 'All', label: 'All Statuses' \}, \.\.\.statuses\.map/) &&
+        !directoryToolbarSrcStatus.includes("{ value: 'Active', label: 'Active' },\n                  { value: 'Onboarding', label: 'Onboarding' }"),
+        '1640. NEW — DirectoryToolbar.jsx\'s Status <Select> options are built from the statuses prop (with \'All\' kept as a real option, matching the existing sentinel convention), not a hardcoded array'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Personnel Details' Personal Information — IC/Passport Number and Home Address read live
+    // from the Interns DB (never mirrored locally), scoped to the single-employee detail read
+    // only, never the bulk Personnel list.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const internSyncSrcDetails = fs.readFileSync(path.resolve('./server/db/internSync.js'), 'utf-8');
+      const employeeRoutesSrcDetails = fs.readFileSync(path.resolve('./server/routes/employees.js'), 'utf-8');
+      const employeeServiceSrcDetails = fs.readFileSync(path.resolve('./src/services/employeeService.js'), 'utf-8');
+      const detailsPageSrcPersonal = fs.readFileSync(path.resolve('./src/pages/employees/PersonnelDetailsPage.jsx'), 'utf-8');
+      const profileModalSrcPersonal = fs.readFileSync(path.resolve('./src/components/employees/PersonnelProfileModal.jsx'), 'utf-8');
+
+      // 1641. NEW — internSync.js exports getInternPersonalDetails(), reading IC/Passport Number
+      // and Home Address from the live Interns DB record (getLinkedIntern()), returning null for
+      // a non-intern employee rather than fabricating values.
+      assert(
+        internSyncSrcDetails.includes('export async function getInternPersonalDetails(employee)') &&
+        internSyncSrcDetails.includes('icPassportNumber: intern.ic_passport_number') &&
+        internSyncSrcDetails.includes('homeAddress: intern.home_address'),
+        '1641. NEW — internSync.js exports getInternPersonalDetails(), reading icPassportNumber/homeAddress from the live Interns DB record'
+      );
+
+      // 1642. NEW — only GET /employees/{id} (the Personnel Details page's own read) merges this
+      // in, never the bulk GET /employees list — avoids one extra external call per row on every
+      // Personnel page load for fields that list doesn't even display.
+      const employeesByIdBlock = (employeeRoutesSrcDetails.match(/"\/employees\/\{id\}": \{[\s\S]*?\n  \},/) || [''])[0];
+      assert(
+        employeesByIdBlock.includes('getInternPersonalDetails(employee)') &&
+        !employeeRoutesSrcDetails.match(/"\/employees": \{[\s\S]{0,300}getInternPersonalDetails/),
+        '1642. NEW — GET /employees/{id} merges getInternPersonalDetails() into its response; GET /employees (the bulk list) does not call it at all'
+      );
+
+      // 1643. NEW — employeeService.getProfile() surfaces these as profile.personal.icPassportNumber/
+      // homeAddress (never fabricated for a non-intern employee — both fall back to null), and
+      // both PersonnelDetailsPage.jsx and PersonnelProfileModal.jsx render them so the page and
+      // the (still-live, Dashboard-used) modal never diverge in what data they show.
+      assert(
+        employeeServiceSrcDetails.includes('icPassportNumber: employee.icPassportNumber || null') &&
+        employeeServiceSrcDetails.includes('homeAddress: employee.homeAddress || null') &&
+        detailsPageSrcPersonal.includes('label="IC / Passport Number" value={profile.personal.icPassportNumber}') &&
+        detailsPageSrcPersonal.includes('label="Home Address" value={profile.personal.homeAddress}') &&
+        profileModalSrcPersonal.includes('label="IC / Passport Number" value={profile.personal.icPassportNumber}') &&
+        profileModalSrcPersonal.includes('label="Home Address" value={profile.personal.homeAddress}'),
+        '1643. NEW — employeeService.getProfile() surfaces icPassportNumber/homeAddress; PersonnelDetailsPage.jsx and PersonnelProfileModal.jsx both render them'
       );
 
       resetDatabase();

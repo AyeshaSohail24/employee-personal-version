@@ -47,7 +47,8 @@ export const internsClient = {
   // `data` fields: first_name, last_name, ic_passport_number,
   // internship_start_date, internship_end_date, email_address, phone_number,
   // home_address, department_id ("DEP-0001" style, resolved via the
-  // Departments service), mode, allowance, photo_url, role_id.
+  // Departments service), mode, allowance, photo_url, role_id, status
+  // (Onboarding/Active/Offboarding/Former — see getStatusEnum() below).
   async createIntern(data) {
     const response = await call("/api/interns", { method: "POST", body: data, scope: "intern:write" });
     return response.data ?? response; // service returns { id, ref_number } at minimum
@@ -63,5 +64,22 @@ export const internsClient = {
   async listRoles() {
     const { data } = await call("/api/roles");
     return data;
+  },
+
+  // The Interns DB's own authoritative status vocabulary — read from its published OpenAPI
+  // contract (components.schemas.Intern.properties.status.enum), the same self-describing
+  // metadata every other client of this service is expected to use, rather than guessing at it
+  // or re-deriving it from whichever statuses happen to be populated on interns right now (which
+  // could easily be an incomplete subset — see server/routes/employees.js's /employees/statuses
+  // for why this app's own Personnel status list still isn't a byte-for-byte copy of this one).
+  // Public, unauthenticated endpoint — no service token needed, unlike every other call here.
+  async getStatusEnum() {
+    if (!cfg.baseUrl) throw new Error("INTERNS_API_BASE_URL is not configured.");
+    const response = await fetch(`${cfg.baseUrl}/openapi.json`);
+    if (!response.ok) throw new Error(`Interns API GET /openapi.json failed: ${response.status}`);
+    const spec = await response.json();
+    const statusEnum = spec?.components?.schemas?.Intern?.properties?.status?.enum;
+    if (!Array.isArray(statusEnum)) throw new Error("Interns API's OpenAPI spec has no Intern.status enum at the expected path.");
+    return statusEnum;
   },
 };

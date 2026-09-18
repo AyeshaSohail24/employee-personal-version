@@ -14,7 +14,6 @@ import {
   PLAN_INSTANCE_STATUS,
   isActivePlanStatus,
 } from '../domain/onboardingDomain.js';
-import { departmentService } from './departmentService.js';
 import { resolveCurrentRecord, resolveNextRecord } from '../domain/employmentDomain.js';
 import { addDaysToLocalDate, getTodayLocalDateString } from '../utils/dateUtils.js';
 

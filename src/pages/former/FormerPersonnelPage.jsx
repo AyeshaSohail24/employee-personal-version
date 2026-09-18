@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { History } from 'lucide-react';
 import { formerService } from '../../services/formerService.js';
-import { departmentService } from '../../services/departmentService.js';
+import { apiClient } from '../../services/apiClient.js';
 import FormerToolbar from '../../components/former/FormerToolbar.jsx';
 import FormerListView from '../../components/former/FormerListView.jsx';
 import DirectoryEmptyState from '../../components/employees/DirectoryEmptyState.jsx';
@@ -27,9 +27,12 @@ export default function FormerPersonnelPage() {
   const [departments, setDepartments] = useState([]);
 
   useEffect(() => {
+    // Real Departments service (department-zeta.vercel.app, via GET /departments) — former
+    // employees' own department.id (employeeService.queryEmployees(), same source as Personnel)
+    // already comes from there, so the filter's options have to match, not the mock departmentService.js.
     async function loadOptions() {
       try {
-        const depts = await departmentService.getAll({ withCount: false });
+        const { departments: depts } = await apiClient.get('/departments');
         setDepartments(depts);
       } catch (err) {
         console.error('Failed to load filter options:', err);

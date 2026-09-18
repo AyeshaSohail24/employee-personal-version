@@ -21,6 +21,25 @@ export async function getLinkedIntern(employee) {
   }
 }
 
+// Personnel Details' Personal Information section — IC/Passport Number and Home Address are
+// collected by the Interns DB at intake but were never mirrored into this app's own `employees`
+// table (unlike start/end date, mode, allowance, department), so they're read through live here
+// rather than duplicated locally. null for a non-intern employee (no linked Interns DB record to
+// read from at all) or if the read-through fails — never fabricated, same fallback contract as
+// getLinkedIntern() above. Deliberately NOT resolving role_id here for a "Position" field: that
+// service's Roles are an access-control concept for its own admin UI (Admin/Employee/Intern/
+// Manager/Supervisor), not a job title — every intern would just show "Intern", duplicating the
+// Type field already shown, so it's left out rather than wiring in a technically-present but
+// meaningless value.
+export async function getInternPersonalDetails(employee) {
+  const intern = await getLinkedIntern(employee);
+  if (!intern) return null;
+  return {
+    icPassportNumber: intern.ic_passport_number ?? null,
+    homeAddress: intern.home_address ?? null,
+  };
+}
+
 // AGENTS.md rule 6 — departure automation must be reversible and logged,
 // never framed as instant/irreversible. Launching offboarding sets the
 // intern's real end date in the Interns DB (the one field that's actually
@@ -52,17 +71,10 @@ export async function syncOffboardingLaunchToIntern(employeeId, anchorDate) {
   }
 }
 
-// The local `employees` row already linked to this intern
-// (`intern_external_id`), or — for a real intern the Interns DB knows about
-// but this app has never touched (no Applicant conversion ever ran for
-// them) — one created on first use, so a plan has somewhere local to
-// attach its instance and activities. Mirrors applicantConversion.js's
-// Applicants -> employees push, in reverse.
-export async function resolveOrCreateEmployeeForIntern(internId) {
-  const [existing] = await pool.query("SELECT * FROM employees WHERE intern_external_id = ?", [internId]);
-  if (existing.length > 0) return existing[0];
-
-  const intern = await internsClient.getIntern(internId);
+// Shared by resolveOrCreateEmployeeForIntern() (one intern, on first touch) and
+// syncAllInternsToEmployees() (every intern, on demand via "Sync Personnel") — the actual
+// "create a local employee row for this Interns DB record" logic lives in exactly one place.
+async function createLocalEmployeeFromIntern(intern) {
   const internType = await getEmployeeTypeByCode("INTERN");
 
   const employeeId = await createEmployee({
@@ -75,6 +87,8 @@ export async function resolveOrCreateEmployeeForIntern(internId) {
     status: "Onboarding",
     startDate: intern.internship_start_date,
     contractEndDate: intern.internship_end_date,
+    workMode: intern.mode,
+    allowance: intern.allowance,
   });
   await updateEmployee(employeeId, { internExternalId: intern.id, internRefNumber: intern.ref_number });
 
@@ -86,6 +100,82 @@ export async function resolveOrCreateEmployeeForIntern(internId) {
   }
 
   return getRow("employees", employeeId);
+}
+
+// The local `employees` row already linked to this intern
+// (`intern_external_id`), or — for a real intern the Interns DB knows about
+// but this app has never touched (no Applicant conversion ever ran for
+// them) — one created on first use, so a plan has somewhere local to
+// attach its instance and activities. Mirrors applicantConversion.js's
+// Applicants -> employees push, in reverse. Deliberately stays a cheap
+// no-op once an employee already exists (called from hot per-view onboarding/
+// offboarding code) — it never reconciles existing fields; that's
+// syncAllInternsToEmployees()'s job.
+export async function resolveOrCreateEmployeeForIntern(internId) {
+  const [existing] = await pool.query("SELECT * FROM employees WHERE intern_external_id = ?", [internId]);
+  if (existing.length > 0) return existing[0];
+
+  const intern = await internsClient.getIntern(internId);
+  return createLocalEmployeeFromIntern(intern);
+}
+
+// Mode/Salary always hold a value locally (createEmployee()'s own default), so — unlike
+// contract_end_date, where NULL is a real "missing" sentinel — every intern-linked employee has
+// to be compared against the Interns DB, not just ones with an obviously-missing field.
+function computeInternReconciliation(row, intern) {
+  const changes = {};
+  if (!row.contract_end_date && intern?.internship_end_date) changes.contractEndDate = intern.internship_end_date;
+  if (intern?.mode && intern.mode !== row.work_mode) changes.workMode = intern.mode;
+  if (intern?.allowance && intern.allowance !== row.allowance) changes.allowance = intern.allowance;
+  return changes;
+}
+
+// Powers the "Sync Personnel" button: pulls every intern from the Interns DB (the source of
+// truth) and, for each, either creates their local employee record (a real intern this app has
+// never touched yet) or reconciles Mode/Salary/End Date against the source if any have drifted
+// (see server/scripts/backfillContractEndDates.js's own doc comment for why that drift can
+// happen). Unlike resolveOrCreateEmployeeForIntern(), this is meant to be called on demand for a
+// full pass, not from hot per-view code. One intern's failure (a transient Interns DB hiccup,
+// bad data) is recorded and skipped, never aborting the rest of the batch — a partial sync is
+// far more useful than the whole button failing because of a single bad record. `onItem`, if
+// given, is called once per intern with { intern, action: 'created'|'updated'|'unchanged'|
+// 'failed', changes, error } — the terminal script uses it for per-row progress output; the HTTP
+// route (which only wants the final summary) leaves it out.
+export async function syncAllInternsToEmployees({ onItem } = {}) {
+  const { interns } = await internsClient.listInterns({ limit: 100 });
+
+  let created = 0;
+  let updated = 0;
+  let unchanged = 0;
+  let failed = 0;
+
+  for (const intern of interns ?? []) {
+    try {
+      const [existing] = await pool.query("SELECT * FROM employees WHERE intern_external_id = ?", [intern.id]);
+
+      if (existing.length === 0) {
+        await createLocalEmployeeFromIntern(intern);
+        created += 1;
+        onItem?.({ intern, action: "created" });
+        continue;
+      }
+
+      const changes = computeInternReconciliation(existing[0], intern);
+      if (Object.keys(changes).length === 0) {
+        unchanged += 1;
+        onItem?.({ intern, action: "unchanged" });
+        continue;
+      }
+      await updateEmployee(existing[0].id, changes);
+      updated += 1;
+      onItem?.({ intern, action: "updated", changes });
+    } catch (error) {
+      failed += 1;
+      onItem?.({ intern, action: "failed", error });
+    }
+  }
+
+  return { created, updated, unchanged, failed, total: interns?.length ?? 0 };
 }
 
 function deriveStatus(tasks) {
