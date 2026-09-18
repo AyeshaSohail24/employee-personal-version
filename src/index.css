@@ -2738,13 +2738,15 @@ body {
 }
 
 /* Department Colors modal — one row per department, reusing the shared modal-card/form
-   conventions (see CreateEmployeeModal.jsx) rather than introducing a new modal shell. */
+   conventions (see CreateEmployeeModal.jsx) rather than introducing a new modal shell. Scrolling
+   is handled once, by .modal-scroll-shell's own .modal-body (see DepartmentColorsModal.jsx's
+   modal-card classes) — no separate max-height/overflow here, which used to create a second,
+   nested scrollbar and push Cancel/Save Changes below the fold instead of keeping them pinned
+   in the always-visible footer. */
 .dept-color-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  max-height: 360px;
-  overflow-y: auto;
 }
 
 .dept-color-row {

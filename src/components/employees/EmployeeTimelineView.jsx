@@ -97,7 +97,13 @@ export default function EmployeeTimelineView({ employees = [] }) {
     );
   }
 
-  const canvasMinWidth = Math.max(760, axisTicks.length * 90);
+  // 90px budget PER TICK, plus the fixed chrome the ticks themselves never get to use: the
+  // 220px name column (.timeline-name-col-spacer) and the 78px left/right label gutters inside
+  // .timeline-plot-area (156px total) — without adding those back in, a shorter/quarterly-tick
+  // range (fewer ticks) had that same fixed 376px carved out of an ALREADY-smaller budget,
+  // squeezing each tick's real on-screen space well under 90px and running labels into each
+  // other, worse the fewer ticks there were.
+  const canvasMinWidth = Math.max(760, axisTicks.length * 90 + 376);
 
   // Rasterizes the dedicated off-screen export template (TimelineExportView, always mounted
   // below regardless of scroll position/viewport) — never the live interactive Timeline DOM.

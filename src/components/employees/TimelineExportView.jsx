@@ -3,12 +3,14 @@ import { formatCompactDate, formatDateDisplay, calculateTimelineBarPosition } fr
 import { resolveDepartmentColor } from '../../domain/departmentDomain.js';
 
 const EXPORT_MIN_WIDTH = 1400;
-// Matches the on-screen Timeline's own `canvasMinWidth = Math.max(760, axisTicks.length * 90)`
-// per-tick spacing (see EmployeeTimelineView.jsx) — the live view keeps its axis readable at ANY
-// number of ticks by making its canvas wider (scrolling internally if needed). The export
-// template has no scroll region by design (so the full chart is always captured, never clipped
-// by a scrollport), so instead of scrolling it must widen itself outright for a long date range
-// with many axis ticks — otherwise tick labels for a many-year Timeline would overlap.
+// Matches the on-screen Timeline's own canvasMinWidth formula (see EmployeeTimelineView.jsx) —
+// 90px per tick, PLUS the fixed name-column/gutter chrome the ticks never get to use, or that
+// same chrome eats into an already-tight per-tick budget the fewer ticks there are. The live
+// view keeps its axis readable at ANY number of ticks by making its canvas wider (scrolling
+// internally if needed). The export template has no scroll region by design (so the full chart
+// is always captured, never clipped by a scrollport), so instead of scrolling it must widen
+// itself outright for a long date range with many axis ticks — otherwise tick labels for a
+// many-year Timeline would overlap.
 const EXPORT_TICK_SPACING = 90;
 const EXPORT_NAME_COL_WIDTH = 240;
 const EXPORT_GUTTER = 80;

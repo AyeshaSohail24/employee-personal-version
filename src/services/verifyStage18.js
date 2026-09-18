@@ -14719,6 +14719,42 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Timeline axis tick congestion fix, and Department Colors modal scroll/footer fix.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const timelineViewSrcWidth = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const colorsModalSrcScroll = fs.readFileSync(path.resolve('./src/components/employees/DepartmentColorsModal.jsx'), 'utf-8');
+      const indexCssSrcTimelineFix = fs.readFileSync(path.resolve('./src/index.css'), 'utf-8');
+
+      // 1636. NEW — canvasMinWidth now adds back the 220px name column + 156px (78px x2) label
+      // gutters on top of the 90px-per-tick budget, instead of carving that fixed chrome OUT of
+      // an already tick-count-sized width — the earlier formula squeezed every tick's real
+      // on-screen space well under 90px (worse for shorter/quarterly-tick ranges), running axis
+      // labels into each other.
+      assert(
+        timelineViewSrcWidth.match(/const canvasMinWidth = Math\.max\(760, axisTicks\.length \* 90 \+ 376\);/),
+        '1636. NEW — EmployeeTimelineView.jsx\'s canvasMinWidth is Math.max(760, axisTicks.length * 90 + 376), accounting for the 220px name column and 156px gutters the old formula didn\'t'
+      );
+
+      // 1637. NEW — Department Colors modal uses the app's existing modal-scroll-shell pattern
+      // (header/footer pinned, only the body scrolls) instead of the whole-card-scrolls default,
+      // and the inner .dept-color-list no longer has its own separate max-height/overflow — that
+      // combination used to create a nested double-scrollbar and push Cancel/Save Changes below
+      // the fold for a normal-sized department list.
+      const deptColorListBlock = (indexCssSrcTimelineFix.match(/\.dept-color-list \{[^}]*\}/) || [''])[0];
+      assert(
+        colorsModalSrcScroll.includes('className="modal-card modal-scroll-shell"') &&
+        !deptColorListBlock.includes('max-height') &&
+        !deptColorListBlock.includes('overflow-y'),
+        '1637. NEW — DepartmentColorsModal.jsx\'s modal-card carries modal-scroll-shell (pinned header/footer, single scroll region), and .dept-color-list no longer sets its own max-height/overflow-y'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);
