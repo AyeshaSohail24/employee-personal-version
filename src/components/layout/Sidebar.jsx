@@ -14,6 +14,14 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import UserClockIcon from './icons/UserClockIcon.jsx';
+// The official Rizurf Realty logo (building/R mark + "Rizurf Realty" wordmark) — already placed
+// in the project's own `images/` folder (outside `src/`), never copied/moved into `src/assets`
+// or `public/`. Vite resolves and bundles a relatively-imported image from anywhere reachable on
+// disk, not only from inside `src/`, so a plain ES import referencing it in place is the correct,
+// idiomatic way to wire it in — no new asset location was introduced. `logo-dark-mode.png` is the
+// variant with a light/white wordmark, needed because the sidebar itself has a dark navy
+// background — the standard-ink `logo-light-mode.png`/`Logo.png` would be unreadable here.
+import rizurfLogo from '../../../images/logo-dark-mode.png';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const location = useLocation();
@@ -47,13 +55,14 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
 
   return (
     <aside className={`app-sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
-      {/* Brand Header */}
+      {/* Brand Header — the official Rizurf Realty logo already contains both the company symbol
+          and the "Rizurf Realty" wordmark, so it is the sole branding element here (no separate
+          text/badge alongside it). Preserves the existing click-through to Dashboard exactly as
+          the old branding already had it — this task changes only what renders inside the link,
+          never its destination/behavior. */}
       <div className="sidebar-header">
         <NavLink to="/dashboard" className="brand-title-group" onClick={closeMobile}>
-          <div className="brand-icon">R</div>
-          <div className="brand-text">
-            Rizurf <span className="brand-tag">HR</span>
-          </div>
+          <img src={rizurfLogo} alt="Rizurf Realty" className="brand-logo" />
         </NavLink>
       </div>
 
