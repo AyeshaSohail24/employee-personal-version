@@ -36,9 +36,9 @@ export const openapi = {
           name: "Manage Employees",
           icon: "🧑‍💼",
           description: "The core employee record and its department/position/manager history.",
-          does: ["List employees", "Create an employee", "Update an employee", "View employment history", "Sync the roster from the Interns DB"],
+          does: ["List employees", "Create an employee", "Update an employee", "View employment history", "Sync the roster from the Interns DB", "List Personnel status filter options"],
           best_for: "Any app that needs to look up or maintain who works here.",
-          endpoints: ["GET /employees", "POST /employees", "GET /employees/{id}", "PATCH /employees/{id}", "GET /employees/{id}/employment-records", "POST /employees/{id}/employment-records", "POST /employees/sync"],
+          endpoints: ["GET /employees", "POST /employees", "GET /employees/{id}", "PATCH /employees/{id}", "GET /employees/{id}/employment-records", "POST /employees/{id}/employment-records", "POST /employees/sync", "GET /employees/statuses"],
         },
         {
           name: "Org Structure",
@@ -195,6 +195,20 @@ export const openapi = {
           inputs: [], outputs: ["summary"],
           requires: [], related_endpoints: ["GET /employees", "POST /applicants/{applicantId}/convert"],
           tags: ["employees", "sync", "interns", "reconcile"],
+        },
+      },
+    },
+    "/employees/statuses": {
+      get: {
+        summary: "Personnel lifecycle status options, derived from the Interns DB's own status vocabulary plus this app's own Upcoming stage.",
+        security: scoped("employees:read"),
+        "x-rizurf": {
+          name: "List Personnel Statuses", purpose: "Populate the Personnel directory's Status filter without hardcoding a list that could drift from the Interns DB's own terms",
+          use_when: ["Populating the Personnel directory's Status filter dropdown"],
+          do_not_use_when: ["Reading one employee's own current status — that's a field on GET /employees/{id}, not this list"],
+          inputs: [], outputs: ["statuses[]"],
+          requires: [], related_endpoints: ["GET /employees", "GET /departments"],
+          tags: ["employees", "status", "lifecycle", "filter"],
         },
       },
     },

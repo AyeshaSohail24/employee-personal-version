@@ -14755,6 +14755,53 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Personnel Status filter — options derived from the Interns DB's own status vocabulary
+    // (GET /employees/statuses), not hardcoded.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const internsClientSrcStatus = fs.readFileSync(path.resolve('./server/clients/internsClient.js'), 'utf-8');
+      const employeeRoutesSrcStatus = fs.readFileSync(path.resolve('./server/routes/employees.js'), 'utf-8');
+      const openapiSrcStatus = fs.readFileSync(path.resolve('./server/openapi.js'), 'utf-8');
+      const directoryContainerSrcStatus = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+      const directoryToolbarSrcStatus = fs.readFileSync(path.resolve('./src/components/employees/DirectoryToolbar.jsx'), 'utf-8');
+
+      // 1638. NEW — internsClient.js reads the Interns DB's own status enum from its published
+      // OpenAPI contract (components.schemas.Intern.properties.status.enum), not a guess.
+      assert(
+        internsClientSrcStatus.includes('async getStatusEnum()') &&
+        internsClientSrcStatus.includes('spec?.components?.schemas?.Intern?.properties?.status?.enum'),
+        '1638. NEW — internsClient.js exports getStatusEnum(), reading the Interns DB\'s own OpenAPI-published status enum'
+      );
+
+      // 1639. NEW — GET /employees/statuses is registered (openapi.js — required for the router
+      // to recognize it) and maps the Interns DB's "Offboarding" onto this app's own "Departing"
+      // term, always including "Upcoming" (a stage the Interns DB has no concept of).
+      assert(
+        employeeRoutesSrcStatus.includes('"/employees/statuses"') &&
+        employeeRoutesSrcStatus.includes('Offboarding: "Departing"') &&
+        employeeRoutesSrcStatus.includes('mapped.add("Upcoming")') &&
+        openapiSrcStatus.match(/"\/employees\/statuses": \{\s*get: \{[\s\S]{0,200}security: scoped\("employees:read"\)/),
+        '1639. NEW — GET /employees/statuses is registered with security: scoped("employees:read"), maps Offboarding->Departing, and always includes Upcoming'
+      );
+
+      // 1640. NEW — the Personnel Status filter's options come from that endpoint, not a
+      // hardcoded array, while still using 'All' (not the Select's own '' placeholder value) as
+      // the "no filter" sentinel — statusFilter's existing convention elsewhere in this
+      // container (URL param default, hasActiveFilters, handleResetFilters) all use 'All'.
+      assert(
+        directoryContainerSrcStatus.includes("await apiClient.get('/employees/statuses')") &&
+        directoryContainerSrcStatus.includes('statuses={statuses}') &&
+        directoryToolbarSrcStatus.match(/options=\{\[\{ value: 'All', label: 'All Statuses' \}, \.\.\.statuses\.map/) &&
+        !directoryToolbarSrcStatus.includes("{ value: 'Active', label: 'Active' },\n                  { value: 'Onboarding', label: 'Onboarding' }"),
+        '1640. NEW — DirectoryToolbar.jsx\'s Status <Select> options are built from the statuses prop (with \'All\' kept as a real option, matching the existing sentinel convention), not a hardcoded array'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);

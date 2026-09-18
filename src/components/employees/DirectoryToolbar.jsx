@@ -29,6 +29,7 @@ export default function DirectoryToolbar({
   onViewModeChange,
   onResetFilters,
   departments = [],
+  statuses = [],
   showStatusFilter = false,
   hasActiveFilters = false,
 }) {
@@ -142,7 +143,13 @@ export default function DirectoryToolbar({
             />
           </div>
 
-          {/* Status Filter (Only visible on /employees route) */}
+          {/* Status Filter (Only visible on /employees route) — options come from the Interns
+              DB's own status vocabulary (GET /employees/statuses), not a hardcoded list; see
+              that route's own doc comment in server/routes/employees.js for the Offboarding ->
+              Departing mapping and why Upcoming is always added. 'All' stays a real option (not
+              the Select's own placeholder, which would use value: '' instead) because
+              statusFilter's existing "no filter" sentinel is the string 'All' everywhere else in
+              this container (URL param default, hasActiveFilters, handleResetFilters). */}
           {showStatusFilter && (
             <div className="filter-item">
               <label htmlFor="status-filter">Status:</label>
@@ -151,14 +158,7 @@ export default function DirectoryToolbar({
                 variant="filter"
                 value={selectedStatus}
                 onChange={(e) => onStatusChange(e.target.value)}
-                options={[
-                  { value: 'All', label: 'All Statuses' },
-                  { value: 'Active', label: 'Active' },
-                  { value: 'Onboarding', label: 'Onboarding' },
-                  { value: 'Upcoming', label: 'Upcoming' },
-                  { value: 'Departing', label: 'Departing' },
-                  { value: 'Former', label: 'Former' },
-                ]}
+                options={[{ value: 'All', label: 'All Statuses' }, ...statuses.map((s) => ({ value: s, label: s }))]}
               />
             </div>
           )}

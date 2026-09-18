@@ -1,14 +1,41 @@
 import * as db from "../db/employees.js";
 import { hydrateEmployees, hydrateEmployee } from "../db/employeeHydration.js";
 import { syncAllInternsToEmployees } from "../db/internSync.js";
+import { internsClient } from "../clients/internsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
+
+// The Interns DB's own status vocabulary (Onboarding/Active/Offboarding/Former) doesn't line up
+// 1:1 with this app's own Personnel lifecycle model: "Offboarding" there is "Departing" here (a
+// naming difference, same concept), and it has no equivalent of "Upcoming" at all — an intern
+// only gets added to that service once they're actually onboarding, not while still a pre-hire
+// candidate. "Upcoming" also applies to non-intern Employees, which that service never covers.
+// So this maps the source's real terms in rather than replacing them outright with an unrelated
+// hardcoded list — an actual rename on their end (say, "Offboarding" -> something else) still
+// surfaces correctly here, it just won't silently invent states that service doesn't have.
+const INTERN_STATUS_TO_PERSONNEL_STATUS = {
+  Onboarding: "Onboarding",
+  Active: "Active",
+  Offboarding: "Departing",
+  Former: "Former",
+};
+const PERSONNEL_STATUS_ORDER = ["Active", "Onboarding", "Upcoming", "Departing", "Former"];
 
 export const routes = {
   "/employees/sync": {
     async post(req, res, ctx) {
       sendJson(res, ctx.cid, 200, { summary: await syncAllInternsToEmployees() });
+    },
+  },
+  "/employees/statuses": {
+    async get(req, res, ctx) {
+      const internStatuses = await internsClient.getStatusEnum();
+      const mapped = new Set(internStatuses.map((s) => INTERN_STATUS_TO_PERSONNEL_STATUS[s] ?? s));
+      mapped.add("Upcoming"); // always present — a stage the Interns DB itself has no concept of
+      const statuses = PERSONNEL_STATUS_ORDER.filter((s) => mapped.has(s))
+        .concat([...mapped].filter((s) => !PERSONNEL_STATUS_ORDER.includes(s))); // any genuinely new term, appended rather than dropped
+      sendJson(res, ctx.cid, 200, { statuses });
     },
   },
   "/employees": {
