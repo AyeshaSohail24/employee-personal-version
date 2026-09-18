@@ -100,7 +100,7 @@ export default function EmployeeCardView({ employees = [] }) {
                 <div className="dates-cell">
                   <span className="dates-start">{formatDateDisplay(emp.startDate)}</span>
                   <span className="dates-arrow-end">
-                    &rarr; {emp.contractEndDate ? formatDateDisplay(emp.contractEndDate) : '—'}
+                    &ndash; {emp.contractEndDate ? formatDateDisplay(emp.contractEndDate) : '—'}
                   </span>
                 </div>
               </div>
