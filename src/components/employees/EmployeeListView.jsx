@@ -1,6 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { formatDateDisplay, calculateDurationProgress } from '../../utils/dateUtils.js';
 
 const STATUS_PILL_STYLES = {
@@ -54,22 +53,23 @@ function DurationCell({ startDate, contractEndDate }) {
 }
 
 export default function EmployeeListView({ employees = [] }) {
+  const navigate = useNavigate();
+
   return (
     <div className="directory-table-card">
       <div className="widget-table-wrapper">
         <table className="widget-table">
           <thead>
             <tr>
-              <th style={{ width: '6%' }}>ID</th>
-              <th style={{ width: '17%' }}>NAME</th>
-              <th style={{ width: '12%' }}>DEPARTMENT</th>
-              <th style={{ width: '9%' }}>TYPE</th>
-              <th style={{ width: '8%' }}>MODE</th>
-              <th style={{ width: '10%' }}>DATES</th>
-              <th style={{ width: '7%' }}>SALARY</th>
-              <th style={{ width: '10%' }}>STATUS</th>
-              <th style={{ width: '10%' }}>DURATION</th>
-              <th style={{ width: '11%' }}>DETAILS</th>
+              <th style={{ width: '7%' }}>ID</th>
+              <th style={{ width: '20%' }}>NAME</th>
+              <th style={{ width: '13%' }}>DEPARTMENT</th>
+              <th style={{ width: '10%' }}>TYPE</th>
+              <th style={{ width: '9%' }}>MODE</th>
+              <th style={{ width: '11%' }}>DATES</th>
+              <th style={{ width: '8%' }}>SALARY</th>
+              <th style={{ width: '11%' }}>STATUS</th>
+              <th style={{ width: '11%' }}>DURATION</th>
             </tr>
           </thead>
           <tbody>
@@ -79,9 +79,21 @@ export default function EmployeeListView({ employees = [] }) {
               const salaryPill = SALARY_PILL_STYLES[emp.allowance] || { bg: '#ECFDF5', color: '#059669' };
               const typePill = TYPE_PILL_STYLES[emp.directoryType] || { bg: '#F1F5F9', color: '#475569' };
               const isFormer = emp.status === 'Former';
+              const goToDetails = () => navigate(`/employees/${emp.id}`);
 
               return (
-                <tr key={emp.id}>
+                <tr
+                  key={emp.id}
+                  className="directory-table-row"
+                  tabIndex={0}
+                  onClick={goToDetails}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      goToDetails();
+                    }
+                  }}
+                >
                   {/* 1. ID */}
                   <td>
                     <span className="table-user-code" style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 600 }}>
@@ -153,16 +165,6 @@ export default function EmployeeListView({ employees = [] }) {
                   {/* 9. DURATION */}
                   <td>
                     <DurationCell startDate={emp.startDate} contractEndDate={emp.contractEndDate} />
-                  </td>
-
-                  {/* 10. DETAILS — navigates to the dedicated Personnel Details page instead of
-                      opening PersonnelProfileModal (per direct user request: a person's record
-                      can grow to include CV/resume PDFs, which don't fit comfortably in a modal). */}
-                  <td>
-                    <Link to={`/employees/${emp.id}`} className="btn-compact-override" style={{ whiteSpace: 'nowrap', textDecoration: 'none' }}>
-                      <Eye size={12} />
-                      <span>View Details</span>
-                    </Link>
                   </td>
                 </tr>
               );

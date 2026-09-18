@@ -1386,6 +1386,23 @@ body {
   border-bottom: none;
 }
 
+/* Personnel directory List view only — the whole row navigates to that person's Details page
+   (replaces the old separate DETAILS column/button), so it needs its own click/hover/focus
+   affordance the plain .widget-table row itself never had. */
+.directory-table-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.directory-table-row:hover {
+  background-color: #F8FAFC;
+}
+
+.directory-table-row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
 .table-user-cell {
   display: flex;
   align-items: center;

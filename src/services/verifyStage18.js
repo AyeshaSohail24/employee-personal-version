@@ -10439,29 +10439,37 @@ export async function verifyStage18() {
         '1315. REGRESSION: router/index.jsx still routes \'employees\' to <AllEmployeesPage /> unchanged — preserving route compatibility was preferred over introducing a /personnel migration for this task'
       );
 
-      // 1316. UPDATED (Personnel Details Page task) — List table: final DETAILS column added
-      // (was PROFILE — renamed alongside the View Profile -> View Details wording change below,
-      // since a column still labeled PROFILE next to a "View Details" button would read as
-      // inconsistent), ID still first, 10 columns total.
+      // 1316. SUPERSEDED (Row-click navigation task) — List table no longer has a separate
+      // DETAILS column at all; the whole row navigates instead (see 1317). ID still first,
+      // exactly 9 columns now (was 10 with DETAILS).
       assert(
-        employeeListViewSrc.match(/<th style=\{\{ width: '6%' \}\}>ID<\/th>/) &&
-        employeeListViewSrc.match(/<th[^>]*>DETAILS<\/th>\s*<\/tr>/) &&
+        employeeListViewSrc.match(/<th style=\{\{ width: '7%' \}\}>ID<\/th>/) &&
+        !employeeListViewSrc.match(/<th[^>]*>DETAILS<\/th>/) &&
         !employeeListViewSrc.match(/<th[^>]*>PROFILE<\/th>/) &&
-        (employeeListViewSrc.match(/<th style=/g) || []).length === 10,
-        '1316. UPDATED — EmployeeListView.jsx\'s table header keeps ID first and adds DETAILS (was PROFILE) as the FINAL column — exactly 10 <th> columns total (ID/NAME/DEPARTMENT/TYPE/MODE/DATES/SALARY/STATUS/DURATION/DETAILS)'
+        (employeeListViewSrc.match(/<th style=/g) || []).length === 9,
+        '1316. SUPERSEDED — EmployeeListView.jsx\'s table header has no DETAILS (or PROFILE) column anymore — exactly 9 <th> columns total (ID/NAME/DEPARTMENT/TYPE/MODE/DATES/SALARY/STATUS/DURATION), ID still first'
       );
 
-      // 1317. SUPERSEDED (Personnel Details Page task) — the per-row action no longer opens
-      // PersonnelProfileModal via an onViewProfile(emp.id) callback; it now navigates to the
-      // dedicated Personnel Details page via a real <Link to={`/employees/${emp.id}`}>, reading
-      // "View Details" instead of "View Profile" — per direct user request, since a person's
-      // record can grow to include CV/resume PDFs that don't fit comfortably in a modal.
+      // 1317. SUPERSEDED (Row-click navigation task) — the per-row action is no longer a
+      // separate "View Details" button/column; clicking (or pressing Enter/Space on) the row
+      // itself navigates to the dedicated Personnel Details page via useNavigate(), per direct
+      // user request to replace the button with a clickable row.
       assert(
-        employeeListViewSrc.match(/<Link to=\{`\/employees\/\$\{emp\.id\}`\} className="btn-compact-override"/) &&
-        employeeListViewSrc.includes('<span>View Details</span>') &&
+        employeeListViewSrc.includes("import { useNavigate } from 'react-router-dom';") &&
+        employeeListViewSrc.includes('const navigate = useNavigate();') &&
+        employeeListViewSrc.match(/const goToDetails = \(\) => navigate\(`\/employees\/\$\{emp\.id\}`\);/) &&
+        employeeListViewSrc.match(/className="directory-table-row"[\s\S]{0,150}onClick=\{goToDetails\}/) &&
+        !employeeListViewSrc.includes('View Details') &&
         !employeeListViewSrc.includes('View Profile') &&
         !employeeListViewSrc.includes('onViewProfile'),
-        '1317. SUPERSEDED — EmployeeListView.jsx\'s DETAILS cell renders a <Link to={`/employees/${emp.id}`}> reading "View Details" for every row — no onViewProfile callback, no "View Profile" text remains'
+        '1317. SUPERSEDED — EmployeeListView.jsx has no more per-row "View Details" button; each <tr> carries className="directory-table-row" and navigates via onClick={goToDetails} (useNavigate to /employees/${emp.id}) — no onViewProfile callback, no "View Details"/"View Profile" text remains'
+      );
+
+      // 1317b. NEW — the clickable row is also keyboard-operable (Enter/Space), not mouse-only.
+      assert(
+        employeeListViewSrc.match(/onKeyDown=\{\(e\) => \{[\s\S]{0,120}e\.key === 'Enter' \|\| e\.key === ' '/) &&
+        employeeListViewSrc.includes('tabIndex={0}'),
+        '1317b. NEW — EmployeeListView.jsx\'s clickable row is keyboard-accessible: tabIndex={0} plus an Enter/Space onKeyDown handler that triggers the same navigation as a click'
       );
 
       // 1318. SUPERSEDED (Personnel Details Page task) — Card view also navigates to the
@@ -12390,10 +12398,10 @@ export async function verifyStage18() {
         '1471. REGRESSION: DirectoryPageContainer.jsx\'s Department/Type/Mode/Salary/Status filters, Sort By, and List/Card/Timeline view-mode wiring are all still passed to DirectoryToolbar exactly as before — this task changed only the per-row Details action'
       );
 
-      // 1472. REGRESSION: neither EmployeeListView.jsx nor EmployeeCardView.jsx import
-      // PersonnelProfileModal in actual code — both now navigate via react-router's <Link>, never
-      // a modal (an explanatory comment mentioning the component by name, e.g. "instead of
-      // opening PersonnelProfileModal", is expected and fine — only real import/usage is checked).
+      // 1472. REGRESSION/UPDATED: neither EmployeeListView.jsx nor EmployeeCardView.jsx import
+      // PersonnelProfileModal in actual code — navigation is still pure routing, never a modal.
+      // List navigates the whole row via useNavigate() (row-click task); Card still uses a
+      // per-card <Link> (unaffected — only List's Details column/button was replaced).
       {
         const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
         const listCodeOnly = stripComments(employeeListViewSrcDetails);
@@ -12401,9 +12409,10 @@ export async function verifyStage18() {
         assert(
           !listCodeOnly.includes('PersonnelProfileModal') &&
           !cardCodeOnly.includes('PersonnelProfileModal') &&
-          employeeListViewSrcDetails.includes("import { Link } from 'react-router-dom';") &&
+          employeeListViewSrcDetails.includes("import { useNavigate } from 'react-router-dom';") &&
+          !employeeListViewSrcDetails.includes("import { Link }") &&
           employeeCardViewSrcDetails.includes("import { Link } from 'react-router-dom';"),
-          '1472. REGRESSION: EmployeeListView.jsx and EmployeeCardView.jsx both import react-router-dom\'s Link and neither references PersonnelProfileModal in actual code (comments excluded) — the Personnel directory\'s View Details action is pure navigation'
+          '1472. REGRESSION/UPDATED: EmployeeListView.jsx now imports useNavigate (not Link — replaced by whole-row navigation) and EmployeeCardView.jsx still imports Link unchanged; neither references PersonnelProfileModal in actual code (comments excluded) — the Personnel directory\'s Details action is pure navigation either way'
         );
       }
 
