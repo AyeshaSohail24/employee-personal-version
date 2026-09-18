@@ -31,7 +31,6 @@ export default function DirectoryPageContainer({
   const urlDeptId = searchParams.get('departmentId') || '';
   const urlType = searchParams.get('type') || 'All';
   const urlMode = searchParams.get('mode') || 'All';
-  const urlAllowance = searchParams.get('allowance') || 'All';
 
   // Filter & Search states
   const [search, setSearch] = useState('');
@@ -39,7 +38,6 @@ export default function DirectoryPageContainer({
   const [departmentId, setDepartmentId] = useState(urlDeptId);
   const [typeFilter, setTypeFilter] = useState(urlType);
   const [modeFilter, setModeFilter] = useState(urlMode);
-  const [allowanceFilter, setAllowanceFilter] = useState(urlAllowance);
   const [sortBy, setSortBy] = useState('name-asc');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'card' | 'timeline'
 
@@ -49,8 +47,7 @@ export default function DirectoryPageContainer({
     setDepartmentId(urlDeptId);
     setTypeFilter(urlType);
     setModeFilter(urlMode);
-    setAllowanceFilter(urlAllowance);
-  }, [urlStatus, urlDeptId, urlType, urlMode, urlAllowance]);
+  }, [urlStatus, urlDeptId, urlType, urlMode]);
 
   // Dropdown Options — read through to the real Departments service (department-zeta.vercel.app,
   // via GET /departments — server/routes/orgStructure.js), not the mock departmentService.js:
@@ -82,7 +79,6 @@ export default function DirectoryPageContainer({
         departmentId,
         typeFilter,
         modeFilter,
-        allowanceFilter,
         search,
         sortBy,
       });
@@ -95,7 +91,7 @@ export default function DirectoryPageContainer({
     } finally {
       setLoading(false);
     }
-  }, [baseLifecycleScope, statusFilter, departmentId, typeFilter, modeFilter, allowanceFilter, search, sortBy]);
+  }, [baseLifecycleScope, statusFilter, departmentId, typeFilter, modeFilter, search, sortBy]);
 
   useEffect(() => {
     fetchEmployees();
@@ -140,7 +136,6 @@ export default function DirectoryPageContainer({
     setDepartmentId('');
     setTypeFilter('All');
     setModeFilter('All');
-    setAllowanceFilter('All');
     setSortBy('name-asc');
     setSearchParams({}); // Clears URL query parameters cleanly
   };
@@ -151,7 +146,6 @@ export default function DirectoryPageContainer({
     Boolean(departmentId) ||
     typeFilter !== 'All' ||
     modeFilter !== 'All' ||
-    allowanceFilter !== 'All' ||
     sortBy !== 'name-asc';
 
   // Result count formatting — "personnel" is already collective/plural, so it reads correctly
@@ -223,8 +217,6 @@ export default function DirectoryPageContainer({
         onTypeChange={setTypeFilter}
         selectedMode={modeFilter}
         onModeChange={setModeFilter}
-        selectedAllowance={allowanceFilter}
-        onAllowanceChange={setAllowanceFilter}
         selectedSort={sortBy}
         onSortChange={setSortBy}
         viewMode={viewMode}

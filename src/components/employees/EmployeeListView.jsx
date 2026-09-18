@@ -16,11 +16,6 @@ const MODE_PILL_STYLES = {
   Hybrid: { bg: '#E0F2FE', color: '#0369A1' },
 };
 
-const SALARY_PILL_STYLES = {
-  Paid: { bg: '#ECFDF5', color: '#059669' },
-  Unpaid: { bg: '#FEF3C7', color: '#D97706' },
-};
-
 const TYPE_PILL_STYLES = {
   Employee: { bg: '#F1F5F9', color: '#475569' },
   Intern: { bg: '#E0F2FE', color: '#0369A1' },
@@ -61,22 +56,19 @@ export default function EmployeeListView({ employees = [] }) {
         <table className="widget-table">
           <thead>
             <tr>
-              <th style={{ width: '7%' }}>ID</th>
-              <th style={{ width: '20%' }}>NAME</th>
-              <th style={{ width: '13%' }}>DEPARTMENT</th>
-              <th style={{ width: '10%' }}>TYPE</th>
-              <th style={{ width: '9%' }}>MODE</th>
-              <th style={{ width: '11%' }}>DATES</th>
-              <th style={{ width: '8%' }}>SALARY</th>
-              <th style={{ width: '11%' }}>STATUS</th>
-              <th style={{ width: '11%' }}>DURATION</th>
+              <th style={{ width: '23%' }}>NAME</th>
+              <th style={{ width: '15%' }}>DEPARTMENT</th>
+              <th style={{ width: '12%' }}>TYPE</th>
+              <th style={{ width: '11%' }}>MODE</th>
+              <th style={{ width: '13%' }}>DATES</th>
+              <th style={{ width: '13%' }}>STATUS</th>
+              <th style={{ width: '13%' }}>DURATION</th>
             </tr>
           </thead>
           <tbody>
             {employees.map((emp) => {
               const statusPill = STATUS_PILL_STYLES[emp.status] || { bg: '#F1F5F9', color: '#475569' };
               const modePill = MODE_PILL_STYLES[emp.workMode] || { bg: '#F1F5F9', color: '#475569' };
-              const salaryPill = SALARY_PILL_STYLES[emp.allowance] || { bg: '#ECFDF5', color: '#059669' };
               const typePill = TYPE_PILL_STYLES[emp.directoryType] || { bg: '#F1F5F9', color: '#475569' };
               const isFormer = emp.status === 'Former';
               const goToDetails = () => navigate(`/employees/${emp.id}`);
@@ -94,14 +86,7 @@ export default function EmployeeListView({ employees = [] }) {
                     }
                   }}
                 >
-                  {/* 1. ID */}
-                  <td>
-                    <span className="table-user-code" style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 600 }}>
-                      {emp.employeeId}
-                    </span>
-                  </td>
-
-                  {/* 2. NAME (+ email underneath) */}
+                  {/* 1. NAME (+ email underneath) */}
                   <td style={{ overflow: 'hidden' }}>
                     <div className="table-user-cell">
                       <div
@@ -119,26 +104,26 @@ export default function EmployeeListView({ employees = [] }) {
                     </div>
                   </td>
 
-                  {/* 3. DEPARTMENT */}
+                  {/* 2. DEPARTMENT */}
                   <td>
                     <div className="table-text-main">{emp.department ? emp.department.name : 'Unassigned'}</div>
                   </td>
 
-                  {/* 4. TYPE */}
+                  {/* 3. TYPE */}
                   <td>
                     <span className="status-pill" style={{ backgroundColor: typePill.bg, color: typePill.color }}>
                       {emp.directoryType}
                     </span>
                   </td>
 
-                  {/* 5. MODE */}
+                  {/* 4. MODE */}
                   <td>
                     <span className="status-pill" style={{ backgroundColor: modePill.bg, color: modePill.color }}>
                       {emp.workMode || 'On-site'}
                     </span>
                   </td>
 
-                  {/* 6. DATES */}
+                  {/* 5. DATES */}
                   <td>
                     <div className="dates-cell">
                       <span className="dates-start">{formatDateDisplay(emp.startDate)}</span>
@@ -148,21 +133,14 @@ export default function EmployeeListView({ employees = [] }) {
                     </div>
                   </td>
 
-                  {/* 7. SALARY (label only; underlying data is the existing Paid/Unpaid allowance field) */}
-                  <td>
-                    <span className="status-pill" style={{ backgroundColor: salaryPill.bg, color: salaryPill.color }}>
-                      {emp.allowance || 'Paid'}
-                    </span>
-                  </td>
-
-                  {/* 8. STATUS */}
+                  {/* 6. STATUS */}
                   <td>
                     <span className="status-pill" style={{ backgroundColor: statusPill.bg, color: statusPill.color }}>
                       {emp.status}
                     </span>
                   </td>
 
-                  {/* 9. DURATION */}
+                  {/* 7. DURATION */}
                   <td>
                     <DurationCell startDate={emp.startDate} contractEndDate={emp.contractEndDate} />
                   </td>
