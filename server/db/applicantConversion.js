@@ -42,6 +42,7 @@ export async function convertApplicant(applicantId, {
     employeeTypeId: resolvedEmployeeTypeId,
     status: "Onboarding",
     startDate,
+    contractEndDate: internshipEndDate ?? null,
     sourceApplicantId: applicantId,
   });
 

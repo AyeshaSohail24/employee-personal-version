@@ -38,6 +38,7 @@ export function createEmployee(data) {
     work_mode: data.workMode ?? "On-site",
     allowance: data.allowance ?? "Paid",
     start_date: data.startDate,
+    contract_end_date: data.contractEndDate ?? null,
     source_applicant_id: data.sourceApplicantId ?? null,
   });
 }
