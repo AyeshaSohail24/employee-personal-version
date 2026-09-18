@@ -4,7 +4,7 @@ import { RefreshCw, Plus } from 'lucide-react';
 import { employeeService } from '../../services/employeeService';
 import { employeeTypeService } from '../../services/employeeTypeService';
 import { locationService } from '../../services/locationService';
-import { apiClient } from '../../services/apiClient';
+import { apiClient, ApiError } from '../../services/apiClient';
 
 import DirectoryToolbar from './DirectoryToolbar';
 import EmployeeListView from './EmployeeListView';
@@ -130,10 +130,15 @@ export default function DirectoryPageContainer({
       setSyncMessage('Personnel data refreshed');
     } catch (err) {
       console.error('Failed to sync employees:', err);
-      setSyncMessage('Sync failed — please try again');
+      // Surface the server's actual reason (e.g. "Your role does not permit write access.",
+      // an Interns DB connectivity error) instead of a generic message that hides it — the
+      // previous "Sync failed — please try again" gave no way to tell a permissions problem
+      // from a real outage without opening DevTools.
+      const detail = err instanceof ApiError && err.message ? err.message : null;
+      setSyncMessage(detail ? `Sync failed — ${detail}` : 'Sync failed — please try again');
     } finally {
       setIsSyncing(false);
-      setTimeout(() => setSyncMessage(''), 2500);
+      setTimeout(() => setSyncMessage(''), 6000);
     }
   };
 

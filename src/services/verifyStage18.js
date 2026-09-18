@@ -14900,6 +14900,28 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Sync Personnel's failure message surfaces the server's actual reason (permission denied,
+    // Interns DB outage, etc.) instead of a generic "please try again" that hides it.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const directoryContainerSrcSyncErr = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+
+      // 1648. NEW — handleSync()'s catch block reads the ApiError's own message (the server's
+      // real reason) and includes it in what's shown, rather than a fixed generic string that's
+      // identical regardless of the actual cause.
+      assert(
+        directoryContainerSrcSyncErr.includes("import { apiClient, ApiError } from '../../services/apiClient';") &&
+        directoryContainerSrcSyncErr.includes('err instanceof ApiError && err.message') &&
+        directoryContainerSrcSyncErr.match(/setSyncMessage\(detail \? `Sync failed — \$\{detail\}` : 'Sync failed — please try again'\);/),
+        '1648. NEW — DirectoryPageContainer.jsx\'s handleSync() surfaces the ApiError\'s own message (e.g. "Your role does not permit write access.") instead of always showing a fixed generic string'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);
