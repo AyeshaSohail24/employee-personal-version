@@ -8,7 +8,8 @@ import {
   calculateTimelineBarPosition,
 } from '../../utils/dateUtils.js';
 import { resolveDepartmentColor, buildDepartmentLegend } from '../../domain/departmentDomain.js';
-import { departmentService } from '../../services/departmentService.js';
+import { apiClient } from '../../services/apiClient.js';
+import { departmentColorStore } from '../../services/departmentColorStore.js';
 import DepartmentColorsModal from './DepartmentColorsModal.jsx';
 import TimelineExportView from './TimelineExportView.jsx';
 import { exportTimelineAsPdf, exportTimelineAsPng } from '../../utils/timelineExport.js';
@@ -41,14 +42,17 @@ export default function EmployeeTimelineView({ employees = [] }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isExportMenuOpen]);
 
-  // Timeline reads Department color configuration through departmentService only (the app's
-  // existing data-access boundary for Departments — never a lower-level storage layer touched
-  // directly from a component), and re-reads it (via refreshDepartments) right after Department
-  // Colors is saved, so bars reflect the new color immediately without needing a page refresh,
-  // even though the `employees` prop's own embedded `.department` snapshots don't change until
-  // Personnel's own data next reloads.
+  // Timeline reads real Departments (GET /departments) for identity, merged with locally-stored
+  // color preferences (departmentColorStore.js — colors are a pure UI preference, never real
+  // department data), and re-reads it (via refreshDepartments) right after Department Colors is
+  // saved, so bars reflect the new color immediately without needing a page refresh, even though
+  // the `employees` prop's own embedded `.department` snapshots don't change until Personnel's
+  // own data next reloads.
   const refreshDepartments = useCallback(() => {
-    departmentService.getAll({ withCount: false }).then(setDepartments).catch((err) => {
+    apiClient.get('/departments').then(({ departments: depts }) => {
+      const colorMap = departmentColorStore.getAll();
+      setDepartments(depts.map((d) => ({ ...d, color: colorMap[d.id] || null })));
+    }).catch((err) => {
       console.error('Failed to load department color configuration:', err);
     });
   }, []);

@@ -14622,6 +14622,103 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Create Personnel modal's Department dropdown — same fix as the Personnel directory's own
+    // filter: reads from the real Departments service, not the mock departmentService.js.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const createModalSrcDept = fs.readFileSync(path.resolve('./src/components/employees/CreateEmployeeModal.jsx'), 'utf-8');
+
+      // 1630. NEW — Create Personnel's Department options come from GET /departments (real,
+      // external), not the mock departmentService.js — whose hardcoded department list didn't
+      // match the real ones (e.g. "Executive Office"/"Product & UX" that don't actually exist).
+      assert(
+        createModalSrcDept.match(/const \[\{ departments: depts \}, emps\] = await Promise\.all\(\[\s*apiClient\.get\('\/departments'\)/) &&
+        !createModalSrcDept.includes("from '../../services/departmentService") &&
+        !createModalSrcDept.includes('departmentService.getAll'),
+        '1630. NEW — CreateEmployeeModal.jsx loads Department options via apiClient.get(\'/departments\') (the real external service), no departmentService.js import/usage remains'
+      );
+
+      resetDatabase();
+    }
+
+    // ========================================================================================
+    // Sweeping the mock departmentService.js out of every remaining real (reachable) consumer —
+    // Former Personnel's filter, and the Timeline's department identity/color flow. Upcoming and
+    // configurationService.js are deliberately left alone: Upcoming's candidates are still fully
+    // mock end to end (no real Applicants DB integration yet), so pointing its filter at real
+    // department ids would break it, not fix it; configurationService.js's department CRUD has
+    // no reachable UI at all since Configuration was removed from the app (Stage 18 checks
+    // 8-11), so it's dead code, not a live bug.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const formerPageSrcDept = fs.readFileSync(path.resolve('./src/pages/former/FormerPersonnelPage.jsx'), 'utf-8');
+      const timelineViewSrcDept = fs.readFileSync(path.resolve('./src/components/employees/EmployeeTimelineView.jsx'), 'utf-8');
+      const colorsModalSrcDept = fs.readFileSync(path.resolve('./src/components/employees/DepartmentColorsModal.jsx'), 'utf-8');
+      const colorStoreSrc = fs.existsSync(path.resolve('./src/services/departmentColorStore.js'))
+        ? fs.readFileSync(path.resolve('./src/services/departmentColorStore.js'), 'utf-8')
+        : '';
+      const offboardingSrcDept = fs.readFileSync(path.resolve('./src/services/offboardingService.js'), 'utf-8');
+      const onboardingSrcDept = fs.readFileSync(path.resolve('./src/services/onboardingService.js'), 'utf-8');
+
+      // 1631. NEW — Former Personnel's Department filter also reads from the real service now
+      // (former employees share employeeService.queryEmployees() with Personnel, so their
+      // department.id is real too — the same bug, the same fix).
+      assert(
+        formerPageSrcDept.match(/const \{ departments: depts \} = await apiClient\.get\('\/departments'\);/) &&
+        !formerPageSrcDept.includes("from '../../services/departmentService"),
+        '1631. NEW — FormerPersonnelPage.jsx loads Department filter options via apiClient.get(\'/departments\'), no departmentService.js import remains'
+      );
+
+      // 1632. NEW — a dedicated local-only color store exists: department Timeline colors are a
+      // pure UI preference (the real Departments service has no color field and this app never
+      // writes to it — see departmentsClient.js's own doc comment), so they belong in
+      // localStorage, keyed by real department id, not routed through any department service.
+      assert(
+        colorStoreSrc.includes('export const departmentColorStore') &&
+        colorStoreSrc.includes('setColor') &&
+        colorStoreSrc.includes('localStorage'),
+        '1632. NEW — departmentColorStore.js exists, exporting getAll()/setColor() backed by localStorage'
+      );
+
+      // 1633. NEW — EmployeeTimelineView.jsx and DepartmentColorsModal.jsx both read real
+      // departments (apiClient.get('/departments')) merged with locally-stored colors, and
+      // neither imports the mock departmentService.js anymore.
+      assert(
+        timelineViewSrcDept.includes("apiClient.get('/departments')") &&
+        timelineViewSrcDept.includes('departmentColorStore.getAll()') &&
+        !timelineViewSrcDept.includes("from '../../services/departmentService") &&
+        colorsModalSrcDept.includes("apiClient.get('/departments')") &&
+        colorsModalSrcDept.includes('departmentColorStore') &&
+        !colorsModalSrcDept.includes("from '../../services/departmentService"),
+        '1633. NEW — EmployeeTimelineView.jsx and DepartmentColorsModal.jsx both source departments from the real API and colors from departmentColorStore.js; neither imports departmentService.js'
+      );
+
+      // 1634. NEW — saving a color in DepartmentColorsModal writes to departmentColorStore, not
+      // departmentService.update() (which would silently fail against a real department id the
+      // mock array doesn't contain).
+      assert(
+        colorsModalSrcDept.includes('departmentColorStore.setColor(') &&
+        !colorsModalSrcDept.includes('departmentService.update('),
+        '1634. NEW — DepartmentColorsModal.jsx\'s save handler calls departmentColorStore.setColor(), never departmentService.update()'
+      );
+
+      // 1635. REGRESSION — onboardingService.js/offboardingService.js's now-dead
+      // departmentService.js imports (they already read real departments via
+      // apiClient.get('/departments') elsewhere in the same files) are cleaned up.
+      assert(
+        !offboardingSrcDept.includes("from './departmentService.js'") &&
+        !onboardingSrcDept.includes("from './departmentService.js'"),
+        '1635. REGRESSION — offboardingService.js and onboardingService.js no longer import the unused departmentService.js (they already read real departments via apiClient.get(\'/departments\') elsewhere)'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);

@@ -2,7 +2,6 @@ import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
 import { apiClient } from './apiClient.js';
 import { employeeService } from './employeeService.js';
 import { employmentRecordService } from './employmentRecordService.js';
-import { departmentService } from './departmentService.js';
 import { auditService, AUDIT_ACTIONS } from './auditService.js';
 import {
   generateOffboardingPlanPreview,

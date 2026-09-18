@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { X, Palette, AlertCircle } from 'lucide-react';
-import { departmentService } from '../../services/departmentService.js';
+import { apiClient } from '../../services/apiClient.js';
+import { departmentColorStore } from '../../services/departmentColorStore.js';
 import { resolveDepartmentColor } from '../../domain/departmentDomain.js';
 
 /**
- * Lets HR customize each Department's Timeline bar color. The color belongs to the DEPARTMENT
- * record itself (departmentService.update(id, { color })) — never to individual personnel —
- * so changing one department's color here updates every displayed Timeline bar for that
- * department at once, via the exact same resolveDepartmentColor() resolver the bars themselves
- * use. Persists through departmentService (this app's existing service/storage abstraction) —
- * never localStorage directly from this component, and never claims backend/MySQL persistence,
- * which does not exist for department configuration yet.
+ * Lets HR customize each Department's Timeline bar color. Departments themselves come from the
+ * real Departments service (GET /departments) — never to individual personnel — so changing one
+ * department's color here updates every displayed Timeline bar for that department at once, via
+ * the exact same resolveDepartmentColor() resolver the bars themselves use. The color itself is
+ * a local-only UI preference (departmentColorStore.js, backed by localStorage) — the real
+ * Departments service has no color field and this app never writes to it.
  */
 export default function DepartmentColorsModal({ isOpen, onClose, onSaved }) {
   const [departments, setDepartments] = useState([]);
@@ -23,15 +23,17 @@ export default function DepartmentColorsModal({ isOpen, onClose, onSaved }) {
     if (!isOpen) return;
     setError('');
     setIsLoading(true);
-    departmentService.getAll({ withCount: false })
-      .then((depts) => {
-        setDepartments(depts);
+    apiClient.get('/departments')
+      .then(({ departments: depts }) => {
+        const colorMap = departmentColorStore.getAll();
+        const withColors = depts.map((d) => ({ ...d, color: colorMap[d.id] || null }));
+        setDepartments(withColors);
         // Seed the working color state from each department's CURRENT resolved color (its own
         // explicit `color` if set, otherwise the same stable hash fallback the bars already
         // render) — so the picker always shows what HR would actually see on the Timeline today,
         // never a blank/default swatch that doesn't match reality.
         const initial = {};
-        depts.forEach((d) => {
+        withColors.forEach((d) => {
           initial[d.id] = d.color || resolveDepartmentColor(d);
         });
         setColors(initial);
@@ -58,7 +60,7 @@ export default function DepartmentColorsModal({ isOpen, onClose, onSaved }) {
       // still unconfigured/falling back to the deterministic hash) rather than every department
       // silently gaining an explicit `color` value just because the modal was opened.
       const changed = departments.filter((d) => colors[d.id] && colors[d.id] !== d.color);
-      await Promise.all(changed.map((d) => departmentService.update(d.id, { color: colors[d.id] })));
+      changed.forEach((d) => departmentColorStore.setColor(d.id, colors[d.id]));
       if (onSaved) onSaved();
       onClose();
     } catch (err) {
