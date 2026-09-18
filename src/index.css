@@ -5342,7 +5342,7 @@ input.form-control:focus {
 .onboarding-scope-sections {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: 1.25rem;
 }
 
 .onboarding-scope-section-title {
@@ -5367,8 +5367,8 @@ input.form-control:focus {
    card up to match a longer neighbor's height. */
 .onboarding-scope-grid-dept {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 0.75rem;
   align-items: start;
 }
 
@@ -5377,7 +5377,7 @@ input.form-control:focus {
    against --bg-app here). A slightly cooler/darker border and a step-up to shadow-md gives
    these configuration cards clear boundaries while staying flat/clean, not "KPI card" heavy. */
 .onboarding-scope-card {
-  padding: 1.4rem;
+  padding: 1.1rem;
   border-color: #D6DEE8;
   box-shadow: var(--shadow-md);
   transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
@@ -5390,7 +5390,7 @@ input.form-control:focus {
 }
 
 .onboarding-scope-card--compact {
-  padding: 1.1rem;
+  padding: 0.85rem;
 }
 
 /* Universal Tasks is the broadest scope — a slightly stronger (not louder) treatment: a soft
@@ -5455,7 +5455,7 @@ input.form-control:focus {
    around it grows too rather than clipping/scrolling an inner region. */
 .onboarding-scope-task-table {
   width: 100%;
-  margin-top: 0.9rem;
+  margin-top: 0.6rem;
   border-collapse: collapse;
 }
 
@@ -5468,7 +5468,7 @@ input.form-control:focus {
 }
 
 .onboarding-scope-task-table td {
-  padding: 0.6rem 0;
+  padding: 0.4rem 0;
   vertical-align: middle;
 }
 
@@ -5482,7 +5482,7 @@ input.form-control:focus {
   text-align: right;
   white-space: nowrap;
   width: 1%;
-  padding-left: 0.75rem;
+  padding-left: 0.6rem;
 }
 
 .onboarding-scope-task-timing {
@@ -5495,15 +5495,34 @@ input.form-control:focus {
   font-weight: 600;
 }
 
-.onboarding-scope-task-delete-cell {
+.onboarding-scope-task-action-cell {
   text-align: right;
+  white-space: nowrap;
   width: 1%;
-  padding-left: 0.5rem;
+  padding-left: 0.35rem;
+}
+
+.onboarding-scope-task-action-cell .icon-btn {
+  margin-left: 0.15rem;
+}
+
+/* Inline edit inputs replace the title/timing cells in place, same row height as the
+   read display so a row being edited doesn't jump the rest of the table. */
+.onboarding-scope-task-edit-title {
+  font-size: 0.83rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.onboarding-scope-task-edit-offset {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.4rem;
+  width: 4.5rem;
+  text-align: right;
 }
 
 .onboarding-scope-task-list-empty {
-  margin-top: 0.9rem;
-  padding: 0.8rem 0.9rem;
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.75rem;
   border: 1px dashed var(--border-light);
   border-radius: var(--radius-md);
   font-size: 0.77rem;
@@ -5515,7 +5534,7 @@ input.form-control:focus {
 .onboarding-scope-add-task-row {
   display: flex;
   gap: 0.5rem;
-  margin-top: 0.9rem;
+  margin-top: 0.6rem;
 }
 
 .onboarding-scope-add-task-row .form-input {
@@ -5536,8 +5555,8 @@ input.form-control:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1.15rem;
-  padding-top: 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
   border-top: 1px solid var(--border-light);
 }
 
@@ -5553,7 +5572,7 @@ input.form-control:focus {
 
 @media (max-width: 1024px) {
   .onboarding-scope-grid-dept {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   }
 }
 
