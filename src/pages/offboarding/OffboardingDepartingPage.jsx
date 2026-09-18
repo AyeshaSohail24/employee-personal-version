@@ -8,6 +8,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { offboardingService } from '../../services/offboardingService.js';
+import { formatDateDisplay } from '../../utils/dateUtils.js';
 
 // The real intern roster (Interns DB), joined server-side with whatever
 // local offboarding plan each person has — see
@@ -183,12 +184,11 @@ export default function OffboardingDepartingPage() {
             <table className="presence-data-table onboarding-employees-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '24%', textAlign: 'left' }}>Intern</th>
-                  <th style={{ width: '15%', textAlign: 'left' }}>Department</th>
-                  <th style={{ width: '14%', textAlign: 'center' }}>Final Working Date</th>
-                  <th style={{ width: '18%', textAlign: 'left' }}>Offboarding Plan</th>
-                  <th style={{ width: '14%', textAlign: 'center' }}>Progress</th>
-                  <th style={{ width: '15%', textAlign: 'center' }}>Status</th>
+                  <th style={{ width: '28%', textAlign: 'left' }}>Intern</th>
+                  <th style={{ width: '18%', textAlign: 'left' }}>Department</th>
+                  <th style={{ width: '18%', textAlign: 'center' }}>Final Working Date</th>
+                  <th style={{ width: '18%', textAlign: 'center' }}>Progress</th>
+                  <th style={{ width: '18%', textAlign: 'center' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -224,15 +224,7 @@ export default function OffboardingDepartingPage() {
                       </td>
 
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '0.815rem' }}>
-                        {plan ? plan.anchorDate : (intern.endDate || 'N/A')}
-                      </td>
-
-                      <td>
-                        <div style={{ fontSize: '0.815rem', color: 'var(--text-main)' }}>
-                          {plan ? `${plan.taskCount} task${plan.taskCount === 1 ? '' : 's'}` : (
-                            <span style={{ color: 'var(--text-muted)' }}>No active plan</span>
-                          )}
-                        </div>
+                        {formatDateDisplay(String(plan ? plan.anchorDate : intern.endDate || '').slice(0, 10))}
                       </td>
 
                       <td style={{ textAlign: 'center' }}>
