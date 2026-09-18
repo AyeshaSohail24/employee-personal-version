@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Globe2, GraduationCap, Building2, Settings2 } from 'lucide-react';
+import { Globe2, GraduationCap, Building2, Plus, Trash2 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
 
 function formatRelativeOffset(days) {
@@ -9,37 +8,15 @@ function formatRelativeOffset(days) {
   return value > 0 ? `Day +${value}` : `Day ${value}`;
 }
 
-// Read-only preview of a scope's configured tasks, in their existing configured sequence order
-// (never re-sorted here — the order already comes pre-sorted by sequence from
-// onboardingService.getScopesSummary()). No Edit/Delete/Move controls live here; those only
-// exist in the "Manage Tasks" editor this card links to. Title + timing only — the description
-// is configuration detail, not something this glance-level preview needs.
-function ScopeTaskList({ tasks, emptyStateMessage }) {
-  if (!tasks || tasks.length === 0) {
-    return (
-      <div className="onboarding-scope-task-list-empty">
-        {emptyStateMessage}
-      </div>
-    );
-  }
+// A scope's configured tasks, editable right here — no separate "Manage Tasks" page. Add
+// appends a task (Day 0, default activity type — fine-grained timing/description/activity-type
+// stays a job for a later dedicated editor if this app ever needs one); delete removes one.
+// Both just hand the full desired title/id list up to the parent, which does the actual
+// replace-by-scope save (onboardingService.saveScopeTasks) and reloads.
+function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCount, onAddTask, onDeleteTask, compact = false, emphasized = false }) {
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  return (
-    <table className="onboarding-scope-task-table">
-      <tbody>
-        {tasks.map((task) => (
-          <tr key={task.id}>
-            <td className="onboarding-scope-task-title">{task.title}</td>
-            <td className="onboarding-scope-task-timing-cell">
-              <span className="onboarding-scope-task-timing">{formatRelativeOffset(task.relativeOffsetDays)}</span>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCount, to, compact = false, emphasized = false }) {
   const cardClassName = [
     'table-container-card',
     'onboarding-scope-card',
@@ -52,6 +29,33 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
     compact ? 'onboarding-scope-card-icon--compact' : '',
     emphasized ? 'onboarding-scope-card-icon--emphasized' : '',
   ].filter(Boolean).join(' ');
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    const trimmed = newTaskTitle.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    try {
+      await onAddTask(trimmed);
+      setNewTaskTitle('');
+    } catch (err) {
+      alert(`Failed to add task: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (taskId) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onDeleteTask(taskId);
+    } catch (err) {
+      alert(`Failed to delete task: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className={cardClassName}>
@@ -69,16 +73,56 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
         </div>
       </div>
 
-      <ScopeTaskList tasks={tasks} emptyStateMessage={emptyStateMessage} />
+      {tasks.length === 0 ? (
+        <div className="onboarding-scope-task-list-empty">
+          {emptyStateMessage}
+        </div>
+      ) : (
+        <table className="onboarding-scope-task-table">
+          <tbody>
+            {tasks.map((task) => (
+              <tr key={task.id}>
+                <td className="onboarding-scope-task-title">{task.title}</td>
+                <td className="onboarding-scope-task-timing-cell">
+                  <span className="onboarding-scope-task-timing">{formatRelativeOffset(task.relativeOffsetDays)}</span>
+                </td>
+                <td className="onboarding-scope-task-delete-cell">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn-danger"
+                    title="Delete task"
+                    aria-label={`Delete ${task.title}`}
+                    disabled={saving}
+                    onClick={() => handleDelete(task.id)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <form className="onboarding-scope-add-task-row" onSubmit={handleAdd}>
+        <input
+          type="text"
+          className="form-input"
+          placeholder="Add a task..."
+          value={newTaskTitle}
+          onChange={(e) => setNewTaskTitle(e.target.value)}
+          disabled={saving}
+        />
+        <button type="submit" className="btn-secondary" disabled={saving || !newTaskTitle.trim()}>
+          <Plus size={14} />
+          <span>Add</span>
+        </button>
+      </form>
 
       <div className="onboarding-scope-card-footer">
         <div className="onboarding-scope-card-counts">
           <strong className="onboarding-scope-card-count-main">{taskCount}</strong> task{taskCount === 1 ? '' : 's'}
         </div>
-        <Link to={to} className="btn-secondary onboarding-scope-card-action">
-          <Settings2 size={13} />
-          <span>Manage Tasks</span>
-        </Link>
       </div>
     </div>
   );
@@ -123,6 +167,31 @@ export default function OnboardingPlansPage() {
     }
   };
 
+  // Shared add/delete for both the Universal card and every Department card — scopeType +
+  // departmentId (null for Universal) is all that distinguishes them. Both mutations replace
+  // the whole scope's task list (saveScopeTasks' existing replace-by-key contract), so every
+  // add/delete here always starts from the tasks this page already has in `summary` rather than
+  // re-fetching first.
+  const existingTasksFor = (scopeType, departmentId) =>
+    scopeType === 'universal'
+      ? summary.universal.tasks
+      : summary.departments.find((row) => row.department.id === departmentId)?.tasks ?? [];
+
+  const handleAddTask = async (scopeType, departmentId, title) => {
+    const newTasks = [
+      ...existingTasksFor(scopeType, departmentId),
+      { title, activityTypeId: 1, relativeOffsetDays: 0 },
+    ];
+    await onboardingService.saveScopeTasks(scopeType, personType, departmentId, newTasks);
+    await loadSummary();
+  };
+
+  const handleDeleteTask = async (scopeType, departmentId, taskId) => {
+    const newTasks = existingTasksFor(scopeType, departmentId).filter((t) => t.id !== taskId);
+    await onboardingService.saveScopeTasks(scopeType, personType, departmentId, newTasks);
+    await loadSummary();
+  };
+
   const meta = PERSON_TYPE_META[personType];
 
   return (
@@ -155,7 +224,8 @@ export default function OnboardingPlansPage() {
               tasks={summary.universal.tasks}
               emptyStateMessage={meta.universalEmptyState}
               taskCount={summary.universal.taskCount}
-              to={`/onboarding/plans/${personType}/universal`}
+              onAddTask={(title) => handleAddTask('universal', null, title)}
+              onDeleteTask={(taskId) => handleDeleteTask('universal', null, taskId)}
             />
           </section>
 
@@ -180,7 +250,8 @@ export default function OnboardingPlansPage() {
                     tasks={row.tasks}
                     emptyStateMessage={meta.departmentEmptyState}
                     taskCount={row.taskCount}
-                    to={`/onboarding/plans/${personType}/department/${row.department.id}`}
+                    onAddTask={(title) => handleAddTask('department', row.department.id, title)}
+                    onDeleteTask={(taskId) => handleDeleteTask('department', row.department.id, taskId)}
                   />
                 ))}
               </div>
