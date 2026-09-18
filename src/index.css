@@ -5450,48 +5450,39 @@ input.form-control:focus {
   max-width: 460px;
 }
 
-/* Read-only inline preview of a scope's configured tasks (title/description/relative timing).
-   Bounded to a sensible max-height so a scope with many tasks can't stretch the whole Plans
-   page — only this inner list scrolls, reusing the app's existing .app-scroll-area scrollbar
-   styling but with overflow switched from always-visible `scroll` to `auto` so a short list
-   never shows a scrollbar at all. */
-.onboarding-scope-task-list {
+/* Read-only inline preview of a scope's configured tasks (title + relative timing only — no
+   description, no scroll container). A plain table that grows with its row count; the card
+   around it grows too rather than clipping/scrolling an inner region. */
+.onboarding-scope-task-table {
+  width: 100%;
   margin-top: 0.9rem;
-  max-height: 260px;
-  overflow-y: auto;
-  /* Comfortable gutter between task content and the scrollbar itself — the previous 0.35rem
-     left text sitting almost flush against the 8px-wide .app-scroll-area thumb. scrollbar-gutter
-     reserves the track space up front where supported; the padding is the real fix either way. */
-  padding-right: 0.75rem;
-  scrollbar-gutter: stable;
+  border-collapse: collapse;
 }
 
-.onboarding-scope-task-row {
-  padding: 0.6rem 0;
+.onboarding-scope-task-table tr {
   border-top: 1px solid var(--border-light);
 }
 
-.onboarding-scope-task-row:first-child {
+.onboarding-scope-task-table tr:first-child {
   border-top: none;
-  padding-top: 0;
+}
+
+.onboarding-scope-task-table td {
+  padding: 0.6rem 0;
+  vertical-align: middle;
 }
 
 .onboarding-scope-task-title {
-  display: block;
   font-size: 0.83rem;
   font-weight: 600;
   color: var(--text-main);
 }
 
-.onboarding-scope-task-description {
-  margin: 0.2rem 0 0.4rem 0;
-  font-size: 0.77rem;
-  color: var(--text-muted);
-  line-height: 1.45;
-  /* Preserve HR's own line breaks (pre-line keeps newlines but still collapses/wraps other
-     whitespace normally) without touching the stored plain-text description or rendering HTML. */
-  white-space: pre-line;
-  overflow-wrap: anywhere;
+.onboarding-scope-task-timing-cell {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
+  padding-left: 0.75rem;
 }
 
 .onboarding-scope-task-timing {

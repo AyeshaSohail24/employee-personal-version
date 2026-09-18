@@ -12,7 +12,8 @@ function formatRelativeOffset(days) {
 // Read-only preview of a scope's configured tasks, in their existing configured sequence order
 // (never re-sorted here — the order already comes pre-sorted by sequence from
 // onboardingService.getScopesSummary()). No Edit/Delete/Move controls live here; those only
-// exist in the "Manage Tasks" editor this card links to.
+// exist in the "Manage Tasks" editor this card links to. Title + timing only — the description
+// is configuration detail, not something this glance-level preview needs.
 function ScopeTaskList({ tasks, emptyStateMessage }) {
   if (!tasks || tasks.length === 0) {
     return (
@@ -23,17 +24,18 @@ function ScopeTaskList({ tasks, emptyStateMessage }) {
   }
 
   return (
-    <div className="onboarding-scope-task-list app-scroll-area">
-      {tasks.map((task) => (
-        <div key={task.id} className="onboarding-scope-task-row">
-          <span className="onboarding-scope-task-title">{task.title}</span>
-          {task.description && (
-            <p className="onboarding-scope-task-description">{task.description}</p>
-          )}
-          <span className="onboarding-scope-task-timing">{formatRelativeOffset(task.relativeOffsetDays)}</span>
-        </div>
-      ))}
-    </div>
+    <table className="onboarding-scope-task-table">
+      <tbody>
+        {tasks.map((task) => (
+          <tr key={task.id}>
+            <td className="onboarding-scope-task-title">{task.title}</td>
+            <td className="onboarding-scope-task-timing-cell">
+              <span className="onboarding-scope-task-timing">{formatRelativeOffset(task.relativeOffsetDays)}</span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
