@@ -14537,6 +14537,59 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // "Sync Personnel" — actually reconciles from the Interns DB, not just a re-read of stale
+    // local data (fixes the same root cause as the missing end date/mode/salary bugs: an
+    // employee's fields only ever got set once, at creation, and never re-checked against the
+    // Interns DB afterward).
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const internSyncSrc = fs.readFileSync(path.resolve('./server/db/internSync.js'), 'utf-8');
+      const employeeRoutesSrc = fs.readFileSync(path.resolve('./server/routes/employees.js'), 'utf-8');
+      const openapiSrcSync = fs.readFileSync(path.resolve('./server/openapi.js'), 'utf-8');
+      const employeeServiceSrcSync = fs.readFileSync(path.resolve('./src/services/employeeService.js'), 'utf-8');
+
+      // 1624. NEW — a shared reconciliation function exists, covering both "create the local
+      // employee if this intern has never been touched" and "fix Mode/Salary/End Date if they've
+      // drifted from the Interns DB" in one pass, callable by both the live button and the
+      // terminal script (no duplicated logic between the two).
+      assert(
+        internSyncSrc.includes('export async function syncAllInternsToEmployees(') &&
+        internSyncSrc.includes('createLocalEmployeeFromIntern') &&
+        internSyncSrc.includes('computeInternReconciliation'),
+        '1624. NEW — internSync.js exports syncAllInternsToEmployees(), built from shared create/reconcile helpers also usable by resolveOrCreateEmployeeForIntern()'
+      );
+
+      // 1625. NEW — a single bad intern record can't abort the whole batch: each intern is
+      // processed in its own try/catch, tallied into a `failed` count, never thrown out of the loop.
+      assert(
+        /for \(const intern of interns[\s\S]{0,40}\{\s*try \{/.test(internSyncSrc) &&
+        internSyncSrc.includes('action: "failed"'),
+        '1625. NEW — syncAllInternsToEmployees() catches a per-intern failure and continues the batch (tracked in the returned `failed` count) rather than aborting the whole sync'
+      );
+
+      // 1626. NEW — POST /employees/sync exists, routed and scoped consistently with the other
+      // write endpoints on this resource (employees:write, same as POST/PATCH /employees).
+      assert(
+        employeeRoutesSrc.includes('"/employees/sync"') &&
+        employeeRoutesSrc.includes('syncAllInternsToEmployees()') &&
+        openapiSrcSync.match(/"\/employees\/sync": \{\s*post: \{[\s\S]{0,200}security: scoped\("employees:write"\)/),
+        '1626. NEW — POST /employees/sync is registered in openapi.js (required for the router to recognize it at all) with security: scoped("employees:write"), and its route handler calls syncAllInternsToEmployees()'
+      );
+
+      // 1627. UPDATED — the frontend "Sync Personnel" button (employeeService.syncEmployees())
+      // now actually triggers that server-side reconciliation before re-reading the roster,
+      // instead of just re-fetching whatever this app's own database already had cached.
+      assert(
+        employeeServiceSrcSync.match(/async syncEmployees\(\) \{\s*await apiClient\.post\('\/employees\/sync'\);\s*return this\.getAll\(\);/),
+        '1627. UPDATED — employeeService.syncEmployees() now POSTs to /employees/sync (triggering the real Interns DB reconciliation) before calling getAll() again — "Sync Personnel" gets genuinely fresh data, not a re-read of stale local rows'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);

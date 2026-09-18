@@ -1,10 +1,16 @@
 import * as db from "../db/employees.js";
 import { hydrateEmployees, hydrateEmployee } from "../db/employeeHydration.js";
+import { syncAllInternsToEmployees } from "../db/internSync.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
 
 export const routes = {
+  "/employees/sync": {
+    async post(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { summary: await syncAllInternsToEmployees() });
+    },
+  },
   "/employees": {
     async get(req, res, ctx) {
       const { limit, offset } = parseListQuery(ctx.url);

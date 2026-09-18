@@ -440,18 +440,16 @@ export const employeeService = {
   },
 
   /**
-   * Refreshes Employees Directory data from the current source of truth.
-   *
-   * CURRENT (PoC, no backend): re-reads the local storage-engine database, identically
-   * to getAll(). FUTURE: swap the implementation to fetch the latest employees from a
-   * backend API/database — the call signature and hydrated-array return shape stay the
-   * same, so callers (the Sync Employees button) require no changes when that happens.
-   *
-   * @param {Object} [options]
+   * Refreshes Employees Directory data from the actual source of truth: POSTs to
+   * /employees/sync (server/db/internSync.js's syncAllInternsToEmployees()), which pulls every
+   * intern from the external Interns DB and creates/reconciles their local employee record —
+   * not just a re-read of whatever this app's own database already had cached — then re-fetches
+   * the now-current roster.
    * @returns {Promise<Array<Object>>}
    */
-  async syncEmployees(options = {}) {
-    return this.getAll({ hydrate: true, ...options });
+  async syncEmployees() {
+    await apiClient.post('/employees/sync');
+    return this.getAll();
   },
 };
 
