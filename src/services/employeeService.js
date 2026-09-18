@@ -181,6 +181,10 @@ export const employeeService = {
    * @param {string} [options.locationId='']
    * @param {string} [options.search='']
    * @param {string} [options.sortBy='name-asc'] - 'name-asc', 'name-desc', 'date-desc', 'date-asc'
+   * @param {Array<Object>} [options.sourceEmployees] - Pre-fetched hydrated employees to filter/sort
+   *   instead of re-reading GET /employees — used by the Sync Personnel refresh (see syncEmployees())
+   *   so its live-overlaid, unpersisted result is what's actually displayed, not discarded in favor
+   *   of a fresh read of the (unchanged) local database.
    * @returns {Promise<Object>} { employees, baseCount, totalFilteredCount }
    */
   async queryEmployees({
@@ -194,8 +198,9 @@ export const employeeService = {
     locationId = '',
     search = '',
     sortBy = 'name-asc',
+    sourceEmployees = null,
   } = {}) {
-    const allEmployees = await this.getAll({ hydrate: true });
+    const allEmployees = sourceEmployees || (await this.getAll({ hydrate: true }));
 
     // 1. Enforce route base lifecycle scope
     let scoped = [];
@@ -452,16 +457,20 @@ export const employeeService = {
   },
 
   /**
-   * Refreshes Employees Directory data from the actual source of truth: POSTs to
-   * /employees/sync (server/db/internSync.js's syncAllInternsToEmployees()), which pulls every
-   * intern from the external Interns DB and creates/reconciles their local employee record —
-   * not just a re-read of whatever this app's own database already had cached — then re-fetches
-   * the now-current roster.
+   * Refreshes what Personnel displays from the actual source of truth: GETs /employees/sync
+   * (server/db/internSync.js's getRefreshedEmployeesFromInterns()), which reads the local roster
+   * and overlays each intern-linked employee's Personnel ID/Mode/Allowance/Contract End Date with
+   * the Interns DB's current values, in memory only. Strictly read → retrieve → refresh/display:
+   * this performs no INSERT/UPDATE/DELETE against either the local database or the Interns DB, so
+   * unlike the old write-based sync, the result has to be the list that actually gets displayed
+   * (see DirectoryPageContainer.jsx's handleSync(), which passes it into queryEmployees() as
+   * sourceEmployees) rather than discarded in favor of a plain GET /employees re-read, which would
+   * just show the same unchanged local data again.
    * @returns {Promise<Array<Object>>}
    */
   async syncEmployees() {
-    await apiClient.post('/employees/sync');
-    return this.getAll();
+    const { employees } = await apiClient.get('/employees/sync');
+    return employees;
   },
 };
 

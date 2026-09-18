@@ -1,15 +1,17 @@
 import * as db from "../db/employees.js";
 import { hydrateEmployees, hydrateEmployee } from "../db/employeeHydration.js";
-import { syncAllInternsToEmployees, getInternPersonalDetails } from "../db/internSync.js";
+import { getRefreshedEmployeesFromInterns, getInternPersonalDetails } from "../db/internSync.js";
 import { internsClient } from "../clients/internsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
 
 export const routes = {
+  // Read → retrieve → refresh/display only — see getRefreshedEmployeesFromInterns()'s own doc
+  // comment for why this never writes to either the local roster or the Interns DB.
   "/employees/sync": {
-    async post(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { summary: await syncAllInternsToEmployees() });
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { employees: await getRefreshedEmployeesFromInterns() });
     },
   },
   // Verbatim pass-through of the Interns DB's own status vocabulary — no local rename/mapping

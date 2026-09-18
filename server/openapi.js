@@ -38,7 +38,7 @@ export const openapi = {
           description: "The core employee record and its department/position/manager history.",
           does: ["List employees", "Create an employee", "Update an employee", "View employment history", "Sync the roster from the Interns DB", "List Personnel status filter options"],
           best_for: "Any app that needs to look up or maintain who works here.",
-          endpoints: ["GET /employees", "POST /employees", "GET /employees/{id}", "PATCH /employees/{id}", "GET /employees/{id}/employment-records", "POST /employees/{id}/employment-records", "POST /employees/sync", "GET /employees/statuses"],
+          endpoints: ["GET /employees", "POST /employees", "GET /employees/{id}", "PATCH /employees/{id}", "GET /employees/{id}/employment-records", "POST /employees/{id}/employment-records", "GET /employees/sync", "GET /employees/statuses"],
         },
         {
           name: "Org Structure",
@@ -184,16 +184,16 @@ export const openapi = {
     },
 
     "/employees/sync": {
-      post: {
-        summary: "Sync every intern from the Interns DB into the local roster.",
-        security: scoped("employees:write"),
+      get: {
+        summary: "Read-only refresh: the local roster with each intern-linked employee's Personnel ID/Mode/Allowance/Contract End Date overlaid from the Interns DB's current values.",
+        security: scoped("employees:read"),
         "x-rizurf": {
-          name: "Sync Personnel", purpose: "Pull the latest data from the Interns DB (the source of truth) — creates any local employee record that's missing, and fixes Mode/Salary/End Date if they've drifted from the source",
-          use_when: ["The 'Sync Personnel' button is clicked", "Verifying the roster reflects recent changes made directly in the Interns DB"],
-          do_not_use_when: ["Just listing the current roster — use GET /employees"],
-          inputs: [], outputs: ["summary"],
+          name: "Sync Personnel", purpose: "Retrieve the latest data from the Interns DB (the source of truth) and refresh what Personnel displays — never writes to the local roster or the Interns DB",
+          use_when: ["The 'Sync Personnel' button is clicked", "Refreshing the roster's display to reflect recent changes made directly in the Interns DB"],
+          do_not_use_when: ["Listing the current roster without a live Interns DB refresh — use GET /employees", "Creating local employee records for interns this app has never touched — that's a write, deliberately out of scope here"],
+          inputs: [], outputs: ["employees[]"],
           requires: [], related_endpoints: ["GET /employees", "POST /applicants/{applicantId}/convert"],
-          tags: ["employees", "sync", "interns", "reconcile"],
+          tags: ["employees", "sync", "interns", "refresh", "read-only"],
         },
       },
     },

@@ -6,6 +6,7 @@ import { pool } from "./pool.js";
 import { getRow, insertRow } from "./crud.js";
 import { createEmployee, updateEmployee, createEmploymentRecord } from "./employees.js";
 import { getEmployeeTypeByCode } from "./orgStructure.js";
+import { hydrateEmployees } from "./employeeHydration.js";
 import { internsClient } from "../clients/internsClient.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
 
@@ -183,6 +184,44 @@ export async function syncAllInternsToEmployees({ onItem } = {}) {
   }
 
   return { created, updated, unchanged, failed, total: interns?.length ?? 0 };
+}
+
+// Powers the "Sync Personnel" button. By explicit instruction this is strictly read → retrieve →
+// refresh/display: it never calls createEmployee/updateEmployee/createEmploymentRecord, so it
+// writes nothing to either the local employees/employment_records tables or the Interns DB —
+// unlike syncAllInternsToEmployees() above (which still backs the one-off terminal repair script,
+// server/scripts/backfillContractEndDates.js, untouched). It reads the local roster, hydrates it
+// (still read-only — see employeeHydration.js), then overlays each intern-linked employee's
+// Personnel ID/Mode/Allowance/Contract End Date with whatever the Interns DB reports right now,
+// in memory only. A real intern the Interns DB knows about but this app has never locally created
+// a record for (no applicant conversion, never touched by syncAllInternsToEmployees()) has no
+// local row to overlay and so — deliberately — will not newly appear from this action; making
+// them appear would require a write (createEmployee), which this action must never do.
+export async function getRefreshedEmployeesFromInterns() {
+  const [localEmployeeRows] = await pool.query("SELECT * FROM employees");
+  const hydrated = await hydrateEmployees(localEmployeeRows);
+
+  let interns;
+  try {
+    ({ interns } = await internsClient.listInterns({ limit: 100 }));
+  } catch {
+    // The live Interns DB is unreachable — fall back to the local snapshot rather than failing
+    // the refresh outright; every already-mirrored field still displays, just not freshened.
+    return hydrated;
+  }
+  const internsById = new Map((interns ?? []).map((intern) => [intern.id, intern]));
+
+  return hydrated.map((employee) => {
+    const intern = employee.internExternalId ? internsById.get(employee.internExternalId) : null;
+    if (!intern) return employee;
+    return {
+      ...employee,
+      employeeId: intern.ref_number ?? employee.employeeId,
+      workMode: intern.mode ?? employee.workMode,
+      allowance: intern.allowance ?? employee.allowance,
+      contractEndDate: intern.internship_end_date ?? employee.contractEndDate,
+    };
+  });
 }
 
 function deriveStatus(tasks) {

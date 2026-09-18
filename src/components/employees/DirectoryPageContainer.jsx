@@ -85,8 +85,10 @@ export default function DirectoryPageContainer({
     loadStatuses();
   }, [loadDepartments, loadStatuses]);
 
-  // Fetch queried employees whenever scope or filter states change
-  const fetchEmployees = useCallback(async () => {
+  // Fetch queried employees whenever scope or filter states change. `sourceEmployees`, if given,
+  // is filtered/sorted in place of a fresh GET /employees read — used by handleSync() below so the
+  // live-overlaid (but never persisted) Sync Personnel result is what actually gets displayed.
+  const fetchEmployees = useCallback(async (sourceEmployees) => {
     setLoading(true);
     try {
       const res = await employeeService.queryEmployees({
@@ -97,6 +99,7 @@ export default function DirectoryPageContainer({
         modeFilter,
         search,
         sortBy,
+        sourceEmployees,
       });
 
       setEmployees(res.employees);
@@ -113,10 +116,13 @@ export default function DirectoryPageContainer({
     fetchEmployees();
   }, [fetchEmployees]);
 
-  // Sync Employees: reconciles the roster from the Interns DB (employeeService.syncEmployees(),
-  // POST /employees/sync), then re-reads the employee list AND both filter-option lists that
-  // ultimately come from that same Interns DB — a department or status term added/renamed at
-  // the source should show up here too, not just employees.
+  // Sync Personnel: strictly read -> retrieve -> refresh/display (employeeService.syncEmployees(),
+  // GET /employees/sync) — reads the local roster and overlays each intern-linked employee's live
+  // Interns DB values in memory, with no write to either database. The freshly-read list is passed
+  // straight into fetchEmployees() as sourceEmployees so it's what actually gets displayed, rather
+  // than discarded in favor of a plain re-fetch that would just show the same unchanged local data.
+  // Department/status filter options are still reloaded too, since those come from the same
+  // external sources and can drift independently of any one employee's fields.
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
 
@@ -125,8 +131,8 @@ export default function DirectoryPageContainer({
     setIsSyncing(true);
     setSyncMessage('');
     try {
-      await employeeService.syncEmployees();
-      await Promise.all([fetchEmployees(), loadDepartments(), loadStatuses()]);
+      const refreshed = await employeeService.syncEmployees();
+      await Promise.all([fetchEmployees(refreshed), loadDepartments(), loadStatuses()]);
       setSyncMessage('Personnel data refreshed');
     } catch (err) {
       console.error('Failed to sync employees:', err);
