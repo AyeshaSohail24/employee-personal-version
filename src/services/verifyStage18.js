@@ -14854,6 +14854,52 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Personnel ID for an intern-linked employee is the Interns DB's own real ref_number
+    // (e.g. "INT-0017"), not a synthetic RZ-<timestamp> code — reconcilable via Sync Personnel
+    // for anyone already created before this fix.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const internSyncSrcId = fs.readFileSync(path.resolve('./server/db/internSync.js'), 'utf-8');
+      const employeesDbSrcId = fs.readFileSync(path.resolve('./server/db/employees.js'), 'utf-8');
+      const applicantConversionSrcId = fs.readFileSync(path.resolve('./server/db/applicantConversion.js'), 'utf-8');
+
+      // 1644. NEW — createLocalEmployeeFromIntern() uses the intern's real ref_number as
+      // employeeCode, not a synthetic RZ-<timestamp> string.
+      assert(
+        internSyncSrcId.includes('employeeCode: intern.ref_number,') &&
+        !internSyncSrcId.match(/createLocalEmployeeFromIntern[\s\S]{0,300}RZ-\$\{Date\.now\(\)\}/),
+        '1644. NEW — internSync.js\'s createLocalEmployeeFromIntern() sets employeeCode from the intern\'s real ref_number, not RZ-${Date.now()}'
+      );
+
+      // 1645. NEW — updateEmployee() supports writing employeeCode (required for both the
+      // reconciliation path below and applicantConversion.js's own fix to work at all).
+      assert(
+        employeesDbSrcId.includes('if (data.employeeCode !== undefined) columns.employee_code = data.employeeCode;'),
+        '1645. NEW — employees.js\'s updateEmployee() now supports updating employee_code'
+      );
+
+      // 1646. NEW — computeInternReconciliation() also fixes employee_code for anyone already
+      // created before this fix (a synthetic code that no longer matches the Interns DB's real
+      // ref_number), the same way it already fixes Mode/Salary/End Date drift.
+      assert(
+        internSyncSrcId.includes('if (intern?.ref_number && intern.ref_number !== row.employee_code) changes.employeeCode = intern.ref_number;'),
+        '1646. NEW — computeInternReconciliation() reconciles employee_code against the Interns DB\'s ref_number, fixing already-existing wrong Personnel IDs via Sync Personnel'
+      );
+
+      // 1647. NEW — applicantConversion.js's intern-type conversion path also replaces the
+      // synthetic code with the real ref_number once the Interns DB push actually succeeds
+      // (never claims a ref_number that was never assigned if that push fails).
+      assert(
+        applicantConversionSrcId.includes('employeeCode: intern.ref_number }'),
+        '1647. NEW — applicantConversion.js\'s success-path updateEmployee() call also sets employeeCode from the newly-created intern\'s real ref_number'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);

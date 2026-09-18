@@ -78,7 +78,11 @@ async function createLocalEmployeeFromIntern(intern) {
   const internType = await getEmployeeTypeByCode("INTERN");
 
   const employeeId = await createEmployee({
-    employeeCode: `RZ-${Date.now()}`,
+    // The Interns DB's own ref_number (e.g. "INT-0017") is this person's real, already-visible
+    // identifier there — using it here too (instead of a synthetic RZ-<timestamp> code) means
+    // Personnel ID matches what that source of truth already calls them, everywhere it's shown
+    // in this app (it's read from this single employee_code column, not special-cased per view).
+    employeeCode: intern.ref_number,
     firstName: intern.first_name,
     lastName: intern.last_name,
     workEmail: intern.email_address,
@@ -119,14 +123,17 @@ export async function resolveOrCreateEmployeeForIntern(internId) {
   return createLocalEmployeeFromIntern(intern);
 }
 
-// Mode/Salary always hold a value locally (createEmployee()'s own default), so — unlike
-// contract_end_date, where NULL is a real "missing" sentinel — every intern-linked employee has
-// to be compared against the Interns DB, not just ones with an obviously-missing field.
+// Mode/Salary/employee_code always hold a value locally (createEmployee()'s own defaults/prior
+// behavior), so — unlike contract_end_date, where NULL is a real "missing" sentinel — every
+// intern-linked employee has to be compared against the Interns DB, not just ones with an
+// obviously-missing field. employee_code catches anyone created before the ref_number fix above
+// (they'd have a synthetic RZ-<timestamp> code instead of their real "INT-0017"-style id).
 function computeInternReconciliation(row, intern) {
   const changes = {};
   if (!row.contract_end_date && intern?.internship_end_date) changes.contractEndDate = intern.internship_end_date;
   if (intern?.mode && intern.mode !== row.work_mode) changes.workMode = intern.mode;
   if (intern?.allowance && intern.allowance !== row.allowance) changes.allowance = intern.allowance;
+  if (intern?.ref_number && intern.ref_number !== row.employee_code) changes.employeeCode = intern.ref_number;
   return changes;
 }
 

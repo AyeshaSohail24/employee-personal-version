@@ -72,7 +72,12 @@ export async function convertApplicant(applicantId, {
         allowance: allowance ?? "Paid",
         photo_url: photoUrl ?? null,
       });
-      await updateEmployee(employeeId, { internExternalId: intern.id, internRefNumber: intern.ref_number });
+      // Also replaces the synthetic RZ-<timestamp> code assigned above (a real ref_number wasn't
+      // available until the Interns DB actually created this record) with their real "INT-0017"-
+      // style id — same reasoning as internSync.js's createLocalEmployeeFromIntern(). Left as the
+      // synthetic code if this push fails (the catch block below), since claiming a ref_number
+      // that was never actually assigned would be worse than an ugly placeholder.
+      await updateEmployee(employeeId, { internExternalId: intern.id, internRefNumber: intern.ref_number, employeeCode: intern.ref_number });
       await updateRow("applicant_conversions", conversionId, {
         status: "success",
         external_id: intern.id,
