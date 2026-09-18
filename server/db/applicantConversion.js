@@ -10,11 +10,12 @@ import { applicantsClient } from "../clients/applicantsClient.js";
 import { internsClient } from "../clients/internsClient.js";
 
 // The Interns API requires several fields (ic_passport_number, department_id,
-// role_id, mode, allowance, internship_end_date) that the Applicants DB's own
-// schema (schema_applicants.sql) has no column for — an applicant is never
-// asked for an IC/passport number or assigned a department during hiring.
-// Those must be supplied by whoever calls this endpoint (HR, at accept time),
-// not guessed from the applicant record.
+// role_id, mode, allowance, internship_end_date, home_address) that the real
+// Recruitment API (see clients/applicantsClient.js) has no field for — an
+// applicant is only ever asked for name/email/phone/linkedin/github during
+// hiring, never an IC/passport number, home address, or department. Those
+// must be supplied by whoever calls this endpoint (HR, at accept time), not
+// guessed from the applicant record.
 export async function convertApplicant(applicantId, {
   employeeTypeId,
   startDate,
@@ -25,8 +26,14 @@ export async function convertApplicant(applicantId, {
   mode,
   allowance,
   photoUrl,
+  homeAddress,
 }) {
   const applicant = await applicantsClient.getApplicant(applicantId);
+  // The Recruitment API stores one `name` field, not separate first/last —
+  // split on the first space so employees keeps its own firstName/lastName
+  // columns; a single-word name lands entirely in firstName.
+  const [firstName, ...rest] = String(applicant.name ?? "").trim().split(/\s+/);
+  const lastName = rest.join(" ");
 
   // Resolved by code, not a hardcoded id — employee_types.id depends on seed
   // insertion order, which is not something to assume stays fixed.
@@ -35,8 +42,8 @@ export async function convertApplicant(applicantId, {
 
   const employeeId = await createEmployee({
     employeeCode: `RZ-${Date.now()}`,
-    firstName: applicant.first_name,
-    lastName: applicant.last_name,
+    firstName: firstName || applicant.name,
+    lastName,
     workEmail: applicant.email,
     workPhone: applicant.phone,
     employeeTypeId: resolvedEmployeeTypeId,
@@ -58,14 +65,14 @@ export async function convertApplicant(applicantId, {
   if (resolvedEmployeeTypeId === internType.id) {
     try {
       const intern = await internsClient.createIntern({
-        first_name: applicant.first_name,
-        last_name: applicant.last_name,
+        first_name: firstName || applicant.name,
+        last_name: lastName,
         ic_passport_number: icPassportNumber,
         internship_start_date: startDate,
         internship_end_date: internshipEndDate,
         email_address: applicant.email,
         phone_number: applicant.phone,
-        home_address: applicant.home_address ?? null,
+        home_address: homeAddress ?? null,
         department_id: departmentId,
         role_id: roleId,
         mode: mode ?? "On-site",
@@ -92,7 +99,7 @@ export async function convertApplicant(applicantId, {
     }
   }
 
-  await applicantsClient.markApplicantHired(applicantId).catch(() => {});
+  await applicantsClient.moveApplicantPhase(applicantId, "completed").catch(() => {});
 
   return {
     employee: await getRow("employees", employeeId),

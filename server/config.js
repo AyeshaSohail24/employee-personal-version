@@ -53,7 +53,7 @@ function externalClient(prefix, fallbackAudience) {
 // The three external systems this app links to via API only — never a direct
 // DB connection (see db/schema_employees.sql's architecture note).
 export const EXTERNAL_CLIENTS = {
-  applicants: externalClient("APPLICANTS", "applicants-api"),
+  applicants: externalClient("APPLICANTS", "recruitment-api"),
   interns: externalClient("INTERNS", "intern-database"),
   departments: externalClient("DEPARTMENTS", "department-api"),
 };
