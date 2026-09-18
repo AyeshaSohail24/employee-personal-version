@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Plus } from 'lucide-react';
 import { employeeService } from '../../services/employeeService';
-import { departmentService } from '../../services/departmentService';
 import { employeeTypeService } from '../../services/employeeTypeService';
 import { locationService } from '../../services/locationService';
+import { apiClient } from '../../services/apiClient';
 
 import DirectoryToolbar from './DirectoryToolbar';
 import EmployeeListView from './EmployeeListView';
@@ -52,20 +52,25 @@ export default function DirectoryPageContainer({
     setAllowanceFilter(urlAllowance);
   }, [urlStatus, urlDeptId, urlType, urlMode, urlAllowance]);
 
-  // Dropdown Options
+  // Dropdown Options — read through to the real Departments service (department-zeta.vercel.app,
+  // via GET /departments — server/routes/orgStructure.js), not the mock departmentService.js:
+  // real employee records' department.id (server/db/employeeHydration.js) already comes from
+  // there, so the filter's own option values have to match that same source or "Department"
+  // filtering silently matches nothing.
   const [departments, setDepartments] = useState([]);
 
-  useEffect(() => {
-    async function loadOptions() {
-      try {
-        const depts = await departmentService.getAll({ withCount: false });
-        setDepartments(depts);
-      } catch (err) {
-        console.error('Failed to load filter options:', err);
-      }
+  const loadDepartments = useCallback(async () => {
+    try {
+      const { departments: depts } = await apiClient.get('/departments');
+      setDepartments(depts);
+    } catch (err) {
+      console.error('Failed to load department filter options:', err);
     }
-    loadOptions();
   }, []);
+
+  useEffect(() => {
+    loadDepartments();
+  }, [loadDepartments]);
 
   // Fetch queried employees whenever scope or filter states change
   const fetchEmployees = useCallback(async () => {
@@ -96,10 +101,10 @@ export default function DirectoryPageContainer({
     fetchEmployees();
   }, [fetchEmployees]);
 
-  // Sync Employees: refreshes the current source-of-truth via the service layer, then
-  // re-queries with existing filters/sort/view intact. CURRENT implementation reloads
-  // the local PoC database; swapping employeeService.syncEmployees() for a backend
-  // fetch later requires no change here.
+  // Sync Employees: reconciles the roster from the Interns DB (employeeService.syncEmployees(),
+  // POST /employees/sync), then re-reads both the employee list AND the Department filter
+  // options together — a department added/renamed at the source should show up here too,
+  // not just employees.
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
 
@@ -109,7 +114,7 @@ export default function DirectoryPageContainer({
     setSyncMessage('');
     try {
       await employeeService.syncEmployees();
-      await fetchEmployees();
+      await Promise.all([fetchEmployees(), loadDepartments()]);
       setSyncMessage('Personnel data refreshed');
     } catch (err) {
       console.error('Failed to sync employees:', err);

@@ -14590,6 +14590,38 @@ export async function verifyStage18() {
       resetDatabase();
     }
 
+    // ========================================================================================
+    // Personnel's Department filter — reads from the real Departments service, not the mock
+    // departmentService.js (whose ids never matched real employees' actual department.id, so
+    // the filter silently matched nothing); "Sync Personnel" also refreshes it.
+    // ========================================================================================
+    {
+      resetDatabase();
+
+      const directoryContainerSrcDept = fs.readFileSync(path.resolve('./src/components/employees/DirectoryPageContainer.jsx'), 'utf-8');
+
+      // 1628. NEW — the Department dropdown's options come from GET /departments (the real,
+      // external Departments service, read through server-side — see server/routes/
+      // orgStructure.js), not the mock departmentService.js, whose department ids never matched
+      // a real employee's actual department.id (itself sourced from the same real service via
+      // server/db/employeeHydration.js) — so filtering used to silently match nothing.
+      assert(
+        directoryContainerSrcDept.match(/const \{ departments: depts \} = await apiClient\.get\('\/departments'\);/) &&
+        !directoryContainerSrcDept.includes("from '../../services/departmentService'") &&
+        !directoryContainerSrcDept.includes('departmentService.getAll'),
+        '1628. NEW — DirectoryPageContainer.jsx loads Department filter options via apiClient.get(\'/departments\') (the real external service), no departmentService.js import/usage remains'
+      );
+
+      // 1629. NEW — clicking "Sync Personnel" refreshes the Department options too, not just
+      // the employee list, so a department added/renamed at the source shows up immediately.
+      assert(
+        directoryContainerSrcDept.match(/await Promise\.all\(\[fetchEmployees\(\), loadDepartments\(\)\]\);/),
+        '1629. NEW — handleSync() (the Sync Personnel button) re-runs loadDepartments() alongside fetchEmployees(), so the Department filter reflects the latest data from the real service too'
+      );
+
+      resetDatabase();
+    }
+
   } catch (err) {
     console.error('Unhandled error in verifyStage18:', err);
     assert(false, 'Unhandled error in verifyStage18', err.message);
