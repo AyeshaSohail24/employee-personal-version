@@ -1,4 +1,5 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
+import { apiClient } from './apiClient.js';
 import {
   filterCandidates,
   calculateCandidateSummary,
@@ -10,27 +11,49 @@ import {
 /**
  * Service providing asynchronous data access and querying for Upcoming candidate records.
  *
- * Data flow (current PoC): mock/seedUpcomingCandidates -> storageEngine -> this service ->
- * Upcoming page. Future: an external interview/recruitment microapp populates the same
- * collection via syncCandidates() (a real backend fetch swapped in behind this same call
- * signature) instead of local seed data — the UI requires no change.
+ * Data flow: the candidate roster itself (name, email, department, position) is real — GET
+ * /candidates reads through to the Recruitment API for every applicant at the `confirmation`
+ * phase (see server/db/upcomingCandidates.js). This app has no real email/WhatsApp sending or
+ * a real inbox yet (see candidateMessagingService's own note), so the offer workflow state that
+ * layers on top of a real candidate — offer type, email status, response, notification-read —
+ * stays a local overlay keyed by the real candidate id (db.upcomingCandidateOverlay), created
+ * lazily with sensible defaults the first time any of it is touched.
  */
 
-function enrichCandidate(candidate, departments = []) {
-  const dept = departments.find((d) => d.id === candidate.departmentId) || null;
-  return { ...candidate, department: dept };
+const DEFAULT_OVERLAY = () => ({
+  offerType: 'Paid',
+  emailStatus: EMAIL_STATUS.PENDING,
+  responseStatus: RESPONSE_STATUS.AWAITING,
+  notificationRead: true,
+  emailSentAt: null,
+  lastEmailSubject: null,
+  repliedAt: null,
+  acceptedAt: null,
+  rejectedAt: null,
+});
+
+function getOverlay(db, candidateId) {
+  const overlays = db.upcomingCandidateOverlay || {};
+  return { ...DEFAULT_OVERLAY(), ...overlays[candidateId] };
+}
+
+function setOverlay(db, candidateId, patch) {
+  const overlays = db.upcomingCandidateOverlay || {};
+  overlays[candidateId] = { ...getOverlay(db, candidateId), ...patch };
+  db.upcomingCandidateOverlay = overlays;
+  return overlays[candidateId];
 }
 
 export const upcomingCandidateService = {
   /**
-   * Retrieves all candidates, enriched with resolved Department reference data.
+   * Retrieves every real candidate at the confirmation phase, merged with this app's own local
+   * offer-workflow overlay for each.
    * @returns {Promise<Array<Object>>}
    */
   async getAll() {
+    const { candidates } = await apiClient.get('/candidates');
     const db = loadDatabase();
-    const candidates = db.upcomingCandidates || [];
-    const departments = db.departments || [];
-    return candidates.map((c) => enrichCandidate(c, departments));
+    return candidates.map((c) => ({ ...c, ...getOverlay(db, c.id) }));
   },
 
   /**
@@ -86,19 +109,12 @@ export const upcomingCandidateService = {
    */
   async markEmailSent(candidateId, emailPayload) {
     const db = loadDatabase();
-    const candidates = db.upcomingCandidates || [];
-    const index = candidates.findIndex((c) => c.id === candidateId);
-    if (index === -1) {
-      throw new Error(`Candidate with ID "${candidateId}" not found.`);
-    }
-
     const nowIso = new Date().toISOString();
-    candidates[index] = {
-      ...candidates[index],
+    setOverlay(db, candidateId, {
       emailStatus: EMAIL_STATUS.SENT,
       emailSentAt: nowIso,
       lastEmailSubject: emailPayload.subject,
-    };
+    });
 
     const emailLog = db.candidateEmailLog || [];
     emailLog.push({
@@ -110,8 +126,6 @@ export const upcomingCandidateService = {
       body: emailPayload.body,
       sentAt: nowIso,
     });
-
-    db.upcomingCandidates = candidates;
     db.candidateEmailLog = emailLog;
     saveDatabase(db);
 
@@ -127,20 +141,11 @@ export const upcomingCandidateService = {
    */
   async recordReply(candidateId) {
     const db = loadDatabase();
-    const candidates = db.upcomingCandidates || [];
-    const index = candidates.findIndex((c) => c.id === candidateId);
-    if (index === -1) {
-      throw new Error(`Candidate with ID "${candidateId}" not found.`);
-    }
-
-    candidates[index] = {
-      ...candidates[index],
+    setOverlay(db, candidateId, {
       emailStatus: EMAIL_STATUS.REPLIED,
       repliedAt: new Date().toISOString(),
       notificationRead: false,
-    };
-
-    db.upcomingCandidates = candidates;
+    });
     saveDatabase(db);
     return this.getById(candidateId);
   },
@@ -153,40 +158,25 @@ export const upcomingCandidateService = {
    */
   async markNotificationRead(candidateId) {
     const db = loadDatabase();
-    const candidates = db.upcomingCandidates || [];
-    const index = candidates.findIndex((c) => c.id === candidateId);
-    if (index === -1) {
-      throw new Error(`Candidate with ID "${candidateId}" not found.`);
-    }
-
-    candidates[index] = { ...candidates[index], notificationRead: true };
-    db.upcomingCandidates = candidates;
+    setOverlay(db, candidateId, { notificationRead: true });
     saveDatabase(db);
     return this.getById(candidateId);
   },
 
   /**
    * Accepts a candidate's offer response. Does NOT create an Employee record — acceptance
-   * is a distinct, explicit next step reserved for a future dedicated conversion flow.
+   * is a distinct, explicit next step reserved for a future dedicated conversion flow
+   * (POST /applicants/{applicantId}/convert already exists server-side for that).
    * @param {string} candidateId
    * @returns {Promise<Object>}
    */
   async acceptCandidate(candidateId) {
     const db = loadDatabase();
-    const candidates = db.upcomingCandidates || [];
-    const index = candidates.findIndex((c) => c.id === candidateId);
-    if (index === -1) {
-      throw new Error(`Candidate with ID "${candidateId}" not found.`);
-    }
-
-    candidates[index] = {
-      ...candidates[index],
+    setOverlay(db, candidateId, {
       responseStatus: RESPONSE_STATUS.ACCEPTED,
       acceptedAt: new Date().toISOString(),
       rejectedAt: null,
-    };
-
-    db.upcomingCandidates = candidates;
+    });
     saveDatabase(db);
     return this.getById(candidateId);
   },
@@ -200,22 +190,13 @@ export const upcomingCandidateService = {
    */
   async undoAcceptCandidate(candidateId) {
     const db = loadDatabase();
-    const candidates = db.upcomingCandidates || [];
-    const index = candidates.findIndex((c) => c.id === candidateId);
-    if (index === -1) {
-      throw new Error(`Candidate with ID "${candidateId}" not found.`);
-    }
-    if (candidates[index].responseStatus !== RESPONSE_STATUS.ACCEPTED) {
+    if (getOverlay(db, candidateId).responseStatus !== RESPONSE_STATUS.ACCEPTED) {
       throw new Error(`Candidate "${candidateId}" is not currently Accepted.`);
     }
-
-    candidates[index] = {
-      ...candidates[index],
+    setOverlay(db, candidateId, {
       responseStatus: RESPONSE_STATUS.AWAITING,
       acceptedAt: null,
-    };
-
-    db.upcomingCandidates = candidates;
+    });
     saveDatabase(db);
     return this.getById(candidateId);
   },
@@ -229,20 +210,11 @@ export const upcomingCandidateService = {
    */
   async rejectCandidate(candidateId) {
     const db = loadDatabase();
-    const candidates = db.upcomingCandidates || [];
-    const index = candidates.findIndex((c) => c.id === candidateId);
-    if (index === -1) {
-      throw new Error(`Candidate with ID "${candidateId}" not found.`);
-    }
-
-    candidates[index] = {
-      ...candidates[index],
+    setOverlay(db, candidateId, {
       responseStatus: RESPONSE_STATUS.REJECTED,
       rejectedAt: new Date().toISOString(),
       acceptedAt: null,
-    };
-
-    db.upcomingCandidates = candidates;
+    });
     saveDatabase(db);
     return this.getById(candidateId);
   },
@@ -254,31 +226,17 @@ export const upcomingCandidateService = {
    */
   async restoreCandidate(candidateId) {
     const db = loadDatabase();
-    const candidates = db.upcomingCandidates || [];
-    const index = candidates.findIndex((c) => c.id === candidateId);
-    if (index === -1) {
-      throw new Error(`Candidate with ID "${candidateId}" not found.`);
-    }
-
-    candidates[index] = {
-      ...candidates[index],
+    setOverlay(db, candidateId, {
       responseStatus: RESPONSE_STATUS.AWAITING,
       rejectedAt: null,
-    };
-
-    db.upcomingCandidates = candidates;
+    });
     saveDatabase(db);
     return this.getById(candidateId);
   },
 
   /**
-   * Refreshes Upcoming candidate data from the current source of truth.
-   *
-   * CURRENT (PoC, no backend): re-reads the local storage-engine database, identically to
-   * getAll(). FUTURE: swap the implementation to pull shortlisted candidates from the
-   * external interview/recruitment microapp's shared backend/API — the call signature and
-   * enriched-array return shape stay the same, so a "Sync Candidates" button requires no
-   * change when that happens.
+   * Refreshes Upcoming candidate data from the current source of truth (the real Recruitment
+   * API, via getAll()).
    * @returns {Promise<Array<Object>>}
    */
   async syncCandidates() {

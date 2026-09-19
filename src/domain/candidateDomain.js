@@ -1,9 +1,11 @@
 /**
  * Domain logic for the Upcoming candidate / offer workflow (pre-onboarding).
  *
- * Upcoming candidates are shortlisted candidates who have NOT yet become Employee
- * Directory records. They live in a separate collection (db.upcomingCandidates) and are
- * only ever converted to an Employee by a later, explicit HR action — never automatically.
+ * Upcoming candidates are real applicants at the `confirmation` phase in the Recruitment
+ * API (see upcomingCandidateService.getAll()) who have NOT yet become Employee Directory
+ * records — this app's own offer-workflow state layers on top via a local overlay
+ * (db.upcomingCandidateOverlay), and a candidate is only ever converted to an Employee by a
+ * later, explicit HR action — never automatically.
  */
 
 export const EMAIL_STATUS = {
