@@ -6,6 +6,7 @@ import { pool } from "./pool.js";
 import { getRow, insertRow } from "./crud.js";
 import { createEmployee, updateEmployee, createEmploymentRecord } from "./employees.js";
 import { getEmployeeTypeByCode } from "./orgStructure.js";
+import { hydrateEmployees } from "./employeeHydration.js";
 import { internsClient } from "../clients/internsClient.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
 
@@ -78,7 +79,11 @@ async function createLocalEmployeeFromIntern(intern) {
   const internType = await getEmployeeTypeByCode("INTERN");
 
   const employeeId = await createEmployee({
-    employeeCode: `RZ-${Date.now()}`,
+    // The Interns DB's own ref_number (e.g. "INT-0017") is this person's real, already-visible
+    // identifier there — using it here too (instead of a synthetic RZ-<timestamp> code) means
+    // Personnel ID matches what that source of truth already calls them, everywhere it's shown
+    // in this app (it's read from this single employee_code column, not special-cased per view).
+    employeeCode: intern.ref_number,
     firstName: intern.first_name,
     lastName: intern.last_name,
     workEmail: intern.email_address,
@@ -119,14 +124,17 @@ export async function resolveOrCreateEmployeeForIntern(internId) {
   return createLocalEmployeeFromIntern(intern);
 }
 
-// Mode/Salary always hold a value locally (createEmployee()'s own default), so — unlike
-// contract_end_date, where NULL is a real "missing" sentinel — every intern-linked employee has
-// to be compared against the Interns DB, not just ones with an obviously-missing field.
+// Mode/Salary/employee_code always hold a value locally (createEmployee()'s own defaults/prior
+// behavior), so — unlike contract_end_date, where NULL is a real "missing" sentinel — every
+// intern-linked employee has to be compared against the Interns DB, not just ones with an
+// obviously-missing field. employee_code catches anyone created before the ref_number fix above
+// (they'd have a synthetic RZ-<timestamp> code instead of their real "INT-0017"-style id).
 function computeInternReconciliation(row, intern) {
   const changes = {};
   if (!row.contract_end_date && intern?.internship_end_date) changes.contractEndDate = intern.internship_end_date;
   if (intern?.mode && intern.mode !== row.work_mode) changes.workMode = intern.mode;
   if (intern?.allowance && intern.allowance !== row.allowance) changes.allowance = intern.allowance;
+  if (intern?.ref_number && intern.ref_number !== row.employee_code) changes.employeeCode = intern.ref_number;
   return changes;
 }
 
@@ -176,6 +184,47 @@ export async function syncAllInternsToEmployees({ onItem } = {}) {
   }
 
   return { created, updated, unchanged, failed, total: interns?.length ?? 0 };
+}
+
+// Read-only live overlay, applied to an already-hydrated employee list: every intern-linked
+// employee's Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date is replaced in
+// memory with whatever the Interns DB (the source of truth) currently reports — the same set of
+// fields createLocalEmployeeFromIntern() pulls from there when a record is first created. Nothing
+// is written to either the local employees table or the Interns DB; nothing here calls
+// createEmployee/updateEmployee/createEmploymentRecord or internsClient.createIntern/updateIntern/
+// deleteIntern. Wired into GET /employees itself (not only the Sync button — see
+// server/routes/employees.js), so a full browser refresh shows the same live values Sync does,
+// instead of reverting to a stale local snapshot the next time the page loads; "Sync Personnel" is
+// then just an explicit, on-demand re-fetch of this same always-live data via GET /employees/sync.
+// A real intern the Interns DB knows about but this app has never locally created a record for has
+// no local row here to overlay onto and so never appears from this alone — that would require a
+// write (createEmployee), which this never does.
+export async function overlayInternFields(hydratedEmployees) {
+  if (!hydratedEmployees.some((e) => e.internExternalId)) return hydratedEmployees;
+
+  let interns;
+  try {
+    ({ interns } = await internsClient.listInterns({ limit: 100 }));
+  } catch {
+    // The live Interns DB is unreachable — show the local snapshot as-is rather than failing the
+    // whole page load over it.
+    return hydratedEmployees;
+  }
+  const internsById = new Map((interns ?? []).map((intern) => [intern.id, intern]));
+
+  return hydratedEmployees.map((employee) => {
+    const intern = employee.internExternalId ? internsById.get(employee.internExternalId) : null;
+    if (!intern) return employee;
+    return {
+      ...employee,
+      employeeId: intern.ref_number ?? employee.employeeId,
+      status: intern.status ?? employee.status,
+      workMode: intern.mode ?? employee.workMode,
+      allowance: intern.allowance ?? employee.allowance,
+      startDate: intern.internship_start_date ?? employee.startDate,
+      contractEndDate: intern.internship_end_date ?? employee.contractEndDate,
+    };
+  });
 }
 
 function deriveStatus(tasks) {

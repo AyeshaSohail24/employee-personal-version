@@ -1,15 +1,26 @@
 import * as db from "../db/employees.js";
 import { hydrateEmployees, hydrateEmployee } from "../db/employeeHydration.js";
-import { syncAllInternsToEmployees, getInternPersonalDetails } from "../db/internSync.js";
+import { overlayInternFields, getInternPersonalDetails } from "../db/internSync.js";
 import { internsClient } from "../clients/internsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
 
+// Shared by GET /employees and GET /employees/sync — see overlayInternFields()'s own doc comment
+// for exactly what it does and doesn't do (read-only; no writes to either database).
+async function listEmployeesLive(query) {
+  const rows = await db.listEmployees(query);
+  return overlayInternFields(await hydrateEmployees(rows));
+}
+
 export const routes = {
+  // An explicit, on-demand re-fetch of the exact same live-overlaid data GET /employees already
+  // returns — kept as its own endpoint so the "Sync Personnel" button has a clear, named action to
+  // call, distinct from the page's own initial/background load. A GET, not a POST: this reads and
+  // displays only, so it must never require write permission the way an actual persist would.
   "/employees/sync": {
-    async post(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { summary: await syncAllInternsToEmployees() });
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { employees: await listEmployeesLive({ limit: 200, offset: 0 }) });
     },
   },
   // Verbatim pass-through of the Interns DB's own status vocabulary — no local rename/mapping
@@ -29,16 +40,18 @@ export const routes = {
   "/employees": {
     async get(req, res, ctx) {
       const { limit, offset } = parseListQuery(ctx.url);
-      const rows = await db.listEmployees({
+      // Pre-joined with department/position/location/schedule/manager, camelCase — matches what
+      // src/domain/employmentDomain.js's resolveHydratedEmployee() used to produce client-side
+      // from local mock arrays (see employeeHydration.js) — then live-overlaid with each
+      // intern-linked employee's current Interns DB fields (see overlayInternFields()), so a
+      // plain page load/refresh shows the same fresh data the Sync Personnel button does.
+      const employees = await listEmployeesLive({
         status: ctx.url.searchParams.get("status") ?? undefined,
         departmentId: ctx.url.searchParams.get("department_id") ?? undefined,
         limit,
         offset,
       });
-      // Pre-joined with department/position/location/schedule/manager, camelCase —
-      // matches what src/domain/employmentDomain.js's resolveHydratedEmployee()
-      // used to produce client-side from local mock arrays (see employeeHydration.js).
-      sendJson(res, ctx.cid, 200, { employees: await hydrateEmployees(rows) });
+      sendJson(res, ctx.cid, 200, { employees });
     },
     async post(req, res, ctx) {
       const body = await readJsonBody(req);
@@ -47,10 +60,11 @@ export const routes = {
     },
   },
   "/employees/{id}": {
-    // Only this single-employee read fetches the live Interns DB record (icPassportNumber/
-    // homeAddress, for the Personnel Details page's Personal Information section) — never the
-    // bulk GET /employees list, which would mean one extra external call per row on every
-    // Personnel page load for data that page doesn't even display.
+    // Only this single-employee read fetches icPassportNumber/homeAddress from the live Interns
+    // DB record (for the Personnel Details page's Personal Information section) — GET /employees
+    // already makes its own single batched live call for the Mode/Status/dates overlay
+    // (overlayInternFields()), but per-employee fields not shown on the list view stay here
+    // rather than adding a second per-row external call to every Personnel page load.
     async get(req, res, ctx) {
       const employee = await db.getEmployee(ctx.params.id);
       if (!employee) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);

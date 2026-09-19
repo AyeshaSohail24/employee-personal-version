@@ -181,6 +181,10 @@ export const employeeService = {
    * @param {string} [options.locationId='']
    * @param {string} [options.search='']
    * @param {string} [options.sortBy='name-asc'] - 'name-asc', 'name-desc', 'date-desc', 'date-asc'
+   * @param {Array<Object>} [options.sourceEmployees] - Pre-fetched hydrated employees to filter/sort
+   *   instead of re-reading GET /employees — used by the Sync Personnel refresh (see syncEmployees())
+   *   so its live-overlaid, unpersisted result is what's actually displayed, not discarded in favor
+   *   of a fresh read of the (unchanged) local database.
    * @returns {Promise<Object>} { employees, baseCount, totalFilteredCount }
    */
   async queryEmployees({
@@ -194,8 +198,9 @@ export const employeeService = {
     locationId = '',
     search = '',
     sortBy = 'name-asc',
+    sourceEmployees = null,
   } = {}) {
-    const allEmployees = await this.getAll({ hydrate: true });
+    const allEmployees = sourceEmployees || (await this.getAll({ hydrate: true }));
 
     // 1. Enforce route base lifecycle scope
     let scoped = [];
@@ -452,16 +457,20 @@ export const employeeService = {
   },
 
   /**
-   * Refreshes Employees Directory data from the actual source of truth: POSTs to
-   * /employees/sync (server/db/internSync.js's syncAllInternsToEmployees()), which pulls every
-   * intern from the external Interns DB and creates/reconciles their local employee record —
-   * not just a re-read of whatever this app's own database already had cached — then re-fetches
-   * the now-current roster.
+   * Refreshes Personnel from the actual source of truth: GETs /employees/sync (server/routes/
+   * employees.js's listEmployeesLive(), the same read-only path GET /employees itself already
+   * uses — see internSync.js's overlayInternFields()). Every intern-linked employee's Personnel
+   * ID/Status/Mode/Allowance/Start Date/Contract End Date is read live from the Interns DB, in
+   * memory only — nothing is written to either the local database or the Interns DB, and nothing
+   * here needs write permission. Because GET /employees already applies this same overlay, a
+   * plain page load or full browser refresh shows the same fresh data this explicit action does;
+   * this exists as its own call purely so the Sync Personnel button has something distinct to
+   * trigger on demand.
    * @returns {Promise<Array<Object>>}
    */
   async syncEmployees() {
-    await apiClient.post('/employees/sync');
-    return this.getAll();
+    const { employees } = await apiClient.get('/employees/sync');
+    return employees;
   },
 };
 

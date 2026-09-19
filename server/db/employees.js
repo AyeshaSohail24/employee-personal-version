@@ -45,6 +45,7 @@ export function createEmployee(data) {
 
 export function updateEmployee(id, data) {
   const columns = {};
+  if (data.employeeCode !== undefined) columns.employee_code = data.employeeCode;
   if (data.status !== undefined) columns.status = data.status;
   if (data.workEmail !== undefined) columns.work_email = data.workEmail;
   if (data.workPhone !== undefined) columns.work_phone = data.workPhone;
