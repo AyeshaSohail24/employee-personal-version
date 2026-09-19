@@ -23,6 +23,7 @@ import { routes as offboardingRoutes } from "./routes/offboarding.js";
 import { routes as activityRoutes } from "./routes/activities.js";
 import { routes as leaveRoutes } from "./routes/leaves.js";
 import { routes as candidateMessagingRoutes } from "./routes/candidateMessaging.js";
+import { routes as upcomingCandidatesRoutes } from "./routes/upcomingCandidates.js";
 import { routes as noteRoutes } from "./routes/notes.js";
 import { routes as adminRoutes } from "./routes/admin.js";
 
@@ -35,6 +36,7 @@ const routes = {
   ...activityRoutes,
   ...leaveRoutes,
   ...candidateMessagingRoutes,
+  ...upcomingCandidatesRoutes,
   ...noteRoutes,
   ...adminRoutes,
 };

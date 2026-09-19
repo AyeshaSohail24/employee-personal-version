@@ -1,14 +1,15 @@
 // Applicants DB (external — Rizurf Recruitment API, real service id
 // "recruitment-api", https://hr-recruitment-demo.vercel.app). Paths, scopes
 // and response shapes below are confirmed against a real authenticated call
-// (2026-09-18) — unlike interns/departmentsClient, this service does NOT
-// wrap results in a `{ data, pagination }` envelope: GET /api/applicants
-// returns a plain array, GET /api/applicants/{id} a plain object. An
-// applicant record also carries first_name/last_name/fullName (and much
-// more — nationality, university, position, resume as a base64 data URI,
-// etc.), even though the service's own /openapi.json only documents a
-// single `name` field as a create-time input — its docs and its real
-// response shape disagree; trust the response shape here.
+// (2026-09-18). Every endpoint tested so far (applicants list/get, jobs
+// list) wraps its result in `{ status: "success", data }` — unwrap `.data`
+// everywhere. An applicant record carries first_name/last_name/fullName
+// (and much more — nationality, university, position, resume as a base64
+// data URI, etc.), even though the service's own /openapi.json only
+// documents a single `name` field as a create-time input — its docs and
+// its real response shape disagree; trust the response shape here. A job
+// record's `department` is a plain display string (e.g. "Engineering"),
+// not an id — it does not line up with this app's own Departments API ids.
 import { EXTERNAL_CLIENTS } from "../config.js";
 import { getServiceAccessToken } from "./gatewayClientCredentials.js";
 import { getCorrelationId } from "../http/requestContext.js";
@@ -45,20 +46,29 @@ export const applicantsClient = {
     if (stageId) params.set("stageId", stageId);
     if (search) params.set("search", search);
     if (status) params.set("status", status);
-    // No envelope — a plain array (see file header).
-    return call(`/api/applicants${params.toString() ? `?${params}` : ""}`);
+    const response = await call(`/api/applicants${params.toString() ? `?${params}` : ""}`);
+    return response.data ?? response;
   },
 
-  // No envelope — a plain object (see file header).
-  getApplicant: (applicantId) => call(`/api/applicants/${applicantId}`),
+  async getApplicant(applicantId) {
+    const response = await call(`/api/applicants/${applicantId}`);
+    return response.data ?? response;
+  },
+
+  // Used to resolve an applicant's job_id into a department/title for
+  // display, since an applicant record itself has no department field.
+  async listJobs() {
+    const response = await call("/api/jobs", { scope: "jobs:read" });
+    return response.data ?? response;
+  },
 
   // phase must be one of "recruitment" | "confirmation" | "completed" (the
   // service's own enum). Called once an applicant accepted from Upcoming has
   // been converted to a local employee/intern — moves them from
   // `confirmation` to `completed` in the Recruitment DB itself. Write calls
   // (this one, the two emails below) haven't been exercised live yet — only
-  // the two GETs above have — so the `.data ?? .applicant ?? response`
-  // fallback here is a defensive guess, not a confirmed shape.
+  // the GETs above have — so `.applicant` here is a defensive fallback
+  // alongside the confirmed `.data` envelope, not itself confirmed.
   async moveApplicantPhase(applicantId, phase) {
     const response = await call(`/api/applicants/${applicantId}/phase`, { method: "PATCH", body: { phase }, scope: "applicants:write" });
     return response.data ?? response.applicant ?? response;

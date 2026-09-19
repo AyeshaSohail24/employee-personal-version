@@ -83,10 +83,10 @@ export const openapi = {
         {
           name: "Message Candidates",
           icon: "✉️",
-          description: "The conversation with a shortlisted applicant — over email or WhatsApp — and the reusable offer drafts behind it.",
-          does: ["Read a candidate's message thread", "Send a message to a candidate on email or WhatsApp", "List, create and edit email drafts"],
+          description: "The real Upcoming candidate roster, the conversation with a shortlisted applicant — over email or WhatsApp — and the reusable offer drafts behind it.",
+          does: ["List real candidates at the confirmation phase", "Read a candidate's message thread", "Send a message to a candidate on email or WhatsApp", "List, create and edit email drafts"],
           best_for: "HR corresponding with candidates in the Upcoming pipeline before they're hired.",
-          endpoints: ["GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "GET /email-templates", "POST /email-templates", "PATCH /email-templates/{id}"],
+          endpoints: ["GET /candidates", "GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "GET /email-templates", "POST /email-templates", "PATCH /email-templates/{id}"],
         },
         {
           name: "Gather Candidate Documents",
@@ -447,6 +447,10 @@ export const openapi = {
         "x-rizurf": { name: "Create Presence Override", purpose: "Manually correct today's presence view for one employee", use_when: ["The automatic presence calculation is wrong for a known reason"], do_not_use_when: [], inputs: ["employeeId", "overrideState", "reason"], outputs: ["override"], requires: ["Employee exists"], related_endpoints: ["GET /presence-overrides"], tags: ["presence", "attendance", "correction"] } },
     },
 
+    "/candidates": {
+      get: { summary: "Real shortlisted candidates at the confirmation phase, read through from the Recruitment API.", security: scoped("candidate-messaging:read"),
+        "x-rizurf": { name: "List Upcoming Candidates", purpose: "The real candidate roster for the Upcoming/pre-onboarding offer workflow — every applicant currently at the `confirmation` phase in the Recruitment API, with their department/position resolved via their job", use_when: ["Populating the Upcoming page's candidate table"], do_not_use_when: ["You need the full applicant record or a phase other than confirmation — call the Recruitment API directly"], inputs: [], outputs: ["candidates[]"], requires: [], related_endpoints: ["GET /candidates/{applicantId}/messages", "POST /applicants/{applicantId}/convert"], tags: ["candidates", "upcoming", "applicants", "confirmation", "recruitment"] } },
+    },
     "/candidates/{applicantId}/messages": {
       get: { summary: "Read a candidate's full message thread.", security: scoped("candidate-messaging:read"),
         "x-rizurf": { name: "Get Candidate Thread", purpose: "Read the sent/received messages for one applicant", use_when: ["Opening a candidate's conversation view"], do_not_use_when: [], inputs: ["applicantId"], outputs: ["messages[]"], requires: [], related_endpoints: ["POST /candidates/{applicantId}/messages"], tags: ["candidate", "messages", "email", "thread"] } },
