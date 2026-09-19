@@ -1,14 +1,14 @@
 // Applicants DB (external — Rizurf Recruitment API, real service id
 // "recruitment-api", https://hr-recruitment-demo.vercel.app). Paths, scopes
-// and documented input/output field NAMES below are confirmed against that
-// service's own live /health and /openapi.json (2026-09-18) — but its
-// openapi.json defines no component schemas, only a documented field-name
-// list per operation, so the exact response envelope (e.g. whether a list
-// comes back as `{ data, pagination }` like interns/departmentsClient, or
-// something else) and the applicant object's full field set are NOT yet
-// confirmed against a real authenticated response. Re-verify the first live
-// call against real credentials before trusting this shape further — see
-// listApplicants()'s own note.
+// and response shapes below are confirmed against a real authenticated call
+// (2026-09-18) — unlike interns/departmentsClient, this service does NOT
+// wrap results in a `{ data, pagination }` envelope: GET /api/applicants
+// returns a plain array, GET /api/applicants/{id} a plain object. An
+// applicant record also carries first_name/last_name/fullName (and much
+// more — nationality, university, position, resume as a base64 data URI,
+// etc.), even though the service's own /openapi.json only documents a
+// single `name` field as a create-time input — its docs and its real
+// response shape disagree; trust the response shape here.
 import { EXTERNAL_CLIENTS } from "../config.js";
 import { getServiceAccessToken } from "./gatewayClientCredentials.js";
 import { getCorrelationId } from "../http/requestContext.js";
@@ -45,21 +45,20 @@ export const applicantsClient = {
     if (stageId) params.set("stageId", stageId);
     if (search) params.set("search", search);
     if (status) params.set("status", status);
-    const response = await call(`/api/applicants${params.toString() ? `?${params}` : ""}`);
-    // Envelope shape unverified — see file header. Falls back to the raw
-    // response if it isn't `{ data: [...] }`.
-    return response.data ?? response.applicants ?? response;
+    // No envelope — a plain array (see file header).
+    return call(`/api/applicants${params.toString() ? `?${params}` : ""}`);
   },
 
-  async getApplicant(applicantId) {
-    const response = await call(`/api/applicants/${applicantId}`);
-    return response.data ?? response.applicant ?? response;
-  },
+  // No envelope — a plain object (see file header).
+  getApplicant: (applicantId) => call(`/api/applicants/${applicantId}`),
 
   // phase must be one of "recruitment" | "confirmation" | "completed" (the
   // service's own enum). Called once an applicant accepted from Upcoming has
   // been converted to a local employee/intern — moves them from
-  // `confirmation` to `completed` in the Recruitment DB itself.
+  // `confirmation` to `completed` in the Recruitment DB itself. Write calls
+  // (this one, the two emails below) haven't been exercised live yet — only
+  // the two GETs above have — so the `.data ?? .applicant ?? response`
+  // fallback here is a defensive guess, not a confirmed shape.
   async moveApplicantPhase(applicantId, phase) {
     const response = await call(`/api/applicants/${applicantId}/phase`, { method: "PATCH", body: { phase }, scope: "applicants:write" });
     return response.data ?? response.applicant ?? response;

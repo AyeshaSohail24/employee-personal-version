@@ -10,12 +10,12 @@ import { applicantsClient } from "../clients/applicantsClient.js";
 import { internsClient } from "../clients/internsClient.js";
 
 // The Interns API requires several fields (ic_passport_number, department_id,
-// role_id, mode, allowance, internship_end_date, home_address) that the real
-// Recruitment API (see clients/applicantsClient.js) has no field for — an
-// applicant is only ever asked for name/email/phone/linkedin/github during
-// hiring, never an IC/passport number, home address, or department. Those
-// must be supplied by whoever calls this endpoint (HR, at accept time), not
-// guessed from the applicant record.
+// role_id, mode, allowance, internship_end_date, home_address) that a real
+// applicant record (see clients/applicantsClient.js) has no field for —
+// confirmed via a live call, a real applicant never carries an IC/passport
+// number, home address, or department. Those must be supplied by whoever
+// calls this endpoint (HR, at accept time), not guessed from the applicant
+// record.
 export async function convertApplicant(applicantId, {
   employeeTypeId,
   startDate,
@@ -29,11 +29,12 @@ export async function convertApplicant(applicantId, {
   homeAddress,
 }) {
   const applicant = await applicantsClient.getApplicant(applicantId);
-  // The Recruitment API stores one `name` field, not separate first/last —
-  // split on the first space so employees keeps its own firstName/lastName
-  // columns; a single-word name lands entirely in firstName.
-  const [firstName, ...rest] = String(applicant.name ?? "").trim().split(/\s+/);
-  const lastName = rest.join(" ");
+  // Confirmed via a live call (2026-09-18): a real applicant record has
+  // first_name/last_name (and a redundant fullName) — its own /openapi.json
+  // only documents a single `name` create-time input, which doesn't match
+  // what GET actually returns.
+  const firstName = applicant.first_name;
+  const lastName = applicant.last_name;
 
   // Resolved by code, not a hardcoded id — employee_types.id depends on seed
   // insertion order, which is not something to assume stays fixed.
@@ -42,7 +43,7 @@ export async function convertApplicant(applicantId, {
 
   const employeeId = await createEmployee({
     employeeCode: `RZ-${Date.now()}`,
-    firstName: firstName || applicant.name,
+    firstName,
     lastName,
     workEmail: applicant.email,
     workPhone: applicant.phone,
@@ -65,7 +66,7 @@ export async function convertApplicant(applicantId, {
   if (resolvedEmployeeTypeId === internType.id) {
     try {
       const intern = await internsClient.createIntern({
-        first_name: firstName || applicant.name,
+        first_name: firstName,
         last_name: lastName,
         ic_passport_number: icPassportNumber,
         internship_start_date: startDate,
