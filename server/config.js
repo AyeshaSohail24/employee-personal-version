@@ -41,12 +41,28 @@ export const DB = {
   password: process.env.DB_PASSWORD,
 };
 
+// This app has exactly one gateway-registered API client, granted access to
+// every external audience it calls — client_credentials' own `audience`
+// parameter (see clients/gatewayClientCredentials.js) is what selects which
+// service's token comes back, not a separate client per service. Per-prefix
+// CLIENT_ID/SECRET vars still work as an override (e.g. GATEWAY_CLIENT_ID
+// unset locally but INTERNS_CLIENT_ID set), but there's no need to ever
+// duplicate the same secret into three differently-prefixed vars again —
+// falling back to whatever's already set for Interns means a newly-granted
+// audience (like Applicants) needs no new Vercel var at all.
+function sharedClientId() {
+  return process.env.GATEWAY_CLIENT_ID ?? process.env.INTERNS_CLIENT_ID ?? "";
+}
+function sharedClientSecret() {
+  return process.env.GATEWAY_CLIENT_SECRET ?? process.env.INTERNS_CLIENT_SECRET ?? "";
+}
+
 function externalClient(prefix, fallbackAudience) {
   return {
     baseUrl: (process.env[`${prefix}_API_BASE_URL`] ?? "").replace(/\/+$/, ""),
     audience: process.env[`${prefix}_SERVICE_ID`] ?? fallbackAudience,
-    clientId: process.env[`${prefix}_CLIENT_ID`] ?? "",
-    clientSecret: process.env[`${prefix}_CLIENT_SECRET`] ?? "",
+    clientId: process.env[`${prefix}_CLIENT_ID`] ?? sharedClientId(),
+    clientSecret: process.env[`${prefix}_CLIENT_SECRET`] ?? sharedClientSecret(),
   };
 }
 
