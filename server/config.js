@@ -50,19 +50,28 @@ export const DB = {
 // duplicate the same secret into three differently-prefixed vars again —
 // falling back to whatever's already set for Interns means a newly-granted
 // audience (like Applicants) needs no new Vercel var at all.
+// `??` only skips a truly-unset (null/undefined) var — Vercel dashboards
+// commonly leave an unfilled env var present but set to an empty string,
+// which `??` would treat as "set" and never fall through. `||` here is
+// deliberate: empty string and unset should behave identically for every
+// one of these.
+function firstNonEmpty(...values) {
+  return values.find((v) => v) ?? "";
+}
+
 function sharedClientId() {
-  return process.env.GATEWAY_CLIENT_ID ?? process.env.INTERNS_CLIENT_ID ?? "";
+  return firstNonEmpty(process.env.GATEWAY_CLIENT_ID, process.env.INTERNS_CLIENT_ID);
 }
 function sharedClientSecret() {
-  return process.env.GATEWAY_CLIENT_SECRET ?? process.env.INTERNS_CLIENT_SECRET ?? "";
+  return firstNonEmpty(process.env.GATEWAY_CLIENT_SECRET, process.env.INTERNS_CLIENT_SECRET);
 }
 
 function externalClient(prefix, fallbackAudience) {
   return {
-    baseUrl: (process.env[`${prefix}_API_BASE_URL`] ?? "").replace(/\/+$/, ""),
-    audience: process.env[`${prefix}_SERVICE_ID`] ?? fallbackAudience,
-    clientId: process.env[`${prefix}_CLIENT_ID`] ?? sharedClientId(),
-    clientSecret: process.env[`${prefix}_CLIENT_SECRET`] ?? sharedClientSecret(),
+    baseUrl: firstNonEmpty(process.env[`${prefix}_API_BASE_URL`]).replace(/\/+$/, ""),
+    audience: firstNonEmpty(process.env[`${prefix}_SERVICE_ID`], fallbackAudience),
+    clientId: firstNonEmpty(process.env[`${prefix}_CLIENT_ID`], sharedClientId()),
+    clientSecret: firstNonEmpty(process.env[`${prefix}_CLIENT_SECRET`], sharedClientSecret()),
   };
 }
 
