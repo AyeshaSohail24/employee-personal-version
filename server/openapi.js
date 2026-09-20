@@ -379,8 +379,8 @@ export const openapi = {
     },
 
     "/offboarding/interns": {
-      get: { summary: "Every real intern (Interns DB), cross-referenced with their local offboarding plan if one exists.", security: scoped("offboarding:read"),
-        "x-rizurf": { name: "List Interns' Offboarding Progress", purpose: "The real intern roster joined with whatever offboarding progress this app itself knows about each person", use_when: ["Showing an offboarding progress table"], do_not_use_when: ["You need this app's own employees, not interns — that's a separate, currently-empty roster"], inputs: [], outputs: ["interns[]"], requires: [], related_endpoints: ["POST /offboarding/instances", "GET /offboarding/instances/{id}"], tags: ["offboarding", "interns", "progress", "roster"] } },
+      get: { summary: "Real interns within 7 days of their internship end date (or already offboarding), cross-referenced with their local offboarding plan if one exists.", security: scoped("offboarding:read"),
+        "x-rizurf": { name: "List Interns' Offboarding Progress", purpose: "The real interns actually approaching departure, joined with whatever offboarding progress this app itself knows about each person", use_when: ["Showing an offboarding progress table"], do_not_use_when: ["You need every intern regardless of end date — use GET /onboarding/interns or read through the Interns API directly", "You need this app's own employees, not interns — that's a separate, currently-empty roster"], inputs: [], outputs: ["interns[]"], requires: ["Filtered to internship_end_date <= 7 days away (including already past), unless a local offboarding plan already exists for them"], related_endpoints: ["POST /offboarding/instances", "GET /offboarding/instances/{id}"], tags: ["offboarding", "interns", "progress", "roster"] } },
     },
     "/offboarding/interns/{internId}/launch": {
       post: { summary: "Launch an intern's offboarding plan, composed from Universal + their department's tasks.", security: scoped("offboarding:write"),

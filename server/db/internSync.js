@@ -272,6 +272,20 @@ function progressPercentage(tasks) {
 // VPS database. Fetching every relevant row in one query per table and
 // joining in memory (this app's whole headcount is small — HR PoC scale)
 // keeps this to a handful of round-trips regardless of intern count.
+// Whole days between today and `dateValue`, UTC-midnight to UTC-midnight so
+// "today" always reads 0 and a past date reads negative — null (rather than
+// NaN) for a missing/unparseable date, so callers can tell "no end date" apart
+// from "0 days left".
+function daysUntil(dateValue) {
+  if (!dateValue) return null;
+  const end = new Date(dateValue);
+  if (Number.isNaN(end.getTime())) return null;
+  const today = new Date();
+  const endUtc = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  return Math.round((endUtc - todayUtc) / (24 * 60 * 60 * 1000));
+}
+
 async function listInternsWithProgress(stage) {
   const [{ interns }, departments] = await Promise.all([
     internsClient.listInterns({ limit: 100 }),
@@ -316,7 +330,7 @@ async function listInternsWithProgress(stage) {
     }
   }
 
-  return interns.map((intern) => {
+  const results = interns.map((intern) => {
     const localEmployee = employeeByInternId.get(intern.id);
     let plan = null;
 
@@ -349,6 +363,16 @@ async function listInternsWithProgress(stage) {
       plan,
     };
   });
+
+  if (stage !== "offboarding") return results;
+
+  // Offboarding only surfaces interns actually approaching departure — 7
+  // days or less left on their internship (0 = ends today; negative =
+  // already past their end date and overdue for it, still surfaced rather
+  // than hidden) — or anyone who already has an offboarding plan running,
+  // so an in-progress checklist never disappears just because HR launched
+  // it before the person crossed the 7-day mark.
+  return results.filter((intern) => intern.plan || (daysUntil(intern.endDate) ?? Infinity) <= 7);
 }
 
 export const listInternsWithOnboardingStatus = () => listInternsWithProgress("onboarding");
