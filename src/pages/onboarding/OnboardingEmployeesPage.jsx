@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
+import Avatar from '../../components/common/Avatar.jsx';
 
 // The real intern roster (Interns DB), joined server-side with whatever
 // local onboarding plan each person has, auto-launching one from Universal +
@@ -203,9 +204,10 @@ export default function OnboardingEmployeesPage() {
                     >
                       <td>
                         <div className="emp-identity-block">
-                          <div className="emp-avatar-circle">
-                            {intern.fullName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
-                          </div>
+                          <Avatar
+                            photoUrl={intern.photoUrl}
+                            initials={intern.fullName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                          />
                           <div className="emp-identity-text">
                             <div className="emp-name-text" style={{ whiteSpace: 'nowrap' }}>
                               {intern.fullName}

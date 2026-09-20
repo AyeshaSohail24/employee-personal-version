@@ -38,6 +38,7 @@ export async function getInternPersonalDetails(employee) {
   return {
     icPassportNumber: intern.ic_passport_number ?? null,
     homeAddress: intern.home_address ?? null,
+    photoUrl: intern.photo_url ?? null,
   };
 }
 
@@ -223,6 +224,7 @@ export async function overlayInternFields(hydratedEmployees) {
       allowance: intern.allowance ?? employee.allowance,
       startDate: intern.internship_start_date ?? employee.startDate,
       contractEndDate: intern.internship_end_date ?? employee.contractEndDate,
+      photoUrl: intern.photo_url ?? employee.photoUrl ?? null,
     };
   });
 }

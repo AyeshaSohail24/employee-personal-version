@@ -213,7 +213,7 @@ export const openapi = {
     },
     "/employees": {
       get: {
-        summary: "List employees, optionally filtered by status or department. Each intern-linked employee's Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date is live-overlaid from the Interns DB.",
+        summary: "List employees, optionally filtered by status or department. Each intern-linked employee's Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date/Photo is live-overlaid from the Interns DB.",
         security: scoped("employees:read"),
         "x-rizurf": {
           name: "List Employees", purpose: "Browse or search the employee roster, always reflecting each intern's current Interns DB data rather than a possibly-stale local snapshot",

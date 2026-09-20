@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
 import { offboardingService } from '../../services/offboardingService.js';
+import Avatar from '../../components/common/Avatar.jsx';
 
 // Real-data offboarding detail view for one (real) intern's local employee
 // record — mirrors onboarding/OnboardingEmployeeDetailPage.jsx exactly.
@@ -96,9 +97,11 @@ export default function OffboardingEmployeeDetailPage() {
       <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
           <div className="emp-identity-block" style={{ gap: '1rem' }}>
-            <div className="emp-avatar-circle" style={{ width: '48px', height: '48px', fontSize: '1.1rem' }}>
-              {employee.photo || 'EM'}
-            </div>
+            <Avatar
+              photoUrl={employee.photoUrl}
+              initials={employee.photo || 'EM'}
+              style={{ width: '48px', height: '48px', fontSize: '1.1rem' }}
+            />
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>

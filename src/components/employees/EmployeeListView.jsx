@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDateDisplay, calculateDurationProgress } from '../../utils/dateUtils.js';
+import Avatar from '../common/Avatar.jsx';
 
 const STATUS_PILL_STYLES = {
   Active: { bg: '#ECFDF5', color: '#059669' },
@@ -89,12 +90,12 @@ export default function EmployeeListView({ employees = [] }) {
                   {/* 1. NAME (+ email underneath) */}
                   <td style={{ overflow: 'hidden' }}>
                     <div className="table-user-cell">
-                      <div
+                      <Avatar
+                        photoUrl={emp.photoUrl}
+                        initials={emp.photo}
                         className="table-avatar"
                         style={isFormer ? { background: '#64748B' } : undefined}
-                      >
-                        {emp.photo}
-                      </div>
+                      />
                       <div style={{ minWidth: 0 }}>
                         <div className="table-user-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.fullName}</div>
                         <div className="table-user-email" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

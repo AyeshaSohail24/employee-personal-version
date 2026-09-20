@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, Calendar, Mail, Eye } from 'lucide-react';
 import { formatDateDisplay, calculateDurationProgress } from '../../utils/dateUtils.js';
+import Avatar from '../common/Avatar.jsx';
 
 const STATUS_PILL_STYLES = {
   Active: { bg: '#ECFDF5', color: '#059669' },
@@ -48,12 +49,12 @@ export default function EmployeeCardView({ employees = [] }) {
           <div key={emp.id} className="employee-card">
             {/* TOP: Avatar, Name, ID, Status */}
             <div className="emp-card-header">
-              <div
+              <Avatar
+                photoUrl={emp.photoUrl}
+                initials={emp.photo}
                 className="emp-card-avatar"
                 style={isFormer ? { background: '#64748B' } : undefined}
-              >
-                {emp.photo}
-              </div>
+              />
 
               <span className="status-pill" style={{ backgroundColor: statusPill.bg, color: statusPill.color }}>
                 {emp.status}

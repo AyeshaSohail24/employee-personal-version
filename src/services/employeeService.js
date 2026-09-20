@@ -89,6 +89,9 @@ export const employeeService = {
       personnelId: employee.employeeId,
       fullName: employee.fullName,
       photo: employee.photo,
+      // Live-read from the Interns DB for an intern-linked employee (see icPassportNumber's
+      // identical note below) — null for a non-intern employee.
+      photoUrl: employee.photoUrl || null,
       status: employee.status,
       personal: {
         firstName: employee.firstName || null,

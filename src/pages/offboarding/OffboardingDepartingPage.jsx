@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { offboardingService } from '../../services/offboardingService.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
+import Avatar from '../../components/common/Avatar.jsx';
 
 // The real intern roster (Interns DB), joined server-side with whatever
 // local offboarding plan each person has — see
@@ -205,9 +206,10 @@ export default function OffboardingDepartingPage() {
                     >
                       <td>
                         <div className="emp-identity-block">
-                          <div className="emp-avatar-circle">
-                            {intern.fullName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
-                          </div>
+                          <Avatar
+                            photoUrl={intern.photoUrl}
+                            initials={intern.fullName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                          />
                           <div className="emp-identity-text">
                             <div className="emp-name-text" style={{ whiteSpace: 'nowrap' }}>
                               {intern.fullName}

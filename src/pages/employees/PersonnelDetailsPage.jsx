@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
+import Avatar from '../../components/common/Avatar.jsx';
 
 /**
  * Dedicated Personnel Details page — replaces PersonnelProfileModal as the destination for the
@@ -136,9 +137,11 @@ export default function PersonnelDetailsPage() {
           hardcoded), plus type/position/department when available from the hydrated record. */}
       <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
         <div className="emp-identity-block" style={{ gap: '1rem' }}>
-          <div className="emp-avatar-circle" style={{ width: '52px', height: '52px', fontSize: '1.2rem', background: isFormer ? '#64748B' : undefined }}>
-            {profile.photo || 'EM'}
-          </div>
+          <Avatar
+            photoUrl={profile.photoUrl}
+            initials={profile.photo || 'EM'}
+            style={{ width: '52px', height: '52px', fontSize: '1.2rem', background: isFormer ? '#64748B' : undefined }}
+          />
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>
