@@ -42,6 +42,22 @@ export async function getInternPersonalDetails(employee) {
   };
 }
 
+// Resolves the signed-in gateway user's own photo for the app header — the
+// identity token itself carries no picture claim (sub/email/name/role only,
+// per MICROAPP_AUTH.md), so this follows that same doc's documented pattern
+// for turning a bare email into real data: match it against this app's own
+// employees table, then read through to their linked intern record if they
+// have one. Returns null for anyone with no local employee record, or no
+// linked intern (e.g. a pure HR/Admin account) — never a broken image.
+export async function getPhotoUrlForEmail(email) {
+  if (!email) return null;
+  const [rows] = await pool.query("SELECT * FROM employees WHERE work_email = ? LIMIT 1", [email]);
+  const employee = rows[0];
+  if (!employee) return null;
+  const intern = await getLinkedIntern(employee);
+  return intern?.photo_url ?? null;
+}
+
 // AGENTS.md rule 6 — departure automation must be reversible and logged,
 // never framed as instant/irreversible. Launching offboarding sets the
 // intern's real end date in the Interns DB (the one field that's actually

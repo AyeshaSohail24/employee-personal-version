@@ -6,6 +6,7 @@ import { useSession } from '../../state/SessionContext';
 import { useNotifications } from '../../state/NotificationContext';
 import { employeeService } from '../../services/employeeService.js';
 import NotificationPanel from './NotificationPanel';
+import Avatar from '../common/Avatar.jsx';
 
 function initialsFor(name, email) {
   const source = (name || email || '').trim();
@@ -149,7 +150,7 @@ export default function Header({ toggleMobileSidebar }) {
             session (SessionContext), not the app's own capability-role stub
             (RoleContext, still fixed to 'HR' — see its own comment). */}
         <div className="user-profile-badge">
-          <div className="avatar">{initialsFor(session.name, session.email)}</div>
+          <Avatar photoUrl={session.photoUrl} initials={initialsFor(session.name, session.email)} className="avatar" />
           <div className="user-info">
             <span className="user-name">{session.name || session.email}</span>
             <span className="user-role">{session.role ? session.role.toUpperCase() : currentRole}</span>

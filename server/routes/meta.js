@@ -7,6 +7,7 @@ import { sendJson } from "../http/errors.js";
 import { openapi } from "../openapi.js";
 import { SERVICE_ID, VERSION } from "../config.js";
 import { pool } from "../db/pool.js";
+import { getPhotoUrlForEmail } from "../db/internSync.js";
 
 const started = Date.now();
 
@@ -42,11 +43,22 @@ export const routes = {
   // the frontend's actual signal to redirect to sign-in.
   "/session": {
     async get(req, res, ctx) {
+      // The identity token itself carries no picture claim — resolved
+      // separately (see getPhotoUrlForEmail's own doc comment). Never lets
+      // a broken photo lookup fail the session check that gates the whole
+      // app: falls back to null exactly like a person with no linked intern.
+      let photoUrl = null;
+      try {
+        photoUrl = await getPhotoUrlForEmail(ctx.principal.email);
+      } catch {
+        photoUrl = null;
+      }
       sendJson(res, ctx.cid, 200, {
         sub: ctx.principal.sub,
         email: ctx.principal.email ?? null,
         name: ctx.principal.name ?? null,
         role: ctx.principal.role ?? null,
+        photoUrl,
       });
     },
   },
