@@ -260,6 +260,49 @@ function progressPercentage(tasks) {
   return Math.round((tasks.filter((t) => t.completed).length / tasks.length) * 100);
 }
 
+// AGENTS.md rule 6 (same discipline as syncOffboardingLaunchToIntern below)
+// — moves a real Active intern's status on to Offboarding once their
+// internship_end_date is 7 days away or less (0 = ends today; negative =
+// already past it, still transitioned rather than left stuck on Active
+// forever). A forward-only, easily-reversible field change, never anything
+// destructive — every attempt is logged to audit_logs, success or failure.
+// Mutates each matched `intern` object's own `.status` in place so the
+// SAME request's Onboarding/Offboarding status filter (below) sees the
+// transition immediately, not only on a later reload.
+async function autoTransitionToOffboarding(interns) {
+  const today = new Date();
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+
+  for (const intern of interns) {
+    if (intern.status !== "Active" || !intern.internship_end_date) continue;
+    const end = new Date(intern.internship_end_date);
+    if (Number.isNaN(end.getTime())) continue;
+    const endUtc = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+    const daysLeft = Math.round((endUtc - todayUtc) / (24 * 60 * 60 * 1000));
+    if (daysLeft > 7) continue;
+
+    try {
+      await internsClient.updateIntern(intern.id, { status: "Offboarding" });
+      intern.status = "Offboarding";
+      await insertRow("audit_logs", {
+        user_id: "system",
+        action: "intern_status_auto_offboarding",
+        entity: "interns",
+        entity_id: String(intern.id),
+        details: `Moved ${intern.first_name} ${intern.last_name} (${intern.ref_number}) from Active to Offboarding — ${daysLeft} day(s) left on internship_end_date ${intern.internship_end_date}.`,
+      });
+    } catch (error) {
+      await insertRow("audit_logs", {
+        user_id: "system",
+        action: "intern_status_auto_offboarding_failed",
+        entity: "interns",
+        entity_id: String(intern.id),
+        details: String(error.message ?? error),
+      });
+    }
+  }
+}
+
 // Every real intern (Interns DB, external) cross-referenced with any local
 // employee/plan — the view every Onboarding/Offboarding progress page
 // actually wants: the real roster, joined with whatever this app itself
@@ -277,6 +320,7 @@ async function listInternsWithProgress(stage) {
     internsClient.listInterns({ limit: 100 }),
     departmentsClient.listDepartments().catch(() => []),
   ]);
+  await autoTransitionToOffboarding(interns);
   const departmentsById = new Map(departments.map((d) => [d.id, d]));
 
   const [localEmployees] = await pool.query("SELECT * FROM employees WHERE intern_external_id IS NOT NULL");
