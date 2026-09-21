@@ -1,33 +1,24 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
 import { apiClient } from './apiClient.js';
-import {
-  filterCandidates,
-  calculateCandidateSummary,
-  countUnreadReplies,
-  EMAIL_STATUS,
-  RESPONSE_STATUS,
-} from '../domain/candidateDomain.js';
+import { filterCandidates, calculateCandidateSummary, countUnreadReplies, RESPONSE_STATUS } from '../domain/candidateDomain.js';
 
 /**
  * Service providing asynchronous data access and querying for Upcoming candidate records.
  *
  * Data flow: the candidate roster itself (name, email, department, position) is real — GET
  * /candidates reads through to the Recruitment API for every applicant at the `confirmation`
- * phase (see server/db/upcomingCandidates.js). This app has no real email/WhatsApp sending or
- * a real inbox yet (see candidateMessagingService's own note), so the offer workflow state that
- * layers on top of a real candidate — offer type, email status, response, notification-read —
- * stays a local overlay keyed by the real candidate id (db.upcomingCandidateOverlay), created
- * lazily with sensible defaults the first time any of it is touched.
+ * phase, and now also derives emailStatus/notificationRead from this app's own real
+ * candidate_messages table — a real email send (candidateEmailService) and a real reply (IMAP,
+ * see server/messaging/imapReplyChecker.js) both land there (server/db/upcomingCandidates.js).
+ * Only the offer decision itself — offer type, accept/reject response — has no backend
+ * equivalent to read from, so that stays a local overlay keyed by the real candidate id
+ * (db.upcomingCandidateOverlay), created lazily with sensible defaults the first time it's
+ * touched.
  */
 
 const DEFAULT_OVERLAY = () => ({
   offerType: 'Paid',
-  emailStatus: EMAIL_STATUS.PENDING,
   responseStatus: RESPONSE_STATUS.AWAITING,
-  notificationRead: true,
-  emailSentAt: null,
-  lastEmailSubject: null,
-  repliedAt: null,
   acceptedAt: null,
   rejectedAt: null,
 });
@@ -53,7 +44,9 @@ export const upcomingCandidateService = {
   async getAll() {
     const { candidates } = await apiClient.get('/candidates');
     const db = loadDatabase();
-    return candidates.map((c) => ({ ...c, ...getOverlay(db, c.id) }));
+    // Overlay first, real candidate fields last — emailStatus/notificationRead are real
+    // (server-derived) and must never be clobbered by the local overlay's own defaults.
+    return candidates.map((c) => ({ ...getOverlay(db, c.id), ...c }));
   },
 
   /**
@@ -96,71 +89,6 @@ export const upcomingCandidateService = {
   async getUnreadReplyCount() {
     const all = await this.getAll();
     return countUnreadReplies(all);
-  },
-
-  /**
-   * Marks an offer email as sent for a candidate and appends an audit-friendly record to the
-   * local candidateEmailLog. Called by candidateEmailService after successful render/validate
-   * — never called directly by UI components.
-   *
-   * @param {string} candidateId
-   * @param {{ to: string, cc: string, subject: string, body: string }} emailPayload
-   * @returns {Promise<Object>} The updated, enriched candidate
-   */
-  async markEmailSent(candidateId, emailPayload) {
-    const db = loadDatabase();
-    const nowIso = new Date().toISOString();
-    setOverlay(db, candidateId, {
-      emailStatus: EMAIL_STATUS.SENT,
-      emailSentAt: nowIso,
-      lastEmailSubject: emailPayload.subject,
-    });
-
-    const emailLog = db.candidateEmailLog || [];
-    emailLog.push({
-      id: `mail-${Date.now()}-${candidateId}`,
-      candidateId,
-      to: emailPayload.to,
-      cc: emailPayload.cc || '',
-      subject: emailPayload.subject,
-      body: emailPayload.body,
-      sentAt: nowIso,
-    });
-    db.candidateEmailLog = emailLog;
-    saveDatabase(db);
-
-    return this.getById(candidateId);
-  },
-
-  /**
-   * Records that a candidate replied to their offer email. In the current PoC this is a
-   * manual HR action (there is no real inbox); later a backend inbox webhook would call the
-   * equivalent of this same operation automatically.
-   * @param {string} candidateId
-   * @returns {Promise<Object>}
-   */
-  async recordReply(candidateId) {
-    const db = loadDatabase();
-    setOverlay(db, candidateId, {
-      emailStatus: EMAIL_STATUS.REPLIED,
-      repliedAt: new Date().toISOString(),
-      notificationRead: false,
-    });
-    saveDatabase(db);
-    return this.getById(candidateId);
-  },
-
-  /**
-   * Marks a candidate's reply notification as reviewed (clears it from the unread badge
-   * count without changing their Email Status/Response).
-   * @param {string} candidateId
-   * @returns {Promise<Object>}
-   */
-  async markNotificationRead(candidateId) {
-    const db = loadDatabase();
-    setOverlay(db, candidateId, { notificationRead: true });
-    saveDatabase(db);
-    return this.getById(candidateId);
   },
 
   /**

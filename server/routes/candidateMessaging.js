@@ -9,6 +9,9 @@ export const routes = {
   "/candidates/{applicantId}/messages": {
     async get(req, res, ctx) {
       const messages = await db.listMessages(ctx.params.applicantId, parseListQuery(ctx.url));
+      // Reading the thread marks its replies seen — mirrors opening a
+      // message in an inbox; see db/candidateMessaging.js's own comment.
+      await db.markRepliesSeen(ctx.params.applicantId);
       sendJson(res, ctx.cid, 200, { messages });
     },
     async post(req, res, ctx) {

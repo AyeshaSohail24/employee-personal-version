@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "html-to-image": "^1.11.13",
+    "imapflow": "^2.0.5",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.344.0",
+    "mailparser": "^3.9.28",
     "mysql2": "^3.9.7",
     "nodemailer": "^10.0.10",
     "react": "^18.2.0",

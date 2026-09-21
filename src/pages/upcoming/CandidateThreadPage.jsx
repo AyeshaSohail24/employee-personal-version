@@ -73,10 +73,9 @@ export default function CandidateThreadPage() {
       }
       setCandidate(c);
 
-      if (c.emailStatus === 'Replied' && !c.notificationRead) {
-        await upcomingCandidateService.markNotificationRead(candidateId);
-      }
-
+      // getThread() itself marks any unseen reply seen server-side (the real GET
+      // /candidates/{applicantId}/messages route calls markRepliesSeen()) — opening the
+      // thread is what clears the notification badge, no separate call needed here.
       const thread = await candidateEmailService.getThread(candidateId);
       setMessages(thread);
     } catch (err) {

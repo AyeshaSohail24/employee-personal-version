@@ -1,8 +1,22 @@
+import { pool } from "./pool.js";
 import { listRows, getRow, insertRow, updateRow } from "./crud.js";
 import { sendCandidateMessage } from "../messaging/index.js";
 
 export function listMessages(applicantId, { limit, offset } = {}) {
   return listRows("candidate_messages", { where: { applicant_id: applicantId }, orderBy: "sent_at", orderDir: "ASC", limit, offset });
+}
+
+// Opening a candidate's thread marks their replies seen, same as opening a
+// message in an inbox — mirrors the existing `is_seen` column's own schema
+// comment ("relevant for direction = 'received' only"). Never touches a
+// "sent" row; those have no unseen concept. A bulk UPDATE (not crud.js's
+// single-row updateRow()) since this clears every unseen reply for the
+// applicant in one statement.
+export async function markRepliesSeen(applicantId) {
+  await pool.query(
+    "UPDATE candidate_messages SET is_seen = TRUE WHERE applicant_id = ? AND direction = 'received' AND is_seen = FALSE",
+    [applicantId],
+  );
 }
 
 export async function createMessage(applicantId, data) {

@@ -1,4 +1,3 @@
-import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
 import { apiClient } from './apiClient.js';
 import { upcomingCandidateService } from './upcomingCandidateService.js';
 import { emailTemplateService } from './emailTemplateService.js';
@@ -9,15 +8,11 @@ function normalizedIncludes(haystack, needle) {
 }
 
 /**
- * Backend-ready email composition/send abstraction for the Upcoming candidate workflow.
- *
- * sendEmail() actually delivers now — POST /candidates/{applicantId}/messages, which sends
- * real SMTP via server/messaging/emailProvider.js (real MAIL_* config required; see that
- * file). It used to only ever persist local "sent" bookkeeping through
- * upcomingCandidateService (a local send simulation, no real API ever called) — that local
- * bookkeeping (Sent/Received tabs, thread reconstruction) is still updated the same way
- * afterward, so every existing caller/UI behavior stays the same; the only change is that an
- * email now actually leaves the server.
+ * Email composition/send abstraction for the Upcoming candidate workflow — every send and the
+ * full thread (sent AND received) are real now, backed by this app's own candidate_messages
+ * table (POST/GET /candidates/{applicantId}/messages): sendEmail() really delivers via SMTP
+ * (server/messaging/emailProvider.js), and incoming replies land there too via IMAP polling
+ * (server/messaging/imapReplyChecker.js) — no local reconstruction or bookkeeping left here.
  */
 export const candidateEmailService = {
   /**
@@ -108,9 +103,10 @@ export const candidateEmailService = {
       throw new Error(`Cannot send: unresolved placeholder(s) ${unresolved.map((t) => `{{${t}}}`).join(', ')} remain in the email.`);
     }
 
-    // Actually deliver it before recording it as sent — a real SMTP failure (e.g. MAIL_* not
-    // configured) throws here and the caller sees it, rather than the old behavior of silently
-    // recording "Sent" for an email nobody ever received.
+    // Actually deliver it — a real SMTP failure (e.g. MAIL_* not configured) throws here and
+    // the caller sees it, rather than the old behavior of silently recording "Sent" for an
+    // email nobody ever received. The send itself is the record (candidate_messages); nothing
+    // local needs updating afterward — re-fetching just reflects the new real message.
     await apiClient.post(`/candidates/${candidate.id}/messages`, {
       channel: 'email',
       toEmail: candidate.email,
@@ -119,12 +115,7 @@ export const candidateEmailService = {
       body,
     });
 
-    return upcomingCandidateService.markEmailSent(candidateId, {
-      to: candidate.email,
-      cc,
-      subject,
-      body,
-    });
+    return upcomingCandidateService.getById(candidateId);
   },
 
   /**
@@ -161,76 +152,28 @@ export const candidateEmailService = {
   },
 
   /**
-   * Builds the full email correspondence thread for one candidate, oldest first, for the
-   * Upcoming page's Candidate Thread view.
-   *
-   * CURRENT (PoC, no real inbox): actual send records live in candidateEmailLog, persisted
-   * across every send (including replies sent from the thread page's compose box). A candidate
-   * seeded as already Sent/Replied has no log entry for that original send yet, so the first
-   * time this is called it is BACKFILLED once into candidateEmailLog (reconstructed from the
-   * candidate's own stored lastEmailSubject/emailSentAt plus a fresh render of their offer
-   * template) — from then on candidateEmailLog is the authoritative, growing history, so a
-   * later reply-send never displaces it. Deliberately NOT re-derived from candidate.emailSentAt/
-   * lastEmailSubject on every call: those fields hold only the MOST RECENT send (sendEmail()
-   * overwrites them every time), so anchoring the thread to them after a second send would lose
-   * everything before it. The candidate's own reply is never stored as a full log entry (there
-   * is no real inbox to read from) — it is represented by their single replyMessage field
-   * alongside repliedAt, shown whenever those are present regardless of the candidate's CURRENT
-   * emailStatus (which also gets overwritten by a later send). FUTURE: once a real inbox/email
-   * API is connected, this entirely replaces the reconstruction with the provider's real
-   * thread — callers don't change.
+   * The full email correspondence thread for one candidate, oldest first, for the Upcoming
+   * page's Candidate Thread view — GET /candidates/{applicantId}/messages, this app's own real
+   * candidate_messages table. Both directions are real: "sent" rows come from sendEmail()'s own
+   * POST to the same endpoint, "received" rows come from a real reply matched by IMAP (see
+   * server/messaging/imapReplyChecker.js). Fetching this also marks any unseen reply seen
+   * server-side (db/candidateMessaging.js's markRepliesSeen()) — opening the thread is what
+   * clears the notification badge, nothing here does that separately.
    *
    * @param {string} candidateId
    * @returns {Promise<Array<{ id: string, direction: 'sent'|'received', subject: string, body: string, at: string }>>}
    */
   async getThread(candidateId) {
-    const candidate = await upcomingCandidateService.getById(candidateId);
-    if (!candidate) {
-      throw new Error(`Candidate with ID "${candidateId}" not found.`);
-    }
-
-    const db = loadDatabase();
-    let candidateLog = (db.candidateEmailLog || []).filter((entry) => entry.candidateId === candidateId);
-
-    if (candidateLog.length === 0 && candidate.emailSentAt) {
-      const template = await emailTemplateService.getByOfferType(candidate.offerType);
-      const tokens = buildCandidateEmailTokens(candidate, 'the Hiring Team');
-      const bootstrapEntry = {
-        id: `${candidate.id}-sent-bootstrap`,
-        candidateId,
-        to: candidate.email,
-        cc: '',
-        subject: candidate.lastEmailSubject || (template ? renderEmailTemplate(template.subject, tokens).rendered : ''),
-        body: template ? renderEmailTemplate(template.body, tokens).rendered : '',
-        sentAt: candidate.emailSentAt,
-      };
-      db.candidateEmailLog = [...(db.candidateEmailLog || []), bootstrapEntry];
-      saveDatabase(db);
-      candidateLog = [bootstrapEntry];
-    }
-
-    const messages = candidateLog
-      .map((entry) => ({
-        id: entry.id,
-        direction: 'sent',
-        subject: entry.subject,
-        body: entry.body,
-        at: entry.sentAt,
+    const { messages } = await apiClient.get(`/candidates/${candidateId}/messages`);
+    return messages
+      .map((m) => ({
+        id: String(m.id),
+        direction: m.direction,
+        subject: m.subject,
+        body: m.body,
+        at: m.sent_at,
       }))
       .sort((a, b) => new Date(a.at) - new Date(b.at));
-
-    if (candidate.repliedAt && candidate.replyMessage) {
-      const originalSubject = messages[0]?.subject || candidate.lastEmailSubject || 'Your offer';
-      messages.push({
-        id: `${candidate.id}-reply`,
-        direction: 'received',
-        subject: originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`,
-        body: candidate.replyMessage,
-        at: candidate.repliedAt,
-      });
-    }
-
-    return messages.sort((a, b) => new Date(a.at) - new Date(b.at));
   },
 
   /**

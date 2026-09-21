@@ -86,6 +86,10 @@ export const EXTERNAL_CLIENTS = {
 // Not required at startup (like EXTERNAL_CLIENTS above) — server/messaging/
 // emailProvider.js throws its own clear error if this is asked to send
 // without being configured, same pattern as the external API clients.
+// imapHost/imapPort are for reading replies from that same mailbox (see
+// messaging/imapReplyChecker.js) — Hostinger's IMAP endpoint is a different
+// host from its SMTP one, defaulted here to the sibling of MAIL_HOST's own
+// convention but overridable if that guess is wrong.
 export const MAIL = {
   host: process.env.MAIL_HOST ?? "",
   port: Number(process.env.MAIL_PORT ?? 465),
@@ -93,4 +97,6 @@ export const MAIL = {
   password: process.env.MAIL_PASSWORD ?? "",
   fromAddress: process.env.MAIL_FROM_ADDRESS ?? "",
   fromName: process.env.MAIL_FROM_NAME ?? "",
+  imapHost: firstNonEmpty(process.env.MAIL_IMAP_HOST, "imap.hostinger.com"),
+  imapPort: Number(process.env.MAIL_IMAP_PORT ?? 993),
 };
