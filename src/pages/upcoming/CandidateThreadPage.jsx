@@ -5,7 +5,6 @@ import { upcomingCandidateService } from '../../services/upcomingCandidateServic
 import { candidateEmailService } from '../../services/candidateEmailService.js';
 import { emailTemplateService } from '../../services/emailTemplateService.js';
 import { Select } from '../../components/common/Select.jsx';
-import { useSession } from '../../state/SessionContext';
 
 function formatThreadTimestamp(isoString) {
   if (!isoString) return '';
@@ -28,10 +27,13 @@ const OFFER_PILL_STYLES = {
  * is picked up on the next getThread() call. Opening this page clears the candidate's unseen
  * reply flag, same as opening a message in an inbox.
  */
+// Candidate-facing correspondence signs as this team identity, never the
+// individual HR user who happens to be signed in.
+const HIRING_EMPLOYEE_NAME = 'Rizurf Onboarding Team';
+
 export default function CandidateThreadPage() {
   const { candidateId } = useParams();
-  const session = useSession();
-  const hiringEmployeeName = session.name || session.email || 'HR Team';
+  const hiringEmployeeName = HIRING_EMPLOYEE_NAME;
   const [candidate, setCandidate] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);

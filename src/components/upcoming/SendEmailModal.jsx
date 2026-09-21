@@ -11,7 +11,9 @@ import { renderEmailTemplate, validateCcList } from '../../domain/candidateDomai
 export default function SendEmailModal({ isOpen, onClose, candidates = [], onSent }) {
   const isBulk = candidates.length > 1;
 
-  const [hiringEmployeeName, setHiringEmployeeName] = useState('');
+  // Defaults to the team identity candidate-facing correspondence signs as — still editable,
+  // e.g. if a specific person needs to sign a particular offer instead.
+  const [hiringEmployeeName, setHiringEmployeeName] = useState('Rizurf Onboarding Team');
   const [cc, setCc] = useState('');
   const [ccError, setCcError] = useState(null);
 
