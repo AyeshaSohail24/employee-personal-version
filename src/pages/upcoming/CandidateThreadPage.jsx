@@ -5,6 +5,7 @@ import { upcomingCandidateService } from '../../services/upcomingCandidateServic
 import { candidateEmailService } from '../../services/candidateEmailService.js';
 import { emailTemplateService } from '../../services/emailTemplateService.js';
 import { Select } from '../../components/common/Select.jsx';
+import { useSession } from '../../state/SessionContext';
 
 function formatThreadTimestamp(isoString) {
   if (!isoString) return '';
@@ -29,6 +30,8 @@ const OFFER_PILL_STYLES = {
  */
 export default function CandidateThreadPage() {
   const { candidateId } = useParams();
+  const session = useSession();
+  const hiringEmployeeName = session.name || session.email || 'HR Team';
   const [candidate, setCandidate] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -118,7 +121,7 @@ export default function CandidateThreadPage() {
       return;
     }
     try {
-      const rendered = await candidateEmailService.renderTemplateForCandidate(templateId, candidate, 'Ayesha Z.');
+      const rendered = await candidateEmailService.renderTemplateForCandidate(templateId, candidate, hiringEmployeeName);
       setReplySubject(rendered.subject);
       setReplyText(rendered.body);
     } catch (err) {
@@ -140,7 +143,7 @@ export default function CandidateThreadPage() {
   const placeholderFields = candidate ? [
     { key: 'applicantName', label: 'Applicant Name', value: candidate.fullName },
     { key: 'positionName', label: 'Position', value: candidate.positionName },
-    { key: 'hiringEmployeeName', label: 'Hiring Employee Name', value: 'Ayesha Z.' },
+    { key: 'hiringEmployeeName', label: 'Hiring Employee Name', value: hiringEmployeeName },
   ] : [];
 
   // Inserts the selected value at the cursor in whichever reply field (Subject or Body) was

@@ -1,4 +1,5 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
+import { apiClient } from './apiClient.js';
 import { upcomingCandidateService } from './upcomingCandidateService.js';
 import { emailTemplateService } from './emailTemplateService.js';
 import { renderEmailTemplate, buildCandidateEmailTokens } from '../domain/candidateDomain.js';
@@ -10,14 +11,13 @@ function normalizedIncludes(haystack, needle) {
 /**
  * Backend-ready email composition/send abstraction for the Upcoming candidate workflow.
  *
- * There is currently no real email backend/provider connected. This service never calls a
- * real API (no Gmail/Outlook/SMTP/SendGrid/Resend/Mailgun/fetch) and never claims an email
- * was actually delivered.
- *
- * CURRENT (PoC): renderPreview()/sendEmail() validate and render the email locally, then
- * persist "sent" metadata through upcomingCandidateService — a local send simulation.
- * FUTURE: swap sendEmail()'s body for a real backend email API call; renderPreview(), the
- * token/placeholder contract, and every caller stay exactly the same.
+ * sendEmail() actually delivers now — POST /candidates/{applicantId}/messages, which sends
+ * real SMTP via server/messaging/emailProvider.js (real MAIL_* config required; see that
+ * file). It used to only ever persist local "sent" bookkeeping through
+ * upcomingCandidateService (a local send simulation, no real API ever called) — that local
+ * bookkeeping (Sent/Received tabs, thread reconstruction) is still updated the same way
+ * afterward, so every existing caller/UI behavior stays the same; the only change is that an
+ * email now actually leaves the server.
  */
 export const candidateEmailService = {
   /**
@@ -85,8 +85,9 @@ export const candidateEmailService = {
   },
 
   /**
-   * Validates and "sends" (PoC: records as sent) a single candidate's offer email.
-   * Refuses to send if any required placeholder is unresolved.
+   * Validates, actually delivers (real SMTP via POST /candidates/{applicantId}/messages),
+   * and records a single candidate's offer email as sent. Refuses to send if any required
+   * placeholder is unresolved.
    *
    * @param {string} candidateId
    * @param {{ subject: string, body: string, cc?: string }} composedEmail - Final, HR-reviewed email content
@@ -106,6 +107,17 @@ export const candidateEmailService = {
     if (unresolved.length > 0) {
       throw new Error(`Cannot send: unresolved placeholder(s) ${unresolved.map((t) => `{{${t}}}`).join(', ')} remain in the email.`);
     }
+
+    // Actually deliver it before recording it as sent — a real SMTP failure (e.g. MAIL_* not
+    // configured) throws here and the caller sees it, rather than the old behavior of silently
+    // recording "Sent" for an email nobody ever received.
+    await apiClient.post(`/candidates/${candidate.id}/messages`, {
+      channel: 'email',
+      toEmail: candidate.email,
+      ccEmail: cc || undefined,
+      subject,
+      body,
+    });
 
     return upcomingCandidateService.markEmailSent(candidateId, {
       to: candidate.email,
