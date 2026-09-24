@@ -1,16 +1,10 @@
 import { loadDatabase, saveDatabase } from '../mock-data/storageEngine.js';
 import { apiClient } from './apiClient.js';
-import {
-  resolveHydratedEmployee,
-  validateEmployeeCreation,
-  resolveEmployeeTypeIdForDirectoryType,
-  generateNextEmployeeIdentifiers,
-  compareEmployeeIdNumeric,
-} from '../domain/employmentDomain.js';
+import { resolveHydratedEmployee, compareEmployeeIdNumeric } from '../domain/employmentDomain.js';
 import { filterEmployeesByStatus } from '../domain/lifecycleDomain.js';
 
-// create()/createDirectoryEmployee() below still write to the mock
-// localStorage db (not yet rewired to the real API) — this keeps their
+// create() below still writes to the mock
+// localStorage db (not yet rewired to the real API) — this keeps its
 // return value self-contained instead of routing through getById(), which
 // now fetches the real backend and would never find a mock-generated id.
 function hydrateFromMockDb(db, employeeId) {
@@ -373,89 +367,6 @@ export const employeeService = {
     }
 
     saveDatabase(db);
-    return hydrateFromMockDb(db, newId);
-  },
-
-  /**
-   * Creates a new employee from the Employees Directory "Create Employee" modal.
-   * Kept as a separate operation from create() (used by legacy verifyStage12 with a
-   * looser payload) so this stricter, fully-validated directory creation flow cannot
-   * regress that existing caller.
-   *
-   * Data flow: CreateEmployeeModal -> employeeService.createDirectoryEmployee()
-   * -> validation/ID/type-mapping domain helpers -> storage engine -> hydration (getById).
-   * The UI never touches localStorage or seed files directly.
-   *
-   * @param {Object} employeeData - firstName, lastName, workEmail, workPhone, icPassportNumber,
-   *   homeAddress, directoryType ('Employee'|'Intern'), startDate, contractEndDate, allowance,
-   *   workMode, status, notes
-   * @param {Object} [initialRecordData] - departmentId (required), managerId (optional "Supervisor")
-   * @returns {Promise<Object>} The newly created, hydrated employee
-   */
-  async createDirectoryEmployee(employeeData = {}, initialRecordData = {}) {
-    const db = loadDatabase();
-    const existingEmployees = db.employees || [];
-
-    // departmentId is architecturally part of the initial EmploymentRecord, not the raw
-    // Employee record, but it is a required field from the Create Employee form's point
-    // of view — validate against the merged candidate payload.
-    const { isValid, errors } = validateEmployeeCreation(
-      { ...employeeData, departmentId: initialRecordData.departmentId },
-      existingEmployees
-    );
-    if (!isValid) {
-      throw new Error(Object.values(errors).join(', '));
-    }
-
-    const allTypes = db.employeeTypes || [];
-    const employeeTypeId = resolveEmployeeTypeIdForDirectoryType(employeeData.directoryType, allTypes);
-    if (!employeeTypeId) {
-      throw new Error(`Validation Error: No active Employment Type is configured for "${employeeData.directoryType}".`);
-    }
-
-    const { id: newId, employeeId: empCode } = generateNextEmployeeIdentifiers(existingEmployees);
-    const firstName = employeeData.firstName.trim();
-    const lastName = employeeData.lastName.trim();
-
-    const newEmp = {
-      id: newId,
-      employeeId: empCode,
-      firstName,
-      lastName,
-      fullName: `${firstName} ${lastName}`.trim(),
-      workEmail: employeeData.workEmail.trim().toLowerCase(),
-      workPhone: (employeeData.workPhone || '').trim(),
-      icPassportNumber: (employeeData.icPassportNumber || '').trim(),
-      homeAddress: (employeeData.homeAddress || '').trim(),
-      photo: `${(firstName[0] || '').toUpperCase()}${(lastName[0] || '').toUpperCase()}`,
-      employeeTypeId,
-      status: employeeData.status,
-      workMode: employeeData.workMode,
-      allowance: employeeData.allowance,
-      startDate: employeeData.startDate,
-      contractEndDate: employeeData.contractEndDate || null,
-      notes: (employeeData.notes || '').trim(),
-      tags: [],
-    };
-
-    const newRec = {
-      id: `rec-${newId.replace('emp-', '')}-1`,
-      employeeId: newId,
-      departmentId: initialRecordData.departmentId || null,
-      positionId: initialRecordData.positionId || null,
-      managerId: initialRecordData.managerId || null,
-      supervisorId: initialRecordData.supervisorId || null,
-      locationId: initialRecordData.locationId || null,
-      scheduleId: initialRecordData.scheduleId || null,
-      effectiveFrom: newEmp.startDate,
-      effectiveTo: null,
-      changeReason: 'Initial Hire',
-    };
-
-    db.employees = [...existingEmployees, newEmp];
-    db.employmentRecords = [...(db.employmentRecords || []), newRec];
-    saveDatabase(db);
-
     return hydrateFromMockDb(db, newId);
   },
 

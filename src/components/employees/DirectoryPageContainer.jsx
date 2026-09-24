@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Plus } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { employeeService } from '../../services/employeeService';
 import { employeeTypeService } from '../../services/employeeTypeService';
 import { locationService } from '../../services/locationService';
@@ -12,7 +12,6 @@ import EmployeeCardView from './EmployeeCardView';
 import EmployeeTimelineView from './EmployeeTimelineView';
 import DirectoryEmptyState from './DirectoryEmptyState';
 import DirectorySkeleton from './DirectorySkeleton';
-import CreateEmployeeModal from './CreateEmployeeModal';
 
 export default function DirectoryPageContainer({
   title = 'Personnel Directory',
@@ -147,14 +146,6 @@ export default function DirectoryPageContainer({
     }
   };
 
-  // Create Employee
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-
-  const handleCreateSubmit = async (employeeData, initialRecordData) => {
-    await employeeService.createDirectoryEmployee(employeeData, initialRecordData);
-    await fetchEmployees();
-  };
-
   // Reset interactive filters & clear URL query parameters without overriding route baseLifecycleScope!
   const handleResetFilters = () => {
     setSearch('');
@@ -203,14 +194,6 @@ export default function DirectoryPageContainer({
           >
             <RefreshCw size={15} className={isSyncing ? 'icon-spin' : undefined} />
             <span>{isSyncing ? 'Syncing...' : 'Sync Personnel'}</span>
-          </button>
-          <button
-            type="button"
-            className="btn-primary btn-header-action"
-            onClick={() => setIsCreateOpen(true)}
-          >
-            <Plus size={15} />
-            <span>Create Personnel</span>
           </button>
         </div>
       </div>
@@ -268,13 +251,6 @@ export default function DirectoryPageContainer({
           <EmployeeTimelineView employees={employees} />
         )}
       </div>
-
-      {/* Create Personnel Modal */}
-      <CreateEmployeeModal
-        isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        onSubmit={handleCreateSubmit}
-      />
     </div>
   );
 }
