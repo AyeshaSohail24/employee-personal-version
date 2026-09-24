@@ -28,6 +28,7 @@ async function call(path, { method = "GET", body, scope = "applicants:read" } = 
       ...(cid ? { "x-correlation-id": cid } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(8000), // MICROAPP_PERFORMANCE.md §9
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");

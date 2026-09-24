@@ -11,6 +11,10 @@ export async function gatewaySessionIsLive(session) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sid: session.sid, sub: session.sub }),
+      // MICROAPP_PERFORMANCE.md §9 — this runs on every authenticated request (§5, never
+      // skipped/cached); a hang here without a timeout would hang every signed-in page. A timeout
+      // lands in the same catch below as any other failure — fail open, same as always.
+      signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) return true; // see "fail open," below
     const { active } = await response.json();

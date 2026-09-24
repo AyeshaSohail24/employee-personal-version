@@ -1,4 +1,5 @@
 {
+  "regions": ["sin1"],
   "rewrites": [
     { "source": "/auth/login", "destination": "/api/handler" },
     { "source": "/auth/callback", "destination": "/api/handler" },

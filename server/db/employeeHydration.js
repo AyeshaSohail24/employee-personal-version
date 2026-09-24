@@ -152,14 +152,20 @@ export async function hydrateEmployees(employeeRows) {
   if (employeeRows.length === 0) return [];
 
   const employeeIds = employeeRows.map((e) => e.id);
-  const [allRecords] = await pool.query(
-    `SELECT * FROM employment_records WHERE employee_id IN (${employeeIds.map(() => "?").join(",")})`,
-    employeeIds,
-  );
-  // Manager/supervisor lookups can point outside this page's rows, so fetch
-  // every employee once too — this app's whole headcount is small (HR PoC
-  // scale), not worth a second round trip per referenced manager.
-  const [allEmployeeRows] = await pool.query("SELECT * FROM employees");
+  // MICROAPP_PERFORMANCE.md §2 — these three don't depend on each other (loadLookups() also does
+  // its own internal Promise.all, including the one external Departments call in this whole
+  // function), so they run together instead of stacking three round trips in sequence.
+  const [[allRecords], [allEmployeeRows], lookups] = await Promise.all([
+    pool.query(
+      `SELECT * FROM employment_records WHERE employee_id IN (${employeeIds.map(() => "?").join(",")})`,
+      employeeIds,
+    ),
+    // Manager/supervisor lookups can point outside this page's rows, so fetch every employee once
+    // too — this app's whole headcount is small (HR PoC scale), not worth a second round trip per
+    // referenced manager.
+    pool.query("SELECT * FROM employees"),
+    loadLookups(),
+  ]);
 
   const recordsByEmployeeId = new Map();
   for (const record of allRecords) {
@@ -168,7 +174,6 @@ export async function hydrateEmployees(employeeRows) {
   }
 
   const employeesById = new Map(allEmployeeRows.map((row) => [row.id, toCamelEmployee(row)]));
-  const lookups = await loadLookups();
 
   return employeeRows.map((row) => hydrateOne(row, recordsByEmployeeId, employeesById, lookups));
 }

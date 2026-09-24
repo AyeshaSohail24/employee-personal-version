@@ -25,6 +25,7 @@ async function call(path, { method = "GET", body, scope = "department:read" } = 
       ...(cid ? { "x-correlation-id": cid } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(8000), // MICROAPP_PERFORMANCE.md §9
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -33,9 +34,26 @@ async function call(path, { method = "GET", body, scope = "department:read" } = 
   return response.status === 204 ? null : response.json();
 }
 
+// MICROAPP_PERFORMANCE.md §8 — the whole department list is fetched on essentially every employee
+// hydration (employeeHydration.js's loadLookups(), overlayInternFields(), the Upcoming roster —
+// call sites that never pass a search term) and changes rarely; short-lived, non-personal, safe to
+// share across every caller for a few seconds. A search-scoped call bypasses this entirely — a
+// live lookup by name should stay live.
+let departmentsCache = null; // { value, at }
+const DEPARTMENTS_TTL_MS = 30_000;
+
 export const departmentsClient = {
   // Returns a plain array — this service does not paginate/wrap it.
-  listDepartments: (search) => call(`/api/departments${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  listDepartments(search) {
+    if (search) return call(`/api/departments?search=${encodeURIComponent(search)}`);
+    if (departmentsCache && Date.now() - departmentsCache.at < DEPARTMENTS_TTL_MS) {
+      return Promise.resolve(departmentsCache.value);
+    }
+    return call("/api/departments").then((value) => {
+      departmentsCache = { value, at: Date.now() };
+      return value;
+    });
+  },
   getDepartment: (departmentId) => call(`/api/departments/${departmentId}`),
 
   createDepartment: (data) => call("/api/departments", { method: "POST", body: data, scope: "department:write" }),

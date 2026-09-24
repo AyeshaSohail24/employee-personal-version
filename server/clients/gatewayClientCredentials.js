@@ -19,6 +19,7 @@ export async function getServiceAccessToken({ clientId, clientSecret, audience, 
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Basic ${basicAuth}` },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(5000), // MICROAPP_PERFORMANCE.md §9
   });
   if (!response.ok) throw new Error(`client_credentials grant for "${audience}" failed: ${response.status}`);
 

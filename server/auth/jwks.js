@@ -6,7 +6,7 @@ let jwksCache = null;
 
 export async function getGatewayJwks() {
   if (!jwksCache) {
-    const response = await fetch(`${GATEWAY_URL}/.well-known/jwks.json`);
+    const response = await fetch(`${GATEWAY_URL}/.well-known/jwks.json`, { signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error(`JWKS fetch failed: ${response.status}`);
     jwksCache = await response.json();
   }

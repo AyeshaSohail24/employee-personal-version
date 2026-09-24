@@ -9,6 +9,7 @@ import { getServiceAccessToken } from "./gatewayClientCredentials.js";
 import { getCorrelationId } from "../http/requestContext.js";
 
 const cfg = EXTERNAL_CLIENTS.interns;
+let statusEnumCache = null; // see getStatusEnum() below
 
 async function call(path, { method = "GET", body, scope = "intern:read" } = {}) {
   if (!cfg.baseUrl) throw new Error("INTERNS_API_BASE_URL is not configured.");
@@ -22,6 +23,10 @@ async function call(path, { method = "GET", body, scope = "intern:read" } = {}) 
       ...(cid ? { "x-correlation-id": cid } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
+    // MICROAPP_PERFORMANCE.md §9 — this service has its own measured latency (the gateway's own
+    // catalog check saw 1.1s+ on a cold /health); without a timeout a hang here hangs every page
+    // that reads Personnel/Onboarding/Offboarding until the platform kills the whole function.
+    signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -89,13 +94,19 @@ export const internsClient = {
   // could easily be an incomplete subset — see server/routes/employees.js's /employees/statuses
   // for why this app's own Personnel status list still isn't a byte-for-byte copy of this one).
   // Public, unauthenticated endpoint — no service token needed, unlike every other call here.
+  // MICROAPP_PERFORMANCE.md §5c/§8 — a service's own published API contract changes only on that
+  // service's own deploy, same lifetime assumption jwks.js already makes for the gateway's signing
+  // keys. Cached for this process's lifetime instead of re-fetched on every GET /employees/statuses
+  // (once per Personnel page load).
   async getStatusEnum() {
+    if (statusEnumCache) return statusEnumCache;
     if (!cfg.baseUrl) throw new Error("INTERNS_API_BASE_URL is not configured.");
-    const response = await fetch(`${cfg.baseUrl}/openapi.json`);
+    const response = await fetch(`${cfg.baseUrl}/openapi.json`, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) throw new Error(`Interns API GET /openapi.json failed: ${response.status}`);
     const spec = await response.json();
     const statusEnum = spec?.components?.schemas?.Intern?.properties?.status?.enum;
     if (!Array.isArray(statusEnum)) throw new Error("Interns API's OpenAPI spec has no Intern.status enum at the expected path.");
-    return statusEnum;
+    statusEnumCache = statusEnum;
+    return statusEnumCache;
   },
 };

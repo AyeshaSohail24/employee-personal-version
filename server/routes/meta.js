@@ -11,6 +11,17 @@ import { getPhotoUrlForEmail } from "../db/internSync.js";
 
 const started = Date.now();
 
+// MICROAPP_PERFORMANCE.md §3 — time-box the one check /health does, so a hanging database
+// (this app's VPS-hosted MySQL has had real connect timeouts before — see dev-docs/DEPLOYMENT.md)
+// reports `degraded` quickly instead of hanging the whole endpoint until the platform kills it.
+// The gateway polls this every ~15s; it must answer fast every time, not just when things are fine.
+async function withTimeout(fn, ms = 800) {
+  return Promise.race([
+    fn(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+  ]);
+}
+
 export const routes = {
   "/health": {
     async get(req, res, ctx) {
@@ -18,7 +29,7 @@ export const routes = {
       // isn't; a hardcoded `true` here would make this endpoint worthless.
       let databaseOk = true;
       try {
-        await pool.query("SELECT 1");
+        await withTimeout(() => pool.query("SELECT 1"));
       } catch {
         databaseOk = false;
       }
@@ -33,7 +44,10 @@ export const routes = {
   },
   "/openapi.json": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, openapi);
+      // MICROAPP_PERFORMANCE.md §4/§8 — public, identical for every caller, and only changes on
+      // deploy: safe to let the CDN and browser cache it briefly instead of NO_STORE (sendJson's
+      // default, correct everywhere else — every other response here can depend on who's asking).
+      sendJson(res, ctx.cid, 200, openapi, { "cache-control": "public, max-age=60" });
     },
   },
   // Not part of the public API catalog (SS-8) in spirit — it's how the SPA

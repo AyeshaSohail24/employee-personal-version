@@ -1,6 +1,6 @@
 import * as db from "../db/employees.js";
 import { hydrateEmployees, hydrateEmployee } from "../db/employeeHydration.js";
-import { overlayInternFields, applyInternOverlay, getInternPersonalDetails, getLinkedIntern, isLinkedInternDeleted } from "../db/internSync.js";
+import { overlayInternFields, applyInternOverlay, fetchInternsForOverlay, getInternPersonalDetails, getLinkedInternForDetails } from "../db/internSync.js";
 import { internsClient } from "../clients/internsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
@@ -8,9 +8,15 @@ import { parseListQuery, readJsonBody } from "../http/util.js";
 
 // Shared by GET /employees and GET /employees/sync — see overlayInternFields()'s own doc comment
 // for exactly what it does and doesn't do (read-only; no writes to either database).
+//
+// MICROAPP_PERFORMANCE.md §2 — the interns-list fetch doesn't depend on the local DB rows/
+// hydration at all, so it starts immediately and runs alongside that work instead of only
+// starting once hydration finishes.
 async function listEmployeesLive(query) {
+  const internsPromise = fetchInternsForOverlay();
   const rows = await db.listEmployees(query);
-  return overlayInternFields(await hydrateEmployees(rows));
+  const hydrated = await hydrateEmployees(rows);
+  return overlayInternFields(hydrated, await internsPromise);
 }
 
 export const routes = {
@@ -60,20 +66,28 @@ export const routes = {
     },
   },
   "/employees/{id}": {
-    // Fetches this one intern's live Interns DB record once and reuses it for two things: the
-    // same Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date/photo overlay GET
+    // Fetches this one intern's live Interns DB record once (getLinkedInternForDetails() — a
+    // single call that also answers "was it deleted upstream", replacing what used to be two
+    // separate internsClient.getIntern() calls for the same person) and reuses it for two things:
+    // the same Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date/photo overlay GET
     // /employees already applies in bulk (applyInternOverlay() — the shared transform
     // overlayInternFields() also uses, so the two read paths can't drift apart on which fields are
     // live), plus the per-employee fields only this page shows (icPassportNumber/homeAddress, via
     // getInternPersonalDetails()). Previously this page never called the overlay at all, so an
     // intern-linked employee could show a stale local Status/Mode/etc. here even when Personnel's
-    // list/Dashboard correctly showed the live value from the same Interns DB record.
+    // list/Dashboard correctly showed the live value from the same Interns DB record. Runs
+    // alongside hydrateEmployee() (MICROAPP_PERFORMANCE.md §2) rather than only starting once local
+    // hydration finishes — neither depends on the other's result.
     async get(req, res, ctx) {
       const employee = await db.getEmployee(ctx.params.id);
       if (!employee) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);
-      if (await isLinkedInternDeleted(employee)) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);
-      const hydrated = await hydrateEmployee(employee);
-      const intern = await getLinkedIntern(employee);
+
+      const [hydrated, { intern, deleted }] = await Promise.all([
+        hydrateEmployee(employee),
+        getLinkedInternForDetails(employee),
+      ]);
+      if (deleted) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);
+
       const overlaid = intern ? applyInternOverlay(hydrated, intern) : hydrated;
       const internPersonalDetails = getInternPersonalDetails(intern);
       sendJson(res, ctx.cid, 200, { employee: { ...overlaid, ...internPersonalDetails } });

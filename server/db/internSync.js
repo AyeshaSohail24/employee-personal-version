@@ -316,6 +316,19 @@ export async function syncAllInternsToEmployees({ onItem } = {}) {
   return { created, updated, unchanged, failed, total: interns?.length ?? 0 };
 }
 
+// Fetches the full interns list for overlayInternFields() below, resolving to null (not throwing)
+// on any failure — the one thing a caller needs to be able to kick this off early (before it even
+// knows whether any employee is intern-linked) and run it alongside unrelated local DB work
+// (MICROAPP_PERFORMANCE.md §2), rather than only starting it after that work finishes.
+export async function fetchInternsForOverlay() {
+  try {
+    const { interns } = await internsClient.listAllInterns();
+    return interns ?? [];
+  } catch {
+    return null;
+  }
+}
+
 // Read-only live overlay, applied to an already-hydrated employee LIST (the bulk GET /employees
 // path — GET /employees/{id} applies the same applyInternOverlay() transform directly against the
 // one intern record it already fetches, rather than this list-oriented batch lookup). Every
@@ -331,18 +344,18 @@ export async function syncAllInternsToEmployees({ onItem } = {}) {
 // A real intern the Interns DB knows about but this app has never locally created a record for has
 // no local row here to overlay onto and so never appears from this alone — that would require a
 // write (createEmployee), which this never does.
-export async function overlayInternFields(hydratedEmployees) {
+//
+// `prefetchedInterns` (optional): the caller may pass an already-in-flight fetch of the interns
+// list instead of letting this function start its own — see fetchInternsForOverlay() below and
+// server/routes/employees.js's listEmployeesLive(), which kicks that fetch off before the local DB
+// hydration work even starts (MICROAPP_PERFORMANCE.md §2), rather than only starting it once
+// hydration finishes.
+export async function overlayInternFields(hydratedEmployees, prefetchedInterns) {
   if (!hydratedEmployees.some((e) => e.internExternalId)) return hydratedEmployees;
 
-  let interns;
-  try {
-    ({ interns } = await internsClient.listAllInterns());
-  } catch {
-    // The live Interns DB is unreachable — show the local snapshot as-is rather than failing the
-    // whole page load over it.
-    return hydratedEmployees;
-  }
-  const internsById = new Map((interns ?? []).map((intern) => [intern.id, intern]));
+  const interns = prefetchedInterns !== undefined ? prefetchedInterns : await fetchInternsForOverlay();
+  if (!interns) return hydratedEmployees; // unreachable — show the local snapshot as-is rather than failing the whole page load
+  const internsById = new Map(interns.map((intern) => [intern.id, intern]));
 
   // The Interns DB is the source of truth for who exists: an intern-linked employee whose intern
   // is no longer there (deleted upstream) is dropped from the result, not shown as a stale
@@ -365,6 +378,24 @@ export async function isLinkedInternDeleted(employee) {
     return false;
   } catch (error) {
     return error?.status === 404;
+  }
+}
+
+// MICROAPP_PERFORMANCE.md §2 — GET /employees/{id} needs both "the live intern record" (for
+// applyInternOverlay()/getInternPersonalDetails()) and "has it been deleted upstream" (to 404 the
+// whole page), which used to mean two separate internsClient.getIntern() calls for the same person
+// (getLinkedIntern() + isLinkedInternDeleted() above, still used as-is elsewhere — onboarding.js/
+// offboarding.js only ever need one or the other, not both). This does it in one fetch: `deleted`
+// is true only on a definitive 404, the same distinction isLinkedInternDeleted() makes, so a
+// transient failure still leaves `deleted: false` and simply shows a null intern rather than a
+// false 404.
+export async function getLinkedInternForDetails(employee) {
+  if (!employee?.intern_external_id) return { intern: null, deleted: false };
+  try {
+    const intern = await internsClient.getIntern(employee.intern_external_id);
+    return { intern, deleted: false };
+  } catch (error) {
+    return { intern: null, deleted: error?.status === 404 };
   }
 }
 
