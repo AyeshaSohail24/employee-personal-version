@@ -104,9 +104,11 @@ export default function EmployeeCardView({ employees = [] }) {
 
               {/* Navigates to the dedicated Personnel Details page instead of opening
                   PersonnelProfileModal (per direct user request: a person's record can grow to
-                  include CV/resume PDFs, which don't fit comfortably in a modal). */}
-              <Link to={`/employees/${emp.id}`} className="btn-compact-override" style={{ alignSelf: 'flex-start', textDecoration: 'none' }}>
-                <Eye size={12} />
+                  include CV/resume PDFs, which don't fit comfortably in a modal). A dedicated
+                  card-scoped style (.emp-card-view-details-btn), not the shared
+                  .btn-compact-override several other pages' own buttons still use. */}
+              <Link to={`/employees/${emp.id}`} className="emp-card-view-details-btn" style={{ textDecoration: 'none' }}>
+                <Eye size={13} />
                 <span>View Details</span>
               </Link>
             </div>
