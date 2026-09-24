@@ -86,7 +86,7 @@ export const openapi = {
           description: "The real Upcoming candidate roster, the conversation with a shortlisted applicant — over email or WhatsApp — and the reusable offer drafts behind it.",
           does: ["List real candidates at the confirmation phase", "Read a candidate's message thread", "Send a message to a candidate on email or WhatsApp", "List, create and edit email drafts"],
           best_for: "HR corresponding with candidates in the Upcoming pipeline before they're hired.",
-          endpoints: ["GET /candidates", "GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "GET /email-templates", "POST /email-templates", "PATCH /email-templates/{id}"],
+          endpoints: ["GET /candidates", "GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "GET /email-templates", "POST /email-templates", "PATCH /email-templates/{id}", "DELETE /email-templates/{id}"],
         },
         {
           name: "Gather Candidate Documents",
@@ -478,7 +478,9 @@ export const openapi = {
     },
     "/email-templates/{id}": {
       patch: { summary: "Edit an email draft.", security: scoped("candidate-messaging:write"),
-        "x-rizurf": { name: "Update Email Draft", purpose: "Change a template's subject, body or offer type", use_when: ["Editing wording"], do_not_use_when: [], inputs: ["name", "offerType", "subject", "body"], outputs: ["template"], requires: ["Template exists"], related_endpoints: ["GET /email-templates"], tags: ["email drafts", "edit"] } },
+        "x-rizurf": { name: "Update Email Draft", purpose: "Change a template's subject, body or offer type", use_when: ["Editing wording"], do_not_use_when: [], inputs: ["name", "offerType", "subject", "body"], outputs: ["template"], requires: ["Template exists", "offerType is Paid or Unpaid", "Changing offerType is refused (422) if this is the last draft of its current offer type"], related_endpoints: ["GET /email-templates"], tags: ["email drafts", "edit"] } },
+      delete: { summary: "Delete an email draft.", security: scoped("candidate-messaging:write"),
+        "x-rizurf": { name: "Delete Email Draft", purpose: "Permanently remove an offer-email template", use_when: ["A draft is no longer needed"], do_not_use_when: ["It is the only Paid or Unpaid draft — offer emails of that type are rendered from it, so the request is refused (422)"], inputs: ["id"], outputs: [], requires: ["Template exists", "At least one other draft of the same offer type exists"], related_endpoints: ["GET /email-templates"], tags: ["email drafts", "delete"] } },
     },
     "/candidates/{applicantId}/documents": {
       get: { summary: "List a candidate's requested and submitted documents.", security: scoped("candidate-documents:read"),

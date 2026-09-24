@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, RotateCcw, Save, CheckCircle2, Mail, Pencil, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle2, AlertCircle, Mail, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { emailTemplateService } from '../../services/emailTemplateService.js';
+import { ApiError } from '../../services/apiClient.js';
 import { Select } from '../common/Select.jsx';
 
 const PLACEHOLDER_TOKENS = ['{{ApplicantName}}', '{{PositionName}}', '{{HiringEmployeeName}}'];
@@ -10,6 +11,14 @@ const OFFER_PILL_STYLES = {
   Unpaid: { bg: '#FEF3C7', color: '#D97706' },
 };
 
+// Every candidate's offer email is rendered from a draft of their offer type, so each of these
+// must always keep at least one draft (mirrors REQUIRED_OFFER_TYPES in server/db/candidateMessaging.js).
+const REQUIRED_OFFER_TYPES = ['Paid', 'Unpaid'];
+
+function errorText(err, fallback) {
+  return err instanceof ApiError && err.message ? err.message : fallback;
+}
+
 const OFFER_TYPE_OPTIONS = [
   { value: 'Paid', label: 'Paid' },
   { value: 'Unpaid', label: 'Unpaid' },
@@ -18,7 +27,7 @@ const OFFER_TYPE_OPTIONS = [
 /**
  * Card-grid overview of every offer email draft, so HR can see what exists at a glance before
  * committing to edit one. Clicking a card opens a focused, full-width editor for just that
- * draft (name/offer type/subject/body + placeholder legend + Save/Reset) — replaces the old
+ * draft (name/offer type/subject/body + placeholder legend + Delete/Cancel/Save) — replaces the old
  * cramped sidebar-list-plus-editor split view. The "New Draft" button above the grid creates a
  * blank draft and opens it straight into the editor.
  */
@@ -26,12 +35,12 @@ export default function EmailDraftsPanel() {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
-  const [canReset, setCanReset] = useState(false);
   const [name, setName] = useState('');
   const [offerType, setOfferType] = useState('Paid');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [savedMessage, setSavedMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [activeField, setActiveField] = useState('body');
   const [search, setSearch] = useState('');
   const subjectRef = useRef(null);
@@ -58,16 +67,20 @@ export default function EmailDraftsPanel() {
     });
   };
 
-  const loadTemplates = async () => {
-    setLoading(true);
+  // Drafts live in MySQL (via emailTemplateService). Only the first load shows the skeleton —
+  // later refreshes (after save/create/delete) update in place so the open editor isn't unmounted.
+  const loadTemplates = async ({ initial = false } = {}) => {
+    if (initial) setLoading(true);
     try {
       setTemplates(await emailTemplateService.getAll());
+    } catch (err) {
+      setErrorMessage(errorText(err, 'Could not load email drafts.'));
     } finally {
-      setLoading(false);
+      if (initial) setLoading(false);
     }
   };
 
-  useEffect(() => { loadTemplates(); }, []);
+  useEffect(() => { loadTemplates({ initial: true }); }, []);
 
   const editingTemplate = templates.find((t) => t.id === editingId) || null;
 
@@ -83,25 +96,31 @@ export default function EmailDraftsPanel() {
     ));
   }, [templates, search]);
 
-  const openEditor = async (tpl) => {
+  const openEditor = (tpl) => {
     setEditingId(tpl.id);
     setName(tpl.name);
     setOfferType(tpl.offerType);
     setSubject(tpl.subject);
     setBody(tpl.body);
     setSavedMessage('');
-    setCanReset(await emailTemplateService.hasDefault(tpl.id));
+    setErrorMessage('');
   };
 
   const handleAddDraft = async () => {
-    const created = await emailTemplateService.create({ name: 'New Draft', offerType: 'Paid', subject: '', body: '' });
-    await loadTemplates();
-    await openEditor(created);
+    setErrorMessage('');
+    try {
+      const created = await emailTemplateService.create({ name: 'New Draft', offerType: 'Paid', subject: '', body: '' });
+      await loadTemplates();
+      openEditor(created);
+    } catch (err) {
+      setErrorMessage(errorText(err, 'Could not create a new draft.'));
+    }
   };
 
   const handleBack = () => {
     setEditingId(null);
     setSavedMessage('');
+    setErrorMessage('');
   };
 
   // Discards any unsaved edits and returns to the drafts grid — nothing is written. Asks first
@@ -118,21 +137,41 @@ export default function EmailDraftsPanel() {
   };
 
   const handleSave = async () => {
-    await emailTemplateService.update(editingId, { name, offerType, subject, body });
-    await loadTemplates();
-    setSavedMessage('Draft saved.');
-    setTimeout(() => setSavedMessage(''), 2000);
+    setErrorMessage('');
+    try {
+      await emailTemplateService.update(editingId, { name, offerType, subject, body });
+      await loadTemplates();
+      setSavedMessage('Draft saved.');
+      setTimeout(() => setSavedMessage(''), 2000);
+    } catch (err) {
+      setErrorMessage(errorText(err, 'Could not save this draft.'));
+    }
   };
 
-  const handleReset = async () => {
-    const restored = await emailTemplateService.resetToDefault(editingId);
-    setName(restored.name);
-    setOfferType(restored.offerType);
-    setSubject(restored.subject);
-    setBody(restored.body);
-    await loadTemplates();
-    setSavedMessage('Reset to default.');
-    setTimeout(() => setSavedMessage(''), 2000);
+  // Offer emails are rendered from the candidate's Paid/Unpaid draft, so the last saved draft of
+  // either type can't be deleted — explained up front here, and enforced again by the server
+  // (DELETE /email-templates/{id} answers 422) in case the list here is out of date.
+  const isLastOfRequiredType = editingTemplate
+    && REQUIRED_OFFER_TYPES.includes(editingTemplate.offerType)
+    && templates.filter((t) => t.offerType === editingTemplate.offerType).length <= 1;
+
+  // Permanently removes the draft (after confirmation) and returns to the drafts grid.
+  const handleDelete = async () => {
+    setErrorMessage('');
+    if (isLastOfRequiredType) {
+      const type = editingTemplate.offerType;
+      setErrorMessage(`This is the only ${type} email draft. ${type} offer emails are sent using it, so it can't be deleted. Create another ${type} draft first.`);
+      return;
+    }
+    const label = name.trim() || editingTemplate?.name || 'this draft';
+    if (!window.confirm(`Delete "${label}" permanently? This cannot be undone.`)) return;
+    try {
+      await emailTemplateService.remove(editingId);
+      handleBack();
+      await loadTemplates();
+    } catch (err) {
+      setErrorMessage(errorText(err, 'Could not delete this draft.'));
+    }
   };
 
   if (loading) {
@@ -203,7 +242,18 @@ export default function EmailDraftsPanel() {
             ))}
           </div>
 
+          {errorMessage && (
+            <div className="email-draft-error" role="alert">
+              <AlertCircle size={15} />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           <div className="email-draft-editor-footer">
+            <button type="button" className="btn-danger-outline email-draft-delete-btn" onClick={handleDelete}>
+              <Trash2 size={14} />
+              <span>Delete Draft</span>
+            </button>
             {savedMessage && (
               <span className="sync-status-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
                 <CheckCircle2 size={14} /> {savedMessage}
@@ -213,12 +263,6 @@ export default function EmailDraftsPanel() {
               <X size={14} />
               <span>Cancel</span>
             </button>
-            {canReset && (
-              <button type="button" className="btn-secondary" onClick={handleReset}>
-                <RotateCcw size={14} />
-                <span>Reset to Default</span>
-              </button>
-            )}
             <button type="button" className="btn-primary" onClick={handleSave} disabled={!name.trim()}>
               <Save size={14} />
               <span>Save Draft</span>
@@ -231,6 +275,12 @@ export default function EmailDraftsPanel() {
 
   return (
     <div>
+      {errorMessage && (
+        <div className="email-draft-error" role="alert" style={{ marginBottom: '1rem' }}>
+          <AlertCircle size={15} />
+          <span>{errorMessage}</span>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem' }}>
         <div className="toolbar-search-box">
           <Search size={18} className="toolbar-search-icon" />
@@ -256,7 +306,9 @@ export default function EmailDraftsPanel() {
 
       {filteredTemplates.length === 0 ? (
         <div className="directory-empty-card">
-          <p className="empty-description">No drafts match &ldquo;{search}&rdquo;.</p>
+          <p className="empty-description">
+            {search.trim() ? <>No drafts match &ldquo;{search}&rdquo;.</> : 'No email drafts yet.'}
+          </p>
         </div>
       ) : (
         <div className="email-draft-card-grid">

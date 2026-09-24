@@ -3633,7 +3633,62 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+/* Icon + label spacing for every footer button (the shared .btn-* classes don't set a gap, so the
+   icon sat flush against the text). */
+.email-draft-editor-footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.1rem;
+  white-space: nowrap;
+}
+
+/* Inline error for the draft editor/grid (e.g. refusing to delete the last Paid/Unpaid draft). */
+.email-draft-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.65rem 0.85rem;
+  background-color: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: var(--radius-md);
+  color: #B91C1C;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.email-draft-error svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+/* Delete sits apart on the left, away from Cancel/Save, so it's hard to hit by accident. */
+.email-draft-delete-btn {
+  margin-right: auto;
+}
+
+/* Secondary destructive action — red outline at rest, solid red on hover. */
+.btn-danger-outline {
+  border: 1px solid #FCA5A5;
+  background-color: var(--bg-card);
+  color: #DC2626;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-danger-outline:hover {
+  background-color: #DC2626;
+  border-color: #DC2626;
+  color: #FFFFFF;
 }
 
 /* Bulk send review — .bulk-candidate-list is a plain flex-column layout container; the

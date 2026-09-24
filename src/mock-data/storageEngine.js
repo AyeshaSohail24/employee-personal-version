@@ -17,7 +17,6 @@ import { seedOffboardingPlanTemplates, seedOffboardingPlanTasks } from './seedOf
 import { seedOffboardingPlanInstances, seedOffboardingTaskInstances } from './seedOffboardingInstances.js';
 import { seedDocumentTypes } from './seedDocumentTypes.js';
 import { seedUpcomingCandidates } from './seedUpcomingCandidates.js';
-import { seedEmailTemplates } from './seedEmailTemplates.js';
 import { seedNotes } from './seedNotes.js';
 import { seedFormerExitRecords } from './seedFormerExitRecords.js';
 
@@ -500,7 +499,6 @@ function getInitialState() {
     offboardingTaskInstances: seedOffboardingTaskInstances,
     documentTypes: seedDocumentTypes,
     upcomingCandidates: seedUpcomingCandidates,
-    emailTemplates: seedEmailTemplates,
     candidateEmailLog: [],
     // Shallow-copied (not aliased) — notesService.update()/archive()/etc. replace an array
     // INDEX in place (`notes[index] = updatedNote; db.notes = notes;`); aliasing this straight
@@ -565,7 +563,9 @@ export function loadDatabase() {
     if (!parsed.offboardingTaskInstances) parsed.offboardingTaskInstances = seedOffboardingTaskInstances;
     if (!parsed.documentTypes) parsed.documentTypes = seedDocumentTypes;
     if (!parsed.upcomingCandidates) parsed.upcomingCandidates = seedUpcomingCandidates;
-    if (!parsed.emailTemplates) parsed.emailTemplates = seedEmailTemplates;
+    // Email drafts moved to MySQL (email_templates, via GET /email-templates) — drop any stale
+    // browser copy left over from when they lived here; it's never read anymore.
+    delete parsed.emailTemplates;
     if (!parsed.candidateEmailLog) parsed.candidateEmailLog = [];
     if (!parsed.notes) parsed.notes = [...seedNotes];
     if (!parsed.notifications) parsed.notifications = [];

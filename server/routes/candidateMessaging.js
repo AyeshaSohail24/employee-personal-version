@@ -5,6 +5,18 @@ import { parseListQuery, readJsonBody } from "../http/util.js";
 import { convertApplicant } from "../db/applicantConversion.js";
 import { CHANNELS } from "../messaging/index.js";
 
+function validateOfferType(offerType) {
+  if (offerType !== undefined && !db.REQUIRED_OFFER_TYPES.includes(offerType)) {
+    throw new ValidationError(`offerType must be one of: ${db.REQUIRED_OFFER_TYPES.join(", ")}.`);
+  }
+}
+
+function mapEmailTemplateError(error) {
+  if (error instanceof RowNotFoundError) return new NotFoundError(error.message);
+  if (error instanceof db.LastRequiredTemplateError) return new ValidationError(error.message);
+  return error;
+}
+
 export const routes = {
   "/candidates/{applicantId}/messages": {
     async get(req, res, ctx) {
@@ -29,6 +41,8 @@ export const routes = {
     },
     async post(req, res, ctx) {
       const body = await readJsonBody(req);
+      if (typeof body.name !== "string" || !body.name.trim()) throw new ValidationError("name is required.");
+      validateOfferType(body.offerType);
       const id = await db.createEmailTemplate(body);
       sendJson(res, ctx.cid, 201, { template: await db.getEmailTemplate(id) });
     },
@@ -36,13 +50,26 @@ export const routes = {
   "/email-templates/{id}": {
     async patch(req, res, ctx) {
       const body = await readJsonBody(req);
+      if (body.name !== undefined && (typeof body.name !== "string" || !body.name.trim())) {
+        throw new ValidationError("name cannot be empty.");
+      }
+      validateOfferType(body.offerType);
       try {
         await db.updateEmailTemplate(ctx.params.id, body);
       } catch (error) {
-        if (error instanceof RowNotFoundError) throw new NotFoundError(error.message);
-        throw error;
+        throw mapEmailTemplateError(error);
       }
       sendJson(res, ctx.cid, 200, { template: await db.getEmailTemplate(ctx.params.id) });
+    },
+    // Refused (422) for the last remaining draft of a required offer type — see
+    // db/candidateMessaging.js's email-drafts comment.
+    async delete(req, res, ctx) {
+      try {
+        await db.deleteEmailTemplate(ctx.params.id);
+      } catch (error) {
+        throw mapEmailTemplateError(error);
+      }
+      sendJson(res, ctx.cid, 204, null);
     },
   },
   "/applicants/{applicantId}/convert": {

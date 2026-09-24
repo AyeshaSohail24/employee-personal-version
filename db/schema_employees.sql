@@ -519,7 +519,12 @@ CREATE TABLE IF NOT EXISTS `offboarding_task_instances` (
 -- Upcoming: candidate messaging + email drafts (built for the Upcoming page)
 -- ----------------------------------------------------------------------------
 
--- 23. EMAIL_TEMPLATES — reusable offer-email drafts, editable via Email Drafts
+-- 23. EMAIL_TEMPLATES — reusable offer-email drafts, editable via Email Drafts.
+--     The single source of truth for drafts (the UI reads/writes them through
+--     /email-templates). The default Paid/Unpaid drafts are inserted by
+--     `npm run seed-email-templates` (server/scripts/seedEmailTemplates.js),
+--     not here, so their wording lives in one place. At least one Paid and
+--     one Unpaid draft must always exist; the API refuses to delete the last.
 CREATE TABLE IF NOT EXISTS `email_templates` (
     `id` VARCHAR(100) PRIMARY KEY,
     `name` VARCHAR(255) NOT NULL,

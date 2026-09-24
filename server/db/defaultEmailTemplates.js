@@ -1,8 +1,9 @@
-/**
- * Default PoC offer email drafts for the Upcoming candidate workflow.
- * Editable by HR through emailTemplateService; these are the reset-to-default originals.
- */
-export const seedEmailTemplates = [
+// The two default offer-email drafts (Paid / Unpaid) the Upcoming workflow's offer emails are
+// rendered from. Moved here verbatim from the old src/mock-data/seedEmailTemplates.js when drafts
+// moved from browser localStorage to the email_templates table — these are only ever written to
+// the database by server/scripts/seedEmailTemplates.js (seedDefaultEmailTemplates() in
+// ./candidateMessaging.js), never read at request time: MySQL is the single source of truth.
+export const DEFAULT_EMAIL_TEMPLATES = [
   {
     id: 'tpl-email-paid',
     offerType: 'Paid',

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "server": "node --env-file=.env server/index.js",
     "start": "node server/index.js",
-    "backfill-contract-end-dates": "node --env-file=.env server/scripts/backfillContractEndDates.js"
+    "backfill-contract-end-dates": "node --env-file=.env server/scripts/backfillContractEndDates.js",
+    "seed-email-templates": "node --env-file=.env server/scripts/seedEmailTemplates.js"
   },
   "dependencies": {
     "html-to-image": "^1.11.13",
