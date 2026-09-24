@@ -1,6 +1,6 @@
 import * as db from "../db/employees.js";
 import { hydrateEmployees, hydrateEmployee } from "../db/employeeHydration.js";
-import { overlayInternFields, getInternPersonalDetails, isLinkedInternDeleted } from "../db/internSync.js";
+import { overlayInternFields, applyInternOverlay, getInternPersonalDetails, getLinkedIntern, isLinkedInternDeleted } from "../db/internSync.js";
 import { internsClient } from "../clients/internsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
@@ -60,18 +60,23 @@ export const routes = {
     },
   },
   "/employees/{id}": {
-    // Only this single-employee read fetches icPassportNumber/homeAddress from the live Interns
-    // DB record (for the Personnel Details page's Personal Information section) — GET /employees
-    // already makes its own single batched live call for the Mode/Status/dates overlay
-    // (overlayInternFields()), but per-employee fields not shown on the list view stay here
-    // rather than adding a second per-row external call to every Personnel page load.
+    // Fetches this one intern's live Interns DB record once and reuses it for two things: the
+    // same Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date/photo overlay GET
+    // /employees already applies in bulk (applyInternOverlay() — the shared transform
+    // overlayInternFields() also uses, so the two read paths can't drift apart on which fields are
+    // live), plus the per-employee fields only this page shows (icPassportNumber/homeAddress, via
+    // getInternPersonalDetails()). Previously this page never called the overlay at all, so an
+    // intern-linked employee could show a stale local Status/Mode/etc. here even when Personnel's
+    // list/Dashboard correctly showed the live value from the same Interns DB record.
     async get(req, res, ctx) {
       const employee = await db.getEmployee(ctx.params.id);
       if (!employee) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);
       if (await isLinkedInternDeleted(employee)) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);
       const hydrated = await hydrateEmployee(employee);
-      const internPersonalDetails = await getInternPersonalDetails(employee);
-      sendJson(res, ctx.cid, 200, { employee: { ...hydrated, ...internPersonalDetails } });
+      const intern = await getLinkedIntern(employee);
+      const overlaid = intern ? applyInternOverlay(hydrated, intern) : hydrated;
+      const internPersonalDetails = getInternPersonalDetails(intern);
+      sendJson(res, ctx.cid, 200, { employee: { ...overlaid, ...internPersonalDetails } });
     },
     async patch(req, res, ctx) {
       const body = await readJsonBody(req);

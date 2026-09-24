@@ -25,20 +25,38 @@ export async function getLinkedIntern(employee) {
 // Personnel Details' Personal Information section — IC/Passport Number and Home Address are
 // collected by the Interns DB at intake but were never mirrored into this app's own `employees`
 // table (unlike start/end date, mode, allowance, department), so they're read through live here
-// rather than duplicated locally. null for a non-intern employee (no linked Interns DB record to
-// read from at all) or if the read-through fails — never fabricated, same fallback contract as
-// getLinkedIntern() above. Deliberately NOT resolving role_id here for a "Position" field: that
-// service's Roles are an access-control concept for its own admin UI (Admin/Employee/Intern/
-// Manager/Supervisor), not a job title — every intern would just show "Intern", duplicating the
-// Type field already shown, so it's left out rather than wiring in a technically-present but
-// meaningless value.
-export async function getInternPersonalDetails(employee) {
-  const intern = await getLinkedIntern(employee);
+// rather than duplicated locally. Takes the already-resolved `intern` record (not the employee)
+// so a caller that also needs applyInternOverlay() below for the same person — e.g. GET
+// /employees/{id} — fetches it once via getLinkedIntern() and reuses it for both, rather than two
+// separate live calls for one page. null for a non-intern employee (no linked Interns DB record at
+// all) or a null `intern` — never fabricated. Deliberately NOT resolving role_id here for a
+// "Position" field: that service's Roles are an access-control concept for its own admin UI
+// (Admin/Employee/Intern/Manager/Supervisor), not a job title — every intern would just show
+// "Intern", duplicating the Type field already shown, so it's left out rather than wiring in a
+// technically-present but meaningless value.
+export function getInternPersonalDetails(intern) {
   if (!intern) return null;
   return {
     icPassportNumber: intern.ic_passport_number ?? null,
     homeAddress: intern.home_address ?? null,
     photoUrl: intern.photo_url ?? null,
+  };
+}
+
+// The actual field-overlay transform, shared by overlayInternFields() below (the bulk GET
+// /employees list) and GET /employees/{id} (Personnel Details) — one definition of "what a live
+// intern record overrides on a hydrated employee," so the two read paths can never quietly drift
+// apart on which fields are live vs. stale-tolerant. Pure and read-only: no store is touched here.
+export function applyInternOverlay(employee, intern) {
+  return {
+    ...employee,
+    employeeId: intern.ref_number ?? employee.employeeId,
+    status: intern.status ?? employee.status,
+    workMode: intern.mode ?? employee.workMode,
+    allowance: intern.allowance ?? employee.allowance,
+    startDate: intern.internship_start_date ?? employee.startDate,
+    contractEndDate: intern.internship_end_date ?? employee.contractEndDate,
+    photoUrl: intern.photo_url ?? employee.photoUrl ?? null,
   };
 }
 
@@ -298,13 +316,15 @@ export async function syncAllInternsToEmployees({ onItem } = {}) {
   return { created, updated, unchanged, failed, total: interns?.length ?? 0 };
 }
 
-// Read-only live overlay, applied to an already-hydrated employee list: every intern-linked
-// employee's Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date is replaced in
-// memory with whatever the Interns DB (the source of truth) currently reports — the same set of
-// fields createLocalEmployeeFromIntern() pulls from there when a record is first created. Nothing
-// is written to either the local employees table or the Interns DB; nothing here calls
-// createEmployee/updateEmployee/createEmploymentRecord or internsClient.createIntern/updateIntern/
-// deleteIntern. Wired into GET /employees itself (not only the Sync button — see
+// Read-only live overlay, applied to an already-hydrated employee LIST (the bulk GET /employees
+// path — GET /employees/{id} applies the same applyInternOverlay() transform directly against the
+// one intern record it already fetches, rather than this list-oriented batch lookup). Every
+// intern-linked employee's Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date is
+// replaced in memory with whatever the Interns DB (the source of truth) currently reports — the
+// same set of fields createLocalEmployeeFromIntern() pulls from there when a record is first
+// created. Nothing is written to either the local employees table or the Interns DB; nothing here
+// calls createEmployee/updateEmployee/createEmploymentRecord or internsClient.createIntern/
+// updateIntern/deleteIntern. Wired into GET /employees itself (not only the Sync button — see
 // server/routes/employees.js), so a full browser refresh shows the same live values Sync does,
 // instead of reverting to a stale local snapshot the next time the page loads; "Sync Personnel" is
 // then just an explicit, on-demand re-fetch of this same always-live data via GET /employees/sync.
@@ -331,16 +351,7 @@ export async function overlayInternFields(hydratedEmployees) {
     if (!employee.internExternalId) return [employee];
     const intern = internsById.get(employee.internExternalId);
     if (!intern) return [];
-    return [{
-      ...employee,
-      employeeId: intern.ref_number ?? employee.employeeId,
-      status: intern.status ?? employee.status,
-      workMode: intern.mode ?? employee.workMode,
-      allowance: intern.allowance ?? employee.allowance,
-      startDate: intern.internship_start_date ?? employee.startDate,
-      contractEndDate: intern.internship_end_date ?? employee.contractEndDate,
-      photoUrl: intern.photo_url ?? employee.photoUrl ?? null,
-    }];
+    return [applyInternOverlay(employee, intern)];
   });
 }
 
