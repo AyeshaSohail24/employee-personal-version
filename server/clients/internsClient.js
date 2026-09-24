@@ -25,7 +25,9 @@ async function call(path, { method = "GET", body, scope = "intern:read" } = {}) 
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Interns API ${method} ${path} failed: ${response.status} ${detail}`);
+    const error = new Error(`Interns API ${method} ${path} failed: ${response.status} ${detail}`);
+    error.status = response.status;
+    throw error;
   }
   return response.status === 204 ? null : response.json();
 }
@@ -37,6 +39,20 @@ export const internsClient = {
     if (offset) params.set("offset", offset);
     const { data, pagination } = await call(`/api/interns${params.toString() ? `?${params}` : ""}`);
     return { interns: data, pagination };
+  },
+
+  // Every intern, paged through in full. Callers that decide who EXISTS from this list (e.g.
+  // hiding a local record whose intern was deleted upstream) must never see a truncated first
+  // page, or a real intern past the cap would look deleted.
+  async listAllInterns() {
+    const pageSize = 100;
+    const all = [];
+    for (let offset = 0; ; offset += pageSize) {
+      const { interns } = await this.listInterns({ limit: pageSize, offset });
+      all.push(...(interns ?? []));
+      if (!interns || interns.length < pageSize) break;
+    }
+    return { interns: all };
   },
 
   async getIntern(internId) {

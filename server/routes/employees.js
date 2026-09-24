@@ -1,6 +1,6 @@
 import * as db from "../db/employees.js";
 import { hydrateEmployees, hydrateEmployee } from "../db/employeeHydration.js";
-import { overlayInternFields, getInternPersonalDetails } from "../db/internSync.js";
+import { overlayInternFields, getInternPersonalDetails, isLinkedInternDeleted } from "../db/internSync.js";
 import { internsClient } from "../clients/internsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError } from "../http/errors.js";
@@ -68,6 +68,7 @@ export const routes = {
     async get(req, res, ctx) {
       const employee = await db.getEmployee(ctx.params.id);
       if (!employee) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);
+      if (await isLinkedInternDeleted(employee)) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);
       const hydrated = await hydrateEmployee(employee);
       const internPersonalDetails = await getInternPersonalDetails(employee);
       sendJson(res, ctx.cid, 200, { employee: { ...hydrated, ...internPersonalDetails } });

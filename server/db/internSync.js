@@ -167,7 +167,7 @@ function computeInternReconciliation(row, intern) {
 // 'failed', changes, error } — the terminal script uses it for per-row progress output; the HTTP
 // route (which only wants the final summary) leaves it out.
 export async function syncAllInternsToEmployees({ onItem } = {}) {
-  const { interns } = await internsClient.listInterns({ limit: 100 });
+  const { interns } = await internsClient.listAllInterns();
 
   let created = 0;
   let updated = 0;
@@ -221,7 +221,7 @@ export async function overlayInternFields(hydratedEmployees) {
 
   let interns;
   try {
-    ({ interns } = await internsClient.listInterns({ limit: 100 }));
+    ({ interns } = await internsClient.listAllInterns());
   } catch {
     // The live Interns DB is unreachable — show the local snapshot as-is rather than failing the
     // whole page load over it.
@@ -229,10 +229,14 @@ export async function overlayInternFields(hydratedEmployees) {
   }
   const internsById = new Map((interns ?? []).map((intern) => [intern.id, intern]));
 
-  return hydratedEmployees.map((employee) => {
-    const intern = employee.internExternalId ? internsById.get(employee.internExternalId) : null;
-    if (!intern) return employee;
-    return {
+  // The Interns DB is the source of truth for who exists: an intern-linked employee whose intern
+  // is no longer there (deleted upstream) is dropped from the result, not shown as a stale
+  // snapshot. Hidden only — the local row itself is left untouched, so this stays reversible.
+  return hydratedEmployees.flatMap((employee) => {
+    if (!employee.internExternalId) return [employee];
+    const intern = internsById.get(employee.internExternalId);
+    if (!intern) return [];
+    return [{
       ...employee,
       employeeId: intern.ref_number ?? employee.employeeId,
       status: intern.status ?? employee.status,
@@ -241,8 +245,21 @@ export async function overlayInternFields(hydratedEmployees) {
       startDate: intern.internship_start_date ?? employee.startDate,
       contractEndDate: intern.internship_end_date ?? employee.contractEndDate,
       photoUrl: intern.photo_url ?? employee.photoUrl ?? null,
-    };
+    }];
   });
+}
+
+// True only when the Interns DB definitively says this employee's linked intern no longer exists
+// (404). Any other failure (network, 5xx) is "unknown", never "deleted" — same never-break-the-page
+// stance as getLinkedIntern().
+export async function isLinkedInternDeleted(employee) {
+  if (!employee?.intern_external_id) return false;
+  try {
+    await internsClient.getIntern(employee.intern_external_id);
+    return false;
+  } catch (error) {
+    return error?.status === 404;
+  }
 }
 
 function deriveStatus(tasks) {
@@ -317,7 +334,7 @@ async function autoTransitionToOffboarding(interns) {
 // keeps this to a handful of round-trips regardless of intern count.
 async function listInternsWithProgress(stage) {
   const [{ interns }, departments] = await Promise.all([
-    internsClient.listInterns({ limit: 100 }),
+    internsClient.listAllInterns(),
     departmentsClient.listDepartments().catch(() => []),
   ]);
   await autoTransitionToOffboarding(interns);
