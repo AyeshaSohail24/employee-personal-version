@@ -5990,6 +5990,20 @@ input.form-control:focus {
   color: #0E848D;
 }
 
+/* Matches EmployeeListView.jsx/EmployeeCardView.jsx's STATUS_PILL_STYLES exactly — Active and
+   Upcoming were the two statuses missing a color variant here, so they fell back to the base
+   .emp-status-sub-pill (padding/shape but no background/text color), rendering as plain text
+   instead of the colored pill every other status already got. */
+.emp-status-sub-pill.active {
+  background-color: #ECFDF5;
+  color: #059669;
+}
+
+.emp-status-sub-pill.upcoming {
+  background-color: #EFF6FF;
+  color: #2563EB;
+}
+
 .act-due-block {
   display: flex;
   flex-direction: column;
