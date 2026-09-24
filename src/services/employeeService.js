@@ -472,7 +472,11 @@ export const employeeService = {
    * @returns {Promise<Array<Object>>}
    */
   async syncEmployees() {
-    const { employees } = await apiClient.get('/employees/sync');
+    // An explicit refresh must never be answered from apiClient's short-lived GET cache, and
+    // everything else read before it (other tabs' rosters, filter options) is cleared too, so the
+    // whole app reflects the Interns DB as of this click — not just this one list.
+    apiClient.invalidate();
+    const { employees } = await apiClient.get('/employees/sync', { fresh: true });
     return employees;
   },
 };

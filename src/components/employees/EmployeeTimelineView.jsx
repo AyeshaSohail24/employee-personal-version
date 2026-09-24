@@ -12,7 +12,6 @@ import { apiClient } from '../../services/apiClient.js';
 import { departmentColorStore } from '../../services/departmentColorStore.js';
 import DepartmentColorsModal from './DepartmentColorsModal.jsx';
 import TimelineExportView from './TimelineExportView.jsx';
-import { exportTimelineAsPdf, exportTimelineAsPng } from '../../utils/timelineExport.js';
 
 const TYPE_BADGE_STYLES = {
   Employee: { bg: '#F1F5F9', color: '#475569' },
@@ -116,11 +115,13 @@ export default function EmployeeTimelineView({ employees = [] }) {
     setIsExporting(true);
 
     const node = exportTemplateRef.current;
+    // jsPDF + html-to-image (~300 KB) load only when someone actually exports, not on every
+    // Personnel visit.
     const generate = !node
       ? Promise.reject(new Error('Export template is not ready.'))
-      : format === 'pdf'
-      ? exportTimelineAsPdf(node)
-      : exportTimelineAsPng(node);
+      : import('../../utils/timelineExport.js').then(({ exportTimelineAsPdf, exportTimelineAsPng }) =>
+          format === 'pdf' ? exportTimelineAsPdf(node) : exportTimelineAsPng(node),
+        );
 
     generate
       .catch((err) => {

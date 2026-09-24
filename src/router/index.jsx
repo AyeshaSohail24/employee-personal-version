@@ -2,38 +2,30 @@ import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 
-import DashboardPage from '../pages/dashboard/DashboardPage';
+// Every page is its own lazily-loaded chunk — see lazyPages.js (and AppShell's idle prefetch).
+import { pages } from './lazyPages';
 
-// Employees Page
-import AllEmployeesPage from '../pages/employees/AllEmployeesPage';
-import PersonnelDetailsPage from '../pages/employees/PersonnelDetailsPage';
-
-// Upcoming (Candidate / Offer Workflow) Page
-import UpcomingPage from '../pages/upcoming/UpcomingPage';
-import CandidateThreadPage from '../pages/upcoming/CandidateThreadPage';
-
-// Onboarding Pages
-import OnboardingEmployeesPage from '../pages/onboarding/OnboardingEmployeesPage';
-import OnboardingEmployeeDetailPage from '../pages/onboarding/OnboardingEmployeeDetailPage';
-import OnboardingPlansPage from '../pages/onboarding/OnboardingPlansPage';
-import PlanEditorPage from '../pages/onboarding/PlanEditorPage';
-
-// Offboarding Pages
-import OffboardingDepartingPage from '../pages/offboarding/OffboardingDepartingPage';
-import OffboardingEmployeeDetailPage from '../pages/offboarding/OffboardingEmployeeDetailPage';
-import OffboardingPlansPage from '../pages/offboarding/OffboardingPlansPage';
-import OffboardingPlanEditorPage from '../pages/offboarding/PlanEditorPage';
-
-// Notes Pages (personal HR notepad — replaces the old Activities module)
-import MyNotesPage from '../pages/notes/MyNotesPage';
-import PinnedNotesPage from '../pages/notes/PinnedNotesPage';
-import ArchivedNotesPage from '../pages/notes/ArchivedNotesPage';
-
-// Former Personnel (historical record view over the same Personnel identity, status: Former)
-import FormerPersonnelPage from '../pages/former/FormerPersonnelPage';
-import HistoricalRecordPage from '../pages/former/HistoricalRecordPage';
-
-import NotFoundPage from '../pages/NotFoundPage';
+const {
+  DashboardPage,
+  AllEmployeesPage,
+  PersonnelDetailsPage,
+  UpcomingPage,
+  CandidateThreadPage,
+  OnboardingEmployeesPage,
+  OnboardingEmployeeDetailPage,
+  OnboardingPlansPage,
+  PlanEditorPage,
+  OffboardingDepartingPage,
+  OffboardingEmployeeDetailPage,
+  OffboardingPlansPage,
+  OffboardingPlanEditorPage,
+  MyNotesPage,
+  PinnedNotesPage,
+  ArchivedNotesPage,
+  FormerPersonnelPage,
+  HistoricalRecordPage,
+  NotFoundPage,
+} = pages;
 
 export const router = createBrowserRouter([
   {

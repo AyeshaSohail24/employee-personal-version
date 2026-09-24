@@ -5,6 +5,7 @@ import { useRole } from '../../state/RoleContext';
 import { useSession } from '../../state/SessionContext';
 import { useNotifications } from '../../state/NotificationContext';
 import { employeeService } from '../../services/employeeService.js';
+import { apiClient } from '../../services/apiClient.js';
 import NotificationPanel from './NotificationPanel';
 import Avatar from '../common/Avatar.jsx';
 
@@ -22,6 +23,18 @@ export default function Header({ toggleMobileSidebar }) {
   const session = useSession();
   const { unreadCount } = useNotifications();
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
+
+  // Loaded after the app has rendered (GET /session/photo) rather than holding first paint;
+  // initials show until it arrives, or permanently if there's no linked photo.
+  const [photoUrl, setPhotoUrl] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get('/session/photo')
+      .then((data) => { if (!cancelled) setPhotoUrl(data?.photoUrl ?? null); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Helper to construct dynamic breadcrumbs from URL pathname
   const pathSegments = location.pathname.split('/').filter(Boolean);
@@ -150,7 +163,7 @@ export default function Header({ toggleMobileSidebar }) {
             session (SessionContext), not the app's own capability-role stub
             (RoleContext, still fixed to 'HR' — see its own comment). */}
         <div className="user-profile-badge">
-          <Avatar photoUrl={session.photoUrl} initials={initialsFor(session.name, session.email)} className="avatar" />
+          <Avatar photoUrl={photoUrl} initials={initialsFor(session.name, session.email)} className="avatar" />
           <div className="user-info">
             <span className="user-name">{session.name || session.email}</span>
             <span className="user-role">{session.role ? session.role.toUpperCase() : currentRole}</span>

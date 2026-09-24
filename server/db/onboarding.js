@@ -1,6 +1,6 @@
 import { pool } from "./pool.js";
 import { listRows, getRow, insertRow, updateRow, RowNotFoundError } from "./crud.js";
-import { getLinkedIntern, listInternsWithOnboardingStatus, resolveOrCreateEmployeeForIntern, activateInternOnOnboardingComplete } from "./internSync.js";
+import { getLinkedIntern, fetchRosterSources, listInternsWithOnboardingStatus, resolveOrCreateEmployeeForIntern, activateInternOnOnboardingComplete } from "./internSync.js";
 
 export { RowNotFoundError, getLinkedIntern };
 
@@ -143,10 +143,13 @@ export async function launchInstance({ employeeId, personType, departmentId, anc
 // they have no resolvable start date — they simply keep showing with
 // plan: null, exactly as before, until HR adds Universal/department tasks.
 export async function listInternsWithAutoLaunchedOnboarding() {
-  const interns = await listInternsWithOnboardingStatus();
+  // Fetched once and reused below — see fetchRosterSources()'s own comment.
+  const sources = await fetchRosterSources();
+  const interns = await listInternsWithOnboardingStatus(sources);
   const pending = interns.filter((intern) => !intern.plan && intern.startDate);
   if (pending.length === 0) return interns;
 
+  let launched = 0;
   for (const intern of pending) {
     try {
       const employee = await resolveOrCreateEmployeeForIntern(intern.internId);
@@ -156,6 +159,7 @@ export async function listInternsWithAutoLaunchedOnboarding() {
         departmentId: intern.department?.id ?? null,
         anchorDate: intern.startDate,
       });
+      launched += 1;
     } catch {
       // No active Universal/department task configured for this intern's
       // scope yet, or another per-intern issue — leave them at plan: null
@@ -163,7 +167,11 @@ export async function listInternsWithAutoLaunchedOnboarding() {
     }
   }
 
-  return listInternsWithOnboardingStatus();
+  // Only the local plans changed — re-read those, reusing the Interns DB/Departments data fetched
+  // above instead of pulling every intern again. And if nothing launched (e.g. no tasks configured
+  // for someone's scope yet, which would otherwise repeat on every single page load), nothing
+  // changed at all, so the first result stands.
+  return launched > 0 ? listInternsWithOnboardingStatus(sources) : interns;
 }
 
 export const getInstance = (id) => getRow("onboarding_plan_instances", id);

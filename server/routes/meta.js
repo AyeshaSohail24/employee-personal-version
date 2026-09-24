@@ -56,24 +56,30 @@ export const routes = {
   // requestHandler.js's comment on the acceptsHtml branch). A 401 here is
   // the frontend's actual signal to redirect to sign-in.
   "/session": {
+    // The whole SPA renders nothing until this answers (state/SessionContext.jsx), so it does
+    // only what that gate needs — the header photo lives in GET /session/photo below instead of
+    // holding first paint behind a DB query plus a live Interns DB call (MICROAPP_PERFORMANCE.md §2).
     async get(req, res, ctx) {
-      // The identity token itself carries no picture claim — resolved
-      // separately (see getPhotoUrlForEmail's own doc comment). Never lets
-      // a broken photo lookup fail the session check that gates the whole
-      // app: falls back to null exactly like a person with no linked intern.
+      sendJson(res, ctx.cid, 200, {
+        sub: ctx.principal.sub,
+        email: ctx.principal.email ?? null,
+        name: ctx.principal.name ?? null,
+        role: ctx.principal.role ?? null,
+      });
+    },
+  },
+  "/session/photo": {
+    // The identity token itself carries no picture claim — resolved separately (see
+    // getPhotoUrlForEmail's own doc comment). Fetched by the header after the app has already
+    // rendered; a failed lookup just means initials, exactly like a person with no linked intern.
+    async get(req, res, ctx) {
       let photoUrl = null;
       try {
         photoUrl = await getPhotoUrlForEmail(ctx.principal.email);
       } catch {
         photoUrl = null;
       }
-      sendJson(res, ctx.cid, 200, {
-        sub: ctx.principal.sub,
-        email: ctx.principal.email ?? null,
-        name: ctx.principal.name ?? null,
-        role: ctx.principal.role ?? null,
-        photoUrl,
-      });
+      sendJson(res, ctx.cid, 200, { photoUrl });
     },
   },
 };

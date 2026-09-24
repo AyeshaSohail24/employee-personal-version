@@ -469,14 +469,42 @@ async function autoTransitionToOffboarding(interns) {
 // VPS database. Fetching every relevant row in one query per table and
 // joining in memory (this app's whole headcount is small — HR PoC scale)
 // keeps this to a handful of round-trips regardless of intern count.
-async function listInternsWithProgress(stage) {
+//
+// MICROAPP_PERFORMANCE.md §2 — the external half (fetchRosterSources()) and the local plan/task
+// queries (loadLocalPlanProgress()) don't depend on each other, so they run together. A caller that
+// already has the external half — onboarding.js re-reading plans right after auto-launching some —
+// passes it as `sources` so only the local half re-runs, instead of re-fetching every intern.
+export async function fetchRosterSources() {
   const [{ interns }, departments] = await Promise.all([
     internsClient.listAllInterns(),
     departmentsClient.listDepartments().catch(() => []),
   ]);
   await autoTransitionToOffboarding(interns);
+  return { interns, departments };
+}
+
+async function listInternsWithProgress(stage, sources) {
+  const [{ interns, departments }, { employeeByInternId, latestInstanceByEmployeeId, tasksByInstanceId }] = await Promise.all([
+    sources ?? fetchRosterSources(),
+    loadLocalPlanProgress(stage),
+  ]);
   const departmentsById = new Map(departments.map((d) => [d.id, d]));
 
+  const results = buildRosterRows(interns, departmentsById, employeeByInternId, latestInstanceByEmployeeId, tasksByInstanceId);
+
+  // Each page only shows interns the Interns DB itself currently has in that
+  // exact lifecycle stage (its own status enum: Onboarding/Active/
+  // Offboarding/Former — see internsClient.js's getStatusEnum()) — not every
+  // intern regardless of where they actually are, and not a local proxy like
+  // "close to their end date". Trusts that field as the source of truth
+  // rather than a plan already existing here: once HR moves someone's real
+  // status on (e.g. Onboarding -> Active), they stop appearing on this page
+  // even if a local plan instance is still around.
+  const expectedStatus = stage === "offboarding" ? "Offboarding" : "Onboarding";
+  return results.filter((intern) => intern.status === expectedStatus);
+}
+
+async function loadLocalPlanProgress(stage) {
   const [localEmployees] = await pool.query("SELECT * FROM employees WHERE intern_external_id IS NOT NULL");
   const employeeByInternId = new Map(localEmployees.map((e) => [e.intern_external_id, e]));
   const employeeIds = localEmployees.map((e) => e.id);
@@ -514,7 +542,11 @@ async function listInternsWithProgress(stage) {
     }
   }
 
-  const results = interns.map((intern) => {
+  return { employeeByInternId, latestInstanceByEmployeeId, tasksByInstanceId };
+}
+
+function buildRosterRows(interns, departmentsById, employeeByInternId, latestInstanceByEmployeeId, tasksByInstanceId) {
+  return interns.map((intern) => {
     const localEmployee = employeeByInternId.get(intern.id);
     let plan = null;
 
@@ -548,18 +580,7 @@ async function listInternsWithProgress(stage) {
       plan,
     };
   });
-
-  // Each page only shows interns the Interns DB itself currently has in that
-  // exact lifecycle stage (its own status enum: Onboarding/Active/
-  // Offboarding/Former — see internsClient.js's getStatusEnum()) — not every
-  // intern regardless of where they actually are, and not a local proxy like
-  // "close to their end date". Trusts that field as the source of truth
-  // rather than a plan already existing here: once HR moves someone's real
-  // status on (e.g. Onboarding -> Active), they stop appearing on this page
-  // even if a local plan instance is still around.
-  const expectedStatus = stage === "offboarding" ? "Offboarding" : "Onboarding";
-  return results.filter((intern) => intern.status === expectedStatus);
 }
 
-export const listInternsWithOnboardingStatus = () => listInternsWithProgress("onboarding");
-export const listInternsWithOffboardingStatus = () => listInternsWithProgress("offboarding");
+export const listInternsWithOnboardingStatus = (sources) => listInternsWithProgress("onboarding", sources);
+export const listInternsWithOffboardingStatus = (sources) => listInternsWithProgress("offboarding", sources);
