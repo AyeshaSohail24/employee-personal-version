@@ -89,6 +89,101 @@ export async function syncOffboardingLaunchToIntern(employeeId, anchorDate) {
   }
 }
 
+// AGENTS.md rule 6 (same discipline as syncOffboardingLaunchToIntern above and
+// autoTransitionToOffboarding below) — moves a real intern's status on from Onboarding to Active
+// once their onboarding plan (server/db/onboarding.js) is genuinely Completed, keeping BOTH the
+// Interns DB and the local `employees.status` column in sync. Two independent data stores, no
+// shared transaction possible between an external HTTP API and a local MySQL row — so each step
+// below re-checks its OWN current state immediately before writing, rather than trusting a value
+// read earlier or assuming the other store's write already landed. That makes the whole function
+// safe to call again after a partial failure: a retry only repeats whichever step didn't already
+// succeed, never re-issues a write that already landed, and never overwrites a status that has
+// since moved on to something else (Active/Offboarding/Former) via a different path.
+//
+// Ordering: the Interns DB is updated FIRST. It is what most of this app actually reads for
+// status (overlayInternFields() above overrides `employee.status` with `intern.status` on every
+// GET /employees for an intern-linked person — Personnel/Dashboard/Onboarding-Offboarding
+// filtering all read through that), so getting it right matters most; if it fails, the local
+// column is deliberately left untouched too, rather than showing "Active" locally while the
+// actual source of truth this app treats as authoritative still says otherwise. The local write in
+// step 2 is independent of whether step 1 ran just now or already succeeded on an earlier call —
+// it re-reads nothing further, just checks the `employee` row fetched at the top (never touched by
+// step 1), so a retry that finds the Interns DB already Active still fixes a lagging local row.
+//
+// Retry path: no background job/queue exists in this app, so recovery from a partial failure is
+// the existing UI action already available on a Completed plan — reopening and re-completing any
+// one task fires setTaskInstanceCompleted() -> this function again. Both steps below are pure
+// no-ops once already consistent, so a retry never double-writes or re-logs a step that already
+// succeeded; only genuinely-still-stale state is touched. Every attempt (each step, success or
+// failure) is logged to audit_logs. A no-op end to end for a non-intern employee (no
+// intern_external_id to resolve at all) — this transition only ever applies to interns.
+export async function activateInternOnOnboardingComplete(employeeId) {
+  const employee = await getRow("employees", employeeId);
+  if (!employee?.intern_external_id) return;
+  const internId = employee.intern_external_id;
+
+  // Step 1 — Interns DB. Re-read fresh; never write blind, never overwrite a status that has
+  // already moved past Onboarding to something other than Active (Offboarding/Former).
+  let intern;
+  try {
+    intern = await internsClient.getIntern(internId);
+  } catch {
+    return; // can't verify the current status — never write blind to either store
+  }
+
+  if (intern.status === "Onboarding") {
+    try {
+      await internsClient.updateIntern(internId, { status: "Active" });
+      await insertRow("audit_logs", {
+        user_id: "system",
+        action: "intern_status_auto_active",
+        entity: "interns",
+        entity_id: String(internId),
+        details: `Moved ${intern.first_name} ${intern.last_name} (${intern.ref_number}) from Onboarding to Active in the Interns DB — onboarding plan completed for employee ${employeeId}.`,
+      });
+    } catch (error) {
+      await insertRow("audit_logs", {
+        user_id: "system",
+        action: "intern_status_auto_active_failed",
+        entity: "interns",
+        entity_id: String(internId),
+        details: String(error.message ?? error),
+      });
+      // The Interns DB write failed — leave the local record untouched rather than getting the
+      // two stores out of sync in the other direction. A later retry re-attempts both steps.
+      return;
+    }
+  } else if (intern.status !== "Active") {
+    return; // already moved on to Offboarding/Former — never overwritten by either step
+  }
+
+  // Step 2 — local employees.status, brought into sync with the Interns DB's now-current Active
+  // status. Uses updateEmployee(), the same existing local-update helper every other status write
+  // in this app already goes through — no direct SQL, no second write path.
+  if (employee.status === "Onboarding") {
+    try {
+      await updateEmployee(employeeId, { status: "Active" });
+      await insertRow("audit_logs", {
+        user_id: "system",
+        action: "employee_status_auto_active",
+        entity: "employees",
+        entity_id: String(employeeId),
+        details: `Moved employee ${employeeId} (${employee.employee_code}) from Onboarding to Active locally, matching the Interns DB — onboarding plan completed.`,
+      });
+    } catch (error) {
+      await insertRow("audit_logs", {
+        user_id: "system",
+        action: "employee_status_auto_active_failed",
+        entity: "employees",
+        entity_id: String(employeeId),
+        details: String(error.message ?? error),
+      });
+      // Interns DB is already Active at this point; the local row stays stale until a retry
+      // (reopen + re-complete a task) succeeds — reported via audit_logs, not silently dropped.
+    }
+  }
+}
+
 // Shared by resolveOrCreateEmployeeForIntern() (one intern, on first touch) and
 // syncAllInternsToEmployees() (every intern, on demand via "Sync Personnel") — the actual
 // "create a local employee row for this Interns DB record" logic lives in exactly one place.

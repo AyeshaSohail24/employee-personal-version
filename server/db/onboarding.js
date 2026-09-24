@@ -1,6 +1,6 @@
 import { pool } from "./pool.js";
 import { listRows, getRow, insertRow, updateRow, RowNotFoundError } from "./crud.js";
-import { getLinkedIntern, listInternsWithOnboardingStatus, resolveOrCreateEmployeeForIntern } from "./internSync.js";
+import { getLinkedIntern, listInternsWithOnboardingStatus, resolveOrCreateEmployeeForIntern, activateInternOnOnboardingComplete } from "./internSync.js";
 
 export { RowNotFoundError, getLinkedIntern };
 
@@ -201,4 +201,27 @@ export async function setTaskInstanceCompleted(taskInstanceId, completed) {
     "UPDATE activities SET completed = ?, completed_at = ? WHERE id = ?",
     [completed, completed ? new Date() : null, taskInstance.activity_id],
   );
+
+  if (completed) {
+    await activateIfPlanComplete(taskInstance.plan_instance_id);
+  }
+}
+
+// Checks whether every required task in this plan instance is now done and, if so, hands off to
+// activateInternOnOnboardingComplete() (internSync.js) to advance the linked intern's status to
+// Active in both the Interns DB and the local employees record (see that function's own doc
+// comment for the two-store ordering/partial-failure handling). Mirrors src/domain/
+// onboardingDomain.js's derivePlanInstanceStatus() completion rule (every required task done) so
+// "genuinely Completed" means the same thing here as it does for the plan's own displayed status
+// — an incomplete plan (any required task still open) never reaches
+// activateInternOnOnboardingComplete() at all.
+async function activateIfPlanComplete(planInstanceId) {
+  const tasks = await listInstanceTasks(planInstanceId);
+  const requiredTasks = tasks.filter((t) => t.required);
+  if (requiredTasks.length === 0 || !requiredTasks.every((t) => t.completed)) return;
+
+  const planInstance = await getRow("onboarding_plan_instances", planInstanceId);
+  if (!planInstance) return;
+
+  await activateInternOnOnboardingComplete(planInstance.employee_id);
 }
