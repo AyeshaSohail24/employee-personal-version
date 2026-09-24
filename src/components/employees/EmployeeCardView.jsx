@@ -68,16 +68,9 @@ export default function EmployeeCardView({ employees = [] }) {
                 <Mail size={14} className="detail-icon" />
                 <span className="detail-text" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{emp.workEmail}</span>
               </div>
-              {/* Navigates to the dedicated Personnel Details page instead of opening
-                  PersonnelProfileModal (per direct user request: a person's record can grow to
-                  include CV/resume PDFs, which don't fit comfortably in a modal). */}
-              <Link to={`/employees/${emp.id}`} className="btn-compact-override" style={{ marginTop: '0.5rem', textDecoration: 'none' }}>
-                <Eye size={12} />
-                <span>View Details</span>
-              </Link>
             </div>
 
-            {/* BODY: Department, Type, Mode */}
+            {/* BODY: Department, Type, Mode, Salary */}
             <div className="emp-card-body-group">
               <div className="detail-row">
                 <Building2 size={15} className="detail-icon" />
@@ -91,10 +84,13 @@ export default function EmployeeCardView({ employees = [] }) {
                 <span className="status-pill" style={{ backgroundColor: modePill.bg, color: modePill.color }}>
                   {emp.workMode || 'On-site'}
                 </span>
+                <span className="status-pill" style={{ backgroundColor: salaryPill.bg, color: salaryPill.color }}>
+                  {emp.allowance || 'Paid'}
+                </span>
               </div>
             </div>
 
-            {/* DETAILS: Dates, Salary */}
+            {/* DETAILS: Dates, then View Details */}
             <div className="emp-card-details">
               <div className="detail-row">
                 <Calendar size={15} className="detail-icon" />
@@ -106,9 +102,13 @@ export default function EmployeeCardView({ employees = [] }) {
                 </div>
               </div>
 
-              <span className="status-pill" style={{ backgroundColor: salaryPill.bg, color: salaryPill.color, alignSelf: 'flex-start' }}>
-                {emp.allowance || 'Paid'}
-              </span>
+              {/* Navigates to the dedicated Personnel Details page instead of opening
+                  PersonnelProfileModal (per direct user request: a person's record can grow to
+                  include CV/resume PDFs, which don't fit comfortably in a modal). */}
+              <Link to={`/employees/${emp.id}`} className="btn-compact-override" style={{ alignSelf: 'flex-start', textDecoration: 'none' }}>
+                <Eye size={12} />
+                <span>View Details</span>
+              </Link>
             </div>
 
             {/* BOTTOM: Duration progress */}
