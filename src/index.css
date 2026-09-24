@@ -3851,38 +3851,12 @@ body {
   margin-bottom: 0.85rem;
 }
 
-/* A dedicated variant, not a change to the shared .btn-compact-override (used by several other
-   pages' own View Details/action buttons) — the card's dates sit right above it inside the same
-   flex column, so the extra margin-top here is what actually creates breathing room beyond that
-   container's own 0.5rem gap. Teal-tinted at rest (on-brand, still clearly secondary next to the
-   card's green ACTIVE badge and bold name/ID), filling solid teal only on hover/focus so it reads
-   as clickable without competing as a primary CTA. */
-.emp-card-view-details-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  align-self: flex-start;
-  margin-top: 0.6rem;
-  padding: 0.45rem 0.9rem;
-  background-color: var(--color-primary-light);
-  border: 1px solid var(--color-primary-border);
-  border-radius: var(--radius-md);
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--color-primary-hover);
+/* The whole card opens the Personnel Details page (EmployeeCardView.jsx), same as a List view row. */
+.employee-card-clickable {
   cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
 }
 
-.emp-card-view-details-btn:hover {
-  background-color: var(--color-primary);
-  border-color: var(--color-primary);
-  color: #FFFFFF;
-  box-shadow: var(--shadow-sm);
-}
-
-.emp-card-view-details-btn:focus-visible {
+.employee-card-clickable:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }

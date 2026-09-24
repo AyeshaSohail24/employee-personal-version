@@ -179,8 +179,10 @@ export default function DirectoryPageContainer({
         <div>
           <h1 className="page-title">{title}</h1>
           <p className="page-description">{description}</p>
-          {viewMode === 'list' && (
-            <p className="directory-row-click-hint">Note: Click any personnel row to view their full details.</p>
+          {(viewMode === 'list' || viewMode === 'card') && (
+            <p className="directory-row-click-hint">
+              Note: Click any personnel {viewMode === 'card' ? 'card' : 'row'} to view their full details.
+            </p>
           )}
         </div>
         <div className="header-actions">

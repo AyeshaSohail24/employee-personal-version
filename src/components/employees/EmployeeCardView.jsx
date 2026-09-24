@@ -1,6 +1,6 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Building2, Calendar, Mail, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Building2, Calendar, Mail } from 'lucide-react';
 import { formatDateDisplay, calculateDurationProgress } from '../../utils/dateUtils.js';
 import Avatar from '../common/Avatar.jsx';
 
@@ -35,6 +35,8 @@ const DURATION_FILL_CLASS = {
 };
 
 export default function EmployeeCardView({ employees = [] }) {
+  const navigate = useNavigate();
+
   return (
     <div className="employee-card-grid">
       {employees.map((emp) => {
@@ -44,9 +46,23 @@ export default function EmployeeCardView({ employees = [] }) {
         const typePill = TYPE_PILL_STYLES[emp.directoryType] || { bg: '#F1F5F9', color: '#475569' };
         const isFormer = emp.status === 'Former';
         const duration = calculateDurationProgress(emp.startDate, emp.contractEndDate);
+        // The whole card opens the Personnel Details page, same as a List view row.
+        const goToDetails = () => navigate(`/employees/${emp.id}`);
 
         return (
-          <div key={emp.id} className="employee-card">
+          <div
+            key={emp.id}
+            className="employee-card employee-card-clickable"
+            role="link"
+            tabIndex={0}
+            onClick={goToDetails}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                goToDetails();
+              }
+            }}
+          >
             {/* TOP: Avatar, Name, ID, Status */}
             <div className="emp-card-header">
               <Avatar
@@ -90,7 +106,7 @@ export default function EmployeeCardView({ employees = [] }) {
               </div>
             </div>
 
-            {/* DETAILS: Dates, then View Details */}
+            {/* DETAILS: Dates */}
             <div className="emp-card-details">
               <div className="detail-row">
                 <Calendar size={15} className="detail-icon" />
@@ -101,16 +117,6 @@ export default function EmployeeCardView({ employees = [] }) {
                   </span>
                 </div>
               </div>
-
-              {/* Navigates to the dedicated Personnel Details page instead of opening
-                  PersonnelProfileModal (per direct user request: a person's record can grow to
-                  include CV/resume PDFs, which don't fit comfortably in a modal). A dedicated
-                  card-scoped style (.emp-card-view-details-btn), not the shared
-                  .btn-compact-override several other pages' own buttons still use. */}
-              <Link to={`/employees/${emp.id}`} className="emp-card-view-details-btn" style={{ textDecoration: 'none' }}>
-                <Eye size={13} />
-                <span>View Details</span>
-              </Link>
             </div>
 
             {/* BOTTOM: Duration progress */}
