@@ -81,6 +81,7 @@ export default function Header({ toggleMobileSidebar }) {
   // mirroring how '/onboarding/employees' already cascades into its own detail page.
   const BREADCRUMB_LABEL_OVERRIDES = {
     '/employees': 'Personnel',
+    '/upcoming': 'Upcoming Personnel',
     '/onboarding/employees': 'Progress',
     '/offboarding/departing': 'Progress',
     '/offboarding/employees': 'Progress',

@@ -170,7 +170,7 @@ export default function UpcomingPage() {
     <div className="directory-page-wrapper">
       <div className="employees-page-header page-header">
         <div>
-          <h1 className="page-title">Upcoming</h1>
+          <h1 className="page-title">Upcoming Personnel</h1>
           <p className="page-description">Shortlisted candidates and the pre-onboarding offer workflow</p>
         </div>
       </div>
