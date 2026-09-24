@@ -104,6 +104,19 @@ export default function EmailDraftsPanel() {
     setSavedMessage('');
   };
 
+  // Discards any unsaved edits and returns to the drafts grid — nothing is written. Asks first
+  // only when something has actually changed since the draft was opened/last saved.
+  const handleCancel = () => {
+    const isDirty = editingTemplate && (
+      name !== editingTemplate.name
+      || offerType !== editingTemplate.offerType
+      || subject !== editingTemplate.subject
+      || body !== editingTemplate.body
+    );
+    if (isDirty && !window.confirm('Discard your unsaved changes to this draft?')) return;
+    handleBack();
+  };
+
   const handleSave = async () => {
     await emailTemplateService.update(editingId, { name, offerType, subject, body });
     await loadTemplates();
@@ -196,6 +209,10 @@ export default function EmailDraftsPanel() {
                 <CheckCircle2 size={14} /> {savedMessage}
               </span>
             )}
+            <button type="button" className="btn-secondary" onClick={handleCancel}>
+              <X size={14} />
+              <span>Cancel</span>
+            </button>
             {canReset && (
               <button type="button" className="btn-secondary" onClick={handleReset}>
                 <RotateCcw size={14} />
