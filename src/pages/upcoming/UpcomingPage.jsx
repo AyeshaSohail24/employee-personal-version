@@ -169,9 +169,9 @@ export default function UpcomingPage() {
         <div>
           <h1 className="page-title">Upcoming Personnel</h1>
           <p className="page-description">Shortlisted candidates and the pre-onboarding offer workflow</p>
-          <p className="directory-row-click-hint">Note: Click on a candidate’s name to open their conversation and send an email directly.</p>
+          <p className="directory-row-click-hint"><strong>Note:</strong> Click on a candidate’s name to open their conversation and send an email directly.</p>
           <p className="directory-row-click-hint">
-            Message filters: <strong>All</strong> = all candidate conversations | <strong>Sent</strong> = messages sent to candidates | <strong>Received</strong> = messages received from candidates | <strong>Unseen</strong> = conversations with new messages not yet viewed.
+            <strong>Message filters:</strong> <strong>All</strong> = all candidate conversations | <strong>Sent</strong> = messages sent to candidates | <strong>Received</strong> = messages received from candidates | <strong>Unseen</strong> = conversations with new messages not yet viewed.
           </p>
         </div>
       </div>
