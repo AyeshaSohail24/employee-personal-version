@@ -88,10 +88,6 @@ export async function listConfirmationCandidates() {
     return {
       ...candidate,
       emailStatus: hasReceived ? "Replied" : hasSent ? "Sent" : "Pending",
-      // Both, independently — emailStatus above keeps only the latest stage, so a candidate who
-      // replied would otherwise drop out of the Sent filter even though HR did email them.
-      hasSentMessage: hasSent,
-      hasReceivedMessage: hasReceived,
       notificationRead: !hasUnseenReply,
     };
   });

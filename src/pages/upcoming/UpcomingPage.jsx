@@ -36,10 +36,6 @@ function isUnseen(candidate) {
 
 const STATUS_TABS = [
   { key: 'all', label: 'All', match: () => true },
-  // Sent/Received look at the whole conversation, not just its latest stage (emailStatus), so a
-  // candidate who replied still shows under Sent too.
-  { key: 'sent', label: 'Sent', match: (c) => c.hasSentMessage ?? ['Sent', 'Replied'].includes(c.emailStatus) },
-  { key: 'received', label: 'Received', match: (c) => c.hasReceivedMessage ?? c.emailStatus === 'Replied' },
   { key: 'unseen', label: 'Unseen', match: isUnseen },
 ];
 
@@ -173,7 +169,7 @@ export default function UpcomingPage() {
           <p className="page-description">Shortlisted candidates and the pre-onboarding offer workflow</p>
           <p className="directory-row-click-hint"><strong>Note:</strong> Click on a candidate’s name to open their conversation and send an email directly.</p>
           <p className="directory-row-click-hint">
-            <strong>Message filters:</strong> <strong>All</strong> = all candidate conversations | <strong>Sent</strong> = messages sent to candidates | <strong>Received</strong> = messages received from candidates | <strong>Unseen</strong> = conversations with new messages not yet viewed.
+            <strong>Message filters:</strong> <strong>All</strong> = all candidate conversations | <strong>Unseen</strong> = conversations with new messages not yet viewed.
           </p>
         </div>
       </div>
