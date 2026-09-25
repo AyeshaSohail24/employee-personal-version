@@ -4,6 +4,8 @@ import { ArrowLeft, Send, Loader2, FileEdit, Braces } from 'lucide-react';
 import { upcomingCandidateService } from '../../services/upcomingCandidateService.js';
 import { candidateEmailService } from '../../services/candidateEmailService.js';
 import { emailTemplateService } from '../../services/emailTemplateService.js';
+import { emailPlaceholderService } from '../../services/emailPlaceholderService.js';
+import { resolvePlaceholderValue } from '../../domain/emailPlaceholders.js';
 import { Select } from '../../components/common/Select.jsx';
 
 function formatThreadTimestamp(isoString) {
@@ -42,6 +44,7 @@ export default function CandidateThreadPage() {
   const [replyText, setReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [drafts, setDrafts] = useState([]);
+  const [customPlaceholders, setCustomPlaceholders] = useState([]);
   const [draftPickerValue, setDraftPickerValue] = useState('');
   const [placeholderPickerValue, setPlaceholderPickerValue] = useState('');
   const [activeReplyField, setActiveReplyField] = useState('body');
@@ -50,6 +53,7 @@ export default function CandidateThreadPage() {
 
   useEffect(() => {
     emailTemplateService.getAll().then(setDrafts).catch(() => {});
+    emailPlaceholderService.getAll().then(setCustomPlaceholders).catch(() => {});
   }, []);
 
   // Auto-grow the reply box as its content overflows — matches the height to what's actually
@@ -145,6 +149,11 @@ export default function CandidateThreadPage() {
     { key: 'applicantName', label: 'Applicant Name', value: candidate.fullName },
     { key: 'positionName', label: 'Position', value: candidate.positionName },
     { key: 'hiringEmployeeName', label: 'Hiring Employee Name', value: hiringEmployeeName },
+    // User-created placeholders, resolved for this candidate the same way an offer email is —
+    // one with no value for this candidate is left out rather than inserting a blank.
+    ...customPlaceholders
+      .map((p) => ({ key: `custom:${p.id}`, label: p.label, value: resolvePlaceholderValue(p, candidate) }))
+      .filter((f) => f.value !== null),
   ] : [];
 
   // Inserts the selected value at the cursor in whichever reply field (Subject or Body) was

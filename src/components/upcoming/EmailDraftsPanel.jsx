@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Save, CheckCircle2, AlertCircle, Mail, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle2, AlertCircle, Braces, Mail, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { emailTemplateService } from '../../services/emailTemplateService.js';
+import { emailPlaceholderService } from '../../services/emailPlaceholderService.js';
+import { BUILT_IN_PLACEHOLDERS } from '../../domain/emailPlaceholders.js';
+import EmailPlaceholdersPanel from './EmailPlaceholdersPanel.jsx';
 import { ApiError } from '../../services/apiClient.js';
 import { Select } from '../common/Select.jsx';
-
-const PLACEHOLDER_TOKENS = ['{{ApplicantName}}', '{{PositionName}}', '{{HiringEmployeeName}}'];
 
 const OFFER_PILL_STYLES = {
   Paid: { bg: '#ECFDF5', color: '#059669' },
@@ -33,6 +34,8 @@ const OFFER_TYPE_OPTIONS = [
  */
 export default function EmailDraftsPanel() {
   const [templates, setTemplates] = useState([]);
+  const [customPlaceholders, setCustomPlaceholders] = useState([]);
+  const [view, setView] = useState('drafts'); // 'drafts' | 'placeholders'
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
@@ -72,7 +75,9 @@ export default function EmailDraftsPanel() {
   const loadTemplates = async ({ initial = false } = {}) => {
     if (initial) setLoading(true);
     try {
-      setTemplates(await emailTemplateService.getAll());
+      const [drafts, placeholders] = await Promise.all([emailTemplateService.getAll(), emailPlaceholderService.getAll()]);
+      setTemplates(drafts);
+      setCustomPlaceholders(placeholders);
     } catch (err) {
       setErrorMessage(errorText(err, 'Could not load email drafts.'));
     } finally {
@@ -180,6 +185,23 @@ export default function EmailDraftsPanel() {
     return <div className="directory-table-card skeleton-box" style={{ height: '220px' }} />;
   }
 
+  // Built-in first, then every user-created placeholder (shared, from MySQL).
+  const insertablePlaceholders = [
+    ...BUILT_IN_PLACEHOLDERS.map((b) => ({ key: b.token, token: b.token, label: b.label, description: b.description })),
+    ...customPlaceholders.map((p) => ({ key: `custom-${p.id}`, token: p.token, label: p.label, description: p.description })),
+  ];
+
+  if (view === 'placeholders') {
+    return (
+      <EmailPlaceholdersPanel
+        placeholders={customPlaceholders}
+        templates={templates}
+        onBack={() => setView('drafts')}
+        onChanged={() => loadTemplates()}
+      />
+    );
+  }
+
   if (editingTemplate) {
     return (
       <div>
@@ -231,15 +253,15 @@ export default function EmailDraftsPanel() {
             <span className="form-label" style={{ marginBottom: 0 }}>
               Click to insert into {activeField === 'subject' ? 'Subject' : 'Body'}:
             </span>
-            {PLACEHOLDER_TOKENS.map((token) => (
+            {insertablePlaceholders.map((p) => (
               <button
-                key={token}
+                key={p.key}
                 type="button"
                 className="placeholder-token-chip placeholder-token-chip-clickable"
-                onClick={() => insertPlaceholder(token)}
-                title={`Insert ${token} into ${activeField === 'subject' ? 'Subject' : 'Body'}`}
+                onClick={() => insertPlaceholder(`{{${p.token}}}`)}
+                title={`${p.label}${p.description ? ` — ${p.description}` : ''}\nInsert into ${activeField === 'subject' ? 'Subject' : 'Body'}`}
               >
-                {token}
+                {`{{${p.token}}}`}
               </button>
             ))}
           </div>
@@ -305,7 +327,11 @@ export default function EmailDraftsPanel() {
             </button>
           )}
         </div>
-        <button type="button" className="btn-primary" style={{ flexShrink: 0 }} onClick={handleAddDraft}>
+        <button type="button" className="btn-secondary email-drafts-toolbar-btn" style={{ flexShrink: 0 }} onClick={() => { setErrorMessage(''); setView('placeholders'); }}>
+          <Braces size={15} />
+          <span>Placeholders</span>
+        </button>
+        <button type="button" className="btn-primary email-drafts-toolbar-btn" style={{ flexShrink: 0 }} onClick={handleAddDraft}>
           <Plus size={15} />
           <span>New Draft</span>
         </button>

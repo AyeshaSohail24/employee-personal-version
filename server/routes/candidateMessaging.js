@@ -1,4 +1,5 @@
 import * as db from "../db/candidateMessaging.js";
+import * as placeholders from "../db/emailPlaceholders.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError, ValidationError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
@@ -14,7 +15,17 @@ function validateOfferType(offerType) {
 function mapEmailTemplateError(error) {
   if (error instanceof RowNotFoundError) return new NotFoundError(error.message);
   if (error instanceof db.LastRequiredTemplateError) return new ValidationError(error.message);
+  if (error instanceof placeholders.PlaceholderValidationError) return new ValidationError(error.message);
   return error;
+}
+
+// A draft may only use {{Tokens}} that can be filled in (built-in or user-created).
+async function validateDraftPlaceholders(body) {
+  try {
+    await placeholders.assertDraftTokensKnown(body.subject, body.body);
+  } catch (error) {
+    throw mapEmailTemplateError(error);
+  }
 }
 
 export const routes = {
@@ -43,6 +54,7 @@ export const routes = {
       const body = await readJsonBody(req);
       if (typeof body.name !== "string" || !body.name.trim()) throw new ValidationError("name is required.");
       validateOfferType(body.offerType);
+      await validateDraftPlaceholders(body);
       const id = await db.createEmailTemplate(body);
       sendJson(res, ctx.cid, 201, { template: await db.getEmailTemplate(id) });
     },
@@ -54,6 +66,7 @@ export const routes = {
         throw new ValidationError("name cannot be empty.");
       }
       validateOfferType(body.offerType);
+      await validateDraftPlaceholders(body);
       try {
         await db.updateEmailTemplate(ctx.params.id, body);
       } catch (error) {
@@ -66,6 +79,42 @@ export const routes = {
     async delete(req, res, ctx) {
       try {
         await db.deleteEmailTemplate(ctx.params.id);
+      } catch (error) {
+        throw mapEmailTemplateError(error);
+      }
+      sendJson(res, ctx.cid, 204, null);
+    },
+  },
+  // User-created placeholders — see db/emailPlaceholders.js. Delete/rename are refused (422)
+  // while a draft still uses the placeholder.
+  "/email-placeholders": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { placeholders: await placeholders.listPlaceholders() });
+    },
+    async post(req, res, ctx) {
+      const body = await readJsonBody(req);
+      let id;
+      try {
+        id = await placeholders.createPlaceholder(body);
+      } catch (error) {
+        throw mapEmailTemplateError(error);
+      }
+      sendJson(res, ctx.cid, 201, { placeholder: await placeholders.getPlaceholder(id) });
+    },
+  },
+  "/email-placeholders/{id}": {
+    async patch(req, res, ctx) {
+      const body = await readJsonBody(req);
+      try {
+        await placeholders.updatePlaceholder(ctx.params.id, body);
+      } catch (error) {
+        throw mapEmailTemplateError(error);
+      }
+      sendJson(res, ctx.cid, 200, { placeholder: await placeholders.getPlaceholder(ctx.params.id) });
+    },
+    async delete(req, res, ctx) {
+      try {
+        await placeholders.deletePlaceholder(ctx.params.id);
       } catch (error) {
         throw mapEmailTemplateError(error);
       }

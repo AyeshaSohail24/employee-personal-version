@@ -79,6 +79,7 @@ DROP TABLE IF EXISTS `candidate_documents`;
 DROP TABLE IF EXISTS `candidate_messages`;
 DROP TABLE IF EXISTS `applicant_conversions`;
 DROP TABLE IF EXISTS `email_templates`;
+DROP TABLE IF EXISTS `email_placeholders`;
 DROP TABLE IF EXISTS `offboarding_task_instances`;
 DROP TABLE IF EXISTS `offboarding_plan_instances`;
 DROP TABLE IF EXISTS `offboarding_plan_tasks`;
@@ -533,6 +534,23 @@ CREATE TABLE IF NOT EXISTS `email_templates` (
     `body` LONGTEXT NULL, -- may contain {{ApplicantName}} / {{PositionName}} / {{HiringEmployeeName}}
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 23b. EMAIL_PLACEHOLDERS — HR-created {{Tokens}} for email drafts, shared by
+--      every user. `source` names one value the app can resolve for a
+--      candidate when an email is prepared (see src/domain/emailPlaceholders.js);
+--      `fixed_value` is only used when source = 'fixedText'. Created on an
+--      existing database by `npm run create-email-placeholders-table`.
+CREATE TABLE IF NOT EXISTS `email_placeholders` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `token` VARCHAR(40) NOT NULL,
+    `label` VARCHAR(100) NOT NULL,
+    `description` VARCHAR(255) NULL,
+    `source` VARCHAR(40) NOT NULL,
+    `fixed_value` VARCHAR(500) NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uq_email_placeholders_token` (`token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 24. APPLICANT_CONVERSIONS — the append-only hand-off audit trail: an

@@ -10,7 +10,8 @@
     "server": "node --env-file=.env server/index.js",
     "start": "node server/index.js",
     "backfill-contract-end-dates": "node --env-file=.env server/scripts/backfillContractEndDates.js",
-    "seed-email-templates": "node --env-file=.env server/scripts/seedEmailTemplates.js"
+    "seed-email-templates": "node --env-file=.env server/scripts/seedEmailTemplates.js",
+    "create-email-placeholders-table": "node --env-file=.env server/scripts/createEmailPlaceholdersTable.js"
   },
   "dependencies": {
     "html-to-image": "^1.11.13",

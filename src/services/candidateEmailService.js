@@ -1,6 +1,7 @@
 import { apiClient } from './apiClient.js';
 import { upcomingCandidateService } from './upcomingCandidateService.js';
 import { emailTemplateService } from './emailTemplateService.js';
+import { emailPlaceholderService } from './emailPlaceholderService.js';
 import { renderEmailTemplate, buildCandidateEmailTokens } from '../domain/candidateDomain.js';
 
 function normalizedIncludes(haystack, needle) {
@@ -32,7 +33,7 @@ export const candidateEmailService = {
       throw new Error(`No email draft is configured for Offer Type "${candidate.offerType}".`);
     }
 
-    const tokens = buildCandidateEmailTokens(candidate, hiringEmployeeName);
+    const tokens = buildCandidateEmailTokens(candidate, hiringEmployeeName, await emailPlaceholderService.getAll());
 
     const subjectSource = subjectOverride !== undefined ? subjectOverride : template.subject;
     const bodySource = bodyOverride !== undefined ? bodyOverride : template.body;
@@ -68,7 +69,7 @@ export const candidateEmailService = {
       throw new Error(`Email draft with ID "${templateId}" not found.`);
     }
 
-    const tokens = buildCandidateEmailTokens(candidate, hiringEmployeeName);
+    const tokens = buildCandidateEmailTokens(candidate, hiringEmployeeName, await emailPlaceholderService.getAll());
     const subjectResult = renderEmailTemplate(template.subject, tokens);
     const bodyResult = renderEmailTemplate(template.body, tokens);
 

@@ -8,6 +8,8 @@
  * later, explicit HR action — never automatically.
  */
 
+import { resolvePlaceholderValue } from './emailPlaceholders.js';
+
 export const EMAIL_STATUS = {
   PENDING: 'Pending',
   SENT: 'Sent',
@@ -50,16 +52,25 @@ export function renderEmailTemplate(templateText, tokens = {}) {
 }
 
 /**
- * Builds the token map for a single candidate's offer email. HiringEmployeeName is always
- * supplied by the HR user composing the email (never inferred), so it is passed in rather
- * than derived here.
+ * Builds the token map for a single candidate's offer email: the three built-ins plus every
+ * user-created placeholder (src/domain/emailPlaceholders.js), each resolved from its own value
+ * source. HiringEmployeeName is always supplied by the HR user composing the email (never
+ * inferred), so it is passed in rather than derived here. A placeholder with no value for this
+ * candidate is left out, so renderEmailTemplate() reports it as unresolved and Send is blocked.
  *
  * @param {Object} candidate
  * @param {string} hiringEmployeeName
- * @returns {{ ApplicantName: string, PositionName: string, HiringEmployeeName: string }}
+ * @param {Array<Object>} [customPlaceholders] - from emailPlaceholderService.getAll()
+ * @returns {Object<string, string>}
  */
-export function buildCandidateEmailTokens(candidate, hiringEmployeeName) {
+export function buildCandidateEmailTokens(candidate, hiringEmployeeName, customPlaceholders = []) {
+  const tokens = {};
+  for (const placeholder of customPlaceholders) {
+    const value = resolvePlaceholderValue(placeholder, candidate);
+    if (value !== null) tokens[placeholder.token] = value;
+  }
   return {
+    ...tokens,
     ApplicantName: candidate?.fullName || '',
     PositionName: candidate?.positionName || '',
     HiringEmployeeName: hiringEmployeeName || '',

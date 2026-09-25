@@ -3691,6 +3691,111 @@ body {
   color: #FFFFFF;
 }
 
+/* Email Drafts toolbar / placeholder list buttons — icon + label spacing (the shared .btn-*
+   classes don't set a gap). */
+.email-drafts-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+
+/* Email placeholders (EmailPlaceholdersPanel) */
+.placeholder-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.placeholder-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 1.25rem 0 0.6rem;
+}
+
+.placeholder-editor-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0 0 1rem;
+}
+
+.placeholder-token-code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-active);
+  border: 1px solid var(--color-primary-border);
+  white-space: nowrap;
+}
+
+.placeholder-token-input {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.placeholder-token-input .form-input {
+  font-family: var(--font-mono, monospace);
+  flex: 1;
+  min-width: 0;
+}
+
+.placeholder-source-help {
+  margin-top: 0.6rem;
+  padding: 0.65rem 0.85rem;
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.placeholder-source-help p {
+  margin: 0;
+}
+
+.placeholder-source-help p + p {
+  margin-top: 0.35rem;
+}
+
+.placeholder-source-warning {
+  color: #B45309;
+}
+
+.placeholder-card-usage {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  margin-top: 0.5rem;
+}
+
+.placeholder-card-builtin {
+  cursor: default;
+}
+
+.placeholder-card-builtin:hover {
+  border-color: var(--border-light);
+  box-shadow: var(--shadow-sm);
+  transform: none;
+}
+
+.placeholder-card-builtin-footer {
+  color: var(--text-muted);
+}
+
 /* Bulk send review — .bulk-candidate-list is a plain flex-column layout container; the
    actual scrolling for the whole candidate list happens one level up, in the single
    .bulk-main-scroll-area primary scroll region (see modal-scroll-shell rules above), so

@@ -53,6 +53,11 @@ export async function listConfirmationCandidates() {
         // signal available for ordering "most recent" first.
         shortlistedAt: a.start_date ?? null,
         resumeAvailable: Boolean(a.resume),
+        // Exposed for email placeholders (src/domain/emailPlaceholders.js). Already on every
+        // applicant record this request fetches, so no extra call.
+        firstName: a.first_name ?? null,
+        lastName: a.last_name ?? null,
+        proposedStartDate: a.start_date ?? null,
       };
     });
 

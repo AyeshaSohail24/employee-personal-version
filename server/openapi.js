@@ -86,7 +86,7 @@ export const openapi = {
           description: "The real Upcoming candidate roster, the conversation with a shortlisted applicant — over email or WhatsApp — and the reusable offer drafts behind it.",
           does: ["List real candidates at the confirmation phase", "Read a candidate's message thread", "Send a message to a candidate on email or WhatsApp", "List, create and edit email drafts"],
           best_for: "HR corresponding with candidates in the Upcoming pipeline before they're hired.",
-          endpoints: ["GET /candidates", "GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "GET /email-templates", "POST /email-templates", "PATCH /email-templates/{id}", "DELETE /email-templates/{id}"],
+          endpoints: ["GET /candidates", "GET /candidates/{applicantId}/messages", "POST /candidates/{applicantId}/messages", "GET /email-templates", "POST /email-templates", "PATCH /email-templates/{id}", "DELETE /email-templates/{id}", "GET /email-placeholders", "POST /email-placeholders", "PATCH /email-placeholders/{id}", "DELETE /email-placeholders/{id}"],
         },
         {
           name: "Gather Candidate Documents",
@@ -481,6 +481,18 @@ export const openapi = {
         "x-rizurf": { name: "Update Email Draft", purpose: "Change a template's subject, body or offer type", use_when: ["Editing wording"], do_not_use_when: [], inputs: ["name", "offerType", "subject", "body"], outputs: ["template"], requires: ["Template exists", "offerType is Paid or Unpaid", "Changing offerType is refused (422) if this is the last draft of its current offer type"], related_endpoints: ["GET /email-templates"], tags: ["email drafts", "edit"] } },
       delete: { summary: "Delete an email draft.", security: scoped("candidate-messaging:write"),
         "x-rizurf": { name: "Delete Email Draft", purpose: "Permanently remove an offer-email template", use_when: ["A draft is no longer needed"], do_not_use_when: ["It is the only Paid or Unpaid draft — offer emails of that type are rendered from it, so the request is refused (422)"], inputs: ["id"], outputs: [], requires: ["Template exists", "At least one other draft of the same offer type exists"], related_endpoints: ["GET /email-templates"], tags: ["email drafts", "delete"] } },
+    },
+    "/email-placeholders": {
+      get: { summary: "List user-created email placeholders.", security: scoped("candidate-messaging:read"),
+        "x-rizurf": { name: "List Email Placeholders", purpose: "The shared, HR-created {{Tokens}} available in offer-email drafts, alongside the built-in ApplicantName/PositionName/HiringEmployeeName", use_when: ["Showing the placeholders an email draft can use"], do_not_use_when: [], inputs: [], outputs: ["placeholders[]"], requires: [], related_endpoints: ["GET /email-templates"], tags: ["email drafts", "placeholders"] } },
+      post: { summary: "Create an email placeholder.", security: scoped("candidate-messaging:write"),
+        "x-rizurf": { name: "Create Email Placeholder", purpose: "Add a {{Token}} whose value comes from a supported candidate field, the date, or fixed text", use_when: ["HR needs another value in offer emails"], do_not_use_when: [], inputs: ["label", "token", "description", "source", "fixedValue"], outputs: ["placeholder"], requires: ["token: letters/numbers, starts with a letter, unique, not a built-in name", "source: one of the supported value sources", "fixedValue required when source is fixedText"], related_endpoints: ["PATCH /email-placeholders/{id}"], tags: ["email drafts", "placeholders", "create"] } },
+    },
+    "/email-placeholders/{id}": {
+      patch: { summary: "Edit an email placeholder.", security: scoped("candidate-messaging:write"),
+        "x-rizurf": { name: "Update Email Placeholder", purpose: "Change a placeholder's name, description, value source or token", use_when: ["Correcting or repointing a placeholder"], do_not_use_when: ["Renaming the token while a draft uses it: refused (422)"], inputs: ["label", "token", "description", "source", "fixedValue"], outputs: ["placeholder"], requires: ["Placeholder exists"], related_endpoints: ["GET /email-placeholders"], tags: ["email drafts", "placeholders", "edit"] } },
+      delete: { summary: "Delete an email placeholder.", security: scoped("candidate-messaging:write"),
+        "x-rizurf": { name: "Delete Email Placeholder", purpose: "Permanently remove a user-created placeholder", use_when: ["It is no longer needed"], do_not_use_when: ["A draft still uses it: refused (422) with the draft names"], inputs: ["id"], outputs: [], requires: ["Placeholder exists", "No draft uses it"], related_endpoints: ["GET /email-placeholders"], tags: ["email drafts", "placeholders", "delete"] } },
     },
     "/candidates/{applicantId}/documents": {
       get: { summary: "List a candidate's requested and submitted documents.", security: scoped("candidate-documents:read"),
