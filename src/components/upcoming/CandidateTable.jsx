@@ -79,16 +79,11 @@ function ActiveRowActions({ candidate, onAccept, onReject, onUndoAccept }) {
 export default function CandidateTable({
   candidates = [],
   mode = 'active', // 'active' | 'rejected'
-  selectedIds = new Set(),
-  onToggleSelect,
-  onToggleSelectAll,
   onAccept,
   onReject,
   onUndoAccept,
   onRestore,
 }) {
-  const allSelected = mode === 'active' && candidates.length > 0 && candidates.every((c) => selectedIds.has(c.id));
-
   return (
     <>
       {/* Desktop table — dense, connected inbox-style list (Gmail pattern): flush rows with a
@@ -99,16 +94,6 @@ export default function CandidateTable({
           <table className="widget-table gmail-table">
             <thead>
               <tr>
-                {mode === 'active' && (
-                  <th className="gmail-checkbox-cell">
-                    <input
-                      type="checkbox"
-                      aria-label="Select all visible candidates"
-                      checked={allSelected}
-                      onChange={(e) => onToggleSelectAll(e.target.checked)}
-                    />
-                  </th>
-                )}
                 <th style={{ width: '26%' }}>Candidate</th>
                 <th style={{ width: '28%' }}>Role</th>
                 <th style={{ width: '12%' }}>Offer</th>
@@ -120,24 +105,13 @@ export default function CandidateTable({
               {candidates.map((candidate) => {
                 const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_STYLES.Paid;
                 const responsePill = RESPONSE_PILL_STYLES[candidate.responseStatus] || RESPONSE_PILL_STYLES['Awaiting Response'];
-                const isSelected = selectedIds.has(candidate.id);
                 const isUnreadReply = mode === 'active' && candidate.emailStatus === 'Replied' && !candidate.notificationRead;
 
                 return (
                   <tr
                     key={candidate.id}
-                    className={`gmail-row ${isSelected ? 'gmail-row-selected' : ''} ${isUnreadReply ? 'gmail-row-unread' : ''}`}
+                    className={`gmail-row ${isUnreadReply ? 'gmail-row-unread' : ''}`}
                   >
-                    {mode === 'active' && (
-                      <td className="gmail-checkbox-cell">
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${candidate.fullName}`}
-                          checked={isSelected}
-                          onChange={() => onToggleSelect(candidate.id)}
-                        />
-                      </td>
-                    )}
                     <td className="gmail-cell-truncate">
                       <CandidateIdentity candidate={candidate} isUnreadReply={isUnreadReply} />
                     </td>
@@ -199,14 +173,6 @@ export default function CandidateTable({
           return (
             <div key={candidate.id} className="candidate-card">
               <div className="candidate-card-header">
-                {mode === 'active' && (
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${candidate.fullName}`}
-                    checked={selectedIds.has(candidate.id)}
-                    onChange={() => onToggleSelect(candidate.id)}
-                  />
-                )}
                 <div style={{ flex: 1 }}>
                   <Link
                     to={`/upcoming/${candidate.id}`}

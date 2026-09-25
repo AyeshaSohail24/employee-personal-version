@@ -43,7 +43,6 @@ const STATUS_TABS = [
 export default function UpcomingPage() {
   const [pageTab, setPageTab] = useState('messages');
   const [allCandidates, setAllCandidates] = useState([]);
-  const [selectedIds, setSelectedIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusTab, setStatusTab] = useState('all');
@@ -89,10 +88,6 @@ export default function UpcomingPage() {
     }
   };
 
-  useEffect(() => {
-    setSelectedIds(new Set());
-  }, [statusTab, departmentFilter]);
-
   const unseenCount = useMemo(() => allCandidates.filter(isUnseen).length, [allCandidates]);
 
   const candidates = useMemo(() => {
@@ -128,18 +123,6 @@ export default function UpcomingPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const handleToggleSelect = (id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const handleToggleSelectAll = (checked) => {
-    setSelectedIds(checked ? new Set(candidates.map((c) => c.id)) : new Set());
-  };
-
   const handleAccept = async (id) => {
     await upcomingCandidateService.acceptCandidate(id);
     await loadData();
@@ -158,11 +141,6 @@ export default function UpcomingPage() {
       return;
     }
     await upcomingCandidateService.rejectCandidate(candidate.id);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(candidate.id);
-      return next;
-    });
     await loadData();
   };
 
@@ -172,6 +150,7 @@ export default function UpcomingPage() {
         <div>
           <h1 className="page-title">Upcoming Personnel</h1>
           <p className="page-description">Shortlisted candidates and the pre-onboarding offer workflow</p>
+          <p className="directory-row-click-hint">Note: Click on a candidate’s name to open their conversation and send an email directly.</p>
         </div>
       </div>
 
@@ -289,9 +268,6 @@ export default function UpcomingPage() {
               <CandidateTable
                 candidates={candidates}
                 mode="active"
-                selectedIds={selectedIds}
-                onToggleSelect={handleToggleSelect}
-                onToggleSelectAll={handleToggleSelectAll}
                 onAccept={handleAccept}
                 onReject={handleReject}
                 onUndoAccept={handleUndoAccept}
