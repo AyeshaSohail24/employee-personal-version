@@ -53,10 +53,6 @@ export async function listConfirmationCandidates() {
           : departmentName
             ? { id: null, name: departmentName }
             : null,
-        // The Recruitment API exposes no created/shortlisted timestamp on an
-        // applicant — their own proposed start date is the closest real
-        // signal available for ordering "most recent" first.
-        shortlistedAt: a.start_date ?? null,
         resumeAvailable: Boolean(a.resume),
         // Exposed for email placeholders (src/domain/emailPlaceholders.js). Already on every
         // applicant record this request fetches, so no extra call.
@@ -70,7 +66,7 @@ export async function listConfirmationCandidates() {
 
   const placeholders = candidates.map(() => "?").join(",");
   const [messageRows] = await pool.query(
-    `SELECT applicant_id, direction, is_seen FROM candidate_messages WHERE applicant_id IN (${placeholders})`,
+    `SELECT applicant_id, direction, is_seen, sent_at FROM candidate_messages WHERE applicant_id IN (${placeholders})`,
     candidates.map((c) => c.id),
   );
   const messagesByApplicantId = new Map();
@@ -80,6 +76,8 @@ export async function listConfirmationCandidates() {
     messagesByApplicantId.get(key).push(row);
   }
 
+  const shortlistedAtById = await recordShortlistedDates(candidates, messagesByApplicantId);
+
   return candidates.map((candidate) => {
     const messages = messagesByApplicantId.get(candidate.id) ?? [];
     const hasSent = messages.some((m) => m.direction === "sent");
@@ -87,8 +85,47 @@ export async function listConfirmationCandidates() {
     const hasUnseenReply = messages.some((m) => m.direction === "received" && !m.is_seen);
     return {
       ...candidate,
+      shortlistedAt: shortlistedAtById.get(candidate.id) ?? null,
       emailStatus: hasReceived ? "Replied" : hasSent ? "Sent" : "Pending",
       notificationRead: !hasUnseenReply,
     };
   });
+}
+
+// "Shortlisted" = the date a candidate first appeared in Upcoming. The Recruitment API records no
+// shortlisted or phase-change time, so this app notes it itself (upcoming_candidates_seen) the
+// first time a candidate shows up in this list, and never changes it afterwards. For candidates
+// already in Upcoming before this was recorded, their earliest message is used when older than
+// today, since they must have been in Upcoming before HR emailed them.
+export async function recordShortlistedDates(candidates, messagesByApplicantId) {
+  const ids = candidates.map((c) => c.id);
+  const placeholders = ids.map(() => "?").join(",");
+  const [seenRows] = await pool.query(
+    `SELECT applicant_id, first_seen_at FROM upcoming_candidates_seen WHERE applicant_id IN (${placeholders})`,
+    ids,
+  );
+  const byId = new Map(seenRows.map((r) => [String(r.applicant_id), r.first_seen_at]));
+
+  const now = new Date();
+  const newRows = ids
+    .filter((id) => !byId.has(id))
+    .map((id) => {
+      const earliestMessage = (messagesByApplicantId.get(id) ?? [])
+        .map((m) => new Date(m.sent_at))
+        .filter((d) => !Number.isNaN(d.getTime()))
+        .sort((a, b) => a - b)[0];
+      return [id, earliestMessage && earliestMessage < now ? earliestMessage : now];
+    });
+
+  if (newRows.length > 0) {
+    // INSERT IGNORE: if two requests race, the first recorded date wins.
+    await pool.query("INSERT IGNORE INTO upcoming_candidates_seen (applicant_id, first_seen_at) VALUES ?", [newRows]);
+    const [fresh] = await pool.query(
+      `SELECT applicant_id, first_seen_at FROM upcoming_candidates_seen WHERE applicant_id IN (${newRows.map(() => "?").join(",")})`,
+      newRows.map(([id]) => id),
+    );
+    for (const r of fresh) byId.set(String(r.applicant_id), r.first_seen_at);
+  }
+
+  return new Map([...byId].map(([id, at]) => [id, at instanceof Date ? at.toISOString() : at]));
 }

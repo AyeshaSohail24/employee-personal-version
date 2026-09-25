@@ -80,6 +80,7 @@ DROP TABLE IF EXISTS `candidate_messages`;
 DROP TABLE IF EXISTS `applicant_conversions`;
 DROP TABLE IF EXISTS `email_templates`;
 DROP TABLE IF EXISTS `email_placeholders`;
+DROP TABLE IF EXISTS `upcoming_candidates_seen`;
 DROP TABLE IF EXISTS `offboarding_task_instances`;
 DROP TABLE IF EXISTS `offboarding_plan_instances`;
 DROP TABLE IF EXISTS `offboarding_plan_tasks`;
@@ -576,6 +577,17 @@ CREATE TABLE IF NOT EXISTS `applicant_conversions` (
     INDEX `idx_applicant_conversions_applicant` (`applicant_id`),
     INDEX `idx_applicant_conversions_employee` (`employee_id`),
     INDEX `idx_applicant_conversions_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 24b. UPCOMING_CANDIDATES_SEEN — the date each applicant first appeared in
+--      Upcoming (shown as "Shortlisted"). The Recruitment API records no
+--      shortlisted/phase-change time, so this app notes it the first time
+--      GET /candidates returns them (server/db/upcomingCandidates.js).
+--      Created on an existing database by
+--      `npm run create-upcoming-candidates-seen-table`.
+CREATE TABLE IF NOT EXISTS `upcoming_candidates_seen` (
+    `applicant_id` VARCHAR(64) PRIMARY KEY, -- soft ref -> applicants.id (Applicants DB, external)
+    `first_seen_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 25. CANDIDATE_MESSAGES — the full message thread (sent + received) for a

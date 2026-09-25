@@ -14,8 +14,14 @@ const RESPONSE_PILL_STYLES = {
   Rejected: { bg: '#FEF2F2', color: '#DC2626' },
 };
 
+// The viewer's local calendar date for a timestamp (a UTC slice would show the previous day for
+// anything before 8am in Malaysia).
 function toIsoDate(isoTimestamp) {
-  return isoTimestamp ? isoTimestamp.slice(0, 10) : null;
+  if (!isoTimestamp) return null;
+  const d = new Date(isoTimestamp);
+  if (Number.isNaN(d.getTime())) return String(isoTimestamp).slice(0, 10);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function CandidateIdentity({ candidate, isUnreadReply }) {
