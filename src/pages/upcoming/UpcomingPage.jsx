@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search, X } from 'lucide-react';
 import { upcomingCandidateService } from '../../services/upcomingCandidateService.js';
 import { candidateEmailService } from '../../services/candidateEmailService.js';
-import { departmentService } from '../../services/departmentService.js';
+import { apiClient } from '../../services/apiClient.js';
 import { sortCandidates } from '../../domain/candidateDomain.js';
 import CandidateTable from '../../components/upcoming/CandidateTable.jsx';
 import CandidateSearchResults from '../../components/upcoming/CandidateSearchResults.jsx';
@@ -54,8 +54,13 @@ export default function UpcomingPage() {
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [departments, setDepartments] = useState([]);
 
+  // The real Departments service (GET /departments), not the mock departmentService — each
+  // candidate's department.id is matched against this same list server-side
+  // (server/db/upcomingCandidates.js), so the filter's values line up with the candidates'.
   useEffect(() => {
-    departmentService.getAll({ withCount: false }).then(setDepartments).catch(() => {});
+    apiClient.get('/departments')
+      .then(({ departments: list }) => setDepartments(list))
+      .catch((err) => console.error('Failed to load department filter options:', err));
   }, []);
 
   const fetchAll = useCallback(() => upcomingCandidateService.queryCandidates({ scope: 'active' }), []);
