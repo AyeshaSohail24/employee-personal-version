@@ -36,8 +36,10 @@ function isUnseen(candidate) {
 
 const STATUS_TABS = [
   { key: 'all', label: 'All', match: () => true },
-  { key: 'sent', label: 'Sent', match: (c) => c.emailStatus === 'Sent' },
-  { key: 'received', label: 'Received', match: (c) => c.emailStatus === 'Replied' },
+  // Sent/Received look at the whole conversation, not just its latest stage (emailStatus), so a
+  // candidate who replied still shows under Sent too.
+  { key: 'sent', label: 'Sent', match: (c) => c.hasSentMessage ?? ['Sent', 'Replied'].includes(c.emailStatus) },
+  { key: 'received', label: 'Received', match: (c) => c.hasReceivedMessage ?? c.emailStatus === 'Replied' },
   { key: 'unseen', label: 'Unseen', match: isUnseen },
 ];
 
