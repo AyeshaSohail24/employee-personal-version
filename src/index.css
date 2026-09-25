@@ -3124,7 +3124,8 @@ body {
 
 .gmail-date-header {
   text-align: right;
-  width: 8rem;
+  width: 14%;
+  min-width: 8rem;
 }
 
 .gmail-date-cell {
