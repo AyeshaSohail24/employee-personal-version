@@ -8,12 +8,6 @@ const OFFER_PILL_STYLES = {
   Unpaid: { bg: '#FEF3C7', color: '#D97706' },
 };
 
-const RESPONSE_PILL_STYLES = {
-  'Awaiting Response': { bg: '#F1F5F9', color: '#475569' },
-  Accepted: { bg: '#ECFDF5', color: '#059669' },
-  Rejected: { bg: '#FEF2F2', color: '#DC2626' },
-};
-
 // The viewer's local calendar date for a timestamp (a UTC slice would show the previous day for
 // anything before 8am in Malaysia).
 function toIsoDate(isoTimestamp) {
@@ -109,14 +103,12 @@ export default function CandidateTable({
                 <th style={{ width: '26%' }}>Candidate</th>
                 <th style={{ width: '28%' }}>Role</th>
                 <th style={{ width: '12%' }}>Offer</th>
-                {mode === 'active' && <th style={{ width: '13%' }}>Response</th>}
                 <th className="gmail-date-header">{mode === 'active' ? 'Shortlisted' : 'Rejected'}</th>
               </tr>
             </thead>
             <tbody>
               {candidates.map((candidate) => {
                 const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_STYLES.Paid;
-                const responsePill = RESPONSE_PILL_STYLES[candidate.responseStatus] || RESPONSE_PILL_STYLES['Awaiting Response'];
                 const isUnreadReply = mode === 'active' && candidate.emailStatus === 'Replied' && !candidate.notificationRead;
 
                 return (
@@ -137,17 +129,6 @@ export default function CandidateTable({
                         {candidate.offerType}
                       </span>
                     </td>
-                    {mode === 'active' && (
-                      <td>
-                        {candidate.responseStatus === 'Awaiting Response' ? (
-                          <span className="table-text-secondary">—</span>
-                        ) : (
-                          <span className="status-pill" style={{ backgroundColor: responsePill.bg, color: responsePill.color }}>
-                            {candidate.responseStatus}
-                          </span>
-                        )}
-                      </td>
-                    )}
                     <td className="gmail-date-cell">
                       <span className="gmail-date-text">
                         {formatDateDisplay(toIsoDate(mode === 'active' ? candidate.shortlistedAt : candidate.rejectedAt))}
@@ -180,7 +161,6 @@ export default function CandidateTable({
       <div className="candidate-card-grid">
         {candidates.map((candidate) => {
           const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_STYLES.Paid;
-          const responsePill = RESPONSE_PILL_STYLES[candidate.responseStatus] || RESPONSE_PILL_STYLES['Awaiting Response'];
 
           return (
             <div key={candidate.id} className="candidate-card">
@@ -202,9 +182,7 @@ export default function CandidateTable({
                 <div className="detail-row"><span className="detail-text">{candidate.department ? candidate.department.name : 'Unassigned'}</span></div>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', margin: '0.4rem 0' }}>
                   <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>{candidate.offerType}</span>
-                  {mode === 'active' ? (
-                    <span className="status-pill" style={{ backgroundColor: responsePill.bg, color: responsePill.color }}>{candidate.responseStatus}</span>
-                  ) : (
+                  {mode !== 'active' && (
                     <span className="table-sub-badge">Rejected {formatDateDisplay(toIsoDate(candidate.rejectedAt))}</span>
                   )}
                 </div>
