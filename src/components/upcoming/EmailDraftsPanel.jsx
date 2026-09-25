@@ -141,8 +141,10 @@ export default function EmailDraftsPanel() {
     try {
       await emailTemplateService.update(editingId, { name, offerType, subject, body });
       await loadTemplates();
+      // Back to the drafts list once saved; a failed save (catch below) keeps the editor open.
+      handleBack();
       setSavedMessage('Draft saved.');
-      setTimeout(() => setSavedMessage(''), 2000);
+      setTimeout(() => setSavedMessage(''), 2500);
     } catch (err) {
       setErrorMessage(errorText(err, 'Could not save this draft.'));
     }
@@ -279,6 +281,11 @@ export default function EmailDraftsPanel() {
         <div className="email-draft-error" role="alert" style={{ marginBottom: '1rem' }}>
           <AlertCircle size={15} />
           <span>{errorMessage}</span>
+        </div>
+      )}
+      {savedMessage && (
+        <div className="sync-status-text" role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.75rem' }}>
+          <CheckCircle2 size={14} /> {savedMessage}
         </div>
       )}
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem' }}>
