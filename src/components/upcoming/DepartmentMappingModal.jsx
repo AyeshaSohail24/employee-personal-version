@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, Link2, AlertCircle, Trash2 } from 'lucide-react';
+import { X, Link2, AlertCircle, Trash2, ArrowRight, Check } from 'lucide-react';
 import { apiClient, ApiError } from '../../services/apiClient.js';
 import { Select } from '../common/Select.jsx';
 
@@ -116,9 +116,9 @@ export default function DepartmentMappingModal({ unmatchedNames = [], onClose, o
             <p className="form-hint" style={{ marginTop: 0 }}>Every candidate’s department matches a real department.</p>
           ) : (
             pending.map((name) => (
-              <div key={name} className="dept-mapping-row">
-                <span className="dept-mapping-alias">{name}</span>
-                <span className="dept-mapping-arrow">→</span>
+              <div key={name} className="dept-mapping-row dept-mapping-row-pending">
+                <span className="dept-mapping-alias" title="Department name in the Recruitment system">{name}</span>
+                <span className="dept-mapping-arrow" aria-hidden="true"><ArrowRight size={14} /></span>
                 <div className="dept-mapping-select">
                   <Select
                     variant="filter"
@@ -130,11 +130,12 @@ export default function DepartmentMappingModal({ unmatchedNames = [], onClose, o
                 </div>
                 <button
                   type="button"
-                  className="btn-primary email-drafts-toolbar-btn"
-                  disabled={busyName === name}
+                  className="btn-primary dept-mapping-save"
+                  disabled={busyName === name || !choices[name]}
                   onClick={() => save(name, choices[name])}
                 >
-                  {busyName === name ? 'Saving...' : 'Save'}
+                  <Check size={14} />
+                  <span>{busyName === name ? 'Saving...' : 'Save'}</span>
                 </button>
               </div>
             ))
@@ -146,8 +147,8 @@ export default function DepartmentMappingModal({ unmatchedNames = [], onClose, o
           ) : (
             aliases.map((a) => (
               <div key={a.alias} className="dept-mapping-row">
-                <span className="dept-mapping-alias">{a.alias}</span>
-                <span className="dept-mapping-arrow">→</span>
+                <span className="dept-mapping-alias" title="Department name in the Recruitment system">{a.alias}</span>
+                <span className="dept-mapping-arrow" aria-hidden="true"><ArrowRight size={14} /></span>
                 <div className="dept-mapping-select">
                   <Select
                     variant="filter"
@@ -161,12 +162,13 @@ export default function DepartmentMappingModal({ unmatchedNames = [], onClose, o
                 </div>
                 <button
                   type="button"
-                  className="btn-danger-outline email-drafts-toolbar-btn"
+                  className="dept-mapping-remove"
                   disabled={busyName === a.alias}
                   onClick={() => remove(a.alias)}
+                  title="Remove this mapping"
                   aria-label={`Remove the mapping for ${a.alias}`}
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={16} />
                 </button>
               </div>
             ))
@@ -174,7 +176,10 @@ export default function DepartmentMappingModal({ unmatchedNames = [], onClose, o
         </div>
 
         <div className="modal-footer" style={{ padding: '1rem 1.5rem', backgroundColor: 'var(--bg-subtle)', marginTop: 0 }}>
-          <button type="button" className="btn-secondary" onClick={onClose}>Done</button>
+          <button type="button" className="btn-primary dept-mapping-done" onClick={onClose}>
+            <Check size={15} />
+            <span>Done</span>
+          </button>
         </div>
       </div>
     </div>
