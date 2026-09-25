@@ -37,9 +37,23 @@ function CandidateIdentity({ candidate, isUnreadReply }) {
 }
 
 function ActiveRowActions({ candidate, onAccept, onReject, onUndoAccept }) {
+  const acceptButton = (
+    <button
+      type="button"
+      className="candidate-action-btn accept"
+      title={`Accept ${candidate.fullName} and add them as an intern`}
+      aria-label={`Accept ${candidate.fullName}`}
+      onClick={(e) => { e.stopPropagation(); onAccept(candidate); }}
+    >
+      <Check size={14} />
+    </button>
+  );
+  // "Accepted" here is the old browser-only mark — they haven't been added as an intern yet, so
+  // Accept is still offered to finish that, alongside Undo.
   if (candidate.responseStatus === 'Accepted') {
     return (
       <div className="candidate-row-actions gmail-row-actions">
+        {acceptButton}
         <button
           type="button"
           className="candidate-action-btn undo"
@@ -54,15 +68,7 @@ function ActiveRowActions({ candidate, onAccept, onReject, onUndoAccept }) {
   }
   return (
     <div className="candidate-row-actions gmail-row-actions">
-      <button
-        type="button"
-        className="candidate-action-btn accept"
-        title={`Accept ${candidate.fullName}`}
-        aria-label={`Accept ${candidate.fullName}`}
-        onClick={(e) => { e.stopPropagation(); onAccept(candidate.id); }}
-      >
-        <Check size={14} />
-      </button>
+      {acceptButton}
       <button
         type="button"
         className="candidate-action-btn reject"

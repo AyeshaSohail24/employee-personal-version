@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Search, X } from 'lucide-react';
+import { RefreshCw, Search, X, CheckCircle2 } from 'lucide-react';
 import { upcomingCandidateService } from '../../services/upcomingCandidateService.js';
 import { candidateEmailService } from '../../services/candidateEmailService.js';
 import { apiClient } from '../../services/apiClient.js';
@@ -8,6 +8,7 @@ import CandidateTable from '../../components/upcoming/CandidateTable.jsx';
 import CandidateSearchResults from '../../components/upcoming/CandidateSearchResults.jsx';
 import DirectoryEmptyState from '../../components/employees/DirectoryEmptyState.jsx';
 import EmailDraftsPanel from '../../components/upcoming/EmailDraftsPanel.jsx';
+import AcceptCandidateModal from '../../components/upcoming/AcceptCandidateModal.jsx';
 import { Select } from '../../components/common/Select.jsx';
 
 const PAGE_TABS = [
@@ -128,8 +129,21 @@ export default function UpcomingPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const handleAccept = async (id) => {
-    await upcomingCandidateService.acceptCandidate(id);
+  // Accept opens the Accept form (AcceptCandidateModal): on success the candidate is now an
+  // Onboarding intern, so they drop out of this list on the reload below.
+  const [acceptingCandidate, setAcceptingCandidate] = useState(null);
+  const [acceptedMessage, setAcceptedMessage] = useState('');
+
+  const handleAccept = (candidate) => {
+    setAcceptedMessage('');
+    setAcceptingCandidate(candidate);
+  };
+
+  const handleAccepted = async (result) => {
+    const name = acceptingCandidate?.fullName || 'The candidate';
+    setAcceptingCandidate(null);
+    const ref = result?.intern?.refNumber ? ` as ${result.intern.refNumber}` : '';
+    setAcceptedMessage(`${name} was added to the Interns database${ref} and is now in Onboarding and Personnel.`);
     await loadData();
   };
 
@@ -158,6 +172,23 @@ export default function UpcomingPage() {
           <p className="directory-row-click-hint">Note: Click on a candidate’s name to open their conversation and send an email directly.</p>
         </div>
       </div>
+
+      {acceptingCandidate && (
+        <AcceptCandidateModal
+          candidate={acceptingCandidate}
+          onClose={() => setAcceptingCandidate(null)}
+          onAccepted={handleAccepted}
+        />
+      )}
+      {acceptedMessage && (
+        <div className="sync-status-text" role="status" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', margin: '0 0 1rem' }}>
+          <CheckCircle2 size={15} />
+          <span>{acceptedMessage}</span>
+          <button type="button" className="modal-close-btn" aria-label="Dismiss" onClick={() => setAcceptedMessage('')}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <div className="underline-tabs">
         {PAGE_TABS.map((tab) => (

@@ -92,9 +92,21 @@ export const upcomingCandidateService = {
   },
 
   /**
-   * Accepts a candidate's offer response. Does NOT create an Employee record — acceptance
-   * is a distinct, explicit next step reserved for a future dedicated conversion flow
-   * (POST /applicants/{applicantId}/convert already exists server-side for that).
+   * Accepts a candidate for real: creates them as an Onboarding intern in the Interns database,
+   * links their Personnel record, and removes them from Upcoming
+   * (POST /applicants/{applicantId}/convert — server/db/applicantConversion.js).
+   * @param {string} candidateId
+   * @param {{ startDate: string, internshipEndDate: string, icPassportNumber: string, phone: string,
+   *   homeAddress: string, departmentId: string, mode: string, allowance: string }} details
+   * @returns {Promise<{ employee: Object, intern: { id: string, refNumber: string|null }, phaseMoved: boolean }>}
+   */
+  async acceptAndConvert(candidateId, details) {
+    return apiClient.post(`/applicants/${encodeURIComponent(candidateId)}/convert`, details);
+  },
+
+  /**
+   * Legacy local-only "Accepted" mark (this browser's overlay). Superseded by acceptAndConvert();
+   * kept so candidates already marked Accepted this way can still be undone.
    * @param {string} candidateId
    * @returns {Promise<Object>}
    */

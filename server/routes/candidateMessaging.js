@@ -3,7 +3,7 @@ import * as placeholders from "../db/emailPlaceholders.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { sendJson, NotFoundError, ValidationError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
-import { convertApplicant } from "../db/applicantConversion.js";
+import { convertApplicant, ConversionError } from "../db/applicantConversion.js";
 import { CHANNELS } from "../messaging/index.js";
 
 function validateOfferType(offerType) {
@@ -124,7 +124,13 @@ export const routes = {
   "/applicants/{applicantId}/convert": {
     async post(req, res, ctx) {
       const body = await readJsonBody(req);
-      const result = await convertApplicant(ctx.params.applicantId, body);
+      let result;
+      try {
+        result = await convertApplicant(ctx.params.applicantId, body);
+      } catch (error) {
+        if (error instanceof ConversionError) throw new ValidationError(error.message);
+        throw error;
+      }
       sendJson(res, ctx.cid, 201, result);
     },
   },

@@ -30,8 +30,13 @@ export async function listConfirmationCandidates() {
   // { id: null, name } the filter simply won't select.
   const departmentsByName = new Map(departments.map((d) => [d.name.toLowerCase(), d]));
 
+  // Anyone already accepted (converted into an intern — applicantConversion.js) leaves Upcoming
+  // straight away, even if moving their Recruitment phase to `completed` failed.
+  const [convertedRows] = await pool.query("SELECT DISTINCT applicant_id FROM applicant_conversions WHERE status = 'success'");
+  const convertedIds = new Set(convertedRows.map((r) => String(r.applicant_id)));
+
   const candidates = applicants
-    .filter((a) => a.phase === "confirmation")
+    .filter((a) => a.phase === "confirmation" && !convertedIds.has(String(a.id)))
     .map((a) => {
       const job = jobsById.get(a.job_id) ?? null;
       const departmentName = job?.department ?? null;
