@@ -3046,8 +3046,12 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+/* Fixed layout so the column widths set on the <th>s are used exactly. With automatic layout the
+   truncating cells (.gmail-cell-truncate, max-width: 0) collapse and every spare pixel goes to the
+   last column instead. */
 .gmail-table {
   min-width: 720px;
+  table-layout: fixed;
 }
 
 .gmail-table th {
@@ -3124,8 +3128,6 @@ body {
 
 .gmail-date-header {
   text-align: right;
-  width: 14%;
-  min-width: 8rem;
 }
 
 .gmail-date-cell {

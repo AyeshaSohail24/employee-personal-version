@@ -100,10 +100,10 @@ export default function CandidateTable({
           <table className="widget-table gmail-table">
             <thead>
               <tr>
-                <th style={{ width: '36%' }}>Candidate</th>
-                <th style={{ width: '40%' }}>Role</th>
-                <th style={{ width: '10%' }}>Offer</th>
-                <th className="gmail-date-header">{mode === 'active' ? 'Shortlisted' : 'Rejected'}</th>
+                <th style={{ width: '34%' }}>Candidate</th>
+                <th style={{ width: '38%' }}>Role</th>
+                <th style={{ width: '12%' }}>Offer</th>
+                <th className="gmail-date-header" style={{ width: '16%' }}>{mode === 'active' ? 'Shortlisted' : 'Rejected'}</th>
               </tr>
             </thead>
             <tbody>
