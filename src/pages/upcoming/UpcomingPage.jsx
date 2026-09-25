@@ -3,7 +3,7 @@ import { RefreshCw, Search, X, CheckCircle2, Link2 } from 'lucide-react';
 import { upcomingCandidateService } from '../../services/upcomingCandidateService.js';
 import { candidateEmailService } from '../../services/candidateEmailService.js';
 import { apiClient } from '../../services/apiClient.js';
-import { sortCandidates } from '../../domain/candidateDomain.js';
+import { sortCandidates, RESPONSE_STATUS } from '../../domain/candidateDomain.js';
 import CandidateTable from '../../components/upcoming/CandidateTable.jsx';
 import CandidateSearchResults from '../../components/upcoming/CandidateSearchResults.jsx';
 import DirectoryEmptyState from '../../components/employees/DirectoryEmptyState.jsx';
@@ -35,9 +35,14 @@ function isUnseen(candidate) {
   return candidate.emailStatus === 'Replied' && !candidate.notificationRead;
 }
 
+const isRejected = (candidate) => candidate.responseStatus === RESPONSE_STATUS.REJECTED;
+
+// All and Unseen show the active pipeline; Rejected shows candidates moved out with Reject, so
+// they can be found again and restored.
 const STATUS_TABS = [
-  { key: 'all', label: 'All', match: () => true },
-  { key: 'unseen', label: 'Unseen', match: isUnseen },
+  { key: 'all', label: 'All', match: (c) => !isRejected(c) },
+  { key: 'unseen', label: 'Unseen', match: (c) => !isRejected(c) && isUnseen(c) },
+  { key: 'rejected', label: 'Rejected', match: isRejected },
 ];
 
 export default function UpcomingPage() {
@@ -63,7 +68,7 @@ export default function UpcomingPage() {
       .catch((err) => console.error('Failed to load department filter options:', err));
   }, []);
 
-  const fetchAll = useCallback(() => upcomingCandidateService.queryCandidates({ scope: 'active' }), []);
+  const fetchAll = useCallback(() => upcomingCandidateService.getAll(), []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -93,7 +98,8 @@ export default function UpcomingPage() {
     }
   };
 
-  const unseenCount = useMemo(() => allCandidates.filter(isUnseen).length, [allCandidates]);
+  const unseenCount = useMemo(() => allCandidates.filter((c) => !isRejected(c) && isUnseen(c)).length, [allCandidates]);
+  const rejectedCount = useMemo(() => allCandidates.filter(isRejected).length, [allCandidates]);
 
   const candidates = useMemo(() => {
     const tab = STATUS_TABS.find((t) => t.key === statusTab) || STATUS_TABS[0];
@@ -164,6 +170,13 @@ export default function UpcomingPage() {
     await loadData();
   };
 
+  const handleRestore = async (candidateId) => {
+    const candidate = allCandidates.find((c) => c.id === candidateId);
+    if (!window.confirm(`Restore ${candidate?.fullName || 'this candidate'} to the active candidates list?`)) return;
+    await upcomingCandidateService.restoreCandidate(candidateId);
+    await loadData();
+  };
+
   const handleReject = async (candidate) => {
     if (!window.confirm(`Move candidate to Rejected?\n\n${candidate.fullName} will be removed from the active Candidates pipeline and preserved in the Rejected tab.`)) {
       return;
@@ -180,7 +193,7 @@ export default function UpcomingPage() {
           <p className="page-description">Shortlisted candidates and the pre-onboarding offer workflow</p>
           <p className="directory-row-click-hint"><strong>Note:</strong> Click on a candidate’s name to open their conversation and send an email directly.</p>
           <p className="directory-row-click-hint">
-            <strong>Message filters:</strong> <strong>All</strong> = all candidate conversations | <strong>Unseen</strong> = conversations with new messages not yet viewed.
+            <strong>Message filters:</strong> <strong>All</strong> = all candidate conversations | <strong>Unseen</strong> = conversations with new messages not yet viewed | <strong>Rejected</strong> = candidates you rejected, which can be restored.
           </p>
         </div>
       </div>
@@ -322,6 +335,9 @@ export default function UpcomingPage() {
                 {tab.key === 'unseen' && unseenCount > 0 && (
                   <span className="underline-tab-badge">{unseenCount}</span>
                 )}
+                {tab.key === 'rejected' && rejectedCount > 0 && (
+                  <span className="underline-tab-badge underline-tab-badge-muted">{rejectedCount}</span>
+                )}
               </button>
             ))}
           </div>
@@ -330,14 +346,19 @@ export default function UpcomingPage() {
             {loading ? (
               <div className="directory-table-card skeleton-box" style={{ height: '320px' }} />
             ) : candidates.length === 0 ? (
-              <DirectoryEmptyState message="No candidates match the current search or filter criteria." />
+              <DirectoryEmptyState
+                message={statusTab === 'rejected'
+                  ? 'No rejected candidates.'
+                  : 'No candidates match the current search or filter criteria.'}
+              />
             ) : (
               <CandidateTable
                 candidates={candidates}
-                mode="active"
+                mode={statusTab === 'rejected' ? 'rejected' : 'active'}
                 onAccept={handleAccept}
                 onReject={handleReject}
                 onUndoAccept={handleUndoAccept}
+                onRestore={handleRestore}
               />
             )}
           </div>

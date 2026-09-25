@@ -136,17 +136,17 @@ export default function CandidateTable({
                       {mode === 'active' ? (
                         <ActiveRowActions candidate={candidate} onAccept={onAccept} onReject={onReject} onUndoAccept={onUndoAccept} />
                       ) : (
-                        <div className="candidate-row-actions gmail-row-actions">
-                          <button
-                            type="button"
-                            className="candidate-action-btn restore"
-                            title={`Restore ${candidate.fullName}`}
-                            aria-label={`Restore ${candidate.fullName} to Candidates`}
-                            onClick={(e) => { e.stopPropagation(); onRestore(candidate.id); }}
-                          >
-                            <RotateCcw size={14} />
-                          </button>
-                        </div>
+                        // Always visible (not hover-only) so a rejected candidate can clearly be restored.
+                        <button
+                          type="button"
+                          className="candidate-restore-btn"
+                          title={`Restore ${candidate.fullName} to the active candidates`}
+                          aria-label={`Restore ${candidate.fullName} to Candidates`}
+                          onClick={(e) => { e.stopPropagation(); onRestore(candidate.id); }}
+                        >
+                          <RotateCcw size={13} />
+                          <span>Restore</span>
+                        </button>
                       )}
                     </td>
                   </tr>

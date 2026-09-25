@@ -8132,3 +8132,31 @@ input.form-control:focus {
 .dept-mapping-done {
   padding: 0.55rem 1.4rem;
 }
+
+/* Upcoming Personnel — Rejected tab */
+.underline-tab-badge.underline-tab-badge-muted {
+  background-color: var(--text-muted);
+}
+
+.candidate-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.75rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-primary-border);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-hover);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.candidate-restore-btn:hover {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #FFFFFF;
+}
