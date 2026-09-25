@@ -460,6 +460,16 @@ export const openapi = {
         "x-rizurf": { name: "Create Presence Override", purpose: "Manually correct today's presence view for one employee", use_when: ["The automatic presence calculation is wrong for a known reason"], do_not_use_when: [], inputs: ["employeeId", "overrideState", "reason"], outputs: ["override"], requires: ["Employee exists"], related_endpoints: ["GET /presence-overrides"], tags: ["presence", "attendance", "correction"] } },
     },
 
+    "/department-aliases": {
+      get: { summary: "List department mappings for Upcoming candidates.", security: scoped("candidate-messaging:read"),
+        "x-rizurf": { name: "List Department Mappings", purpose: "HR-defined mappings from a Recruitment job's free-text department to a real department in the Departments service", use_when: ["Showing or editing how candidate departments are matched"], do_not_use_when: [], inputs: [], outputs: ["aliases[]"], requires: [], related_endpoints: ["GET /candidates"], tags: ["departments", "mapping", "upcoming"] } },
+      put: { summary: "Create or replace a department mapping.", security: scoped("candidate-messaging:write"),
+        "x-rizurf": { name: "Save Department Mapping", purpose: "Map a Recruitment department name (matched ignoring case and spacing) to a real department", use_when: ["A candidate's department shows the Recruitment text instead of a real department"], do_not_use_when: ["The name already matches a real department"], inputs: ["alias", "departmentId"], outputs: ["alias"], requires: ["departmentId exists in the Departments service"], related_endpoints: ["GET /department-aliases"], tags: ["departments", "mapping", "upcoming"] } },
+    },
+    "/department-aliases/{alias}": {
+      delete: { summary: "Remove a department mapping.", security: scoped("candidate-messaging:write"),
+        "x-rizurf": { name: "Delete Department Mapping", purpose: "Stop mapping a Recruitment department name", use_when: ["A mapping is wrong or no longer needed"], do_not_use_when: [], inputs: ["alias"], outputs: [], requires: ["Mapping exists"], related_endpoints: ["GET /department-aliases"], tags: ["departments", "mapping", "upcoming"] } },
+    },
     "/candidates": {
       get: { summary: "Real shortlisted candidates at the confirmation phase, read through from the Recruitment API.", security: scoped("candidate-messaging:read"),
         "x-rizurf": { name: "List Upcoming Candidates", purpose: "The real candidate roster for the Upcoming/pre-onboarding offer workflow — every applicant currently at the `confirmation` phase in the Recruitment API, with their department/position resolved via their job. Also polls for new replies (IMAP) before responding, and derives each candidate's emailStatus (Pending/Sent/Replied) and notificationRead from this app's own candidate_messages table — neither is a local flag, both reflect real sent/received messages", use_when: ["Populating the Upcoming page's candidate table"], do_not_use_when: ["You need the full applicant record or a phase other than confirmation — call the Recruitment API directly"], inputs: [], outputs: ["candidates[]"], requires: [], related_endpoints: ["GET /candidates/{applicantId}/messages", "POST /applicants/{applicantId}/convert"], tags: ["candidates", "upcoming", "applicants", "confirmation", "recruitment", "reply", "imap"] } },

@@ -13,22 +13,23 @@ import { pool } from "./pool.js";
 import { applicantsClient } from "../clients/applicantsClient.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
 import { checkForReplies } from "../messaging/imapReplyChecker.js";
+import { loadDepartmentAliasMap, resolveDepartment } from "./departmentAliases.js";
 
 export async function listConfirmationCandidates() {
-  const [, applicants, jobs, departments] = await Promise.all([
+  const [, applicants, jobs, departments, aliasMap] = await Promise.all([
     checkForReplies().catch(() => {}),
     applicantsClient.listApplicants({}),
     applicantsClient.listJobs(),
     departmentsClient.listDepartments().catch(() => []),
+    loadDepartmentAliasMap(),
   ]);
 
   const jobsById = new Map(jobs.map((j) => [j.id, j]));
-  // A job's `department` is a plain display string (e.g. "Engineering"),
-  // not an id — matched by name, case-insensitively, against this app's
-  // real Departments API so the department filter can still work when the
-  // names line up; unmatched departments fall back to a display-only
-  // { id: null, name } the filter simply won't select.
-  const departmentsByName = new Map(departments.map((d) => [d.name.toLowerCase(), d]));
+  // A job's `department` is a plain display string (e.g. "Engineering"), not an id — resolved
+  // against the real Departments API by name, or HR's mapping (departmentAliases.js), both
+  // ignoring case and extra spaces. Anything still unmatched falls back to a display-only
+  // { id: null, name } that the department filter can't select, and `jobDepartment` keeps the
+  // original text so HR can map it.
 
   // Anyone already accepted (converted into an intern — applicantConversion.js) leaves Upcoming
   // straight away, even if moving their Recruitment phase to `completed` failed.
@@ -40,7 +41,7 @@ export async function listConfirmationCandidates() {
     .map((a) => {
       const job = jobsById.get(a.job_id) ?? null;
       const departmentName = job?.department ?? null;
-      const matchedDepartment = departmentName ? departmentsByName.get(departmentName.toLowerCase()) : null;
+      const matchedDepartment = departmentName ? resolveDepartment(departmentName, departments, aliasMap) : null;
 
       return {
         id: String(a.id),
@@ -53,6 +54,7 @@ export async function listConfirmationCandidates() {
           : departmentName
             ? { id: null, name: departmentName }
             : null,
+        jobDepartment: departmentName,
         resumeAvailable: Boolean(a.resume),
         // Exposed for email placeholders (src/domain/emailPlaceholders.js). Already on every
         // applicant record this request fetches, so no extra call.

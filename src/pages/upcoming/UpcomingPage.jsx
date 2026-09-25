@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Search, X, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, Search, X, CheckCircle2, Link2 } from 'lucide-react';
 import { upcomingCandidateService } from '../../services/upcomingCandidateService.js';
 import { candidateEmailService } from '../../services/candidateEmailService.js';
 import { apiClient } from '../../services/apiClient.js';
@@ -9,6 +9,7 @@ import CandidateSearchResults from '../../components/upcoming/CandidateSearchRes
 import DirectoryEmptyState from '../../components/employees/DirectoryEmptyState.jsx';
 import EmailDraftsPanel from '../../components/upcoming/EmailDraftsPanel.jsx';
 import AcceptCandidateModal from '../../components/upcoming/AcceptCandidateModal.jsx';
+import DepartmentMappingModal from '../../components/upcoming/DepartmentMappingModal.jsx';
 import { Select } from '../../components/common/Select.jsx';
 
 const PAGE_TABS = [
@@ -130,6 +131,16 @@ export default function UpcomingPage() {
   // Accept opens the Accept form (AcceptCandidateModal): on success the candidate is now an
   // Onboarding intern, so they drop out of this list on the reload below.
   const [acceptingCandidate, setAcceptingCandidate] = useState(null);
+  const [isMappingOpen, setIsMappingOpen] = useState(false);
+
+  // Job department names (from the Recruitment system) that didn't resolve to a real department.
+  const unmatchedDepartmentNames = useMemo(() => {
+    const names = new Map();
+    for (const c of allCandidates) {
+      if (c.jobDepartment && !c.department?.id) names.set(c.jobDepartment.trim().toLowerCase(), c.jobDepartment.trim());
+    }
+    return [...names.values()].sort((a, b) => a.localeCompare(b));
+  }, [allCandidates]);
   const [acceptedMessage, setAcceptedMessage] = useState('');
 
   const handleAccept = (candidate) => {
@@ -174,6 +185,13 @@ export default function UpcomingPage() {
         </div>
       </div>
 
+      {isMappingOpen && (
+        <DepartmentMappingModal
+          unmatchedNames={unmatchedDepartmentNames}
+          onClose={() => setIsMappingOpen(false)}
+          onChanged={() => loadData()}
+        />
+      )}
       {acceptingCandidate && (
         <AcceptCandidateModal
           candidate={acceptingCandidate}
@@ -269,6 +287,18 @@ export default function UpcomingPage() {
                 options={departments.map((d) => ({ value: d.id, label: d.name }))}
               />
             </div>
+            <button
+              type="button"
+              className="dept-mapping-link"
+              onClick={() => setIsMappingOpen(true)}
+              title="Link Recruitment department names to real departments"
+            >
+              <Link2 size={14} />
+              <span>Map departments</span>
+              {unmatchedDepartmentNames.length > 0 && (
+                <span className="underline-tab-badge">{unmatchedDepartmentNames.length}</span>
+              )}
+            </button>
           </div>
 
           <div className="underline-tabs">

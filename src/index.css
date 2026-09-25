@@ -8002,7 +8002,49 @@ input.form-control:focus {
   }
 }
 
+/* Department mapping (DepartmentMappingModal / Upcoming filter bar) */
+.dept-mapping-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  align-self: center;
+  background: none;
+  border: none;
+  padding: 0.25rem 0.1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
 
+.dept-mapping-link:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
 
+.dept-mapping-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
 
+.dept-mapping-alias {
+  font-weight: 600;
+  color: var(--text-main);
+  overflow-wrap: anywhere;
+}
 
+.dept-mapping-arrow {
+  color: var(--text-muted);
+}
+
+.dept-mapping-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}

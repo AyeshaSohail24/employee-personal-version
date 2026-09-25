@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import { pool } from "../db/pool.js";
 import { assertRequiredEnv } from "../config.js";
 
-const ALLOWED_TABLES = ["email_placeholders", "upcoming_candidates_seen"];
+const ALLOWED_TABLES = ["email_placeholders", "upcoming_candidates_seen", "department_aliases"];
 
 async function main() {
   assertRequiredEnv();

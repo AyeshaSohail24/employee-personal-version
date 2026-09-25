@@ -81,6 +81,7 @@ DROP TABLE IF EXISTS `applicant_conversions`;
 DROP TABLE IF EXISTS `email_templates`;
 DROP TABLE IF EXISTS `email_placeholders`;
 DROP TABLE IF EXISTS `upcoming_candidates_seen`;
+DROP TABLE IF EXISTS `department_aliases`;
 DROP TABLE IF EXISTS `offboarding_task_instances`;
 DROP TABLE IF EXISTS `offboarding_plan_instances`;
 DROP TABLE IF EXISTS `offboarding_plan_tasks`;
@@ -577,6 +578,20 @@ CREATE TABLE IF NOT EXISTS `applicant_conversions` (
     INDEX `idx_applicant_conversions_applicant` (`applicant_id`),
     INDEX `idx_applicant_conversions_employee` (`employee_id`),
     INDEX `idx_applicant_conversions_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 24c. DEPARTMENT_ALIASES — HR's mappings from a Recruitment job's free-text
+--      department (e.g. "Engineering") to a real department in the
+--      Departments service, used when the names don't already match.
+--      `alias_key` is the name lower-cased with spaces collapsed, so matching
+--      ignores case and spacing. Created on an existing database by
+--      `npm run create-department-aliases-table`.
+CREATE TABLE IF NOT EXISTS `department_aliases` (
+    `alias_key` VARCHAR(255) PRIMARY KEY,
+    `alias` VARCHAR(255) NOT NULL, -- as HR entered it, for display
+    `department_id` VARCHAR(64) NOT NULL, -- soft ref -> Departments service id
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 24b. UPCOMING_CANDIDATES_SEEN — the date each applicant first appeared in
