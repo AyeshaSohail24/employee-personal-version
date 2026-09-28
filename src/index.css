@@ -8207,3 +8207,27 @@ input.form-control:focus {
   opacity: 0.5;
   cursor: default;
 }
+
+.plan-task-breakdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.plan-task-required-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.plan-task-required-toggle input {
+  margin-top: 0.2rem;
+}

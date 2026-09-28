@@ -386,6 +386,10 @@ export const openapi = {
       get: { summary: "Fetch one onboarding instance with its task instances.", security: scoped("onboarding:read"),
         "x-rizurf": { name: "Get Onboarding Instance", purpose: "See a launched plan's progress, and the employee's live Interns DB record if they're an intern", use_when: ["Viewing an employee's onboarding progress"], do_not_use_when: [], inputs: ["id"], outputs: ["instance", "taskInstances[]", "internRecord"], requires: [], related_endpoints: ["PATCH /onboarding/task-instances/{id}"], tags: ["onboarding", "progress", "interns"] } },
     },
+    "/onboarding/instances/{id}/tasks": {
+      post: { summary: "Add a task to one person's onboarding plan.", security: scoped("onboarding:write"),
+        "x-rizurf": { name: "Add Onboarding Task", purpose: "Add an extra task to a single person's plan without changing the shared plan tasks", use_when: ["This person needs a step the standard plan doesn't have"], do_not_use_when: ["Everyone should get the task — add it under Onboarding > Plans"], inputs: ["title", "description", "dueDate", "required"], outputs: ["taskInstance"], requires: ["Plan instance exists", "title and dueDate (YYYY-MM-DD)"], related_endpoints: ["PATCH /onboarding/task-instances/{id}", "DELETE /onboarding/task-instances/{id}"], tags: ["onboarding", "task", "create"] } },
+    },
     "/onboarding/task-instances/{id}": {
       patch: { summary: "Mark an onboarding task done/reopen it, or edit its title, description or due date.", security: scoped("onboarding:write"),
         "x-rizurf": { name: "Update Onboarding Task", purpose: "Complete or reopen a single onboarding task", use_when: ["A step in the checklist is finished", "A step was marked done by mistake"], do_not_use_when: [], inputs: ["completed", "title", "description", "dueDate"], outputs: ["taskInstance"], requires: ["Task instance exists"], related_endpoints: ["GET /onboarding/instances/{id}"], tags: ["onboarding", "task", "complete"] } },

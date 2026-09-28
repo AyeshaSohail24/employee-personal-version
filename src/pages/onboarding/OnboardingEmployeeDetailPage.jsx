@@ -8,6 +8,7 @@ import {
   FileText,
   Pencil,
   Trash2,
+  Plus,
 } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
 import { onboardingService } from '../../services/onboardingService.js';
@@ -34,6 +35,7 @@ export default function OnboardingEmployeeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
+  const [isAddingTask, setIsAddingTask] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
@@ -67,6 +69,12 @@ export default function OnboardingEmployeeDetailPage() {
     } finally {
       setTogglingId(null);
     }
+  };
+
+  const handleAddTask = async (details) => {
+    await onboardingService.addRealTaskToInstance(instance.id, details);
+    setIsAddingTask(false);
+    await loadData();
   };
 
   const handleSaveTask = async (details) => {
@@ -122,6 +130,14 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
 
   return (
     <div className="page-layout-container">
+      {isAddingTask && (
+        <EditPlanTaskModal
+          personName={employee.fullName}
+          defaultDueDate={toDateOnly(instance?.anchor_date)}
+          onClose={() => setIsAddingTask(false)}
+          onSave={handleAddTask}
+        />
+      )}
       {editingTask && (
         <EditPlanTaskModal
           task={editingTask}
@@ -215,10 +231,19 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
 
           {/* Task Breakdown Table */}
           <div className="table-container-card">
-            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-light)' }}>
+            <div className="plan-task-breakdown-header">
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
                 Onboarding Task Breakdown
               </h3>
+              <button
+                type="button"
+                className="btn-primary dept-mapping-done"
+                onClick={() => setIsAddingTask(true)}
+                title={`Add a task to ${employee.fullName}'s plan only`}
+              >
+                <Plus size={15} />
+                <span>Add Task</span>
+              </button>
             </div>
 
             <div style={{ overflowX: 'auto' }}>

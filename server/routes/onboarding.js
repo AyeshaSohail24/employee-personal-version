@@ -98,6 +98,21 @@ export const routes = {
       });
     },
   },
+  // Add a task to one person's plan only.
+  "/onboarding/instances/{id}/tasks": {
+    async post(req, res, ctx) {
+      const body = await readJsonBody(req);
+      let taskInstanceId;
+      try {
+        taskInstanceId = await db.addTaskToInstance(ctx.params.id, body);
+      } catch (error) {
+        if (error instanceof RowNotFoundError) throw new NotFoundError(error.message);
+        if (error instanceof db.TaskInstanceValidationError) throw new ValidationError(error.message);
+        throw error;
+      }
+      sendJson(res, ctx.cid, 201, { taskInstance: await db.getTaskInstance(taskInstanceId) });
+    },
+  },
   // One task in one person's plan: mark done/reopen (`completed`) and/or edit its title,
   // description or due date; DELETE removes it from that plan only.
   "/onboarding/task-instances/{id}": {

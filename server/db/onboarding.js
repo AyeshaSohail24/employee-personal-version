@@ -268,6 +268,55 @@ export async function updateTaskInstanceDetails(taskInstanceId, { title, descrip
   }
 }
 
+// Adds a new task to ONE person's plan only (their own task row + its linked activity), placed
+// after the existing tasks. It isn't added to Onboarding > Plans, so no one else's plan changes.
+// Uses the "To Do" activity type and HR assignment, like the tasks HR configures there.
+export async function addTaskToInstance(planInstanceId, { title, description, dueDate, required = true } = {}) {
+  const trimmedTitle = String(title ?? "").trim();
+  if (!trimmedTitle) throw new TaskInstanceValidationError("The task title can't be empty.");
+  if (trimmedTitle.length > 255) throw new TaskInstanceValidationError("The task title must be 255 characters or fewer.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate ?? ""))) throw new TaskInstanceValidationError("Enter a valid due date.");
+  const trimmedDescription = String(description ?? "").trim() || null;
+
+  const planInstance = await getRow("onboarding_plan_instances", planInstanceId);
+  if (!planInstance) throw new RowNotFoundError(`No onboarding plan instance with id ${planInstanceId}.`);
+
+  const [[todoType]] = await pool.query("SELECT id FROM activity_types WHERE name = 'To Do' LIMIT 1");
+  const [[anyType]] = todoType ? [[todoType]] : await pool.query("SELECT id FROM activity_types ORDER BY id LIMIT 1");
+  if (!anyType) throw new TaskInstanceValidationError("No activity types are configured.");
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[{ offset }]] = await conn.query("SELECT DATEDIFF(?, anchor_date) AS offset FROM onboarding_plan_instances WHERE id = ?", [dueDate, planInstanceId]);
+    const [[{ nextSequence }]] = await conn.query(
+      "SELECT COALESCE(MAX(sequence), 0) + 1 AS nextSequence FROM onboarding_task_instances WHERE plan_instance_id = ?",
+      [planInstanceId],
+    );
+    const [taskResult] = await conn.query(
+      `INSERT INTO onboarding_task_instances
+         (plan_instance_id, plan_task_id, title, description, activity_type_id, assignment_rule,
+          relative_offset_days, originally_calculated_due_date, required, sequence)
+       VALUES (?, NULL, ?, ?, ?, 'hr', ?, ?, ?, ?)`,
+      [planInstanceId, trimmedTitle, trimmedDescription, anyType.id, offset ?? 0, dueDate, Boolean(required), nextSequence],
+    );
+    const taskInstanceId = taskResult.insertId;
+    const [activityResult] = await conn.query(
+      `INSERT INTO activities (type_id, title, description, employee_id, due_date, source, source_entity_type, source_entity_id)
+       VALUES (?, ?, ?, ?, ?, 'Onboarding', 'OnboardingTaskInstance', ?)`,
+      [anyType.id, trimmedTitle, trimmedDescription, planInstance.employee_id, dueDate, taskInstanceId],
+    );
+    await conn.query("UPDATE onboarding_task_instances SET activity_id = ? WHERE id = ?", [activityResult.insertId, taskInstanceId]);
+    await conn.commit();
+    return taskInstanceId;
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
 // Removes ONE task from one person's plan (their snapshot row + its linked activity) and renumbers
 // the rest; the shared task in Onboarding > Plans is untouched. If what's left is now all done,
 // the plan is complete and the usual Onboarding -> Active hand-off runs (activateIfPlanComplete).

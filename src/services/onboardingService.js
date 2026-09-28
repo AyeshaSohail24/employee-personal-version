@@ -59,6 +59,16 @@ export const onboardingService = {
   },
 
   /**
+   * Adds a task to one person's plan only — POST /onboarding/instances/{id}/tasks.
+   * @param {number|string} planInstanceId
+   * @param {{ title: string, description?: string, dueDate: string, required?: boolean }} details
+   */
+  async addRealTaskToInstance(planInstanceId, details) {
+    const { taskInstance } = await apiClient.post(`/onboarding/instances/${planInstanceId}/tasks`, details);
+    return taskInstance;
+  },
+
+  /**
    * Removes one task from one person's plan only — DELETE /onboarding/task-instances/{id}.
    * @param {number|string} taskInstanceId
    */
