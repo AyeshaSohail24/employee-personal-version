@@ -8360,3 +8360,22 @@ input.form-control:focus {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
+
+/* Onboarding Progress — search box sits in the Current / History tab row, on the right. Tabs are
+   bottom-aligned so the active underline stays on the row's border. */
+.onboarding-tabs-row {
+  align-items: flex-end;
+}
+
+.onboarding-tabs-row .onboarding-tabs-search {
+  margin-left: auto;
+  margin-bottom: 0.5rem;
+  width: 100%;
+  max-width: 280px;
+}
+
+.onboarding-history-intro {
+  margin: 0 0 0.85rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}

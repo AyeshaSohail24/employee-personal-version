@@ -20,24 +20,12 @@ const HISTORY_STATUS_STYLES = {
 };
 
 // Onboarding History — completed onboarding plans, kept for reference after people move on.
-function OnboardingHistoryTable({ records, totalCount, loading, search, onSearchChange, onOpen }) {
+function OnboardingHistoryTable({ records, totalCount, loading, onOpen }) {
   return (
     <>
-      <div className="table-toolbar-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem', padding: '0.75rem 1rem', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-          Completed onboarding records, kept for reference after each person moves on.
-        </span>
-        <div className="toolbar-search-box" style={{ maxWidth: '280px' }}>
-          <Search size={16} className="toolbar-search-icon" />
-          <input
-            type="text"
-            className="toolbar-search-input"
-            placeholder="Search name or ref number"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
-        </div>
-      </div>
+      <p className="onboarding-history-intro">
+        Completed onboarding records, kept for reference after each person moves on.
+      </p>
 
       <div className="table-container-card">
         {loading ? (
@@ -281,7 +269,8 @@ export default function OnboardingEmployeesPage() {
         </button>
       </div>
 
-      <div className="underline-tabs" style={{ marginBottom: '1.25rem' }}>
+      {/* Tabs on the left, search on the right — the search box filters whichever tab is open. */}
+      <div className="underline-tabs onboarding-tabs-row" style={{ marginBottom: '1.25rem' }}>
         <button
           type="button"
           className={`underline-tab-item ${view === 'current' ? 'active' : ''}`}
@@ -298,6 +287,16 @@ export default function OnboardingEmployeesPage() {
           History
           {completedCount > 0 && <span className="underline-tab-badge underline-tab-badge-muted">{completedCount}</span>}
         </button>
+        <div className="toolbar-search-box onboarding-tabs-search">
+          <Search size={16} className="toolbar-search-icon" />
+          <input
+            type="text"
+            className="toolbar-search-input"
+            placeholder={view === 'history' ? 'Search name or ref number' : 'Search intern name or ref number'}
+            value={view === 'history' ? historySearch : search}
+            onChange={(e) => (view === 'history' ? setHistorySearch : setSearch)(e.target.value)}
+          />
+        </div>
       </div>
 
       {view === 'history' ? (
@@ -305,26 +304,10 @@ export default function OnboardingEmployeesPage() {
           records={visibleHistory}
           totalCount={history.length}
           loading={loading}
-          search={historySearch}
-          onSearchChange={setHistorySearch}
           onOpen={(record) => navigate(`/onboarding/employees/${record.employeeId}?from=history`)}
         />
       ) : (
       <>
-
-      {/* Filter Bar */}
-      <div className="table-toolbar-card" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginBottom: '1.25rem', padding: '0.75rem 1rem', flexWrap: 'wrap' }}>
-        <div className="toolbar-search-box" style={{ maxWidth: '280px' }}>
-          <Search size={16} className="toolbar-search-icon" />
-          <input
-            type="text"
-            className="toolbar-search-input"
-            placeholder="Search intern name or ref number"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </div>
 
       {/* Interns Table */}
       <div className="table-container-card">
