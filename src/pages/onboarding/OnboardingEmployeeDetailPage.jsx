@@ -21,6 +21,11 @@ import EditPlanTaskModal from '../../components/onboarding/EditPlanTaskModal.jsx
 // listInternsWithAutoLaunchedOnboarding()), composed from Universal + their
 // department's active tasks. This page views it, checks off tasks, and can edit or remove a
 // single task for this person only (their own copy — Onboarding > Plans is unchanged).
+// "2026-09-17T00:00:00.000Z" -> "2026-09-17" (DATE columns arrive as full timestamps).
+function toDateOnly(value) {
+  return value ? String(value).slice(0, 10) : '';
+}
+
 export default function OnboardingEmployeeDetailPage() {
   const { employeeId } = useParams();
   const [employee, setEmployee] = useState(null);
@@ -150,7 +155,7 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
                 </span>
               </div>
               <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                {employee.position?.name || 'Position N/A'} · {employee.department?.name || 'Department N/A'} · ID: <strong>{employee.employeeId}</strong>
+                {employee.department?.name || 'Department N/A'} · ID: <strong>{employee.employeeId}</strong>
               </div>
             </div>
           </div>
@@ -159,7 +164,7 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
             <div style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>Anchor Start Date</div>
             <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
               <Calendar size={14} style={{ color: 'var(--color-primary)' }} />
-              <span>{instance?.anchor_date || employee.startDate || 'N/A'}</span>
+              <span>{toDateOnly(instance?.anchor_date || employee.startDate) || 'N/A'}</span>
             </div>
           </div>
         </div>
@@ -184,7 +189,7 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
               <div>
                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Onboarding Plan</h3>
                 <span style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>
-                  Launched on {instance.started_at}
+                  Launched on {toDateOnly(instance.started_at)}
                 </span>
               </div>
               <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
