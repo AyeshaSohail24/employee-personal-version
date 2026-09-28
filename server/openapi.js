@@ -387,8 +387,10 @@ export const openapi = {
         "x-rizurf": { name: "Get Onboarding Instance", purpose: "See a launched plan's progress, and the employee's live Interns DB record if they're an intern", use_when: ["Viewing an employee's onboarding progress"], do_not_use_when: [], inputs: ["id"], outputs: ["instance", "taskInstances[]", "internRecord"], requires: [], related_endpoints: ["PATCH /onboarding/task-instances/{id}"], tags: ["onboarding", "progress", "interns"] } },
     },
     "/onboarding/task-instances/{id}": {
-      patch: { summary: "Mark an onboarding task done or reopen it.", security: scoped("onboarding:write"),
-        "x-rizurf": { name: "Update Onboarding Task", purpose: "Complete or reopen a single onboarding task", use_when: ["A step in the checklist is finished", "A step was marked done by mistake"], do_not_use_when: [], inputs: ["completed"], outputs: ["taskInstance"], requires: ["Task instance exists"], related_endpoints: ["GET /onboarding/instances/{id}"], tags: ["onboarding", "task", "complete"] } },
+      patch: { summary: "Mark an onboarding task done/reopen it, or edit its title, description or due date.", security: scoped("onboarding:write"),
+        "x-rizurf": { name: "Update Onboarding Task", purpose: "Complete or reopen a single onboarding task", use_when: ["A step in the checklist is finished", "A step was marked done by mistake"], do_not_use_when: [], inputs: ["completed", "title", "description", "dueDate"], outputs: ["taskInstance"], requires: ["Task instance exists"], related_endpoints: ["GET /onboarding/instances/{id}"], tags: ["onboarding", "task", "complete"] } },
+      delete: { summary: "Remove one task from one person's onboarding plan.", security: scoped("onboarding:write"),
+        "x-rizurf": { name: "Delete Onboarding Task", purpose: "Drop a task from a single person's plan without changing the shared plan tasks", use_when: ["A task doesn't apply to this person"], do_not_use_when: ["The task should go for everyone — edit it under Onboarding > Plans"], inputs: ["id"], outputs: [], requires: ["Task instance exists", "If every remaining required task is done, the plan completes and the intern moves to Active"], related_endpoints: ["PATCH /onboarding/task-instances/{id}"], tags: ["onboarding", "task", "delete"] } },
     },
 
     "/offboarding/interns": {

@@ -47,6 +47,25 @@ export const onboardingService = {
    * /onboarding/task-instances/{id}, the real counterpart to activityService.markComplete/reopen
    * (which only ever operates on mock activities).
    */
+  /**
+   * Edits one task in one person's plan only (title/description/due date) —
+   * PATCH /onboarding/task-instances/{id}. The shared task under Onboarding > Plans is unchanged.
+   * @param {number|string} taskInstanceId
+   * @param {{ title?: string, description?: string, dueDate?: string }} details
+   */
+  async updateRealTaskInstance(taskInstanceId, details) {
+    const { taskInstance } = await apiClient.patch(`/onboarding/task-instances/${taskInstanceId}`, details);
+    return taskInstance;
+  },
+
+  /**
+   * Removes one task from one person's plan only — DELETE /onboarding/task-instances/{id}.
+   * @param {number|string} taskInstanceId
+   */
+  async deleteRealTaskInstance(taskInstanceId) {
+    await apiClient.delete(`/onboarding/task-instances/${taskInstanceId}`);
+  },
+
   async setRealTaskInstanceCompleted(taskInstanceId, completed) {
     const { taskInstance } = await apiClient.patch(`/onboarding/task-instances/${taskInstanceId}`, { completed });
     return taskInstance;

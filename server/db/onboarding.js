@@ -215,6 +215,90 @@ export async function setTaskInstanceCompleted(taskInstanceId, completed) {
   }
 }
 
+export class TaskInstanceValidationError extends Error {}
+
+// Edits ONE task in one person's plan (their own snapshot row + its linked activity) — the shared
+// Universal/department task in Onboarding > Plans is never touched, so no one else's plan changes.
+// Changing the due date also updates the task's relative day (vs. the plan's anchor date) so the
+// "Relative Timing" column stays truthful; originally_calculated_due_date keeps the original.
+export async function updateTaskInstanceDetails(taskInstanceId, { title, description, dueDate } = {}) {
+  const taskInstance = await getRow("onboarding_task_instances", taskInstanceId);
+  if (!taskInstance) throw new RowNotFoundError(`No onboarding task instance with id ${taskInstanceId}.`);
+
+  const taskColumns = {};
+  const activityColumns = {};
+  if (title !== undefined) {
+    const trimmed = String(title ?? "").trim();
+    if (!trimmed) throw new TaskInstanceValidationError("The task title can't be empty.");
+    if (trimmed.length > 255) throw new TaskInstanceValidationError("The task title must be 255 characters or fewer.");
+    taskColumns.title = trimmed;
+    activityColumns.title = trimmed;
+  }
+  if (description !== undefined) {
+    const trimmed = String(description ?? "").trim();
+    taskColumns.description = trimmed || null;
+    activityColumns.description = trimmed || null;
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    if (dueDate !== undefined) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate))) throw new TaskInstanceValidationError("Enter a valid due date.");
+      activityColumns.due_date = dueDate;
+      const [[{ offset }]] = await conn.query(
+        "SELECT DATEDIFF(?, anchor_date) AS offset FROM onboarding_plan_instances WHERE id = ?",
+        [dueDate, taskInstance.plan_instance_id],
+      );
+      if (offset !== null && offset !== undefined) taskColumns.relative_offset_days = offset;
+    }
+    const setClause = (cols) => Object.keys(cols).map((c) => `\`${c}\` = ?`).join(", ");
+    if (Object.keys(taskColumns).length > 0) {
+      await conn.query(`UPDATE onboarding_task_instances SET ${setClause(taskColumns)} WHERE id = ?`, [...Object.values(taskColumns), taskInstanceId]);
+    }
+    if (Object.keys(activityColumns).length > 0 && taskInstance.activity_id) {
+      await conn.query(`UPDATE activities SET ${setClause(activityColumns)} WHERE id = ?`, [...Object.values(activityColumns), taskInstance.activity_id]);
+    }
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
+// Removes ONE task from one person's plan (their snapshot row + its linked activity) and renumbers
+// the rest; the shared task in Onboarding > Plans is untouched. If what's left is now all done,
+// the plan is complete and the usual Onboarding -> Active hand-off runs (activateIfPlanComplete).
+export async function deleteTaskInstance(taskInstanceId) {
+  const taskInstance = await getRow("onboarding_task_instances", taskInstanceId);
+  if (!taskInstance) throw new RowNotFoundError(`No onboarding task instance with id ${taskInstanceId}.`);
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query("DELETE FROM onboarding_task_instances WHERE id = ?", [taskInstanceId]);
+    if (taskInstance.activity_id) await conn.query("DELETE FROM activities WHERE id = ?", [taskInstance.activity_id]);
+    const [remaining] = await conn.query(
+      "SELECT id FROM onboarding_task_instances WHERE plan_instance_id = ? ORDER BY sequence ASC, id ASC",
+      [taskInstance.plan_instance_id],
+    );
+    for (const [index, row] of remaining.entries()) {
+      await conn.query("UPDATE onboarding_task_instances SET sequence = ? WHERE id = ?", [index + 1, row.id]);
+    }
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+
+  await activateIfPlanComplete(taskInstance.plan_instance_id);
+  return taskInstance.plan_instance_id;
+}
+
 // Checks whether every required task in this plan instance is now done and, if so, hands off to
 // activateInternOnOnboardingComplete() (internSync.js) to advance the linked intern's status to
 // Active in both the Interns DB and the local employees record (see that function's own doc

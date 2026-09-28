@@ -6,18 +6,21 @@ import {
   CheckCircle2,
   RotateCcw,
   FileText,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
 import { onboardingService } from '../../services/onboardingService.js';
 import Avatar from '../../components/common/Avatar.jsx';
+import EditPlanTaskModal from '../../components/onboarding/EditPlanTaskModal.jsx';
 
 // Real-data onboarding detail view for one (real) intern's local employee
 // record — reached from OnboardingEmployeesPage's "View Progress" link. The
 // plan itself is never launched from here: it's auto-launched the moment the
 // intern first appears with no plan yet (server/db/onboarding.js's
 // listInternsWithAutoLaunchedOnboarding()), composed from Universal + their
-// department's active tasks. This page only views it and checks off tasks —
-// editing/dropping a plan has no real-backend equivalent yet.
+// department's active tasks. This page views it, checks off tasks, and can edit or remove a
+// single task for this person only (their own copy — Onboarding > Plans is unchanged).
 export default function OnboardingEmployeeDetailPage() {
   const { employeeId } = useParams();
   const [employee, setEmployee] = useState(null);
@@ -25,6 +28,8 @@ export default function OnboardingEmployeeDetailPage() {
   const [taskInstances, setTaskInstances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -59,6 +64,30 @@ export default function OnboardingEmployeeDetailPage() {
     }
   };
 
+  const handleSaveTask = async (details) => {
+    await onboardingService.updateRealTaskInstance(editingTask.id, details);
+    setEditingTask(null);
+    await loadData();
+  };
+
+  const handleDeleteTask = async (task) => {
+    const name = employee?.fullName || 'this person';
+    if (!window.confirm(`Remove "${task.title}" from ${name}'s onboarding plan?
+
+Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyone else. This can't be undone.`)) {
+      return;
+    }
+    setDeletingId(task.id);
+    try {
+      await onboardingService.deleteRealTaskInstance(task.id);
+      await loadData();
+    } catch (err) {
+      alert(`Failed to remove the task: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="page-layout-container">
@@ -88,6 +117,14 @@ export default function OnboardingEmployeeDetailPage() {
 
   return (
     <div className="page-layout-container">
+      {editingTask && (
+        <EditPlanTaskModal
+          task={editingTask}
+          personName={employee.fullName}
+          onClose={() => setEditingTask(null)}
+          onSave={handleSaveTask}
+        />
+      )}
       <div style={{ marginBottom: '1rem' }}>
         <Link to="/onboarding/employees" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
           <ArrowLeft size={14} /> Back to Onboarding Progress
@@ -184,10 +221,10 @@ export default function OnboardingEmployeeDetailPage() {
                 <thead>
                   <tr>
                     <th style={{ width: '5%', textAlign: 'center' }}>#</th>
-                    <th style={{ width: '52%', textAlign: 'left' }}>Task Title</th>
-                    <th style={{ width: '15%', textAlign: 'center' }}>Relative Timing</th>
-                    <th style={{ width: '18%', textAlign: 'center' }}>Due Date</th>
-                    <th style={{ width: '10%', textAlign: 'center' }}>Action</th>
+                    <th style={{ width: '45%', textAlign: 'left' }}>Task Title</th>
+                    <th style={{ width: '14%', textAlign: 'center' }}>Relative Timing</th>
+                    <th style={{ width: '14%', textAlign: 'center' }}>Due Date</th>
+                    <th style={{ width: '22%', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -214,16 +251,37 @@ export default function OnboardingEmployeeDetailPage() {
                           {(task.due_date || task.originally_calculated_due_date || '').slice(0, 10)}
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          <button
-                            type="button"
-                            className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
-                            style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
-                            disabled={togglingId === task.id}
-                            onClick={() => handleToggleTaskComplete(task.id, isDone)}
-                          >
-                            {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
-                            <span>{isDone ? 'Reopen' : 'Done'}</span>
-                          </button>
+                          <div className="plan-task-actions">
+                            <button
+                              type="button"
+                              className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
+                              style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
+                              disabled={togglingId === task.id}
+                              onClick={() => handleToggleTaskComplete(task.id, isDone)}
+                            >
+                              {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
+                              <span>{isDone ? 'Reopen' : 'Done'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="plan-task-icon-btn"
+                              title={`Edit this task for ${employee.fullName} only`}
+                              aria-label={`Edit ${task.title}`}
+                              onClick={() => setEditingTask(task)}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="plan-task-icon-btn plan-task-icon-btn-danger"
+                              title={`Remove this task from ${employee.fullName}'s plan only`}
+                              aria-label={`Delete ${task.title}`}
+                              disabled={deletingId === task.id}
+                              onClick={() => handleDeleteTask(task)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
