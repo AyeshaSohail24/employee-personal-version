@@ -8231,3 +8231,23 @@ input.form-control:focus {
 .plan-task-required-toggle input {
   margin-top: 0.2rem;
 }
+
+/* Add/Edit Task (onboarding plan) — compact so it fits without scrolling; header and buttons stay
+   put, and if a small screen still needs scrolling, the body scrolls with no visible scrollbar. */
+.plan-task-modal > .modal-body {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  scrollbar-width: none;
+}
+
+.plan-task-modal > .modal-body::-webkit-scrollbar {
+  display: none;
+}
+
+.plan-task-modal > .modal-body .form-group {
+  margin-bottom: 0.9rem;
+}
+
+.plan-task-modal .plan-task-required-toggle {
+  margin-top: 0.85rem;
+}

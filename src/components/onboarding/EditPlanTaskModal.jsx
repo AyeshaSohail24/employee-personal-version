@@ -45,7 +45,7 @@ export default function EditPlanTaskModal({ task = null, personName, defaultDueD
 
   return (
     <div className="modal-backdrop" onClick={() => !isSaving && onClose()}>
-      <div className="modal-card wide-modal" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-card wide-modal modal-scroll-shell plan-task-modal" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
             <div className="modal-icon-badge">
@@ -76,7 +76,7 @@ export default function EditPlanTaskModal({ task = null, personName, defaultDueD
           </div>
           <div className="form-group">
             <label className="form-label">Description</label>
-            <textarea className="form-textarea" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+            <textarea className="form-textarea" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Due date <span className="required-star">*</span></label>
