@@ -80,6 +80,17 @@ export async function convertApplicant(applicantId, input = {}) {
   const firstName = applicant.first_name || String(applicant.fullName ?? "").split(" ")[0] || "";
   const lastName = applicant.last_name || String(applicant.fullName ?? "").split(" ").slice(1).join(" ") || "";
 
+  // One email per employee (employees.work_email is unique): refuse up front, before the Interns
+  // DB record is created — otherwise the intern would exist there with no local record, plan or
+  // clickable Onboarding row.
+  const [[emailOwner]] = await pool.query(
+    "SELECT employee_code, first_name, last_name FROM employees WHERE LOWER(work_email) = LOWER(?) LIMIT 1",
+    [applicant.email ?? ""],
+  );
+  if (emailOwner) {
+    throw new ConversionError(`${applicant.email} is already used by ${`${emailOwner.first_name} ${emailOwner.last_name}`.trim()} (${emailOwner.employee_code}). Each employee needs their own email address, so nothing was changed.`);
+  }
+
   // 1. Interns DB first — if this fails, nothing local has been written.
   let intern;
   try {
