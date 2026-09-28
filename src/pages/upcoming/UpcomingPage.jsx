@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Search, X, CheckCircle2, Link2 } from 'lucide-react';
+import { RefreshCw, Search, X, CheckCircle2, Link2, AlertTriangle } from 'lucide-react';
 import { upcomingCandidateService } from '../../services/upcomingCandidateService.js';
 import { candidateEmailService } from '../../services/candidateEmailService.js';
 import { apiClient } from '../../services/apiClient.js';
@@ -148,6 +148,7 @@ export default function UpcomingPage() {
     return [...names.values()].sort((a, b) => a.localeCompare(b));
   }, [allCandidates]);
   const [acceptedMessage, setAcceptedMessage] = useState('');
+  const [planWarning, setPlanWarning] = useState('');
 
   const handleAccept = (candidate) => {
     setAcceptedMessage('');
@@ -158,7 +159,15 @@ export default function UpcomingPage() {
     const name = acceptingCandidate?.fullName || 'The candidate';
     setAcceptingCandidate(null);
     const ref = result?.intern?.refNumber ? ` as ${result.intern.refNumber}` : '';
-    setAcceptedMessage(`${name} was added to the Interns database${ref} and is now in Onboarding and Personnel.`);
+    const added = `${name} was added to the Interns database${ref} and is now in Onboarding and Personnel`;
+    // Accept launches their onboarding plan too; if it couldn't, Accept still succeeded — say why.
+    if (result?.plan?.status === 'not_launched') {
+      setAcceptedMessage(`${added}.`);
+      setPlanWarning(`Their onboarding plan was not launched: ${result.plan.reason} Fix this, then use Launch Plan for them on Onboarding → Progress.`);
+    } else {
+      setAcceptedMessage(`${added} — onboarding plan launched.`);
+      setPlanWarning('');
+    }
     await loadData();
   };
 
@@ -216,9 +225,15 @@ export default function UpcomingPage() {
         <div className="sync-status-text" role="status" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', margin: '0 0 1rem' }}>
           <CheckCircle2 size={15} />
           <span>{acceptedMessage}</span>
-          <button type="button" className="modal-close-btn" aria-label="Dismiss" onClick={() => setAcceptedMessage('')}>
+          <button type="button" className="modal-close-btn" aria-label="Dismiss" onClick={() => { setAcceptedMessage(''); setPlanWarning(''); }}>
             <X size={14} />
           </button>
+        </div>
+      )}
+      {acceptedMessage && planWarning && (
+        <div className="accept-plan-warning" role="alert">
+          <AlertTriangle size={15} />
+          <span>{planWarning}</span>
         </div>
       )}
 

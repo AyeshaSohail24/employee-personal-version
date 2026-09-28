@@ -32,6 +32,17 @@ export const onboardingService = {
   },
 
   /**
+   * Launch Plan / Retry Launch for an Onboarding intern with no plan yet
+   * (POST /onboarding/interns/{internId}/ensure-plan). Never creates a second plan.
+   * @param {string} internId - Interns DB id
+   * @returns {Promise<{ status: 'launched'|'exists'|'not_launched', planInstanceId?: number, reason?: string }>}
+   */
+  async ensurePlanForIntern(internId) {
+    const { result } = await apiClient.post(`/onboarding/interns/${encodeURIComponent(internId)}/ensure-plan`, {});
+    return result;
+  },
+
+  /**
    * Onboarding History — every completed onboarding plan, including people who have since moved to
    * Active, Offboarding or Former (GET /onboarding/history). Read-only reference records.
    * @returns {Promise<Array<Object>>}

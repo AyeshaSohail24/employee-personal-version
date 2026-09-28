@@ -2,6 +2,7 @@ import { pool } from "./pool.js";
 import { listRows, getRow, insertRow, updateRow, RowNotFoundError } from "./crud.js";
 import { getLinkedIntern, fetchRosterSources, listInternsWithOnboardingStatus, resolveOrCreateEmployeeForIntern, activateInternOnOnboardingComplete, fetchInternsForOverlay } from "./internSync.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
+import { internsClient } from "../clients/internsClient.js";
 import { toAppDateString } from "../dates.js";
 
 export { RowNotFoundError, getLinkedIntern };
@@ -137,43 +138,129 @@ export async function launchInstance({ employeeId, personType, departmentId, anc
   return instanceId;
 }
 
-// "Each intern should already be assigned" — HR never manually launches
-// onboarding for an intern: the moment a real intern shows up with no local
-// plan yet, one is composed and launched automatically from their real
-// department + the active Universal tasks. A silent per-intern no-op (not a
-// request-failing error) when nothing is configured for their scope yet, or
-// they have no resolvable start date — they simply keep showing with
-// plan: null, exactly as before, until HR adds Universal/department tasks.
-export async function listInternsWithAutoLaunchedOnboarding() {
-  // Fetched once and reused below — see fetchRosterSources()'s own comment.
+// Onboarding plans are launched when a person enters Onboarding — at Accept
+// (applicantConversion.js) — or by HR from Progress (Launch Plan / Retry
+// Launch) for interns who entered Onboarding directly in the Interns DB. Both
+// go through ensureOnboardingPlan() below, which never creates a second plan.
+// Reading the Progress roster only DISPLAYS: an intern with no plan is shown
+// with the likely reason (launchIssue) instead of being launched on page load.
+export async function listInternsForOnboardingProgress() {
+  // fetchRosterSources() still applies the existing Active -> Offboarding transition (unchanged).
   const sources = await fetchRosterSources();
   const interns = await listInternsWithOnboardingStatus(sources);
-  const pending = interns.filter((intern) => !intern.plan && intern.startDate);
-  if (pending.length === 0) return interns;
+  const withoutPlan = interns.filter((intern) => !intern.plan);
+  if (withoutPlan.length === 0) return interns;
 
-  let launched = 0;
-  for (const intern of pending) {
-    try {
-      const employee = await resolveOrCreateEmployeeForIntern(intern.internId);
-      await launchInstance({
-        employeeId: employee.id,
-        personType: "intern",
-        departmentId: intern.department?.id ?? null,
-        anchorDate: intern.startDate,
-      });
-      launched += 1;
-    } catch {
-      // No active Universal/department task configured for this intern's
-      // scope yet, or another per-intern issue — leave them at plan: null
-      // rather than failing the whole roster view.
-    }
+  const [taskRows] = await pool.query(
+    "SELECT scope_type, scope_department_id FROM onboarding_plan_tasks WHERE active = TRUE AND person_type = 'intern'",
+  );
+  const universalCount = taskRows.filter((t) => t.scope_type === "universal").length;
+  const departmentCount = (departmentId) =>
+    taskRows.filter((t) => t.scope_type === "department" && t.scope_department_id === departmentId).length;
+
+  return interns.map((intern) =>
+    intern.plan ? intern : { ...intern, launchIssue: describeLaunchIssue(intern, universalCount, departmentCount) });
+}
+
+// Why an Onboarding intern has no plan, from data already on hand — mirrors what
+// ensureOnboardingPlan() would hit: start date first, then whether ANY applicable task exists
+// (Universal + their department, same rule as launchInstance()), then whether they're set up here.
+export function describeLaunchIssue(intern, universalCount, departmentCount) {
+  if (!intern.startDate) return "No internship start date in the Interns database.";
+  const applicable = universalCount + (intern.department?.id ? departmentCount(intern.department.id) : 0);
+  if (applicable === 0) {
+    return `No onboarding tasks are set up for ${intern.department?.name ?? "their department"} (Universal or department) yet.`;
+  }
+  if (!intern.localEmployeeId) return "Not set up in this app yet — Launch Plan creates their record and plan.";
+  return "Plan not launched yet.";
+}
+
+async function logLaunch(action, employeeId, details) {
+  await insertRow("audit_logs", {
+    user_id: "system",
+    action,
+    entity: "employees",
+    entity_id: String(employeeId),
+    details: String(details).slice(0, 2000),
+  }).catch(() => {});
+}
+
+/**
+ * Launches one person's onboarding plan if — and only if — they don't have one yet (active OR
+ * completed), using exactly the existing launch rules: their applicable Universal + department
+ * intern tasks (launchInstance()), anchored on their internship start date. Safe to call any
+ * number of times, including concurrently: a per-person MySQL advisory lock (GET_LOCK) serialises
+ * the check-then-launch, so two calls can never both create a plan.
+ *
+ * Returns { status: "launched", planInstanceId } | { status: "exists", planInstanceId } |
+ *         { status: "not_launched", reason }.
+ */
+export async function ensureOnboardingPlan(employeeId) {
+  const employee = await getRow("employees", employeeId);
+  if (!employee) return { status: "not_launched", reason: "This person has no record in this app yet." };
+  if (!employee.intern_external_id) {
+    return { status: "not_launched", reason: "Onboarding plans are launched automatically for interns only." };
   }
 
-  // Only the local plans changed — re-read those, reusing the Interns DB/Departments data fetched
-  // above instead of pulling every intern again. And if nothing launched (e.g. no tasks configured
-  // for someone's scope yet, which would otherwise repeat on every single page load), nothing
-  // changed at all, so the first result stands.
-  return launched > 0 ? listInternsWithOnboardingStatus(sources) : interns;
+  const conn = await pool.getConnection();
+  const lockName = `onboarding_launch_${employeeId}`;
+  try {
+    const [[{ got }]] = await conn.query("SELECT GET_LOCK(?, 15) AS got", [lockName]);
+    if (got !== 1) return { status: "not_launched", reason: "Another launch for this person is in progress — try again in a moment." };
+
+    const [[existing]] = await conn.query(
+      "SELECT id FROM onboarding_plan_instances WHERE employee_id = ? ORDER BY id DESC LIMIT 1",
+      [employeeId],
+    );
+    if (existing) return { status: "exists", planInstanceId: existing.id };
+
+    const intern = await internsClient.getIntern(employee.intern_external_id);
+    const startDate = intern?.internship_start_date ? String(intern.internship_start_date).slice(0, 10) : null;
+    if (!startDate) {
+      const reason = "No internship start date in the Interns database.";
+      await logLaunch("onboarding_plan_launch_failed", employeeId, reason);
+      return { status: "not_launched", reason };
+    }
+    // Same department resolution as the Progress roster: only a department the Departments
+    // service knows is used for department tasks (otherwise Universal tasks only).
+    const departments = await departmentsClient.listDepartments().catch(() => []);
+    const department = departments.find((d) => String(d.id) === String(intern.department_id)) ?? null;
+
+    try {
+      const planInstanceId = await launchInstance({
+        employeeId,
+        personType: "intern",
+        departmentId: department?.id ?? null,
+        anchorDate: startDate,
+      });
+      await logLaunch("onboarding_plan_launched", employeeId, `Launched onboarding plan ${planInstanceId} for ${intern.ref_number ?? employeeId}, anchored on ${startDate}.`);
+      return { status: "launched", planInstanceId };
+    } catch (error) {
+      const reason = /No onboarding tasks are configured/.test(String(error.message))
+        ? `No onboarding tasks are set up for ${department?.name ?? "their department"} (Universal or department) yet.`
+        : String(error.message ?? error);
+      await logLaunch("onboarding_plan_launch_failed", employeeId, reason);
+      return { status: "not_launched", reason };
+    }
+  } finally {
+    await conn.query("SELECT RELEASE_LOCK(?)", [lockName]).catch(() => {});
+    conn.release();
+  }
+}
+
+/** Launch Plan / Retry Launch from Progress, by Interns DB id (creates the local record if needed). */
+export async function ensureOnboardingPlanForIntern(internId) {
+  let employee;
+  try {
+    employee = await resolveOrCreateEmployeeForIntern(internId);
+  } catch (error) {
+    const message = String(error.message ?? error);
+    const reason = /Duplicate entry .* for key '.*email.*'/i.test(message)
+      ? "Their email address is already used by another employee in this app, so their record can't be created."
+      : `Their record in this app couldn't be created: ${message}`;
+    return { status: "not_launched", reason };
+  }
+  return { employeeId: employee.id, ...(await ensureOnboardingPlan(employee.id)) };
 }
 
 export const getInstance = (id) => getRow("onboarding_plan_instances", id);

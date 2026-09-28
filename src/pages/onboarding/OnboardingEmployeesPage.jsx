@@ -100,13 +100,12 @@ function OnboardingHistoryTable({ records, totalCount, loading, onOpen }) {
   );
 }
 
-// The real intern roster (Interns DB), joined server-side with whatever
-// local onboarding plan each person has, auto-launching one from Universal +
-// their department's active tasks the moment they show up with none — see
-// onboardingService.getInternsProgress() / server/db/onboarding.js's
-// listInternsWithAutoLaunchedOnboarding(). There is no manual "Launch"
-// action: HR configures tasks under Onboarding > Plans and every intern is
-// assigned automatically from there.
+// The real intern roster (Interns DB), joined server-side with each person's local onboarding
+// plan (onboardingService.getInternsProgress() / server/db/onboarding.js's
+// listInternsForOnboardingProgress()). Read/display only: plans are launched at Accept. An
+// Onboarding intern with no plan (e.g. added directly in the Interns DB, or Accept couldn't
+// launch it) shows "Plan not launched" with the reason and a Launch Plan / Retry Launch button,
+// which never creates a second plan (ensureOnboardingPlan()).
 export default function OnboardingEmployeesPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -117,6 +116,23 @@ export default function OnboardingEmployeesPage() {
   const [search, setSearch] = useState('');
   const [historySearch, setHistorySearch] = useState('');
   const [loading, setLoading] = useState(true);
+  // Launch Plan / Retry Launch state per intern: { busy, failedReason }.
+  const [launchState, setLaunchState] = useState({});
+
+  const handleLaunchPlan = async (intern) => {
+    setLaunchState((prev) => ({ ...prev, [intern.internId]: { busy: true } }));
+    try {
+      const result = await onboardingService.ensurePlanForIntern(intern.internId);
+      if (result.status === 'not_launched') {
+        setLaunchState((prev) => ({ ...prev, [intern.internId]: { busy: false, failedReason: result.reason } }));
+        return;
+      }
+      setLaunchState((prev) => ({ ...prev, [intern.internId]: undefined }));
+      await loadData();
+    } catch (err) {
+      setLaunchState((prev) => ({ ...prev, [intern.internId]: { busy: false, failedReason: err.message || 'Could not launch the plan.' } }));
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -339,6 +355,7 @@ export default function OnboardingEmployeesPage() {
                 {visibleInterns.map((intern) => {
                   const plan = intern.plan;
                   const isClickable = Boolean(intern.localEmployeeId);
+                  const launch = launchState[intern.internId];
 
                   return (
                     <tr
@@ -389,7 +406,15 @@ export default function OnboardingEmployeesPage() {
                             </span>
                           </div>
                         ) : (
-                          <span style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>—</span>
+                          <button
+                            type="button"
+                            className="btn-primary onboarding-launch-btn"
+                            disabled={launch?.busy}
+                            onClick={(e) => { e.stopPropagation(); handleLaunchPlan(intern); }}
+                            title="Launch this person's onboarding plan from the Universal + department tasks"
+                          >
+                            {launch?.busy ? 'Launching...' : launch?.failedReason ? 'Retry Launch' : 'Launch Plan'}
+                          </button>
                         )}
                       </td>
 
@@ -408,9 +433,14 @@ export default function OnboardingEmployeesPage() {
                             {plan.status === 'In Progress' && plan.progressPercentage === 0 ? 'Not Started' : plan.status}
                           </span>
                         ) : (
-                          <span className="presence-badge" style={{ backgroundColor: '#F1F5F9', color: '#64748B', borderColor: '#CBD5E1' }}>
-                            Not Started
-                          </span>
+                          <div className="onboarding-launch-status">
+                            <span className="presence-badge" style={{ backgroundColor: '#FFFBEB', color: '#B45309', borderColor: '#FDE68A' }}>
+                              Plan not launched
+                            </span>
+                            {(launch?.failedReason || intern.launchIssue) && (
+                              <span className="onboarding-launch-reason">{launch?.failedReason || intern.launchIssue}</span>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>

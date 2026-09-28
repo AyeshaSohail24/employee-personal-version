@@ -1,71 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Globe2, GraduationCap, Building2, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+import { Globe2, GraduationCap, Building2, Plus, Trash2, Pencil } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
+import ScopeTaskModal, { formatRelativeOffset, describeRelativeOffset } from '../../components/onboarding/ScopeTaskModal.jsx';
 
-// One task row — click the pencil to edit its title in place (Enter/the check saves, Escape/the
-// X cancels), or the trash to delete it. Both commit by handing the new title up to the parent
-// card, which does the actual replace-by-scope save (onboardingService.saveScopeTasks) and
-// reloads — this component never talks to the service directly. Timing (relativeOffsetDays) is
-// no longer shown or edited here — every task managed from this page stays Day 0.
-function TaskRow({ task, saving, onDelete, onEdit }) {
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(task.title);
-
-  useEffect(() => {
-    setTitle(task.title);
-  }, [task.title]);
-
-  const startEdit = () => {
-    if (saving) return;
-    setTitle(task.title);
-    setEditing(true);
-  };
-
-  const cancel = () => setEditing(false);
-
-  const commit = async () => {
-    const trimmed = title.trim();
-    if (!trimmed || trimmed === task.title) return cancel();
-    await onEdit(task.id, { title: trimmed });
-    setEditing(false);
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') commit();
-    if (e.key === 'Escape') cancel();
-  };
-
-  if (editing) {
-    return (
-      <tr>
-        <td>
-          <input
-            type="text"
-            className="form-input onboarding-scope-task-edit-title"
-            value={title}
-            autoFocus
-            disabled={saving}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-        </td>
-        <td className="onboarding-scope-task-action-cell">
-          <button type="button" className="icon-btn" title="Save" disabled={saving} onClick={commit}>
-            <Check size={13} />
-          </button>
-          <button type="button" className="icon-btn" title="Cancel" disabled={saving} onClick={cancel}>
-            <X size={13} />
-          </button>
-        </td>
-      </tr>
-    );
-  }
-
+// One task row: title (+ description), its relative timing (Day -3 / Day 0 / Day +7), and Edit
+// (opens ScopeTaskModal) / Delete. Edits are handed up to the parent card, which does the actual
+// replace-by-scope save (onboardingService.saveScopeTasks) and reloads.
+function TaskRow({ task, saving, onDelete, onEditRequest }) {
+  const offset = Number(task.relativeOffsetDays) || 0;
   return (
     <tr>
-      <td className="onboarding-scope-task-title">{task.title}</td>
+      <td className="onboarding-scope-task-title">
+        <div>{task.title}</div>
+        {task.description && <div className="onboarding-scope-task-description">{task.description}</div>}
+      </td>
+      <td className="onboarding-scope-task-timing-cell">
+        <span className="onboarding-scope-task-timing" title={describeRelativeOffset(offset)}>
+          {formatRelativeOffset(offset)}
+        </span>
+      </td>
       <td className="onboarding-scope-task-action-cell">
-        <button type="button" className="icon-btn" title="Edit task" aria-label={`Edit ${task.title}`} disabled={saving} onClick={startEdit}>
+        <button type="button" className="icon-btn" title="Edit task" aria-label={`Edit ${task.title}`} disabled={saving} onClick={() => onEditRequest(task)}>
           <Pencil size={13} />
         </button>
         <button type="button" className="icon-btn icon-btn-danger" title="Delete task" aria-label={`Delete ${task.title}`} disabled={saving} onClick={() => onDelete(task.id)}>
@@ -76,13 +31,13 @@ function TaskRow({ task, saving, onDelete, onEdit }) {
   );
 }
 
-// A scope's configured tasks, editable right here — no separate "Manage Tasks" page. Add
-// appends a task (Day 0, default activity type); edit changes a task's title/timing in place;
-// delete removes one. All three just hand the full desired task list up to the parent, which
-// does the actual replace-by-scope save (onboardingService.saveScopeTasks) and reloads.
+// A scope's configured tasks. Add Task and Edit open ScopeTaskModal (title, relative timing,
+// description); delete removes one. All three hand the full desired task list up to the parent,
+// which does the actual replace-by-scope save (onboardingService.saveScopeTasks) and reloads —
+// every other task in the scope is re-sent with its own stored timing/description, unchanged.
 function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCount, onAddTask, onDeleteTask, onEditTask, compact = false, emphasized = false }) {
-  const [newTaskTitle, setNewTaskTitle] = useState('');
   const [saving, setSaving] = useState(false);
+  const [modalTask, setModalTask] = useState(undefined); // undefined = closed, null = new, object = editing
 
   const cardClassName = [
     'table-container-card',
@@ -108,21 +63,30 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
     }
   };
 
-  const handleAdd = (e) => {
-    e.preventDefault();
-    const trimmed = newTaskTitle.trim();
-    if (!trimmed || saving) return;
-    runMutation(async () => {
-      await onAddTask(trimmed);
-      setNewTaskTitle('');
-    }, 'add task');
-  };
-
   const handleDelete = (taskId) => runMutation(() => onDeleteTask(taskId), 'delete task');
-  const handleEdit = (taskId, updates) => runMutation(() => onEditTask(taskId, updates), 'save task');
+
+  // Errors propagate to the modal (shown there) instead of an alert.
+  const handleModalSave = async (fields) => {
+    setSaving(true);
+    try {
+      if (modalTask) await onEditTask(modalTask.id, fields);
+      else await onAddTask(fields);
+      setModalTask(undefined);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className={cardClassName}>
+      {modalTask !== undefined && (
+        <ScopeTaskModal
+          task={modalTask}
+          scopeLabel={title}
+          onClose={() => setModalTask(undefined)}
+          onSave={handleModalSave}
+        />
+      )}
       <div className="onboarding-scope-card-header">
         <div className={iconClassName}>
           {icon}
@@ -145,26 +109,18 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
         <table className="onboarding-scope-task-table">
           <tbody>
             {tasks.map((task) => (
-              <TaskRow key={task.id} task={task} saving={saving} onDelete={handleDelete} onEdit={handleEdit} />
+              <TaskRow key={task.id} task={task} saving={saving} onDelete={handleDelete} onEditRequest={setModalTask} />
             ))}
           </tbody>
         </table>
       )}
 
-      <form className="onboarding-scope-add-task-row" onSubmit={handleAdd}>
-        <input
-          type="text"
-          className="form-input"
-          placeholder="Add a task..."
-          value={newTaskTitle}
-          onChange={(e) => setNewTaskTitle(e.target.value)}
-          disabled={saving}
-        />
-        <button type="submit" className="btn-secondary" disabled={saving || !newTaskTitle.trim()}>
+      <div className="onboarding-scope-add-task-row">
+        <button type="button" className="btn-secondary email-drafts-toolbar-btn" disabled={saving} onClick={() => setModalTask(null)}>
           <Plus size={14} />
-          <span>Add</span>
+          <span>Add Task</span>
         </button>
-      </form>
+      </div>
 
       <div className="onboarding-scope-card-footer">
         <div className="onboarding-scope-card-counts">
@@ -221,10 +177,12 @@ export default function OnboardingPlansPage() {
       ? summary.universal.tasks
       : summary.departments.find((row) => row.department.id === departmentId)?.tasks ?? [];
 
-  const handleAddTask = async (scopeType, departmentId, title) => {
+  // New task: title, relative timing and description from ScopeTaskModal (default activity type,
+  // as before). Every existing task is re-sent with its own stored timing/description/required.
+  const handleAddTask = async (scopeType, departmentId, { title, relativeOffsetDays, description }) => {
     const newTasks = [
       ...existingTasksFor(scopeType, departmentId),
-      { title, activityTypeId: 1, relativeOffsetDays: 0 },
+      { title, activityTypeId: 1, relativeOffsetDays, description },
     ];
     await onboardingService.saveScopeTasks(scopeType, personType, departmentId, newTasks);
     await loadSummary();
@@ -271,7 +229,7 @@ export default function OnboardingPlansPage() {
               tasks={summary.universal.tasks}
               emptyStateMessage={meta.universalEmptyState}
               taskCount={summary.universal.taskCount}
-              onAddTask={(title) => handleAddTask('universal', null, title)}
+              onAddTask={(fields) => handleAddTask('universal', null, fields)}
               onEditTask={(taskId, updates) => handleEditTask('universal', null, taskId, updates)}
               onDeleteTask={(taskId) => handleDeleteTask('universal', null, taskId)}
             />
@@ -296,7 +254,7 @@ export default function OnboardingPlansPage() {
                     tasks={row.tasks}
                     emptyStateMessage={meta.departmentEmptyState}
                     taskCount={row.taskCount}
-                    onAddTask={(title) => handleAddTask('department', row.department.id, title)}
+                    onAddTask={(fields) => handleAddTask('department', row.department.id, fields)}
                     onEditTask={(taskId, updates) => handleEditTask('department', row.department.id, taskId, updates)}
                     onDeleteTask={(taskId) => handleDeleteTask('department', row.department.id, taskId)}
                   />

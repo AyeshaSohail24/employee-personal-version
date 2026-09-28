@@ -18,9 +18,9 @@ import { toLocalDateString } from '../../utils/dateUtils.js';
 
 // Real-data onboarding detail view for one (real) intern's local employee
 // record — reached from OnboardingEmployeesPage's "View Progress" link. The
-// plan itself is never launched from here: it's auto-launched the moment the
-// intern first appears with no plan yet (server/db/onboarding.js's
-// listInternsWithAutoLaunchedOnboarding()), composed from Universal + their
+// plan itself is never launched from here: it's launched at Accept, or with
+// Launch Plan on the Progress page (server/db/onboarding.js's
+// ensureOnboardingPlan()), composed from Universal + their
 // department's active tasks. This page views it, checks off tasks, and can edit or remove a
 // single task for this person only (their own copy — Onboarding > Plans is unchanged).
 // "2026-09-17T00:00:00.000Z" -> "2026-09-17" (DATE columns arrive as full timestamps).

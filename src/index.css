@@ -8379,3 +8379,111 @@ input.form-control:focus {
   font-size: 0.82rem;
   color: var(--text-muted);
 }
+
+/* Onboarding → Plans: relative timing on each shared task, and the Add/Edit Task form */
+.onboarding-scope-task-description {
+  font-size: 0.74rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+
+.onboarding-scope-task-timing-cell {
+  width: 1%;
+  white-space: nowrap;
+  padding-left: 0.5rem;
+  text-align: right;
+}
+
+.onboarding-scope-task-timing {
+  display: inline-block;
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  background-color: #EFF6FF;
+  color: #1D4ED8;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.scope-task-offset-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.scope-task-offset-input {
+  width: 110px;
+  flex: none;
+}
+
+.scope-task-offset-preview {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1D4ED8;
+}
+
+.scope-task-offset-preview.is-invalid {
+  font-weight: 500;
+  color: #B45309;
+}
+
+.scope-task-future-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-light);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.scope-task-future-note svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+/* Onboarding Progress — an Onboarding intern whose plan isn't launched yet */
+.onboarding-launch-btn {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.onboarding-launch-status {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 220px;
+}
+
+.onboarding-launch-reason {
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: #B45309;
+  text-align: center;
+}
+
+/* Upcoming — Accept succeeded but the onboarding plan couldn't be launched */
+.accept-plan-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: -0.5rem 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-md);
+  border: 1px solid #FDE68A;
+  background-color: #FFFBEB;
+  color: #B45309;
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+
+.accept-plan-warning svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}

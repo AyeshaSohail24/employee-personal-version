@@ -9,23 +9,25 @@ import { parseListQuery, readJsonBody } from "../http/util.js";
 export const routes = {
   "/onboarding/interns": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, { interns: await db.listInternsWithAutoLaunchedOnboarding() });
+      sendJson(res, ctx.cid, 200, { interns: await db.listInternsForOnboardingProgress() });
     },
   },
+  // Launch Plan / Retry Launch (Progress). Never creates a second plan — see ensureOnboardingPlan().
+  "/onboarding/interns/{internId}/ensure-plan": {
+    async post(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { result: await db.ensureOnboardingPlanForIntern(ctx.params.internId) });
+    },
+  },
+  // Older manual launch route (not used by the app's screens). Now goes through the same
+  // duplicate-safe step instead of always creating a new plan.
   "/onboarding/interns/{internId}/launch": {
     async post(req, res, ctx) {
-      const body = await readJsonBody(req);
-      const intern = await internsClient.getIntern(ctx.params.internId);
-      const employee = await resolveOrCreateEmployeeForIntern(ctx.params.internId);
-      const instanceId = await db.launchInstance({
-        employeeId: employee.id,
-        personType: "intern",
-        departmentId: intern.department_id,
-        anchorDate: body.anchorDate,
-      });
-      sendJson(res, ctx.cid, 201, {
-        instance: await db.getInstance(instanceId),
-        taskInstances: await db.listInstanceTasks(instanceId),
+      const result = await db.ensureOnboardingPlanForIntern(ctx.params.internId);
+      if (result.status === "not_launched") throw new ValidationError(result.reason);
+      sendJson(res, ctx.cid, result.status === "launched" ? 201 : 200, {
+        result,
+        instance: await db.getInstance(result.planInstanceId),
+        taskInstances: await db.listInstanceTasks(result.planInstanceId),
       });
     },
   },

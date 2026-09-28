@@ -20,6 +20,7 @@ import { insertRow, getRow } from "./crud.js";
 import { applicantsClient } from "../clients/applicantsClient.js";
 import { internsClient } from "../clients/internsClient.js";
 import { resolveOrCreateEmployeeForIntern } from "./internSync.js";
+import { ensureOnboardingPlan } from "./onboarding.js";
 
 export class ConversionError extends Error {}
 
@@ -147,8 +148,18 @@ export async function convertApplicant(applicantId, input = {}) {
     ).catch(() => {});
   }
 
+  // 4. Launch their onboarding plan now (they've just entered Onboarding). Accept succeeds either
+  // way; if it can't launch, the reason goes back to HR and Progress offers Launch Plan.
+  let plan;
+  try {
+    plan = await ensureOnboardingPlan(employee.id);
+  } catch (error) {
+    plan = { status: "not_launched", reason: String(error.message ?? error) };
+  }
+
   return {
     employee: await getRow("employees", employee.id),
+    plan,
     intern: { id: intern.id, refNumber: intern.ref_number ?? null, status: "Onboarding" },
     conversion: await getSuccessfulConversion(applicantId),
     phaseMoved,
