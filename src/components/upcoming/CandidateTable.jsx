@@ -10,6 +10,17 @@ const OFFER_PILL_STYLES = {
 
 // The viewer's local calendar date for a timestamp (a UTC slice would show the previous day for
 // anything before 8am in Malaysia).
+// The department they applied to, shown once. The job's position is added only when it says
+// something different (e.g. "Data Analytics Intern" under "Data Analytics & Business
+// Intelligence"), not when it just repeats the department ("Software Engineering").
+function departmentAndPosition(candidate) {
+  const normalize = (v) => String(v || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  const department = candidate.department?.name || candidate.positionName || 'Unassigned';
+  const position = candidate.positionName;
+  const extraPosition = position && normalize(position) !== normalize(department) ? position : null;
+  return { department, extraPosition };
+}
+
 function toIsoDate(isoTimestamp) {
   if (!isoTimestamp) return null;
   const d = new Date(isoTimestamp);
@@ -101,7 +112,7 @@ export default function CandidateTable({
             <thead>
               <tr>
                 <th style={{ width: '34%' }}>Candidate</th>
-                <th style={{ width: '38%' }}>Role</th>
+                <th style={{ width: '38%' }}>Department</th>
                 <th style={{ width: '12%' }}>Offer</th>
                 <th className="gmail-date-header" style={{ width: '16%' }}>{mode === 'active' ? 'Shortlisted' : 'Rejected'}</th>
               </tr>
@@ -120,9 +131,20 @@ export default function CandidateTable({
                       <CandidateIdentity candidate={candidate} isUnreadReply={isUnreadReply} />
                     </td>
                     <td className="gmail-cell-truncate">
-                      <span className="table-text-main">{candidate.positionName}</span>
-                      <span className="gmail-role-sep">—</span>
-                      <span className="table-text-secondary">{candidate.department ? candidate.department.name : 'Unassigned'}</span>
+                      {(() => {
+                        const { department, extraPosition } = departmentAndPosition(candidate);
+                        return (
+                          <>
+                            <span className="table-text-main">{department}</span>
+                            {extraPosition && (
+                              <>
+                                <span className="gmail-role-sep">—</span>
+                                <span className="table-text-secondary">{extraPosition}</span>
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>
@@ -178,8 +200,10 @@ export default function CandidateTable({
               </div>
 
               <div className="candidate-card-body">
-                <div className="detail-row"><span className="detail-text" style={{ fontWeight: 600 }}>{candidate.positionName}</span></div>
-                <div className="detail-row"><span className="detail-text">{candidate.department ? candidate.department.name : 'Unassigned'}</span></div>
+                <div className="detail-row"><span className="detail-text" style={{ fontWeight: 600 }}>{departmentAndPosition(candidate).department}</span></div>
+                {departmentAndPosition(candidate).extraPosition && (
+                  <div className="detail-row"><span className="detail-text">{departmentAndPosition(candidate).extraPosition}</span></div>
+                )}
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', margin: '0.4rem 0' }}>
                   <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>{candidate.offerType}</span>
                   {mode !== 'active' && (
