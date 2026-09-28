@@ -32,6 +32,16 @@ export const onboardingService = {
   },
 
   /**
+   * Onboarding History — every completed onboarding plan, including people who have since moved to
+   * Active, Offboarding or Former (GET /onboarding/history). Read-only reference records.
+   * @returns {Promise<Array<Object>>}
+   */
+  async getOnboardingHistory() {
+    const { records } = await apiClient.get('/onboarding/history');
+    return records;
+  },
+
+  /**
    * The real onboarding plan instance already running for one (real) employee, plus its task
    * instances — GET /onboarding/instances?employee_id=, backing the real-intern detail view
    * (`plan: null` if nothing has been launched for them yet, e.g. no Universal/department task

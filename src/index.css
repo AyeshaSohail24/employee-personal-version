@@ -8254,3 +8254,109 @@ input.form-control:focus {
 .plan-task-modal .plan-task-required-toggle {
   margin-top: 0.85rem;
 }
+
+/* Onboarding Progress — the Completed Plans card opens Onboarding History. A <button> styled as a
+   normal summary card, with a hover lift and a subtle "View history" cue. */
+.summary-card.summary-card-link {
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+
+.summary-card.summary-card-link:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: #A7F3D0;
+}
+
+.summary-card.summary-card-link:focus-visible {
+  outline: 2px solid #059669;
+  outline-offset: 2px;
+}
+
+.summary-card.summary-card-link.is-selected {
+  border-color: #6EE7B7;
+  box-shadow: 0 0 0 3px #ECFDF5, var(--shadow-sm);
+}
+
+/* Onboarding Progress cards: every description reserves two lines, so all four cards keep the same
+   row heights (and their numbers line up) whether a description wraps or not at a given width. */
+.onboarding-summary-grid .summary-card-subtext {
+  line-height: 1.45;
+  min-height: 2.9em;
+}
+
+.summary-card-value-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.summary-card-link-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  color: #059669;
+  white-space: nowrap;
+}
+
+/* Onboarding History — read-only onboarding record banner and markers */
+.onboarding-history-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid #A7F3D0;
+  background-color: #ECFDF5;
+  color: #047857;
+}
+
+.onboarding-history-banner.is-incomplete {
+  border-color: var(--border-light);
+  background-color: var(--bg-app);
+  color: var(--text-muted);
+}
+
+.onboarding-history-banner > svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.onboarding-history-banner strong {
+  display: block;
+  font-size: 0.9rem;
+  color: inherit;
+}
+
+.onboarding-history-banner span {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.onboarding-history-pill {
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background-color: var(--bg-app);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.onboarding-history-done {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #059669;
+}
+
+.onboarding-history-open {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}

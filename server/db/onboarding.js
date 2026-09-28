@@ -1,6 +1,8 @@
 import { pool } from "./pool.js";
 import { listRows, getRow, insertRow, updateRow, RowNotFoundError } from "./crud.js";
-import { getLinkedIntern, fetchRosterSources, listInternsWithOnboardingStatus, resolveOrCreateEmployeeForIntern, activateInternOnOnboardingComplete } from "./internSync.js";
+import { getLinkedIntern, fetchRosterSources, listInternsWithOnboardingStatus, resolveOrCreateEmployeeForIntern, activateInternOnOnboardingComplete, fetchInternsForOverlay } from "./internSync.js";
+import { departmentsClient } from "../clients/departmentsClient.js";
+import { toAppDateString } from "../dates.js";
 
 export { RowNotFoundError, getLinkedIntern };
 
@@ -212,6 +214,8 @@ export async function setTaskInstanceCompleted(taskInstanceId, completed) {
 
   if (completed) {
     await activateIfPlanComplete(taskInstance.plan_instance_id);
+  } else {
+    await syncPlanCompletedAt(taskInstance.plan_instance_id);
   }
 }
 
@@ -308,6 +312,8 @@ export async function addTaskToInstance(planInstanceId, { title, description, du
     );
     await conn.query("UPDATE onboarding_task_instances SET activity_id = ? WHERE id = ?", [activityResult.insertId, taskInstanceId]);
     await conn.commit();
+    // A new required task reopens a completed plan (clears completed_at).
+    await syncPlanCompletedAt(planInstanceId);
     return taskInstanceId;
   } catch (error) {
     await conn.rollback();
@@ -357,12 +363,116 @@ export async function deleteTaskInstance(taskInstanceId) {
 // — an incomplete plan (any required task still open) never reaches
 // activateInternOnOnboardingComplete() at all.
 async function activateIfPlanComplete(planInstanceId) {
-  const tasks = await listInstanceTasks(planInstanceId);
-  const requiredTasks = tasks.filter((t) => t.required);
-  if (requiredTasks.length === 0 || !requiredTasks.every((t) => t.completed)) return;
+  const isComplete = await syncPlanCompletedAt(planInstanceId);
+  if (!isComplete) return;
 
   const planInstance = await getRow("onboarding_plan_instances", planInstanceId);
   if (!planInstance) return;
 
   await activateInternOnOnboardingComplete(planInstance.employee_id);
+}
+
+// A plan is complete when it has required tasks and every one of them is done (same rule as the
+// Progress page's status and the Onboarding -> Active hand-off). Keeps the plan's completed_at in
+// step: stamped with today's Malaysia date (server/dates.js — not the UTC database's CURDATE())
+// the first time it becomes complete (an existing date is kept), cleared if a required task is
+// reopened or added. Returns whether the plan is complete.
+async function syncPlanCompletedAt(planInstanceId) {
+  const tasks = await listInstanceTasks(planInstanceId);
+  const requiredTasks = tasks.filter((t) => t.required);
+  const isComplete = requiredTasks.length > 0 && requiredTasks.every((t) => t.completed);
+  if (isComplete) {
+    await pool.query(
+      "UPDATE onboarding_plan_instances SET completed_at = COALESCE(completed_at, ?) WHERE id = ?",
+      [toAppDateString(), planInstanceId],
+    );
+  } else {
+    await pool.query(
+      "UPDATE onboarding_plan_instances SET completed_at = NULL WHERE id = ? AND completed_at IS NOT NULL",
+      [planInstanceId],
+    );
+  }
+  return isComplete;
+}
+
+// Onboarding History: every COMPLETED onboarding plan (all required tasks done), including people
+// who have since moved to Active, Offboarding or Former — read from this app's own tables, so no
+// one disappears when their Interns DB status moves on. Read-only. `completedAt` is the plan's
+// recorded completed_at, or — for plans completed before that was recorded — the date its last
+// task was ticked. Current status and photo come from the Interns DB when it's reachable.
+export async function listOnboardingHistory() {
+  const [plans] = await pool.query(
+    `SELECT p.id AS planInstanceId, p.employee_id AS employeeId,
+            DATE_FORMAT(p.anchor_date, '%Y-%m-%d') AS anchorDate,
+            DATE_FORMAT(p.started_at, '%Y-%m-%d') AS startedAt,
+            DATE_FORMAT(p.completed_at, '%Y-%m-%d') AS recordedCompletedAt,
+            e.employee_code AS refNumber, e.first_name, e.last_name, e.status AS localStatus,
+            e.intern_external_id AS internId
+       FROM onboarding_plan_instances p
+       JOIN employees e ON e.id = p.employee_id
+      ORDER BY p.id DESC`,
+  );
+  if (plans.length === 0) return [];
+
+  const planIds = plans.map((p) => p.planInstanceId);
+  const [tasks] = await pool.query(
+    `SELECT ti.plan_instance_id, ti.required, a.completed, UNIX_TIMESTAMP(a.completed_at) AS completedEpoch
+       FROM onboarding_task_instances ti
+       LEFT JOIN activities a ON a.id = ti.activity_id
+      WHERE ti.plan_instance_id IN (${planIds.map(() => "?").join(",")})`,
+    planIds,
+  );
+  const tasksByPlan = new Map();
+  for (const t of tasks) {
+    if (!tasksByPlan.has(t.plan_instance_id)) tasksByPlan.set(t.plan_instance_id, []);
+    tasksByPlan.get(t.plan_instance_id).push(t);
+  }
+
+  const completedPlans = plans.filter((p) => {
+    const required = (tasksByPlan.get(p.planInstanceId) ?? []).filter((t) => t.required);
+    return required.length > 0 && required.every((t) => t.completed);
+  });
+  if (completedPlans.length === 0) return [];
+
+  const employeeIds = [...new Set(completedPlans.map((p) => p.employeeId))];
+  const [records] = await pool.query(
+    `SELECT employee_id, department_id FROM employment_records
+      WHERE employee_id IN (${employeeIds.map(() => "?").join(",")}) AND effective_to IS NULL
+      ORDER BY effective_from DESC, id DESC`,
+    employeeIds,
+  );
+  const departmentIdByEmployee = new Map();
+  for (const r of records) if (!departmentIdByEmployee.has(r.employee_id)) departmentIdByEmployee.set(r.employee_id, r.department_id);
+
+  const [departments, interns] = await Promise.all([
+    departmentsClient.listDepartments().catch(() => []),
+    fetchInternsForOverlay(),
+  ]);
+  const departmentsById = new Map(departments.map((d) => [String(d.id), d]));
+  const internsById = new Map((interns ?? []).map((i) => [i.id, i]));
+
+  return completedPlans
+    .map((p) => {
+      const planTasks = tasksByPlan.get(p.planInstanceId) ?? [];
+      // Fallback completion date: the last task's completion moment (an exact epoch, so neither
+      // the database's nor the server's time zone matters), as a Malaysia calendar date.
+      const lastEpoch = Math.max(0, ...planTasks.map((t) => Number(t.completedEpoch) || 0));
+      const lastTicked = lastEpoch > 0 ? toAppDateString(new Date(lastEpoch * 1000)) : null;
+      const intern = p.internId ? internsById.get(p.internId) : null;
+      const department = departmentsById.get(String(departmentIdByEmployee.get(p.employeeId) ?? ""));
+      return {
+        planInstanceId: p.planInstanceId,
+        employeeId: p.employeeId,
+        refNumber: intern?.ref_number ?? p.refNumber,
+        fullName: `${p.first_name} ${p.last_name}`.trim(),
+        department: department ? { id: department.id, name: department.name } : null,
+        currentStatus: intern?.status ?? p.localStatus,
+        photoUrl: intern?.photo_url ?? null,
+        anchorDate: p.anchorDate,
+        startedAt: p.startedAt,
+        completedAt: p.recordedCompletedAt ?? lastTicked,
+        taskCount: planTasks.length,
+      };
+    })
+    .sort((a, b) => String(b.completedAt ?? "").localeCompare(String(a.completedAt ?? "")));
 }

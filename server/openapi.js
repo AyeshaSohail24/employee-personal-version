@@ -386,6 +386,10 @@ export const openapi = {
       get: { summary: "Fetch one onboarding instance with its task instances.", security: scoped("onboarding:read"),
         "x-rizurf": { name: "Get Onboarding Instance", purpose: "See a launched plan's progress, and the employee's live Interns DB record if they're an intern", use_when: ["Viewing an employee's onboarding progress"], do_not_use_when: [], inputs: ["id"], outputs: ["instance", "taskInstances[]", "internRecord"], requires: [], related_endpoints: ["PATCH /onboarding/task-instances/{id}"], tags: ["onboarding", "progress", "interns"] } },
     },
+    "/onboarding/history": {
+      get: { summary: "List completed onboarding plans (Onboarding History).", security: scoped("onboarding:read"),
+        "x-rizurf": { name: "Onboarding History", purpose: "Every completed onboarding plan, kept after the person moves to Active, Offboarding or Former, with when it was completed", use_when: ["Reviewing someone's past onboarding", "Counting completed onboarding plans"], do_not_use_when: ["You need current onboarding progress — use GET /onboarding/interns"], inputs: [], outputs: ["records[]"], requires: [], related_endpoints: ["GET /onboarding/instances"], tags: ["onboarding", "history", "completed"] } },
+    },
     "/onboarding/instances/{id}/tasks": {
       post: { summary: "Add a task to one person's onboarding plan.", security: scoped("onboarding:write"),
         "x-rizurf": { name: "Add Onboarding Task", purpose: "Add an extra task to a single person's plan without changing the shared plan tasks", use_when: ["This person needs a step the standard plan doesn't have"], do_not_use_when: ["Everyone should get the task — add it under Onboarding > Plans"], inputs: ["title", "description", "dueDate", "required"], outputs: ["taskInstance"], requires: ["Plan instance exists", "title and dueDate (YYYY-MM-DD)"], related_endpoints: ["PATCH /onboarding/task-instances/{id}", "DELETE /onboarding/task-instances/{id}"], tags: ["onboarding", "task", "create"] } },

@@ -18,6 +18,24 @@ export function getTodayLocalDateString() {
 }
 
 /**
+ * A timestamp's calendar date in local (Malaysia) time as 'YYYY-MM-DD' — for moments such as a task's
+ * completed_at, which arrive as UTC ISO strings (slicing those would show the previous day for
+ * anything before 8am in Malaysia). Returns '' for a missing/invalid value.
+ *
+ * @param {string|Date} timestamp
+ * @returns {string}
+ */
+export function toLocalDateString(timestamp) {
+  if (!timestamp) return '';
+  const d = new Date(timestamp);
+  if (Number.isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Formats a YYYY-MM-DD (or full ISO timestamp, e.g. from the live API — '2026-07-27T00:00:00.000Z')
  * string into a human-friendly format (e.g., 'Sep 02, 2026').
  *

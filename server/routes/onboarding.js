@@ -67,6 +67,12 @@ export const routes = {
       sendJson(res, ctx.cid, 200, { template: await db.getTemplate(ctx.params.id) });
     },
   },
+  // Onboarding History — every completed onboarding plan, including people now Active/Offboarding/Former.
+  "/onboarding/history": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { records: await db.listOnboardingHistory() });
+    },
+  },
   "/onboarding/instances": {
     async get(req, res, ctx) {
       const employeeId = ctx.url.searchParams.get("employee_id");
