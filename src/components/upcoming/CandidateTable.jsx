@@ -111,10 +111,10 @@ export default function CandidateTable({
           <table className="widget-table gmail-table">
             <thead>
               <tr>
-                <th style={{ width: '34%' }}>Candidate</th>
-                <th style={{ width: '38%' }}>Department</th>
-                <th style={{ width: '12%' }}>Offer</th>
-                <th className="gmail-date-header" style={{ width: '16%' }}>{mode === 'active' ? 'Shortlisted' : 'Rejected'}</th>
+                <th style={{ width: '36%' }}>Candidate</th>
+                <th style={{ width: '32%' }}>Department</th>
+                <th style={{ width: '14%' }}>Offer</th>
+                <th className="gmail-date-header" style={{ width: '18%' }}>{mode === 'active' ? 'Shortlisted' : 'Rejected'}</th>
               </tr>
             </thead>
             <tbody>
@@ -166,8 +166,7 @@ export default function CandidateTable({
                           aria-label={`Restore ${candidate.fullName} to Candidates`}
                           onClick={(e) => { e.stopPropagation(); onRestore(candidate.id); }}
                         >
-                          <RotateCcw size={13} />
-                          <span>Restore</span>
+                          <RotateCcw size={14} />
                         </button>
                       )}
                     </td>
