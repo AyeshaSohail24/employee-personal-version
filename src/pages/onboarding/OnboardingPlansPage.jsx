@@ -1,13 +1,121 @@
 import React, { useState, useEffect } from 'react';
-import { Globe2, GraduationCap, Building2, Plus, Trash2, Pencil } from 'lucide-react';
+import { Globe2, GraduationCap, Building2, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
-import ScopeTaskModal, { formatRelativeOffset, describeRelativeOffset } from '../../components/onboarding/ScopeTaskModal.jsx';
 
-// One task row: title (+ description), its relative timing (Day -3 / Day 0 / Day +7), and Edit
-// (opens ScopeTaskModal) / Delete. Edits are handed up to the parent card, which does the actual
-// replace-by-scope save (onboardingService.saveScopeTasks) and reloads.
-function TaskRow({ task, saving, onDelete, onEditRequest }) {
+// Relative timing = days from each person's start date: -3 = 3 days before, 0 = on the day,
+// +7 = 7 days after. Shown on every task and edited in place.
+export function formatRelativeOffset(days) {
+  const n = Number(days) || 0;
+  return `Day ${n > 0 ? `+${n}` : n}`;
+}
+
+export function describeRelativeOffset(days) {
+  if (days === 0) return 'On the start date';
+  const n = Math.abs(days);
+  return `${n} day${n === 1 ? '' : 's'} ${days < 0 ? 'before' : 'after'} the start date`;
+}
+
+const OFFSET_PATTERN = /^[+-]?\d{1,3}$/;
+const parseOffset = (value) => {
+  const v = String(value).trim();
+  if (!OFFSET_PATTERN.test(v)) return null;
+  const n = parseInt(v, 10);
+  return Math.abs(n) <= 365 ? n : null;
+};
+
+// In-place editor for one task (also used for a new task): title, relative timing (days) with a
+// plain-language hint, and description. Enter saves, Escape cancels.
+function InlineTaskEditor({ initial, saving, submitLabel, onSubmit, onCancel }) {
+  const [title, setTitle] = useState(initial.title || '');
+  const [offset, setOffset] = useState(String(initial.relativeOffsetDays ?? 0));
+  const [description, setDescription] = useState(initial.description || '');
+  const [error, setError] = useState('');
+  const offsetDays = parseOffset(offset);
+
+  const submit = async () => {
+    setError('');
+    if (!title.trim()) { setError('Enter a task title.'); return; }
+    if (offsetDays === null) { setError('Timing must be a whole number of days between -365 and 365 (e.g. -3, 0, 7).'); return; }
+    try {
+      await onSubmit({ title: title.trim(), relativeOffsetDays: offsetDays, description: description.trim() });
+    } catch (err) {
+      setError(err?.message || 'Could not save this task.');
+    }
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); submit(); }
+    if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+  };
+
+  return (
+    <div className="scope-task-inline-editor" onKeyDown={onKeyDown}>
+      <div className="scope-task-inline-row">
+        <input
+          type="text"
+          className="form-input scope-task-inline-title"
+          placeholder="Task title"
+          value={title}
+          maxLength={255}
+          autoFocus
+          disabled={saving}
+          onChange={(e) => setTitle(e.target.value)}
+          aria-label="Task title"
+        />
+        <div className="scope-task-inline-timing">
+          <span className="scope-task-inline-day">Day</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            className="form-input scope-task-inline-offset"
+            value={offset}
+            disabled={saving}
+            onChange={(e) => setOffset(e.target.value.replace(/[^\d+-]/g, ''))}
+            aria-label="Relative timing in days"
+            title="Days from the start date: -3 = before, 0 = on the day, 7 = after"
+          />
+        </div>
+      </div>
+      <div className={`scope-task-inline-hint ${offsetDays === null ? 'is-invalid' : ''}`}>
+        {offsetDays === null ? 'Enter a whole number of days, e.g. -3, 0 or 7' : describeRelativeOffset(offsetDays)}
+      </div>
+      <input
+        type="text"
+        className="form-input scope-task-inline-description"
+        placeholder="Description (optional)"
+        value={description}
+        disabled={saving}
+        onChange={(e) => setDescription(e.target.value)}
+        aria-label="Description"
+      />
+      {error && <div className="scope-task-inline-error">{error}</div>}
+      <div className="scope-task-inline-actions">
+        <button type="button" className="btn-secondary email-drafts-toolbar-btn" disabled={saving} onClick={onCancel}>
+          <X size={13} />
+          <span>Cancel</span>
+        </button>
+        <button type="button" className="btn-primary email-drafts-toolbar-btn" disabled={saving} onClick={submit}>
+          <Check size={13} />
+          <span>{saving ? 'Saving...' : submitLabel}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// One task row: title (+ description), its relative timing (Day -3 / Day 0 / Day +7), and Edit /
+// Delete. Edit turns the row into InlineTaskEditor in place — no popup.
+function TaskRow({ task, saving, editing, onEditStart, onEditCancel, onEditSave, onDelete }) {
   const offset = Number(task.relativeOffsetDays) || 0;
+  if (editing) {
+    return (
+      <tr>
+        <td colSpan={3}>
+          <InlineTaskEditor initial={task} saving={saving} submitLabel="Save" onSubmit={onEditSave} onCancel={onEditCancel} />
+        </td>
+      </tr>
+    );
+  }
   return (
     <tr>
       <td className="onboarding-scope-task-title">
@@ -20,7 +128,7 @@ function TaskRow({ task, saving, onDelete, onEditRequest }) {
         </span>
       </td>
       <td className="onboarding-scope-task-action-cell">
-        <button type="button" className="icon-btn" title="Edit task" aria-label={`Edit ${task.title}`} disabled={saving} onClick={() => onEditRequest(task)}>
+        <button type="button" className="icon-btn" title="Edit task" aria-label={`Edit ${task.title}`} disabled={saving} onClick={onEditStart}>
           <Pencil size={13} />
         </button>
         <button type="button" className="icon-btn icon-btn-danger" title="Delete task" aria-label={`Delete ${task.title}`} disabled={saving} onClick={() => onDelete(task.id)}>
@@ -31,13 +139,14 @@ function TaskRow({ task, saving, onDelete, onEditRequest }) {
   );
 }
 
-// A scope's configured tasks. Add Task and Edit open ScopeTaskModal (title, relative timing,
-// description); delete removes one. All three hand the full desired task list up to the parent,
-// which does the actual replace-by-scope save (onboardingService.saveScopeTasks) and reloads —
-// every other task in the scope is re-sent with its own stored timing/description, unchanged.
+// A scope's configured tasks. Edit and Add both happen in place (InlineTaskEditor); delete removes
+// one. All three hand the full desired task list up to the parent, which does the actual
+// replace-by-scope save (onboardingService.saveScopeTasks) and reloads — every other task in the
+// scope is re-sent with its own stored timing/description, unchanged.
 function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCount, onAddTask, onDeleteTask, onEditTask, compact = false, emphasized = false }) {
   const [saving, setSaving] = useState(false);
-  const [modalTask, setModalTask] = useState(undefined); // undefined = closed, null = new, object = editing
+  const [editingId, setEditingId] = useState(null);
+  const [adding, setAdding] = useState(false);
 
   const cardClassName = [
     'table-container-card',
@@ -52,41 +161,36 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
     emphasized ? 'onboarding-scope-card-icon--emphasized' : '',
   ].filter(Boolean).join(' ');
 
-  const runMutation = async (action, errorLabel) => {
+  // Errors propagate to the inline editor (shown there).
+  const withSaving = async (action) => {
     setSaving(true);
     try {
       await action();
-    } catch (err) {
-      alert(`Failed to ${errorLabel}: ${err.message}`);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = (taskId) => runMutation(() => onDeleteTask(taskId), 'delete task');
-
-  // Errors propagate to the modal (shown there) instead of an alert.
-  const handleModalSave = async (fields) => {
-    setSaving(true);
+  const handleDelete = async (taskId) => {
     try {
-      if (modalTask) await onEditTask(modalTask.id, fields);
-      else await onAddTask(fields);
-      setModalTask(undefined);
-    } finally {
-      setSaving(false);
+      await withSaving(() => onDeleteTask(taskId));
+    } catch (err) {
+      alert(`Failed to delete task: ${err.message}`);
     }
   };
+
+  const handleEditSave = (taskId) => (fields) => withSaving(async () => {
+    await onEditTask(taskId, fields);
+    setEditingId(null);
+  });
+
+  const handleAddSave = (fields) => withSaving(async () => {
+    await onAddTask(fields);
+    setAdding(false);
+  });
 
   return (
     <div className={cardClassName}>
-      {modalTask !== undefined && (
-        <ScopeTaskModal
-          task={modalTask}
-          scopeLabel={title}
-          onClose={() => setModalTask(undefined)}
-          onSave={handleModalSave}
-        />
-      )}
       <div className="onboarding-scope-card-header">
         <div className={iconClassName}>
           {icon}
@@ -102,25 +206,46 @@ function ScopeCard({ icon, title, description, tasks, emptyStateMessage, taskCou
       </div>
 
       {tasks.length === 0 ? (
-        <div className="onboarding-scope-task-list-empty">
-          {emptyStateMessage}
-        </div>
+        !adding && (
+          <div className="onboarding-scope-task-list-empty">
+            {emptyStateMessage}
+          </div>
+        )
       ) : (
         <table className="onboarding-scope-task-table">
           <tbody>
             {tasks.map((task) => (
-              <TaskRow key={task.id} task={task} saving={saving} onDelete={handleDelete} onEditRequest={setModalTask} />
+              <TaskRow
+                key={task.id}
+                task={task}
+                saving={saving}
+                editing={editingId === task.id}
+                onEditStart={() => { setAdding(false); setEditingId(task.id); }}
+                onEditCancel={() => setEditingId(null)}
+                onEditSave={handleEditSave(task.id)}
+                onDelete={handleDelete}
+              />
             ))}
           </tbody>
         </table>
       )}
 
-      <div className="onboarding-scope-add-task-row">
-        <button type="button" className="btn-secondary email-drafts-toolbar-btn" disabled={saving} onClick={() => setModalTask(null)}>
-          <Plus size={14} />
-          <span>Add Task</span>
-        </button>
-      </div>
+      {adding ? (
+        <InlineTaskEditor
+          initial={{ title: '', relativeOffsetDays: 0, description: '' }}
+          saving={saving}
+          submitLabel="Add Task"
+          onSubmit={handleAddSave}
+          onCancel={() => setAdding(false)}
+        />
+      ) : (
+        <div className="onboarding-scope-add-task-row">
+          <button type="button" className="btn-secondary email-drafts-toolbar-btn" disabled={saving} onClick={() => { setEditingId(null); setAdding(true); }}>
+            <Plus size={14} />
+            <span>Add Task</span>
+          </button>
+        </div>
+      )}
 
       <div className="onboarding-scope-card-footer">
         <div className="onboarding-scope-card-counts">
@@ -177,7 +302,7 @@ export default function OnboardingPlansPage() {
       ? summary.universal.tasks
       : summary.departments.find((row) => row.department.id === departmentId)?.tasks ?? [];
 
-  // New task: title, relative timing and description from ScopeTaskModal (default activity type,
+  // New task: title, relative timing and description from the inline editor (default activity type,
   // as before). Every existing task is re-sent with its own stored timing/description/required.
   const handleAddTask = async (scopeType, departmentId, { title, relativeOffsetDays, description }) => {
     const newTasks = [
@@ -209,6 +334,13 @@ export default function OnboardingPlansPage() {
           <h1 className="page-title">Onboarding Plans</h1>
           <p className="page-subtitle">
             Configure reusable onboarding tasks for interns. Universal and department-specific tasks are combined automatically when onboarding is launched.
+          </p>
+          <p className="onboarding-timing-guide">
+            <strong>Timing</strong> is counted from each person's start date:
+            <span className="onboarding-scope-task-timing">Day -3</span> 3 days before ·
+            <span className="onboarding-scope-task-timing">Day 0</span> on the start date ·
+            <span className="onboarding-scope-task-timing">Day +7</span> 7 days after.
+            Changes apply to plans launched from now on — people already onboarding keep their own tasks and dates.
           </p>
         </div>
       </div>

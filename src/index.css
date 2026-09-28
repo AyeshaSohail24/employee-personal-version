@@ -8405,45 +8405,89 @@ input.form-control:focus {
   font-weight: 600;
 }
 
-.scope-task-offset-row {
+/* Onboarding → Plans: in-place task editor (Edit / Add Task) */
+.scope-task-inline-editor {
   display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  margin: 0.25rem 0;
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-light);
+}
+
+.scope-task-inline-row {
+  display: flex;
+  gap: 0.5rem;
   align-items: center;
-  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
-.scope-task-offset-input {
-  width: 110px;
+.scope-task-inline-title {
+  flex: 1 1 180px;
+  min-width: 0;
+  font-size: 0.83rem;
+}
+
+.scope-task-inline-timing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   flex: none;
 }
 
-.scope-task-offset-preview {
-  font-size: 0.85rem;
+.scope-task-inline-day {
+  font-size: 0.78rem;
   font-weight: 600;
   color: #1D4ED8;
 }
 
-.scope-task-offset-preview.is-invalid {
-  font-weight: 500;
+.scope-task-inline-offset {
+  width: 64px;
+  text-align: center;
+  font-size: 0.83rem;
+}
+
+.scope-task-inline-hint {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #1D4ED8;
+}
+
+.scope-task-inline-hint.is-invalid {
   color: #B45309;
 }
 
-.scope-task-future-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.45rem;
-  margin-top: 0.9rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: var(--radius-md);
-  background-color: var(--bg-app);
-  border: 1px solid var(--border-light);
+.scope-task-inline-description {
   font-size: 0.8rem;
+}
+
+.scope-task-inline-error {
+  font-size: 0.76rem;
+  color: #B91C1C;
+}
+
+.scope-task-inline-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.scope-task-inline-actions button {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.onboarding-timing-guide {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.8;
   color: var(--text-muted);
 }
 
-.scope-task-future-note svg {
-  flex-shrink: 0;
-  margin-top: 0.1rem;
+.onboarding-timing-guide .onboarding-scope-task-timing {
+  margin: 0 0.3rem;
 }
 
 /* Onboarding Progress — an Onboarding intern whose plan isn't launched yet */
