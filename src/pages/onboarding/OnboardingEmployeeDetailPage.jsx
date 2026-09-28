@@ -13,7 +13,6 @@ import { employeeService } from '../../services/employeeService.js';
 import { onboardingService } from '../../services/onboardingService.js';
 import Avatar from '../../components/common/Avatar.jsx';
 import EditPlanTaskModal from '../../components/onboarding/EditPlanTaskModal.jsx';
-import DeletePlanTaskModal from '../../components/onboarding/DeletePlanTaskModal.jsx';
 
 // Real-data onboarding detail view for one (real) intern's local employee
 // record — reached from OnboardingEmployeesPage's "View Progress" link. The
@@ -30,7 +29,7 @@ export default function OnboardingEmployeeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
-  const [deletingTask, setDeletingTask] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -71,11 +70,22 @@ export default function OnboardingEmployeeDetailPage() {
     await loadData();
   };
 
-  // Confirmed in DeletePlanTaskModal; errors are shown there, not in a browser alert.
-  const handleConfirmDeleteTask = async () => {
-    await onboardingService.deleteRealTaskInstance(deletingTask.id);
-    setDeletingTask(null);
-    await loadData();
+  const handleDeleteTask = async (task) => {
+    const name = employee?.fullName || 'this person';
+    if (!window.confirm(`Remove "${task.title}" from ${name}'s onboarding plan?
+
+Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyone else. This can't be undone.`)) {
+      return;
+    }
+    setDeletingId(task.id);
+    try {
+      await onboardingService.deleteRealTaskInstance(task.id);
+      await loadData();
+    } catch (err) {
+      alert(`Failed to remove the task: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   if (loading) {
@@ -107,14 +117,6 @@ export default function OnboardingEmployeeDetailPage() {
 
   return (
     <div className="page-layout-container">
-      {deletingTask && (
-        <DeletePlanTaskModal
-          task={deletingTask}
-          personName={employee.fullName}
-          onClose={() => setDeletingTask(null)}
-          onConfirm={handleConfirmDeleteTask}
-        />
-      )}
       {editingTask && (
         <EditPlanTaskModal
           task={editingTask}
@@ -274,7 +276,8 @@ export default function OnboardingEmployeeDetailPage() {
                               className="plan-task-icon-btn plan-task-icon-btn-danger"
                               title={`Remove this task from ${employee.fullName}'s plan only`}
                               aria-label={`Delete ${task.title}`}
-                              onClick={() => setDeletingTask(task)}
+                              disabled={deletingId === task.id}
+                              onClick={() => handleDeleteTask(task)}
                             >
                               <Trash2 size={14} />
                             </button>
