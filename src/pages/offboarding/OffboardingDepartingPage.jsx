@@ -191,7 +191,11 @@ This permanently removes their offboarding plan and its tasks from History. Thei
     return record.fullName.toLowerCase().includes(q) || (record.refNumber || '').toLowerCase().includes(q);
   });
 
+  // Current tab: a completed plan moves to History only (like Onboarding, where completing moves the
+  // person on to Active). The Interns DB keeps them in Offboarding until their end date, so the
+  // roster still returns them — they're just not listed here.
   const visibleInterns = interns.filter((intern) => {
+    if (intern.plan?.status === 'Completed') return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       const matchName = intern.fullName.toLowerCase().includes(q);
