@@ -8221,40 +8221,6 @@ input.form-control:focus {
   border-bottom: 1px solid var(--border-light);
 }
 
-.plan-task-required-toggle {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.plan-task-required-toggle input {
-  margin-top: 0.2rem;
-}
-
-/* Add/Edit Task (onboarding plan) — compact so it fits without scrolling; header and buttons stay
-   put, and if a small screen still needs scrolling, the body scrolls with no visible scrollbar. */
-.plan-task-modal > .modal-body {
-  padding-top: 1rem;
-  padding-bottom: 1rem;
-  scrollbar-width: none;
-}
-
-.plan-task-modal > .modal-body::-webkit-scrollbar {
-  display: none;
-}
-
-.plan-task-modal > .modal-body .form-group {
-  margin-bottom: 0.9rem;
-}
-
-.plan-task-modal .plan-task-required-toggle {
-  margin-top: 0.85rem;
-}
-
 /* Onboarding Progress — the Completed Plans card opens Onboarding History. A <button> styled as a
    normal summary card, with a hover lift and a subtle "View history" cue. */
 .summary-card.summary-card-link {
@@ -8463,6 +8429,21 @@ input.form-control:focus {
 .scope-task-inline-actions button {
   padding: 0.3rem 0.7rem;
   font-size: 0.78rem;
+}
+
+/* One person's plan: a task added or edited in place (InlinePlanTaskEditor) */
+.plan-task-inline-date {
+  width: 150px;
+  font-size: 0.83rem;
+}
+
+.plan-task-inline-required {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  cursor: pointer;
 }
 
 .onboarding-timing-guide {

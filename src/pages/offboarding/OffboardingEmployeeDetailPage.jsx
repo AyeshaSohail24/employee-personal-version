@@ -13,15 +13,15 @@ import {
 import { employeeService } from '../../services/employeeService.js';
 import { offboardingService } from '../../services/offboardingService.js';
 import Avatar from '../../components/common/Avatar.jsx';
-import EditPlanTaskModal from '../../components/onboarding/EditPlanTaskModal.jsx';
+import InlinePlanTaskEditor from '../../components/plans/InlinePlanTaskEditor.jsx';
 
 // Real-data offboarding detail view for one (real) intern's local employee
 // record — mirrors onboarding/OnboardingEmployeeDetailPage.jsx exactly.
 // Unlike onboarding, a plan here is never auto-launched (launching sets the
 // intern's real internship_end_date in the Interns DB — see
 // server/db/internSync.js's syncOffboardingLaunchToIntern()), so this page
-// views whatever plan already exists, checks off tasks, and can add, edit or remove a single task
-// for this person only (their own copy — Offboarding > Plans is unchanged).
+// views whatever plan already exists, checks off tasks, and can add or edit (in place, no popup) or
+// remove a single task for this person only (their own copy — Offboarding > Plans is unchanged).
 // "2026-09-29T00:00:00.000Z" -> "2026-09-29" (DATE columns arrive as full timestamps).
 function toDateOnly(value) {
   return value ? String(value).slice(0, 10) : '';
@@ -130,24 +130,6 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
 
   return (
     <div className="page-layout-container">
-      {isAddingTask && (
-        <EditPlanTaskModal
-          personName={employee.fullName}
-          defaultDueDate={toDateOnly(instance?.anchor_date)}
-          planLabel="offboarding"
-          onClose={() => setIsAddingTask(false)}
-          onSave={handleAddTask}
-        />
-      )}
-      {editingTask && (
-        <EditPlanTaskModal
-          task={editingTask}
-          personName={employee.fullName}
-          planLabel="offboarding"
-          onClose={() => setEditingTask(null)}
-          onSave={handleSaveTask}
-        />
-      )}
       <div style={{ marginBottom: '1rem' }}>
         <Link to="/offboarding/departing" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
           <ArrowLeft size={14} /> Back to Offboarding Progress
@@ -238,7 +220,7 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
               <button
                 type="button"
                 className="btn-primary dept-mapping-done"
-                onClick={() => setIsAddingTask(true)}
+                onClick={() => { setEditingTask(null); setIsAddingTask(true); }}
                 title={`Add a task to ${employee.fullName}'s plan only`}
               >
                 <Plus size={15} />
@@ -260,6 +242,19 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
                 <tbody>
                   {taskInstances.map((task) => {
                     const isDone = Boolean(task.completed);
+
+                    if (editingTask?.id === task.id) {
+                      return (
+                        <InlinePlanTaskEditor
+                          key={task.id}
+                          task={task}
+                          anchorDate={toDateOnly(instance.anchor_date)}
+                          anchorLabel="last working day"
+                          onSubmit={handleSaveTask}
+                          onCancel={() => setEditingTask(null)}
+                        />
+                      );
+                    }
 
                     return (
                       <tr key={task.id} className="presence-table-row" style={isDone ? { opacity: 0.8, backgroundColor: '#F8FAFC' } : undefined}>
@@ -297,7 +292,7 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
                               className="plan-task-icon-btn"
                               title={`Edit this task for ${employee.fullName} only`}
                               aria-label={`Edit ${task.title}`}
-                              onClick={() => setEditingTask(task)}
+                              onClick={() => { setIsAddingTask(false); setEditingTask(task); }}
                             >
                               <Pencil size={14} />
                             </button>
@@ -316,6 +311,15 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
                       </tr>
                     );
                   })}
+                  {isAddingTask && (
+                    <InlinePlanTaskEditor
+                      anchorDate={toDateOnly(instance.anchor_date)}
+                      anchorLabel="last working day"
+                      planLabel="offboarding"
+                      onSubmit={handleAddTask}
+                      onCancel={() => setIsAddingTask(false)}
+                    />
+                  )}
                 </tbody>
               </table>
             </div>

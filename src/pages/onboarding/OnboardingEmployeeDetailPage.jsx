@@ -13,7 +13,7 @@ import {
 import { employeeService } from '../../services/employeeService.js';
 import { onboardingService } from '../../services/onboardingService.js';
 import Avatar from '../../components/common/Avatar.jsx';
-import EditPlanTaskModal from '../../components/onboarding/EditPlanTaskModal.jsx';
+import InlinePlanTaskEditor from '../../components/plans/InlinePlanTaskEditor.jsx';
 import { toLocalDateString } from '../../utils/dateUtils.js';
 
 // Real-data onboarding detail view for one (real) intern's local employee
@@ -21,8 +21,8 @@ import { toLocalDateString } from '../../utils/dateUtils.js';
 // plan itself is never launched from here: it's launched at Accept, or with
 // Launch Plan on the Progress page (server/db/onboarding.js's
 // ensureOnboardingPlan()), composed from Universal + their
-// department's active tasks. This page views it, checks off tasks, and can edit or remove a
-// single task for this person only (their own copy — Onboarding > Plans is unchanged).
+// department's active tasks. This page views it, checks off tasks, and can add or edit (in place,
+// no popup) or remove a single task for this person only (their own copy — Onboarding > Plans is unchanged).
 // "2026-09-17T00:00:00.000Z" -> "2026-09-17" (DATE columns arrive as full timestamps).
 function toDateOnly(value) {
   return value ? String(value).slice(0, 10) : '';
@@ -144,22 +144,6 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
 
   return (
     <div className="page-layout-container">
-      {isAddingTask && (
-        <EditPlanTaskModal
-          personName={employee.fullName}
-          defaultDueDate={toDateOnly(instance?.anchor_date)}
-          onClose={() => setIsAddingTask(false)}
-          onSave={handleAddTask}
-        />
-      )}
-      {editingTask && (
-        <EditPlanTaskModal
-          task={editingTask}
-          personName={employee.fullName}
-          onClose={() => setEditingTask(null)}
-          onSave={handleSaveTask}
-        />
-      )}
       <div style={{ marginBottom: '1rem' }}>
         <Link to={backTo} style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
           <ArrowLeft size={14} /> {backLabel}
@@ -272,7 +256,7 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
                 <button
                   type="button"
                   className="btn-primary dept-mapping-done"
-                  onClick={() => setIsAddingTask(true)}
+                  onClick={() => { setEditingTask(null); setIsAddingTask(true); }}
                   title={`Add a task to ${employee.fullName}'s plan only`}
                 >
                   <Plus size={15} />
@@ -295,6 +279,19 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
                 <tbody>
                   {taskInstances.map((task) => {
                     const isDone = Boolean(task.completed);
+
+                    if (editingTask?.id === task.id) {
+                      return (
+                        <InlinePlanTaskEditor
+                          key={task.id}
+                          task={task}
+                          anchorDate={toDateOnly(instance.anchor_date)}
+                          anchorLabel="start date"
+                          onSubmit={handleSaveTask}
+                          onCancel={() => setEditingTask(null)}
+                        />
+                      );
+                    }
 
                     return (
                       <tr key={task.id} className="presence-table-row" style={isDone ? { opacity: 0.8, backgroundColor: '#F8FAFC' } : undefined}>
@@ -337,7 +334,7 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
                               className="plan-task-icon-btn"
                               title={`Edit this task for ${employee.fullName} only`}
                               aria-label={`Edit ${task.title}`}
-                              onClick={() => setEditingTask(task)}
+                              onClick={() => { setIsAddingTask(false); setEditingTask(task); }}
                             >
                               <Pencil size={14} />
                             </button>
@@ -357,6 +354,15 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
                       </tr>
                     );
                   })}
+                  {isAddingTask && (
+                    <InlinePlanTaskEditor
+                      anchorDate={toDateOnly(instance.anchor_date)}
+                      anchorLabel="start date"
+                      planLabel="onboarding"
+                      onSubmit={handleAddTask}
+                      onCancel={() => setIsAddingTask(false)}
+                    />
+                  )}
                 </tbody>
               </table>
             </div>
