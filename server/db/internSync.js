@@ -9,6 +9,7 @@ import { getEmployeeTypeByCode } from "./orgStructure.js";
 import { hydrateEmployees } from "./employeeHydration.js";
 import { internsClient } from "../clients/internsClient.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
+import { toAppDateString } from "../dates.js";
 
 // Read-through: the live Interns DB record for display alongside an
 // onboarding/offboarding view, never cached or duplicated locally (SS-13 —
@@ -399,13 +400,29 @@ export async function getLinkedInternForDetails(employee) {
   }
 }
 
+// A DATE column as 'YYYY-MM-DD'. mysql2 returns DATE values as JS Dates at local midnight, so
+// String(date) gives "Fri Jul 24 …" — which never compares as earlier than an ISO date, so an
+// overdue task was never detected. Read the local calendar parts instead (strings pass through).
+function toDateKey(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
+  return String(value).slice(0, 10);
+}
+
 function deriveStatus(tasks) {
   if (tasks.length === 0) return "In Progress";
   const required = tasks.filter((t) => t.required);
   const completedRequired = required.filter((t) => t.completed);
   if (required.length > 0 && completedRequired.length === required.length) return "Completed";
-  const today = new Date().toISOString().slice(0, 10);
-  const needsAttention = required.some((t) => !t.completed && t.due_date && String(t.due_date).slice(0, 10) < today);
+  // Overdue = an incomplete required task due before today (Malaysia calendar — server/dates.js).
+  const today = toAppDateString();
+  const needsAttention = required.some((t) => {
+    const due = toDateKey(t.due_date);
+    return !t.completed && due !== null && due < today;
+  });
   return needsAttention ? "Needs Attention" : "In Progress";
 }
 
