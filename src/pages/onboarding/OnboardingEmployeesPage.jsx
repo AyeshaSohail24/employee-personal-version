@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  ChevronRight,
   Trash2,
 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
@@ -309,15 +308,16 @@ This permanently removes their onboarding plan and its tasks from History. Their
               <CheckCircle2 size={17} />
             </div>
           </div>
-          {/* Same header / value / text rows as the other cards, so the number lines up; the
-              "View history" hint shares the value row instead of adding a row of its own. */}
-          <div className="summary-card-value summary-card-value-row" style={{ color: '#059669' }}>
-            <span>{completedCount}</span>
-            <span className="summary-card-link-cta">View history <ChevronRight size={13} /></span>
+          <div className="summary-card-value" style={{ color: '#059669' }}>
+            {completedCount}
           </div>
           <div className="summary-card-subtext">Onboarding workflows completed</div>
         </button>
       </div>
+
+      <p className="directory-row-click-hint onboarding-summary-note">
+        <strong>Note:</strong> Click the Completed Plans card to view history.
+      </p>
 
       {/* Tabs on the left, search on the right — the search box filters whichever tab is open. */}
       <div className="underline-tabs onboarding-tabs-row" style={{ marginBottom: '1.25rem' }}>

@@ -8287,22 +8287,8 @@ input.form-control:focus {
   min-height: 2.9em;
 }
 
-.summary-card-value-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.summary-card-link-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.1rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  line-height: 1;
-  color: #059669;
-  white-space: nowrap;
+.onboarding-summary-note {
+  margin: -0.85rem 0 0;
 }
 
 /* Onboarding History — read-only onboarding record banner and markers */
