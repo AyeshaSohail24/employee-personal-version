@@ -7,7 +7,7 @@ import { ApiError } from '../../services/apiClient.js';
  * `task` — adds a new task to that plan (also asks whether it's required). Only this person's
  * plan changes; the shared tasks under Onboarding > Plans stay as they are.
  */
-export default function EditPlanTaskModal({ task = null, personName, defaultDueDate = '', onClose, onSave }) {
+export default function EditPlanTaskModal({ task = null, personName, defaultDueDate = '', planLabel = 'onboarding', onClose, onSave }) {
   const isNew = !task;
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
@@ -87,7 +87,7 @@ export default function EditPlanTaskModal({ task = null, personName, defaultDueD
             <label className="plan-task-required-toggle">
               <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} />
               <span>
-                <strong>Required</strong> — must be done before onboarding counts as complete.
+                <strong>Required</strong> — must be done before {planLabel} counts as complete.
               </span>
             </label>
           )}

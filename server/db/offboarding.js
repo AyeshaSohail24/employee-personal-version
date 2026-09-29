@@ -67,8 +67,10 @@ async function composeApplicableTasks(personType, departmentId) {
   } else {
     conditions.push("scope_type = 'universal'");
   }
+  // By each task's own position; at an equal position Universal comes before the department task
+  // (then creation order), so the combined order never depends on how MySQL breaks the tie.
   const [rows] = await pool.query(
-    `SELECT * FROM offboarding_plan_tasks WHERE ${conditions.join(" AND ")} ORDER BY sequence ASC`,
+    `SELECT * FROM offboarding_plan_tasks WHERE ${conditions.join(" AND ")} ORDER BY sequence ASC, scope_type = 'universal' DESC, id ASC`,
     values,
   );
   return rows;
@@ -93,7 +95,9 @@ export async function launchInstance({ employeeId, personType, departmentId, anc
     anchor_date: anchorDate,
   });
 
-  for (const task of tasks) {
+  // Numbered 1..n in the composed order (Universal and department tasks each start their own
+  // sequence at 1, so copying task.sequence would give ties).
+  for (const [index, task] of tasks.entries()) {
     const dueDate = addDays(anchorDate, task.relative_offset_days);
     const taskInstanceId = await insertRow("offboarding_task_instances", {
       plan_instance_id: instanceId,
@@ -106,7 +110,7 @@ export async function launchInstance({ employeeId, personType, departmentId, anc
       relative_offset_days: task.relative_offset_days,
       originally_calculated_due_date: dueDate,
       required: task.required,
-      sequence: task.sequence,
+      sequence: index + 1,
     });
     const activityId = await insertRow("activities", {
       type_id: task.activity_type_id,
@@ -145,7 +149,7 @@ export async function listInstanceTasks(instanceId) {
        FROM offboarding_task_instances ti
        LEFT JOIN activities a ON a.id = ti.activity_id
       WHERE ti.plan_instance_id = ?
-      ORDER BY ti.sequence ASC`,
+      ORDER BY ti.sequence ASC, ti.id ASC`,
     [instanceId],
   );
   return rows;
@@ -160,6 +164,135 @@ export async function setTaskInstanceCompleted(taskInstanceId, completed) {
     "UPDATE activities SET completed = ?, completed_at = ? WHERE id = ?",
     [completed, completed ? new Date() : null, taskInstance.activity_id],
   );
+}
+
+export class TaskInstanceValidationError extends Error {}
+
+// Edits one task in one person's offboarding plan only (title/description/due date) — mirrors
+// onboarding.js's updateTaskInstanceDetails(). A new due date re-derives the task's relative day
+// from the plan's anchor (the last working day). Offboarding > Plans is never touched.
+export async function updateTaskInstanceDetails(taskInstanceId, { title, description, dueDate } = {}) {
+  const taskInstance = await getRow("offboarding_task_instances", taskInstanceId);
+  if (!taskInstance) throw new RowNotFoundError(`No offboarding task instance with id ${taskInstanceId}.`);
+
+  const taskColumns = {};
+  const activityColumns = {};
+  if (title !== undefined) {
+    const trimmed = String(title ?? "").trim();
+    if (!trimmed) throw new TaskInstanceValidationError("The task title can't be empty.");
+    if (trimmed.length > 255) throw new TaskInstanceValidationError("The task title must be 255 characters or fewer.");
+    taskColumns.title = trimmed;
+    activityColumns.title = trimmed;
+  }
+  if (description !== undefined) {
+    const trimmed = String(description ?? "").trim();
+    taskColumns.description = trimmed || null;
+    activityColumns.description = trimmed || null;
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    if (dueDate !== undefined) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate))) throw new TaskInstanceValidationError("Enter a valid due date.");
+      activityColumns.due_date = dueDate;
+      const [[{ offset }]] = await conn.query(
+        "SELECT DATEDIFF(?, anchor_date) AS offset FROM offboarding_plan_instances WHERE id = ?",
+        [dueDate, taskInstance.plan_instance_id],
+      );
+      if (offset !== null && offset !== undefined) taskColumns.relative_offset_days = offset;
+    }
+    const setClause = (cols) => Object.keys(cols).map((c) => `\`${c}\` = ?`).join(", ");
+    if (Object.keys(taskColumns).length > 0) {
+      await conn.query(`UPDATE offboarding_task_instances SET ${setClause(taskColumns)} WHERE id = ?`, [...Object.values(taskColumns), taskInstanceId]);
+    }
+    if (Object.keys(activityColumns).length > 0 && taskInstance.activity_id) {
+      await conn.query(`UPDATE activities SET ${setClause(activityColumns)} WHERE id = ?`, [...Object.values(activityColumns), taskInstance.activity_id]);
+    }
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
+// Adds a task to one person's offboarding plan only — mirrors onboarding.js's addTaskToInstance().
+// Its relative day is worked out from the plan's anchor (the last working day) and it goes to the
+// end of the plan's order. Offboarding > Plans is never touched.
+export async function addTaskToInstance(planInstanceId, { title, description, dueDate, required = true } = {}) {
+  const trimmedTitle = String(title ?? "").trim();
+  if (!trimmedTitle) throw new TaskInstanceValidationError("The task title can't be empty.");
+  if (trimmedTitle.length > 255) throw new TaskInstanceValidationError("The task title must be 255 characters or fewer.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate ?? ""))) throw new TaskInstanceValidationError("Enter a valid due date.");
+  const trimmedDescription = String(description ?? "").trim() || null;
+
+  const planInstance = await getRow("offboarding_plan_instances", planInstanceId);
+  if (!planInstance) throw new RowNotFoundError(`No offboarding plan instance with id ${planInstanceId}.`);
+
+  const [[todoType]] = await pool.query("SELECT id FROM activity_types WHERE name = 'To Do' LIMIT 1");
+  const [[anyType]] = todoType ? [[todoType]] : await pool.query("SELECT id FROM activity_types ORDER BY id LIMIT 1");
+  if (!anyType) throw new TaskInstanceValidationError("No activity types are configured.");
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[{ offset }]] = await conn.query("SELECT DATEDIFF(?, anchor_date) AS offset FROM offboarding_plan_instances WHERE id = ?", [dueDate, planInstanceId]);
+    const [[{ nextSequence }]] = await conn.query(
+      "SELECT COALESCE(MAX(sequence), 0) + 1 AS nextSequence FROM offboarding_task_instances WHERE plan_instance_id = ?",
+      [planInstanceId],
+    );
+    const [taskResult] = await conn.query(
+      `INSERT INTO offboarding_task_instances
+         (plan_instance_id, plan_task_id, title, description, activity_type_id, assignment_rule,
+          relative_offset_days, originally_calculated_due_date, required, sequence)
+       VALUES (?, NULL, ?, ?, ?, 'hr', ?, ?, ?, ?)`,
+      [planInstanceId, trimmedTitle, trimmedDescription, anyType.id, offset ?? 0, dueDate, Boolean(required), nextSequence],
+    );
+    const taskInstanceId = taskResult.insertId;
+    const [activityResult] = await conn.query(
+      `INSERT INTO activities (type_id, title, description, employee_id, due_date, source, source_entity_type, source_entity_id)
+       VALUES (?, ?, ?, ?, ?, 'Offboarding', 'OffboardingTaskInstance', ?)`,
+      [anyType.id, trimmedTitle, trimmedDescription, planInstance.employee_id, dueDate, taskInstanceId],
+    );
+    await conn.query("UPDATE offboarding_task_instances SET activity_id = ? WHERE id = ?", [activityResult.insertId, taskInstanceId]);
+    await conn.commit();
+    return taskInstanceId;
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
+// Removes one task (and its activity) from one person's offboarding plan only, then renumbers the
+// rest — mirrors onboarding.js's deleteTaskInstance(). Offboarding > Plans is never touched.
+export async function deleteTaskInstance(taskInstanceId) {
+  const taskInstance = await getRow("offboarding_task_instances", taskInstanceId);
+  if (!taskInstance) throw new RowNotFoundError(`No offboarding task instance with id ${taskInstanceId}.`);
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query("DELETE FROM offboarding_task_instances WHERE id = ?", [taskInstanceId]);
+    if (taskInstance.activity_id) await conn.query("DELETE FROM activities WHERE id = ?", [taskInstance.activity_id]);
+    const [remaining] = await conn.query(
+      "SELECT id FROM offboarding_task_instances WHERE plan_instance_id = ? ORDER BY sequence ASC, id ASC",
+      [taskInstance.plan_instance_id],
+    );
+    for (const [index, row] of remaining.entries()) {
+      await conn.query("UPDATE offboarding_task_instances SET sequence = ? WHERE id = ?", [index + 1, row.id]);
+    }
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+  return taskInstance.plan_instance_id;
 }
 
 // ---------------------------------------------------------------------------

@@ -45,6 +45,35 @@ export const offboardingService = {
   },
 
   /**
+   * Edits one task in one person's plan only (title/description/due date) — PATCH
+   * /offboarding/task-instances/{id}. The shared task under Offboarding > Plans is unchanged.
+   * @param {number|string} taskInstanceId
+   * @param {{ title?: string, description?: string, dueDate?: string }} details
+   */
+  async updateRealTaskInstance(taskInstanceId, details) {
+    const { taskInstance } = await apiClient.patch(`/offboarding/task-instances/${taskInstanceId}`, details);
+    return taskInstance;
+  },
+
+  /**
+   * Adds a task to one person's plan only — POST /offboarding/instances/{id}/tasks.
+   * @param {number|string} planInstanceId
+   * @param {{ title: string, description?: string, dueDate: string, required?: boolean }} details
+   */
+  async addRealTaskToInstance(planInstanceId, details) {
+    const { taskInstance } = await apiClient.post(`/offboarding/instances/${planInstanceId}/tasks`, details);
+    return taskInstance;
+  },
+
+  /**
+   * Removes one task from one person's plan only — DELETE /offboarding/task-instances/{id}.
+   * @param {number|string} taskInstanceId
+   */
+  async deleteRealTaskInstance(taskInstanceId) {
+    await apiClient.delete(`/offboarding/task-instances/${taskInstanceId}`);
+  },
+
+  /**
    * Fetches all Offboarding PlanTemplates with optional task count enrichment.
    */
   async getAllTemplates() {

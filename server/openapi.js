@@ -62,7 +62,7 @@ export const openapi = {
           description: "Launch and track a departure checklist for a leaving employee — for an intern, this also sets their real internship_end_date in the Interns DB.",
           does: ["List offboarding templates", "Create a template", "Read or edit the real Universal/department task scopes", "Launch a plan for an employee, or auto-assign one to a real intern by department (syncs the departure date to the Interns DB for an intern)", "Mark a task done or reopen it"],
           best_for: "HR taking a departing employee through clearance.",
-          endpoints: ["GET /offboarding/interns", "GET /offboarding/scope-tasks", "PUT /offboarding/scope-tasks", "POST /offboarding/interns/{internId}/launch", "GET /offboarding/templates", "POST /offboarding/templates", "GET /offboarding/templates/{id}", "PATCH /offboarding/templates/{id}", "GET /offboarding/instances", "POST /offboarding/instances", "GET /offboarding/instances/{id}", "PATCH /offboarding/task-instances/{id}"],
+          endpoints: ["GET /offboarding/interns", "GET /offboarding/scope-tasks", "PUT /offboarding/scope-tasks", "POST /offboarding/interns/{internId}/launch", "GET /offboarding/templates", "POST /offboarding/templates", "GET /offboarding/templates/{id}", "PATCH /offboarding/templates/{id}", "GET /offboarding/instances", "POST /offboarding/instances", "GET /offboarding/instances/{id}", "POST /offboarding/instances/{id}/tasks", "PATCH /offboarding/task-instances/{id}", "DELETE /offboarding/task-instances/{id}"],
         },
         {
           name: "Track Activities",
@@ -445,9 +445,15 @@ export const openapi = {
       get: { summary: "Fetch one offboarding instance with its task instances.", security: scoped("offboarding:read"),
         "x-rizurf": { name: "Get Offboarding Instance", purpose: "See a launched plan's progress, and the employee's live Interns DB record if they're an intern", use_when: ["Viewing an employee's offboarding progress"], do_not_use_when: [], inputs: ["id"], outputs: ["instance", "taskInstances[]", "internRecord"], requires: [], related_endpoints: ["PATCH /offboarding/task-instances/{id}"], tags: ["offboarding", "progress", "interns"] } },
     },
+    "/offboarding/instances/{id}/tasks": {
+      post: { summary: "Add a task to one person's offboarding plan.", security: scoped("offboarding:write"),
+        "x-rizurf": { name: "Add Offboarding Task", purpose: "Add an extra task to a single person's plan without changing the shared plan tasks", use_when: ["This person needs a step the standard plan doesn't have"], do_not_use_when: ["Everyone should get the task — add it under Offboarding > Plans"], inputs: ["title", "description", "dueDate", "required"], outputs: ["taskInstance"], requires: ["Plan instance exists", "title and dueDate (YYYY-MM-DD)", "Its relative day is worked out from the plan's last working day"], related_endpoints: ["PATCH /offboarding/task-instances/{id}", "DELETE /offboarding/task-instances/{id}"], tags: ["offboarding", "task", "create"] } },
+    },
     "/offboarding/task-instances/{id}": {
-      patch: { summary: "Mark an offboarding task done or reopen it.", security: scoped("offboarding:write"),
-        "x-rizurf": { name: "Update Offboarding Task", purpose: "Complete or reopen a single offboarding task", use_when: ["A clearance step is finished", "A step was marked done by mistake"], do_not_use_when: [], inputs: ["completed"], outputs: ["taskInstance"], requires: ["Task instance exists"], related_endpoints: ["GET /offboarding/instances/{id}"], tags: ["offboarding", "task", "complete"] } },
+      patch: { summary: "Mark an offboarding task done/reopen it, or edit its title, description or due date.", security: scoped("offboarding:write"),
+        "x-rizurf": { name: "Update Offboarding Task", purpose: "Complete or reopen a single offboarding task, or edit it for this person only", use_when: ["A clearance step is finished", "A step was marked done by mistake", "This person's copy of a task needs a different title, description or due date"], do_not_use_when: ["The change should apply to everyone — edit it under Offboarding > Plans"], inputs: ["completed", "title", "description", "dueDate"], outputs: ["taskInstance"], requires: ["Task instance exists"], related_endpoints: ["GET /offboarding/instances/{id}"], tags: ["offboarding", "task", "complete", "edit"] } },
+      delete: { summary: "Remove one task from one person's offboarding plan.", security: scoped("offboarding:write"),
+        "x-rizurf": { name: "Delete Offboarding Task", purpose: "Drop a task from a single person's plan without changing the shared plan tasks", use_when: ["A task doesn't apply to this person"], do_not_use_when: ["The task should go for everyone — edit it under Offboarding > Plans"], inputs: ["id"], outputs: [], requires: ["Task instance exists", "The remaining tasks are renumbered"], related_endpoints: ["PATCH /offboarding/task-instances/{id}"], tags: ["offboarding", "task", "delete"] } },
     },
 
     "/activities": {

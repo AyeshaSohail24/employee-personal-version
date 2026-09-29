@@ -82,8 +82,10 @@ async function composeApplicableTasks(personType, departmentId) {
   } else {
     conditions.push("scope_type = 'universal'");
   }
+  // By each task's own position; at an equal position Universal comes before the department task
+  // (then creation order), so the combined order never depends on how MySQL breaks the tie.
   const [rows] = await pool.query(
-    `SELECT * FROM onboarding_plan_tasks WHERE ${conditions.join(" AND ")} ORDER BY sequence ASC`,
+    `SELECT * FROM onboarding_plan_tasks WHERE ${conditions.join(" AND ")} ORDER BY sequence ASC, scope_type = 'universal' DESC, id ASC`,
     values,
   );
   return rows;
@@ -106,7 +108,9 @@ export async function launchInstance({ employeeId, personType, departmentId, anc
     anchor_date: anchorDate,
   });
 
-  for (const task of tasks) {
+  // Numbered 1..n in the composed order (Universal and department tasks each start their own
+  // sequence at 1, so copying task.sequence would give ties).
+  for (const [index, task] of tasks.entries()) {
     const dueDate = addDays(anchorDate, task.relative_offset_days);
     const taskInstanceId = await insertRow("onboarding_task_instances", {
       plan_instance_id: instanceId,
@@ -119,7 +123,7 @@ export async function launchInstance({ employeeId, personType, departmentId, anc
       relative_offset_days: task.relative_offset_days,
       originally_calculated_due_date: dueDate,
       required: task.required,
-      sequence: task.sequence,
+      sequence: index + 1,
     });
     const activityId = await insertRow("activities", {
       type_id: task.activity_type_id,
@@ -283,7 +287,7 @@ export async function listInstanceTasks(instanceId) {
        FROM onboarding_task_instances ti
        LEFT JOIN activities a ON a.id = ti.activity_id
       WHERE ti.plan_instance_id = ?
-      ORDER BY ti.sequence ASC`,
+      ORDER BY ti.sequence ASC, ti.id ASC`,
     [instanceId],
   );
   return rows;

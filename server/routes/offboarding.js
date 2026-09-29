@@ -98,16 +98,45 @@ export const routes = {
       });
     },
   },
+  "/offboarding/instances/{id}/tasks": {
+    async post(req, res, ctx) {
+      const body = await readJsonBody(req);
+      let taskInstanceId;
+      try {
+        taskInstanceId = await db.addTaskToInstance(ctx.params.id, body);
+      } catch (error) {
+        if (error instanceof RowNotFoundError) throw new NotFoundError(error.message);
+        if (error instanceof db.TaskInstanceValidationError) throw new ValidationError(error.message);
+        throw error;
+      }
+      sendJson(res, ctx.cid, 201, { taskInstance: await db.getTaskInstance(taskInstanceId) });
+    },
+  },
   "/offboarding/task-instances/{id}": {
     async patch(req, res, ctx) {
       const body = await readJsonBody(req);
       try {
-        await db.setTaskInstanceCompleted(ctx.params.id, Boolean(body.completed));
+        if (body.title !== undefined || body.description !== undefined || body.dueDate !== undefined) {
+          await db.updateTaskInstanceDetails(ctx.params.id, body);
+        }
+        if (body.completed !== undefined) {
+          await db.setTaskInstanceCompleted(ctx.params.id, Boolean(body.completed));
+        }
+      } catch (error) {
+        if (error instanceof RowNotFoundError) throw new NotFoundError(error.message);
+        if (error instanceof db.TaskInstanceValidationError) throw new ValidationError(error.message);
+        throw error;
+      }
+      sendJson(res, ctx.cid, 200, { taskInstance: await db.getTaskInstance(ctx.params.id) });
+    },
+    async delete(req, res, ctx) {
+      try {
+        await db.deleteTaskInstance(ctx.params.id);
       } catch (error) {
         if (error instanceof RowNotFoundError) throw new NotFoundError(error.message);
         throw error;
       }
-      sendJson(res, ctx.cid, 200, { taskInstance: await db.getTaskInstance(ctx.params.id) });
+      sendJson(res, ctx.cid, 204, null);
     },
   },
 };

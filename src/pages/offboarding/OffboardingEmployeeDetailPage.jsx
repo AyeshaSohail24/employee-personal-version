@@ -6,17 +6,27 @@ import {
   CheckCircle2,
   RotateCcw,
   FileText,
+  Pencil,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
 import { offboardingService } from '../../services/offboardingService.js';
 import Avatar from '../../components/common/Avatar.jsx';
+import EditPlanTaskModal from '../../components/onboarding/EditPlanTaskModal.jsx';
 
 // Real-data offboarding detail view for one (real) intern's local employee
 // record — mirrors onboarding/OnboardingEmployeeDetailPage.jsx exactly.
 // Unlike onboarding, a plan here is never auto-launched (launching sets the
 // intern's real internship_end_date in the Interns DB — see
 // server/db/internSync.js's syncOffboardingLaunchToIntern()), so this page
-// only views whatever plan already exists and checks off tasks.
+// views whatever plan already exists, checks off tasks, and can add, edit or remove a single task
+// for this person only (their own copy — Offboarding > Plans is unchanged).
+// "2026-09-29T00:00:00.000Z" -> "2026-09-29" (DATE columns arrive as full timestamps).
+function toDateOnly(value) {
+  return value ? String(value).slice(0, 10) : '';
+}
+
 export default function OffboardingEmployeeDetailPage() {
   const { employeeId } = useParams();
   const [employee, setEmployee] = useState(null);
@@ -24,6 +34,9 @@ export default function OffboardingEmployeeDetailPage() {
   const [taskInstances, setTaskInstances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -58,6 +71,36 @@ export default function OffboardingEmployeeDetailPage() {
     }
   };
 
+  const handleAddTask = async (details) => {
+    await offboardingService.addRealTaskToInstance(instance.id, details);
+    setIsAddingTask(false);
+    await loadData();
+  };
+
+  const handleSaveTask = async (details) => {
+    await offboardingService.updateRealTaskInstance(editingTask.id, details);
+    setEditingTask(null);
+    await loadData();
+  };
+
+  const handleDeleteTask = async (task) => {
+    const name = employee?.fullName || 'this person';
+    if (!window.confirm(`Remove "${task.title}" from ${name}'s offboarding plan?
+
+Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyone else. This can't be undone.`)) {
+      return;
+    }
+    setDeletingId(task.id);
+    try {
+      await offboardingService.deleteRealTaskInstance(task.id);
+      await loadData();
+    } catch (err) {
+      alert(`Failed to remove the task: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="page-layout-container">
@@ -87,6 +130,24 @@ export default function OffboardingEmployeeDetailPage() {
 
   return (
     <div className="page-layout-container">
+      {isAddingTask && (
+        <EditPlanTaskModal
+          personName={employee.fullName}
+          defaultDueDate={toDateOnly(instance?.anchor_date)}
+          planLabel="offboarding"
+          onClose={() => setIsAddingTask(false)}
+          onSave={handleAddTask}
+        />
+      )}
+      {editingTask && (
+        <EditPlanTaskModal
+          task={editingTask}
+          personName={employee.fullName}
+          planLabel="offboarding"
+          onClose={() => setEditingTask(null)}
+          onSave={handleSaveTask}
+        />
+      )}
       <div style={{ marginBottom: '1rem' }}>
         <Link to="/offboarding/departing" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
           <ArrowLeft size={14} /> Back to Offboarding Progress
@@ -112,7 +173,7 @@ export default function OffboardingEmployeeDetailPage() {
                 </span>
               </div>
               <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                {employee.position?.name || 'Position N/A'} · {employee.department?.name || 'Department N/A'} · ID: <strong>{employee.employeeId}</strong>
+                {employee.department?.name || 'Department N/A'} · ID: <strong>{employee.employeeId}</strong>
               </div>
             </div>
           </div>
@@ -121,7 +182,7 @@ export default function OffboardingEmployeeDetailPage() {
             <div style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>Final Working Date</div>
             <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
               <Calendar size={14} style={{ color: '#DC2626' }} />
-              <span>{instance?.anchor_date || employee.contractEndDate || 'Not Confirmed'}</span>
+              <span>{toDateOnly(instance?.anchor_date || employee.contractEndDate) || 'Not Confirmed'}</span>
             </div>
           </div>
         </div>
@@ -144,7 +205,7 @@ export default function OffboardingEmployeeDetailPage() {
               <div>
                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Offboarding Plan</h3>
                 <span style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>
-                  Launched on {instance.started_at}
+                  Launched on {toDateOnly(instance.started_at)}
                 </span>
               </div>
               <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#DC2626' }}>
@@ -170,10 +231,19 @@ export default function OffboardingEmployeeDetailPage() {
 
           {/* Task Breakdown Table */}
           <div className="table-container-card">
-            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-light)' }}>
+            <div className="plan-task-breakdown-header">
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
                 Offboarding Task Breakdown
               </h3>
+              <button
+                type="button"
+                className="btn-primary dept-mapping-done"
+                onClick={() => setIsAddingTask(true)}
+                title={`Add a task to ${employee.fullName}'s plan only`}
+              >
+                <Plus size={15} />
+                <span>Add Task</span>
+              </button>
             </div>
 
             <div style={{ overflowX: 'auto' }}>
@@ -181,10 +251,10 @@ export default function OffboardingEmployeeDetailPage() {
                 <thead>
                   <tr>
                     <th style={{ width: '5%', textAlign: 'center' }}>#</th>
-                    <th style={{ width: '52%', textAlign: 'left' }}>Task Title</th>
-                    <th style={{ width: '15%', textAlign: 'center' }}>Relative Timing</th>
-                    <th style={{ width: '18%', textAlign: 'center' }}>Due Date</th>
-                    <th style={{ width: '10%', textAlign: 'center' }}>Action</th>
+                    <th style={{ width: '45%', textAlign: 'left' }}>Task Title</th>
+                    <th style={{ width: '14%', textAlign: 'center' }}>Relative Timing</th>
+                    <th style={{ width: '14%', textAlign: 'center' }}>Due Date</th>
+                    <th style={{ width: '22%', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -211,16 +281,37 @@ export default function OffboardingEmployeeDetailPage() {
                           {(task.due_date || task.originally_calculated_due_date || '').slice(0, 10)}
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          <button
-                            type="button"
-                            className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
-                            style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
-                            disabled={togglingId === task.id}
-                            onClick={() => handleToggleTaskComplete(task.id, isDone)}
-                          >
-                            {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
-                            <span>{isDone ? 'Reopen' : 'Done'}</span>
-                          </button>
+                          <div className="plan-task-actions">
+                            <button
+                              type="button"
+                              className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
+                              style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
+                              disabled={togglingId === task.id}
+                              onClick={() => handleToggleTaskComplete(task.id, isDone)}
+                            >
+                              {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
+                              <span>{isDone ? 'Reopen' : 'Done'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="plan-task-icon-btn"
+                              title={`Edit this task for ${employee.fullName} only`}
+                              aria-label={`Edit ${task.title}`}
+                              onClick={() => setEditingTask(task)}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="plan-task-icon-btn plan-task-icon-btn-danger"
+                              title={`Remove this task from ${employee.fullName}'s plan only`}
+                              aria-label={`Delete ${task.title}`}
+                              disabled={deletingId === task.id}
+                              onClick={() => handleDeleteTask(task)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
