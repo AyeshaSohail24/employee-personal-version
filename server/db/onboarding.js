@@ -563,3 +563,43 @@ export async function listOnboardingHistory() {
     })
     .sort((a, b) => String(b.completedAt ?? "").localeCompare(String(a.completedAt ?? "")));
 }
+
+export class OnboardingHistoryError extends Error {}
+
+// Deletes ONE completed onboarding plan from Onboarding History — the plan, its task rows and
+// their linked activities — permanently. Only a completed plan (every required task done) can be
+// deleted here, so a plan still in progress is never removed from History by mistake. The person
+// themselves (employee record, Interns DB entry, status) is not touched. Logged to audit_logs.
+export async function deleteCompletedOnboardingPlan(planInstanceId) {
+  const plan = await getRow("onboarding_plan_instances", planInstanceId);
+  if (!plan) throw new RowNotFoundError(`No onboarding plan with id ${planInstanceId}.`);
+
+  const tasks = await listInstanceTasks(planInstanceId);
+  const required = tasks.filter((t) => t.required);
+  if (required.length === 0 || !required.every((t) => t.completed)) {
+    throw new OnboardingHistoryError("Only completed onboarding records can be deleted from History.");
+  }
+
+  const [[employee]] = await pool.query("SELECT employee_code, first_name, last_name FROM employees WHERE id = ?", [plan.employee_id]);
+  const activityIds = tasks.map((t) => t.activity_id).filter(Boolean);
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // Task rows go with the plan (ON DELETE CASCADE); their activities are deleted explicitly.
+    await conn.query("DELETE FROM onboarding_plan_instances WHERE id = ?", [planInstanceId]);
+    if (activityIds.length > 0) await conn.query("DELETE FROM activities WHERE id IN (?)", [activityIds]);
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+
+  await logLaunch(
+    "onboarding_history_deleted",
+    plan.employee_id,
+    `Deleted completed onboarding plan ${planInstanceId} (${tasks.length} tasks) for ${employee ? `${employee.first_name} ${employee.last_name} (${employee.employee_code})` : `employee ${plan.employee_id}`}.`,
+  );
+}

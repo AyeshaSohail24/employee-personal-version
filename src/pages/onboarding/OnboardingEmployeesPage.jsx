@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   ChevronRight,
+  Trash2,
 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
@@ -20,7 +21,7 @@ const HISTORY_STATUS_STYLES = {
 };
 
 // Onboarding History — completed onboarding plans, kept for reference after people move on.
-function OnboardingHistoryTable({ records, totalCount, loading, onOpen }) {
+function OnboardingHistoryTable({ records, totalCount, loading, onOpen, onDelete, deletingId }) {
   return (
     <>
       <p className="onboarding-history-intro">
@@ -45,11 +46,12 @@ function OnboardingHistoryTable({ records, totalCount, loading, onOpen }) {
             <table className="presence-data-table onboarding-employees-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '30%', textAlign: 'left' }}>Intern</th>
-                  <th style={{ width: '22%', textAlign: 'left' }}>Department</th>
-                  <th style={{ width: '16%', textAlign: 'center' }}>Start Date</th>
-                  <th style={{ width: '16%', textAlign: 'center' }}>Completed On</th>
-                  <th style={{ width: '16%', textAlign: 'center' }}>Current Status</th>
+                  <th style={{ width: '29%', textAlign: 'left' }}>Intern</th>
+                  <th style={{ width: '21%', textAlign: 'left' }}>Department</th>
+                  <th style={{ width: '15%', textAlign: 'center' }}>Start Date</th>
+                  <th style={{ width: '15%', textAlign: 'center' }}>Completed On</th>
+                  <th style={{ width: '14%', textAlign: 'center' }}>Current Status</th>
+                  <th style={{ width: '6%', textAlign: 'center' }} aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -89,6 +91,18 @@ function OnboardingHistoryTable({ records, totalCount, loading, onOpen }) {
                         {record.currentStatus}
                       </span>
                     </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        className="plan-task-icon-btn plan-task-icon-btn-danger"
+                        title="Delete this onboarding record"
+                        aria-label={`Delete the onboarding record for ${record.fullName}`}
+                        disabled={deletingId === record.planInstanceId}
+                        onClick={(e) => { e.stopPropagation(); onDelete(record); }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -115,6 +129,26 @@ export default function OnboardingEmployeesPage() {
   const [history, setHistory] = useState([]);
   const [search, setSearch] = useState('');
   const [historySearch, setHistorySearch] = useState('');
+  const [deletingHistoryId, setDeletingHistoryId] = useState(null);
+
+  // Permanently deletes one completed onboarding record (plan + tasks). The person isn't affected.
+  const handleDeleteHistory = async (record) => {
+    const label = `${record.fullName}${record.refNumber ? ` (${record.refNumber})` : ''}`;
+    if (!window.confirm(`Delete the completed onboarding record for ${label}?
+
+This permanently removes their onboarding plan and its tasks from History. Their Personnel record and status are not affected. This can't be undone.`)) {
+      return;
+    }
+    setDeletingHistoryId(record.planInstanceId);
+    try {
+      await onboardingService.deleteHistoryRecord(record.planInstanceId);
+      await loadData();
+    } catch (err) {
+      alert(`Failed to delete the onboarding record: ${err.message}`);
+    } finally {
+      setDeletingHistoryId(null);
+    }
+  };
   const [loading, setLoading] = useState(true);
   // Launch Plan / Retry Launch state per intern: { busy, failedReason }.
   const [launchState, setLaunchState] = useState({});
@@ -321,6 +355,8 @@ export default function OnboardingEmployeesPage() {
           totalCount={history.length}
           loading={loading}
           onOpen={(record) => navigate(`/onboarding/employees/${record.employeeId}?from=history`)}
+          onDelete={handleDeleteHistory}
+          deletingId={deletingHistoryId}
         />
       ) : (
       <>

@@ -75,6 +75,19 @@ export const routes = {
       sendJson(res, ctx.cid, 200, { records: await db.listOnboardingHistory() });
     },
   },
+  // Permanently deletes one completed onboarding record (plan + tasks); the person is untouched.
+  "/onboarding/history/{planInstanceId}": {
+    async delete(req, res, ctx) {
+      try {
+        await db.deleteCompletedOnboardingPlan(ctx.params.planInstanceId);
+      } catch (error) {
+        if (error instanceof RowNotFoundError) throw new NotFoundError(error.message);
+        if (error instanceof db.OnboardingHistoryError) throw new ValidationError(error.message);
+        throw error;
+      }
+      sendJson(res, ctx.cid, 204, null);
+    },
+  },
   "/onboarding/instances": {
     async get(req, res, ctx) {
       const employeeId = ctx.url.searchParams.get("employee_id");

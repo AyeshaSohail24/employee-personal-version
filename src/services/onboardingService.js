@@ -43,6 +43,15 @@ export const onboardingService = {
   },
 
   /**
+   * Permanently deletes one completed onboarding record (the plan and its tasks) from Onboarding
+   * History — DELETE /onboarding/history/{planInstanceId}. The person themselves is not affected.
+   * @param {number} planInstanceId
+   */
+  async deleteHistoryRecord(planInstanceId) {
+    await apiClient.delete(`/onboarding/history/${encodeURIComponent(planInstanceId)}`);
+  },
+
+  /**
    * Onboarding History — every completed onboarding plan, including people who have since moved to
    * Active, Offboarding or Former (GET /onboarding/history). Read-only reference records.
    * @returns {Promise<Array<Object>>}
