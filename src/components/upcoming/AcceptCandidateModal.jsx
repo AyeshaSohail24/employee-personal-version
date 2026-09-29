@@ -3,6 +3,7 @@ import { X, UserCheck, AlertCircle } from 'lucide-react';
 import { apiClient, ApiError } from '../../services/apiClient.js';
 import { upcomingCandidateService } from '../../services/upcomingCandidateService.js';
 import { Select } from '../common/Select.jsx';
+import { getTodayLocalDateString } from '../../utils/dateUtils.js';
 
 const MODE_OPTIONS = ['On-site', 'Remote', 'Hybrid'].map((m) => ({ value: m, label: m }));
 const ALLOWANCE_OPTIONS = ['Paid', 'Unpaid'].map((a) => ({ value: a, label: a }));
@@ -56,11 +57,18 @@ export default function AcceptCandidateModal({ candidate, onClose, onAccepted })
     !form.departmentId && 'department',
   ].filter(Boolean);
   const datesInvalid = form.startDate && form.internshipEndDate && form.internshipEndDate < form.startDate;
+  // Neither internship date can be in the past.
+  const today = getTodayLocalDateString();
+  const datesInPast = (form.startDate && form.startDate < today) || (form.internshipEndDate && form.internshipEndDate < today);
 
   const handleSubmit = async () => {
     setError('');
     if (missing.length > 0) {
       setError(`Please fill in: ${missing.join(', ')}.`);
+      return;
+    }
+    if (datesInPast) {
+      setError("The internship dates can't be before today.");
       return;
     }
     if (datesInvalid) {
@@ -119,11 +127,11 @@ export default function AcceptCandidateModal({ candidate, onClose, onAccepted })
 
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Internship start date {required}</label>
-              <input type="date" className="form-input" value={form.startDate} onChange={setField('startDate')} />
+              <input type="date" className="form-input" value={form.startDate} min={today} onChange={setField('startDate')} />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Internship end date {required}</label>
-              <input type="date" className="form-input" value={form.internshipEndDate} min={form.startDate || undefined} onChange={setField('internshipEndDate')} />
+              <input type="date" className="form-input" value={form.internshipEndDate} min={form.startDate > today ? form.startDate : today} onChange={setField('internshipEndDate')} />
             </div>
 
             <div className="form-group" style={{ marginBottom: 0 }}>

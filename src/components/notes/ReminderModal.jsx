@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, AlertTriangle, X } from 'lucide-react';
 import { notesService } from '../../services/notesService.js';
 import { combineReminderDateTime, splitReminderDateTime, validateReminder, formatReminderLabel } from '../../domain/noteDomain.js';
+import { getTodayLocalDateString } from '../../utils/dateUtils.js';
 
 /**
  * ONE shared Set/Edit Reminder dialog, used identically by Card View (NoteCard) and Document
@@ -113,6 +114,7 @@ export default function ReminderModal({ isOpen, note, onClose, onSaved }) {
                   type="date"
                   className="form-input"
                   value={dateStr}
+                  min={getTodayLocalDateString()}
                   onChange={(e) => setDateStr(e.target.value)}
                 />
               </div>
