@@ -8431,10 +8431,54 @@ input.form-control:focus {
   font-size: 0.78rem;
 }
 
-/* One person's plan: a task added or edited in place (InlinePlanTaskEditor) */
+/* One person's plan: a task added or edited in place (InlinePlanTaskEditor) — one table row whose
+   fields sit under the table's own columns (Task Title | Relative Timing | Due Date | Action). */
+.plan-task-inline-row > td {
+  background-color: var(--color-primary-light);
+  vertical-align: top;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-top: 1px solid var(--color-primary-border);
+  border-bottom: 1px solid var(--color-primary-border);
+}
+
+.plan-task-inline-seq {
+  text-align: center;
+  font-weight: 600;
+  padding-top: 1.2rem !important;
+}
+
+.plan-task-inline-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* Stacked here, so the Plans-page title's flex size must not turn into a height. */
+.plan-task-inline-fields .scope-task-inline-title {
+  flex: none;
+}
+
+.plan-task-inline-timing-cell,
+.plan-task-inline-date-cell,
+.plan-task-inline-actions-cell {
+  text-align: center;
+}
+
+.plan-task-inline-timing-cell .scope-task-inline-hint {
+  margin-top: 0.3rem;
+  line-height: 1.3;
+}
+
 .plan-task-inline-date {
-  width: 150px;
+  width: 100%;
+  max-width: 150px;
   font-size: 0.83rem;
+}
+
+.plan-task-inline-actions-cell .scope-task-inline-actions {
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .plan-task-inline-required {

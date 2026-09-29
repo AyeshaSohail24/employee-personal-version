@@ -22,7 +22,8 @@ export function describeRelativeOffset(days, anchorLabel = 'start date') {
 }
 
 const OFFSET_PATTERN = /^[+-]?\d{1,3}$/;
-const parseOffset = (value) => {
+// "-3" / "0" / "+7" -> number of days (within ±365), or null if it isn't a whole number of days.
+export const parseOffset = (value) => {
   const v = String(value).trim();
   if (!OFFSET_PATTERN.test(v)) return null;
   const n = parseInt(v, 10);
