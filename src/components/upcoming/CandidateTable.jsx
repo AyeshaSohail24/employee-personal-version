@@ -7,6 +7,9 @@ const OFFER_PILL_STYLES = {
   Paid: { bg: '#ECFDF5', color: '#059669' },
   Unpaid: { bg: '#FEF3C7', color: '#D97706' },
 };
+// Real applicants created before the Recruitment API added its own allowance field carry no
+// offerType at all — shown as its own state, never silently defaulted to Paid.
+const OFFER_PILL_UNSET = { bg: '#FEF2F2', color: '#DC2626' };
 
 // The viewer's local calendar date for a timestamp (a UTC slice would show the previous day for
 // anything before 8am in Malaysia).
@@ -119,7 +122,7 @@ export default function CandidateTable({
             </thead>
             <tbody>
               {candidates.map((candidate) => {
-                const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_STYLES.Paid;
+                const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_UNSET;
                 const isUnreadReply = mode === 'active' && candidate.emailStatus === 'Replied' && !candidate.notificationRead;
 
                 return (
@@ -148,7 +151,7 @@ export default function CandidateTable({
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>
-                        {candidate.offerType}
+                        {candidate.offerType || 'Not set'}
                       </span>
                     </td>
                     <td className="gmail-date-cell">
@@ -181,7 +184,7 @@ export default function CandidateTable({
       {/* Mobile candidate cards */}
       <div className="candidate-card-grid">
         {candidates.map((candidate) => {
-          const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_STYLES.Paid;
+          const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_UNSET;
 
           return (
             <div key={candidate.id} className="candidate-card">
@@ -204,7 +207,7 @@ export default function CandidateTable({
                   <div className="detail-row"><span className="detail-text">{departmentAndPosition(candidate).extraPosition}</span></div>
                 )}
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', margin: '0.4rem 0' }}>
-                  <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>{candidate.offerType}</span>
+                  <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>{candidate.offerType || 'Not set'}</span>
                   {mode !== 'active' && (
                     <span className="table-sub-badge">Rejected {formatDateDisplay(toIsoDate(candidate.rejectedAt))}</span>
                   )}

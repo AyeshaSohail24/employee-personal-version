@@ -5,10 +5,13 @@
 // emailStatus/notificationRead are derived here from this app's own real
 // candidate_messages table (see checkForReplies()'s doc comment) rather than
 // tracked anywhere client-side — a real reply lands there via IMAP, not a
-// local flag someone has to remember to set. Purely additive fields with no
-// real-world equivalent (offerType, accept/reject response state) still
-// live client-side; there's nothing in the Recruitment API or a mailbox to
-// derive those from.
+// local flag someone has to remember to set. offerType is likewise real now:
+// the Recruitment API added its own `allowance` field (Paid/Unpaid) to an
+// applicant record, so it's read straight through here instead of defaulting
+// client-side — null for an applicant created before that field existed,
+// never fabricated into a guessed Paid/Unpaid. Only the accept/reject
+// response decision itself still has no backend equivalent and stays a
+// local overlay (upcomingCandidateService.js).
 import { pool } from "./pool.js";
 import { applicantsClient } from "../clients/applicantsClient.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
@@ -55,6 +58,7 @@ export async function listConfirmationCandidates() {
             ? { id: null, name: departmentName }
             : null,
         jobDepartment: departmentName,
+        offerType: a.allowance ?? null,
         resumeAvailable: Boolean(a.resume),
         // Exposed for email placeholders (src/domain/emailPlaceholders.js). Already on every
         // applicant record this request fetches, so no extra call.

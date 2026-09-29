@@ -21,6 +21,9 @@ const OFFER_PILL_STYLES = {
   Paid: { bg: '#ECFDF5', color: '#059669' },
   Unpaid: { bg: '#FEF3C7', color: '#D97706' },
 };
+// Real applicants created before the Recruitment API added its own allowance field carry no
+// offerType at all — shown as its own state, never silently defaulted to Paid.
+const OFFER_PILL_UNSET = { bg: '#FEF2F2', color: '#DC2626' };
 
 /**
  * Full-page conversation view for one candidate's offer-email correspondence — reads via
@@ -199,7 +202,7 @@ export default function CandidateThreadPage() {
     );
   }
 
-  const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_STYLES.Paid;
+  const offerPill = OFFER_PILL_STYLES[candidate.offerType] || OFFER_PILL_UNSET;
 
   return (
     <div className="page-layout-container thread-page-container">
@@ -235,7 +238,7 @@ export default function CandidateThreadPage() {
                 options={placeholderFields.map((f) => ({ value: f.key, label: f.label }))}
               />
             </div>
-            <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>{candidate.offerType}</span>
+            <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>{candidate.offerType || 'Not set'}</span>
             <span className="status-pill" style={{ backgroundColor: '#F1F5F9', color: '#475569' }}>{candidate.positionName}</span>
           </div>
         </div>

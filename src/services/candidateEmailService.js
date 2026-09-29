@@ -28,6 +28,9 @@ export const candidateEmailService = {
   async renderPreview(candidate, options = {}) {
     const { hiringEmployeeName = '', cc = '', subjectOverride, bodyOverride } = options;
 
+    if (!candidate.offerType) {
+      throw new Error('This candidate has no Paid/Unpaid allowance set yet in the Recruitment system — set it there before emailing an offer.');
+    }
     const template = await emailTemplateService.getByOfferType(candidate.offerType);
     if (!template) {
       throw new Error(`No email draft is configured for Offer Type "${candidate.offerType}".`);

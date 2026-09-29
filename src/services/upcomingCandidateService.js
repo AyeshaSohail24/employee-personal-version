@@ -10,14 +10,14 @@ import { filterCandidates, calculateCandidateSummary, countUnreadReplies, RESPON
  * phase, and now also derives emailStatus/notificationRead from this app's own real
  * candidate_messages table — a real email send (candidateEmailService) and a real reply (IMAP,
  * see server/messaging/imapReplyChecker.js) both land there (server/db/upcomingCandidates.js).
- * Only the offer decision itself — offer type, accept/reject response — has no backend
- * equivalent to read from, so that stays a local overlay keyed by the real candidate id
- * (db.upcomingCandidateOverlay), created lazily with sensible defaults the first time it's
- * touched.
+ * offerType is real too, read straight from the Recruitment API's own `allowance` field (null for
+ * an applicant created before that field existed — never guessed). Only the accept/reject
+ * response decision itself has no backend equivalent, so that stays a local overlay keyed by the
+ * real candidate id (db.upcomingCandidateOverlay), created lazily with sensible defaults the
+ * first time it's touched.
  */
 
 const DEFAULT_OVERLAY = () => ({
-  offerType: 'Paid',
   responseStatus: RESPONSE_STATUS.AWAITING,
   acceptedAt: null,
   rejectedAt: null,

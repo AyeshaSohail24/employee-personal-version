@@ -91,16 +91,23 @@ export default function SendEmailModal({ isOpen, onClose, candidates = [], onSen
   useEffect(() => {
     if (!isOpen || !isBulk) return;
     let cancelled = false;
-    Promise.all(candidates.map(async (c) => {
+    // Settled, not Promise.all: one candidate missing a real Paid/Unpaid allowance (see
+    // candidateEmailService.renderPreview()) must not blank out every other candidate's already-
+    // working preview — that candidate's row shows its own error instead (see bulkPreviewError
+    // below), the same per-candidate resilience sendBulkEmails() already has for the actual send.
+    Promise.allSettled(candidates.map(async (c) => {
       const preview = await candidateEmailService.renderPreview(c, { hiringEmployeeName, cc });
       return { candidateId: c.id, candidate: c, ...preview };
-    })).then((results) => {
+    })).then((settled) => {
       if (cancelled) return;
-      setBulkPreviews((prev) => results.map((r) => ({
-        ...r,
-        expanded: prev.find((p) => p.candidateId === r.candidateId)?.expanded || false,
-      })));
-    }).catch((err) => setError(err.message));
+      setBulkPreviews((prev) => settled.map((s, i) => {
+        const c = candidates[i];
+        if (s.status === 'rejected') {
+          return { candidateId: c.id, candidate: c, subject: '', body: '', unresolvedPlaceholders: [], error: s.reason?.message || 'Could not render this candidate\'s email.' };
+        }
+        return { ...s.value, expanded: prev.find((p) => p.candidateId === s.value.candidateId)?.expanded || false };
+      }));
+    });
     return () => { cancelled = true; };
   }, [isOpen, isBulk, hiringEmployeeName, cc, candidates]);
 
@@ -113,7 +120,7 @@ export default function SendEmailModal({ isOpen, onClose, candidates = [], onSen
   const singleUnresolved = !isBulk
     ? Array.from(new Set([...renderEmailTemplate(subject, {}).unresolved, ...renderEmailTemplate(body, {}).unresolved]))
     : [];
-  const bulkHasUnresolved = isBulk && bulkPreviews.some((p) => p.unresolvedPlaceholders.length > 0);
+  const bulkHasUnresolved = isBulk && bulkPreviews.some((p) => p.unresolvedPlaceholders.length > 0 || p.error);
 
   const handleCcBlur = () => {
     if (!cc.trim()) { setCcError(null); return; }
@@ -219,11 +226,15 @@ export default function SendEmailModal({ isOpen, onClose, candidates = [], onSen
                 {bulkPreviews.map((p) => (
                   <div key={p.candidateId} className="bulk-candidate-row">
                     <button type="button" className="bulk-candidate-toggle" onClick={() => toggleBulkExpand(p.candidateId)}>
-                      <CheckCircle2 size={15} style={{ color: '#059669' }} />
+                      {p.error ? <XCircle size={15} style={{ color: '#DC2626' }} /> : <CheckCircle2 size={15} style={{ color: '#059669' }} />}
                       <span className="bulk-candidate-name">{p.candidate.fullName}</span>
-                      <span className="status-pill" style={p.candidate.offerType === 'Paid' ? { backgroundColor: '#ECFDF5', color: '#059669' } : { backgroundColor: '#FEF3C7', color: '#D97706' }}>
-                        {p.candidate.offerType}
-                      </span>
+                      {p.candidate.offerType ? (
+                        <span className="status-pill" style={p.candidate.offerType === 'Paid' ? { backgroundColor: '#ECFDF5', color: '#059669' } : { backgroundColor: '#FEF3C7', color: '#D97706' }}>
+                          {p.candidate.offerType}
+                        </span>
+                      ) : (
+                        <span className="status-pill" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>Allowance not set</span>
+                      )}
                       {p.unresolvedPlaceholders.length > 0 && (
                         <span className="status-pill" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>Missing name</span>
                       )}
@@ -231,9 +242,18 @@ export default function SendEmailModal({ isOpen, onClose, candidates = [], onSen
                     </button>
                     {p.expanded && (
                       <div className="bulk-candidate-preview">
-                        <div className="bulk-preview-field"><strong>To:</strong> {p.to}</div>
-                        <div className="bulk-preview-field"><strong>Subject:</strong> {p.subject}</div>
-                        <pre className="bulk-preview-body">{p.body}</pre>
+                        {p.error ? (
+                          <div className="modal-error-alert" style={{ margin: 0 }}>
+                            <AlertCircle size={16} />
+                            <span>{p.error}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="bulk-preview-field"><strong>To:</strong> {p.to}</div>
+                            <div className="bulk-preview-field"><strong>Subject:</strong> {p.subject}</div>
+                            <pre className="bulk-preview-body">{p.body}</pre>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
