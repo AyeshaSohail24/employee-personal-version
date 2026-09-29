@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Calendar,
@@ -14,14 +14,16 @@ import { employeeService } from '../../services/employeeService.js';
 import { offboardingService } from '../../services/offboardingService.js';
 import Avatar from '../../components/common/Avatar.jsx';
 import InlinePlanTaskEditor from '../../components/plans/InlinePlanTaskEditor.jsx';
+import { toLocalDateString } from '../../utils/dateUtils.js';
 
 // Real-data offboarding detail view for one (real) intern's local employee
-// record — mirrors onboarding/OnboardingEmployeeDetailPage.jsx exactly.
-// Unlike onboarding, a plan here is never auto-launched (launching sets the
-// intern's real internship_end_date in the Interns DB — see
-// server/db/internSync.js's syncOffboardingLaunchToIntern()), so this page
-// views whatever plan already exists, checks off tasks, and can add or edit (in place, no popup) or
-// remove a single task for this person only (their own copy — Offboarding > Plans is unchanged).
+// record — mirrors onboarding/OnboardingEmployeeDetailPage.jsx. The plan is
+// launched automatically once they're in Offboarding (internSync.js's
+// autoLaunchOffboardingPlans()); this page views it, checks off tasks, and can
+// add or edit (in place, no popup) or remove a single task for this person only
+// (their own copy — Offboarding > Plans is unchanged). Opened from Offboarding
+// History, or once the person is no longer in Offboarding (e.g. Former), it's a
+// read-only record instead — same rule as Onboarding History.
 // "2026-09-29T00:00:00.000Z" -> "2026-09-29" (DATE columns arrive as full timestamps).
 function toDateOnly(value) {
   return value ? String(value).slice(0, 10) : '';
@@ -29,6 +31,8 @@ function toDateOnly(value) {
 
 export default function OffboardingEmployeeDetailPage() {
   const { employeeId } = useParams();
+  const [searchParams] = useSearchParams();
+  const openedFromHistory = searchParams.get('from') === 'history';
   const [employee, setEmployee] = useState(null);
   const [instance, setInstance] = useState(null);
   const [taskInstances, setTaskInstances] = useState([]);
@@ -128,13 +132,41 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
   const completedTasks = taskInstances.filter((t) => t.completed).length;
   const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
+  // Historical (read-only) record: opened from Offboarding History, or the person is no longer in
+  // Offboarding (e.g. Former). Reference only — no Add/Edit/Delete/Done/Reopen.
+  const isHistorical = openedFromHistory || (employee.status && employee.status !== 'Offboarding');
+  const requiredTasks = taskInstances.filter((t) => t.required);
+  const planComplete = requiredTasks.length > 0 && requiredTasks.every((t) => t.completed);
+  const completedOn = toDateOnly(instance?.completed_at)
+    || taskInstances.map((t) => toLocalDateString(t.completed_at)).filter(Boolean).sort().pop()
+    || '';
+  const backTo = isHistorical ? '/offboarding/departing?view=history' : '/offboarding/departing';
+  const backLabel = isHistorical ? 'Back to Offboarding History' : 'Back to Offboarding Progress';
+
   return (
     <div className="page-layout-container">
       <div style={{ marginBottom: '1rem' }}>
-        <Link to="/offboarding/departing" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
-          <ArrowLeft size={14} /> Back to Offboarding Progress
+        <Link to={backTo} style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.825rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
+          <ArrowLeft size={14} /> {backLabel}
         </Link>
       </div>
+
+      {isHistorical && instance && (
+        <div className={`onboarding-history-banner ${planComplete ? '' : 'is-incomplete'}`}>
+          {planComplete ? <CheckCircle2 size={18} /> : <FileText size={18} />}
+          <div>
+            <strong>
+              {planComplete
+                ? `Offboarding completed${completedOn ? ` on ${completedOn}` : ''}`
+                : 'Offboarding record (not completed)'}
+            </strong>
+            <span>
+              This is a read-only record of {employee.fullName}’s offboarding for reference
+              {employee.status ? ` — they are now ${employee.status}` : ''}.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Employee Information Card */}
       <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
@@ -217,15 +249,19 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
                 Offboarding Task Breakdown
               </h3>
-              <button
-                type="button"
-                className="btn-primary dept-mapping-done"
-                onClick={() => { setEditingTask(null); setIsAddingTask(true); }}
-                title={`Add a task to ${employee.fullName}'s plan only`}
-              >
-                <Plus size={15} />
-                <span>Add Task</span>
-              </button>
+              {isHistorical ? (
+                <span className="onboarding-history-pill">Read-only record</span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-primary dept-mapping-done"
+                  onClick={() => { setEditingTask(null); setIsAddingTask(true); }}
+                  title={`Add a task to ${employee.fullName}'s plan only`}
+                >
+                  <Plus size={15} />
+                  <span>Add Task</span>
+                </button>
+              )}
             </div>
 
             <div style={{ overflowX: 'auto' }}>
@@ -236,14 +272,14 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
                     <th style={{ width: '45%', textAlign: 'left' }}>Task Title</th>
                     <th style={{ width: '14%', textAlign: 'center' }}>Relative Timing</th>
                     <th style={{ width: '14%', textAlign: 'center' }}>Due Date</th>
-                    <th style={{ width: '22%', textAlign: 'center' }}>Action</th>
+                    <th style={{ width: '22%', textAlign: 'center' }}>{isHistorical ? 'Completed On' : 'Action'}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {taskInstances.map((task) => {
                     const isDone = Boolean(task.completed);
 
-                    if (editingTask?.id === task.id) {
+                    if (!isHistorical && editingTask?.id === task.id) {
                       return (
                         <InlinePlanTaskEditor
                           key={task.id}
@@ -276,6 +312,11 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
                           {(task.due_date || task.originally_calculated_due_date || '').slice(0, 10)}
                         </td>
                         <td style={{ textAlign: 'center' }}>
+                          {isHistorical ? (
+                            <span className={isDone ? 'onboarding-history-done' : 'onboarding-history-open'}>
+                              {isDone ? (toLocalDateString(task.completed_at) || 'Done') : 'Not done'}
+                            </span>
+                          ) : (
                           <div className="plan-task-actions">
                             <button
                               type="button"
@@ -307,11 +348,12 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
                               <Trash2 size={14} />
                             </button>
                           </div>
+                          )}
                         </td>
                       </tr>
                     );
                   })}
-                  {isAddingTask && (
+                  {!isHistorical && isAddingTask && (
                     <InlinePlanTaskEditor
                       anchorDate={toDateOnly(instance.anchor_date)}
                       anchorLabel="last working day"

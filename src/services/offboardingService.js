@@ -28,6 +28,26 @@ export const offboardingService = {
   },
 
   /**
+   * Offboarding History — every completed offboarding plan, including people who have since moved
+   * on to Former (GET /offboarding/history). Read-only reference records.
+   * @returns {Promise<Array<Object>>}
+   */
+  async getOffboardingHistory() {
+    const { records } = await apiClient.get('/offboarding/history');
+    return records;
+  },
+
+  /**
+   * Permanently deletes one completed offboarding record (the plan and its tasks) from Offboarding
+   * History — DELETE /offboarding/history/{planInstanceId}. The person themselves is not affected.
+   * Refused while the person is still in Offboarding (a new plan would be launched automatically).
+   * @param {number} planInstanceId
+   */
+  async deleteHistoryRecord(planInstanceId) {
+    await apiClient.delete(`/offboarding/history/${encodeURIComponent(planInstanceId)}`);
+  },
+
+  /**
    * The real offboarding plan instance already running for one (real) employee, plus its task
    * instances — mirrors onboardingService.getRealInstanceForEmployee() exactly.
    */

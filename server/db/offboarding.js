@@ -1,6 +1,9 @@
 import { pool } from "./pool.js";
 import { listRows, getRow, insertRow, updateRow, RowNotFoundError } from "./crud.js";
-import { syncOffboardingLaunchToIntern, getLinkedIntern, resolveOrCreateEmployeeForIntern } from "./internSync.js";
+import { syncOffboardingLaunchToIntern, getLinkedIntern, resolveOrCreateEmployeeForIntern, fetchInternsForOverlay } from "./internSync.js";
+import { departmentsClient } from "../clients/departmentsClient.js";
+import { internsClient } from "../clients/internsClient.js";
+import { toAppDateString } from "../dates.js";
 
 export { RowNotFoundError, getLinkedIntern };
 
@@ -164,6 +167,31 @@ export async function setTaskInstanceCompleted(taskInstanceId, completed) {
     "UPDATE activities SET completed = ?, completed_at = ? WHERE id = ?",
     [completed, completed ? new Date() : null, taskInstance.activity_id],
   );
+  await syncPlanCompletedAt(taskInstance.plan_instance_id);
+}
+
+// A plan is complete when it has required tasks and every one of them is done (same rule as the
+// Progress page's status). Keeps the plan's completed_at in step — mirrors onboarding.js's
+// syncPlanCompletedAt(): stamped with today's Malaysia date (server/dates.js) the first time it
+// becomes complete (an existing date is kept), cleared if a required task is reopened or added.
+// Unlike Onboarding there's no status hand-off here: Offboarding -> Former comes from the Interns DB
+// (after internship_end_date), not from finishing the plan. Returns whether the plan is complete.
+async function syncPlanCompletedAt(planInstanceId) {
+  const tasks = await listInstanceTasks(planInstanceId);
+  const requiredTasks = tasks.filter((t) => t.required);
+  const isComplete = requiredTasks.length > 0 && requiredTasks.every((t) => t.completed);
+  if (isComplete) {
+    await pool.query(
+      "UPDATE offboarding_plan_instances SET completed_at = COALESCE(completed_at, ?) WHERE id = ?",
+      [toAppDateString(), planInstanceId],
+    );
+  } else {
+    await pool.query(
+      "UPDATE offboarding_plan_instances SET completed_at = NULL WHERE id = ? AND completed_at IS NOT NULL",
+      [planInstanceId],
+    );
+  }
+  return isComplete;
 }
 
 export class TaskInstanceValidationError extends Error {}
@@ -258,6 +286,8 @@ export async function addTaskToInstance(planInstanceId, { title, description, du
     );
     await conn.query("UPDATE offboarding_task_instances SET activity_id = ? WHERE id = ?", [activityResult.insertId, taskInstanceId]);
     await conn.commit();
+    // A new required task reopens a completed plan (clears completed_at).
+    await syncPlanCompletedAt(planInstanceId);
     return taskInstanceId;
   } catch (error) {
     await conn.rollback();
@@ -292,7 +322,151 @@ export async function deleteTaskInstance(taskInstanceId) {
   } finally {
     conn.release();
   }
+  // If what's left is now all done, the plan is complete (or, if not, no longer complete).
+  await syncPlanCompletedAt(taskInstance.plan_instance_id);
   return taskInstance.plan_instance_id;
+}
+
+// Offboarding History: every COMPLETED offboarding plan (all required tasks done) — mirrors
+// onboarding.js's listOnboardingHistory(), on the Offboarding tables. Read from this app's own
+// tables rather than the Interns DB roster, so a person still appears here after their Interns DB
+// status moves on to Former (the Offboarding Progress roster only lists status "Offboarding").
+// Read-only. `completedAt` is the plan's recorded completed_at, or — for plans completed before that
+// was recorded — the date its last task was ticked. `anchorDate` is the Final Working Date (Day 0).
+// Current status and photo come from the Interns DB when it's reachable.
+export async function listOffboardingHistory() {
+  const [plans] = await pool.query(
+    `SELECT p.id AS planInstanceId, p.employee_id AS employeeId,
+            DATE_FORMAT(p.anchor_date, '%Y-%m-%d') AS anchorDate,
+            DATE_FORMAT(p.started_at, '%Y-%m-%d') AS startedAt,
+            DATE_FORMAT(p.completed_at, '%Y-%m-%d') AS recordedCompletedAt,
+            e.employee_code AS refNumber, e.first_name, e.last_name, e.status AS localStatus,
+            e.intern_external_id AS internId
+       FROM offboarding_plan_instances p
+       JOIN employees e ON e.id = p.employee_id
+      ORDER BY p.id DESC`,
+  );
+  if (plans.length === 0) return [];
+
+  const planIds = plans.map((p) => p.planInstanceId);
+  const [tasks] = await pool.query(
+    `SELECT ti.plan_instance_id, ti.required, a.completed, UNIX_TIMESTAMP(a.completed_at) AS completedEpoch
+       FROM offboarding_task_instances ti
+       LEFT JOIN activities a ON a.id = ti.activity_id
+      WHERE ti.plan_instance_id IN (${planIds.map(() => "?").join(",")})`,
+    planIds,
+  );
+  const tasksByPlan = new Map();
+  for (const t of tasks) {
+    if (!tasksByPlan.has(t.plan_instance_id)) tasksByPlan.set(t.plan_instance_id, []);
+    tasksByPlan.get(t.plan_instance_id).push(t);
+  }
+
+  const completedPlans = plans.filter((p) => {
+    const required = (tasksByPlan.get(p.planInstanceId) ?? []).filter((t) => t.required);
+    return required.length > 0 && required.every((t) => t.completed);
+  });
+  if (completedPlans.length === 0) return [];
+
+  const employeeIds = [...new Set(completedPlans.map((p) => p.employeeId))];
+  const [records] = await pool.query(
+    `SELECT employee_id, department_id FROM employment_records
+      WHERE employee_id IN (${employeeIds.map(() => "?").join(",")}) AND effective_to IS NULL
+      ORDER BY effective_from DESC, id DESC`,
+    employeeIds,
+  );
+  const departmentIdByEmployee = new Map();
+  for (const r of records) if (!departmentIdByEmployee.has(r.employee_id)) departmentIdByEmployee.set(r.employee_id, r.department_id);
+
+  const [departments, interns] = await Promise.all([
+    departmentsClient.listDepartments().catch(() => []),
+    fetchInternsForOverlay(),
+  ]);
+  const departmentsById = new Map(departments.map((d) => [String(d.id), d]));
+  const internsById = new Map((interns ?? []).map((i) => [i.id, i]));
+
+  return completedPlans
+    .map((p) => {
+      const planTasks = tasksByPlan.get(p.planInstanceId) ?? [];
+      // Fallback completion date: the last task's completion moment (an exact epoch, so neither
+      // the database's nor the server's time zone matters), as a Malaysia calendar date.
+      const lastEpoch = Math.max(0, ...planTasks.map((t) => Number(t.completedEpoch) || 0));
+      const lastTicked = lastEpoch > 0 ? toAppDateString(new Date(lastEpoch * 1000)) : null;
+      const intern = p.internId ? internsById.get(p.internId) : null;
+      const department = departmentsById.get(String(departmentIdByEmployee.get(p.employeeId) ?? ""));
+      return {
+        planInstanceId: p.planInstanceId,
+        employeeId: p.employeeId,
+        refNumber: intern?.ref_number ?? p.refNumber,
+        fullName: `${p.first_name} ${p.last_name}`.trim(),
+        department: department ? { id: department.id, name: department.name } : null,
+        currentStatus: intern?.status ?? p.localStatus,
+        photoUrl: intern?.photo_url ?? null,
+        anchorDate: p.anchorDate,
+        startedAt: p.startedAt,
+        completedAt: p.recordedCompletedAt ?? lastTicked,
+        taskCount: planTasks.length,
+      };
+    })
+    .sort((a, b) => String(b.completedAt ?? "").localeCompare(String(a.completedAt ?? "")));
+}
+
+export class OffboardingHistoryError extends Error {}
+
+// Deletes ONE completed offboarding plan from Offboarding History — the plan, its task rows and
+// their linked activities — permanently. Mirrors onboarding.js's deleteCompletedOnboardingPlan():
+// only a completed plan (every required task done) can be deleted, so a plan still in progress is
+// never removed by mistake. The person themselves (employee record, Interns DB entry, status, end
+// date) is not touched, nor are the shared tasks under Offboarding > Plans. Logged to audit_logs.
+//
+// One difference from Onboarding: an intern the Interns DB still has in Offboarding gets a plan
+// launched automatically whenever they have none (internSync.js's autoLaunchOffboardingPlans()), so
+// deleting their record would just create a new plan on the next Offboarding Progress load. It's
+// therefore refused until they're no longer in Offboarding (e.g. Former) — or if their current
+// status can't be confirmed.
+export async function deleteCompletedOffboardingPlan(planInstanceId) {
+  const plan = await getRow("offboarding_plan_instances", planInstanceId);
+  if (!plan) throw new RowNotFoundError(`No offboarding plan with id ${planInstanceId}.`);
+
+  const tasks = await listInstanceTasks(planInstanceId);
+  const required = tasks.filter((t) => t.required);
+  if (required.length === 0 || !required.every((t) => t.completed)) {
+    throw new OffboardingHistoryError("Only completed offboarding records can be deleted from History.");
+  }
+
+  const [[employee]] = await pool.query("SELECT employee_code, first_name, last_name, intern_external_id FROM employees WHERE id = ?", [plan.employee_id]);
+  if (employee?.intern_external_id) {
+    let intern;
+    try {
+      intern = await internsClient.getIntern(employee.intern_external_id);
+    } catch {
+      throw new OffboardingHistoryError("Couldn't confirm this person's current status in the Interns database, so the record wasn't deleted. Please try again.");
+    }
+    if (intern?.status === "Offboarding") {
+      throw new OffboardingHistoryError("This person is still in Offboarding. Their record can be deleted once they're no longer in Offboarding — deleting it now would automatically launch a new offboarding plan for them.");
+    }
+  }
+  const activityIds = tasks.map((t) => t.activity_id).filter(Boolean);
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // Task rows go with the plan (ON DELETE CASCADE); their activities are deleted explicitly.
+    await conn.query("DELETE FROM offboarding_plan_instances WHERE id = ?", [planInstanceId]);
+    if (activityIds.length > 0) await conn.query("DELETE FROM activities WHERE id IN (?)", [activityIds]);
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+
+  await logOffboardingLaunch(
+    "offboarding_history_deleted",
+    plan.employee_id,
+    `Deleted completed offboarding plan ${planInstanceId} (${tasks.length} tasks) for ${employee ? `${employee.first_name} ${employee.last_name} (${employee.employee_code})` : `employee ${plan.employee_id}`}.`,
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -29,6 +29,25 @@ export const routes = {
       });
     },
   },
+  // Offboarding History — every completed offboarding plan, including people now Former.
+  "/offboarding/history": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, { records: await db.listOffboardingHistory() });
+    },
+  },
+  // Permanently deletes one completed offboarding record (plan + tasks); the person is untouched.
+  "/offboarding/history/{planInstanceId}": {
+    async delete(req, res, ctx) {
+      try {
+        await db.deleteCompletedOffboardingPlan(ctx.params.planInstanceId);
+      } catch (error) {
+        if (error instanceof RowNotFoundError) throw new NotFoundError(error.message);
+        if (error instanceof db.OffboardingHistoryError) throw new ValidationError(error.message);
+        throw error;
+      }
+      sendJson(res, ctx.cid, 204, null);
+    },
+  },
   "/offboarding/scope-tasks": {
     async get(req, res, ctx) {
       sendJson(res, ctx.cid, 200, { tasks: await db.listScopeTasks() });

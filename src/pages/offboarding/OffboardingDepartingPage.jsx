@@ -1,30 +1,158 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users,
   Search,
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Trash2,
 } from 'lucide-react';
 import { offboardingService } from '../../services/offboardingService.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
 import Avatar from '../../components/common/Avatar.jsx';
 
-// The real intern roster (Interns DB), joined server-side with whatever
-// local offboarding plan each person has — see
-// offboardingService.getInternsProgress() / server/db/internSync.js. Unlike
-// Onboarding, a plan here is NOT auto-launched: launching offboarding also
-// sets the intern's real internship_end_date in the Interns DB (see
-// server/db/internSync.js's syncOffboardingLaunchToIntern()), so it stays an
-// explicit, real-backed action (POST /offboarding/interns/{internId}/launch)
-// rather than something that fires the moment an intern appears — no UI
-// trigger for it exists yet.
+const HISTORY_STATUS_STYLES = {
+  Active: { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' },
+  Offboarding: { backgroundColor: '#FFFBEB', color: '#D97706', borderColor: '#FDE68A' },
+  Former: { backgroundColor: '#F1F5F9', color: '#475569', borderColor: '#CBD5E1' },
+  Onboarding: { backgroundColor: '#E6F7F8', color: '#0E848D', borderColor: '#99E6EB' },
+};
+
+// Offboarding History — completed offboarding plans, kept for reference after people move on to
+// Former (mirrors Onboarding → Progress's History; its own data from GET /offboarding/history).
+function OffboardingHistoryTable({ records, totalCount, loading, onOpen, onDelete, deletingId }) {
+  return (
+    <>
+      <p className="onboarding-history-intro">
+        Completed offboarding records, kept for reference after each person moves on.
+      </p>
+
+      <div className="table-container-card">
+        {loading ? (
+          <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading offboarding history...</div>
+        ) : records.length === 0 ? (
+          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <CheckCircle2 size={32} style={{ marginBottom: '0.5rem', color: 'var(--border-dark)' }} />
+            <h3>{totalCount === 0 ? 'No Completed Offboarding Yet' : 'No Records Found'}</h3>
+            <p style={{ fontSize: '0.85rem' }}>
+              {totalCount === 0
+                ? 'Completed offboarding plans will appear here once someone finishes offboarding.'
+                : 'No completed offboarding records match the search.'}
+            </p>
+          </div>
+        ) : (
+          <div className="onboarding-table-scroll" style={{ overflowX: 'auto' }}>
+            <table className="presence-data-table onboarding-employees-table" style={{ width: '100%' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '28%', textAlign: 'left' }}>Intern</th>
+                  <th style={{ width: '20%', textAlign: 'left' }}>Department</th>
+                  <th style={{ width: '16%', textAlign: 'center' }}>Final Working Date</th>
+                  <th style={{ width: '15%', textAlign: 'center' }}>Completed On</th>
+                  <th style={{ width: '15%', textAlign: 'center' }}>Current Status</th>
+                  <th style={{ width: '6%', textAlign: 'center' }} aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((record) => (
+                  <tr
+                    key={record.planInstanceId}
+                    className="presence-table-row"
+                    onClick={() => onOpen(record)}
+                    style={{ cursor: 'pointer' }}
+                    title="Open the completed offboarding record"
+                  >
+                    <td>
+                      <div className="emp-identity-block">
+                        <Avatar
+                          photoUrl={record.photoUrl}
+                          initials={record.fullName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                        />
+                        <div className="emp-identity-text">
+                          <div className="emp-name-text" style={{ whiteSpace: 'nowrap' }}>{record.fullName}</div>
+                          <div className="emp-id-subtext">{record.refNumber}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.815rem', color: 'var(--text-main)' }}>
+                        {record.department?.name || 'Department N/A'}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '0.815rem' }}>
+                      {formatDateDisplay(String(record.anchorDate || ''))}
+                    </td>
+                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '0.815rem', fontWeight: 600 }}>
+                      {record.completedAt ? formatDateDisplay(String(record.completedAt)) : '—'}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className="presence-badge" style={HISTORY_STATUS_STYLES[record.currentStatus] || HISTORY_STATUS_STYLES.Former}>
+                        {record.currentStatus}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {/* Still in Offboarding: a new plan would be launched automatically, so the
+                          record can only be deleted once they've moved on (server refuses too). */}
+                      <button
+                        type="button"
+                        className="plan-task-icon-btn plan-task-icon-btn-danger"
+                        title={record.currentStatus === 'Offboarding'
+                          ? "Can be deleted once they're no longer in Offboarding — deleting it now would launch a new offboarding plan for them"
+                          : 'Delete this offboarding record'}
+                        aria-label={`Delete the offboarding record for ${record.fullName}`}
+                        disabled={deletingId === record.planInstanceId || record.currentStatus === 'Offboarding'}
+                        onClick={(e) => { e.stopPropagation(); onDelete(record); }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// The real intern roster (Interns DB), joined server-side with whatever local offboarding plan each
+// person has — see offboardingService.getInternsProgress() / server/db/internSync.js. Plans are
+// launched automatically once someone is in Offboarding (internSync.js's autoLaunchOffboardingPlans()).
+// The Current tab only lists people the Interns DB has in Offboarding right now; History lists every
+// completed offboarding plan from this app's own tables, so it's kept after someone becomes Former.
 export default function OffboardingDepartingPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get('view') === 'history' ? 'history' : 'current';
+  const setView = (next) => setSearchParams(next === 'history' ? { view: 'history' } : {});
   const [interns, setInterns] = useState([]);
+  const [history, setHistory] = useState([]);
   const [search, setSearch] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [deletingHistoryId, setDeletingHistoryId] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Permanently deletes one completed offboarding record (plan + tasks). The person isn't affected.
+  const handleDeleteHistory = async (record) => {
+    const label = `${record.fullName}${record.refNumber ? ` (${record.refNumber})` : ''}`;
+    if (!window.confirm(`Delete the completed offboarding record for ${label}?
+
+This permanently removes their offboarding plan and its tasks from History. Their Personnel record, status and end date are not affected. This can't be undone.`)) {
+      return;
+    }
+    setDeletingHistoryId(record.planInstanceId);
+    try {
+      await offboardingService.deleteHistoryRecord(record.planInstanceId);
+      await loadData();
+    } catch (err) {
+      alert(`Failed to delete the offboarding record: ${err.message}`);
+    } finally {
+      setDeletingHistoryId(null);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -33,7 +161,16 @@ export default function OffboardingDepartingPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      setInterns(await offboardingService.getInternsProgress());
+      // History failing (e.g. a slow Departments lookup) never blanks the current roster.
+      const [roster, completed] = await Promise.all([
+        offboardingService.getInternsProgress(),
+        offboardingService.getOffboardingHistory().catch((err) => {
+          console.error('Failed to load offboarding history:', err);
+          return [];
+        }),
+      ]);
+      setInterns(roster);
+      setHistory(completed);
     } catch (err) {
       console.error('Failed to load interns:', err);
     } finally {
@@ -41,11 +178,18 @@ export default function OffboardingDepartingPage() {
     }
   };
 
-  // Summary card metrics
+  // Summary card metrics. Completed = every completed offboarding plan (History), including people
+  // now Former — not only those still in the current roster.
   const activeInterns = interns.filter((i) => i.plan && i.plan.status !== 'Completed');
   const inProgressCount = interns.filter((i) => i.plan?.status === 'In Progress').length;
   const needsAttentionCount = interns.filter((i) => i.plan?.status === 'Needs Attention').length;
-  const completedCount = interns.filter((i) => i.plan?.status === 'Completed').length;
+  const completedCount = history.length;
+
+  const visibleHistory = history.filter((record) => {
+    const q = historySearch.trim().toLowerCase();
+    if (!q) return true;
+    return record.fullName.toLowerCase().includes(q) || (record.refNumber || '').toLowerCase().includes(q);
+  });
 
   const visibleInterns = interns.filter((intern) => {
     if (search.trim()) {
@@ -70,7 +214,7 @@ export default function OffboardingDepartingPage() {
       </div>
 
       {/* Metric KPI Summary Grid */}
-      <div className="summary-cards-grid" style={{ marginBottom: '1.75rem' }}>
+      <div className="summary-cards-grid onboarding-summary-grid" style={{ marginBottom: '1.75rem' }}>
         <div className="summary-card">
           <div className="summary-card-header">
             <span className="summary-card-title">Active Exit Plans</span>
@@ -131,7 +275,12 @@ export default function OffboardingDepartingPage() {
           <div className="summary-card-subtext">Overdue tasks or unassigned items</div>
         </div>
 
-        <div className="summary-card">
+        <button
+          type="button"
+          className={`summary-card summary-card-link ${view === 'history' ? 'is-selected' : ''}`}
+          onClick={() => setView('history')}
+          title="Open Offboarding History"
+        >
           <div className="summary-card-header">
             <span className="summary-card-title">Completed Exit Plans</span>
             <div
@@ -148,23 +297,55 @@ export default function OffboardingDepartingPage() {
           <div className="summary-card-value" style={{ color: '#059669' }}>
             {completedCount}
           </div>
-          <div className="summary-card-subtext">Fully cleared former staff</div>
-        </div>
+          <div className="summary-card-subtext">Offboarding workflows completed</div>
+        </button>
       </div>
 
-      {/* Filter Bar */}
-      <div className="table-toolbar-card" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginBottom: '1.25rem', padding: '0.75rem 1rem', flexWrap: 'wrap' }}>
-        <div className="toolbar-search-box" style={{ maxWidth: '280px' }}>
+      <p className="directory-row-click-hint onboarding-summary-note">
+        <strong>Note:</strong> Click the Completed Exit Plans card to view history.
+      </p>
+
+      {/* Tabs on the left, search on the right — the search box filters whichever tab is open. */}
+      <div className="underline-tabs onboarding-tabs-row" style={{ marginBottom: '1.25rem' }}>
+        <button
+          type="button"
+          className={`underline-tab-item ${view === 'current' ? 'active' : ''}`}
+          onClick={() => setView('current')}
+        >
+          Current
+          {activeInterns.length > 0 && <span className="underline-tab-badge underline-tab-badge-muted">{activeInterns.length}</span>}
+        </button>
+        <button
+          type="button"
+          className={`underline-tab-item ${view === 'history' ? 'active' : ''}`}
+          onClick={() => setView('history')}
+        >
+          History
+          {completedCount > 0 && <span className="underline-tab-badge underline-tab-badge-muted">{completedCount}</span>}
+        </button>
+        <div className="toolbar-search-box onboarding-tabs-search">
           <Search size={16} className="toolbar-search-icon" />
           <input
             type="text"
             className="toolbar-search-input"
-            placeholder="Search intern name or ref number"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            placeholder={view === 'history' ? 'Search name or ref number' : 'Search intern name or ref number'}
+            value={view === 'history' ? historySearch : search}
+            onChange={(e) => (view === 'history' ? setHistorySearch : setSearch)(e.target.value)}
           />
         </div>
       </div>
+
+      {view === 'history' ? (
+        <OffboardingHistoryTable
+          records={visibleHistory}
+          totalCount={history.length}
+          loading={loading}
+          onOpen={(record) => navigate(`/offboarding/employees/${record.employeeId}?from=history`)}
+          onDelete={handleDeleteHistory}
+          deletingId={deletingHistoryId}
+        />
+      ) : (
+      <>
 
       {/* Progress Table */}
       <div className="table-container-card">
@@ -278,6 +459,8 @@ export default function OffboardingDepartingPage() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
