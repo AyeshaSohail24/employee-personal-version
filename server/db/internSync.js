@@ -480,7 +480,38 @@ export async function fetchRosterSources() {
     departmentsClient.listDepartments().catch(() => []),
   ]);
   await autoTransitionToOffboarding(interns);
+  await autoLaunchOffboardingPlans(interns, departments);
   return { interns, departments };
+}
+
+// Right after the 7-day transition: every intern now in Offboarding (moved just now, or already
+// reported as Offboarding by the Interns DB's own 7-day rule) gets their Offboarding plan if they
+// don't have one yet — see offboarding.js's ensureOffboardingPlanForIntern(). One query finds who
+// already has a plan, so repeated roster reads cost almost nothing and never launch twice. A
+// failure for one intern never fails the roster read.
+async function autoLaunchOffboardingPlans(interns, departments) {
+  const offboarding = interns.filter((i) => i.status === "Offboarding" && i.internship_end_date);
+  if (offboarding.length === 0) return;
+
+  const [linked] = await pool.query(
+    `SELECT e.intern_external_id AS internId,
+            EXISTS (SELECT 1 FROM offboarding_plan_instances p WHERE p.employee_id = e.id) AS hasPlan
+       FROM employees e WHERE e.intern_external_id IN (?)`,
+    [offboarding.map((i) => i.id)],
+  );
+  const hasPlan = new Set(linked.filter((r) => r.hasPlan).map((r) => r.internId));
+  const needsPlan = offboarding.filter((i) => !hasPlan.has(i.id));
+  if (needsPlan.length === 0) return;
+
+  // Loaded on demand: offboarding.js already imports from this module.
+  const { ensureOffboardingPlanForIntern } = await import("./offboarding.js");
+  for (const intern of needsPlan) {
+    try {
+      await ensureOffboardingPlanForIntern(intern, departments);
+    } catch {
+      // logged inside; never block the roster
+    }
+  }
 }
 
 async function listInternsWithProgress(stage, sources) {

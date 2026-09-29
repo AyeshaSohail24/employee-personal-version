@@ -1,6 +1,6 @@
 import { pool } from "./pool.js";
 import { listRows, getRow, insertRow, updateRow, RowNotFoundError } from "./crud.js";
-import { syncOffboardingLaunchToIntern, getLinkedIntern } from "./internSync.js";
+import { syncOffboardingLaunchToIntern, getLinkedIntern, resolveOrCreateEmployeeForIntern } from "./internSync.js";
 
 export { RowNotFoundError, getLinkedIntern };
 
@@ -77,7 +77,10 @@ async function composeApplicableTasks(personType, departmentId) {
 // Mirrors onboarding.js's launchInstance exactly — see its comment. Here
 // `anchorDate` is the departing employee's last working day, and offsets are
 // typically negative (clearance tasks due before departure).
-export async function launchInstance({ employeeId, personType, departmentId, anchorDate }) {
+// `syncEndDate` (default true, the manual launch route's existing behaviour) also writes anchorDate
+// back to the intern's internship_end_date. The automatic launch passes false: it anchors ON that
+// end date, so it must never resave it.
+export async function launchInstance({ employeeId, personType, departmentId, anchorDate, syncEndDate = true }) {
   const tasks = await composeApplicableTasks(personType, departmentId);
   if (tasks.length === 0) {
     throw new Error(`No offboarding tasks are configured for ${personType}${departmentId ? ` in department ${departmentId}` : ""} yet.`);
@@ -119,7 +122,7 @@ export async function launchInstance({ employeeId, personType, departmentId, anc
     await pool.query("UPDATE offboarding_task_instances SET activity_id = ? WHERE id = ?", [activityId, taskInstanceId]);
   }
 
-  await syncOffboardingLaunchToIntern(employeeId, anchorDate);
+  if (syncEndDate) await syncOffboardingLaunchToIntern(employeeId, anchorDate);
 
   return instanceId;
 }
@@ -157,4 +160,85 @@ export async function setTaskInstanceCompleted(taskInstanceId, completed) {
     "UPDATE activities SET completed = ?, completed_at = ? WHERE id = ?",
     [completed, completed ? new Date() : null, taskInstance.activity_id],
   );
+}
+
+// ---------------------------------------------------------------------------
+// Automatic Offboarding plan launch. Called for every intern the roster read
+// sees in Offboarding (internSync.js's fetchRosterSources(), right after the
+// existing 7-day Active -> Offboarding transition). Launches the configured
+// Offboarding tasks (Universal + their department, same rule as
+// launchInstance()) anchored on their existing internship_end_date as Day 0,
+// WITHOUT resaving that date. Never creates a second plan: a per-person MySQL
+// advisory lock serialises the check-then-launch, and anyone who already has
+// an Offboarding plan (any, active or completed) is left alone.
+// ---------------------------------------------------------------------------
+
+async function logOffboardingLaunch(action, entityId, details, { oncePerDay = false } = {}) {
+  try {
+    if (oncePerDay) {
+      const [[seen]] = await pool.query(
+        "SELECT id FROM audit_logs WHERE action = ? AND entity = 'employees' AND entity_id = ? AND created_at >= NOW() - INTERVAL 1 DAY LIMIT 1",
+        [action, String(entityId)],
+      );
+      if (seen) return;
+    }
+    await insertRow("audit_logs", { user_id: "system", action, entity: "employees", entity_id: String(entityId), details: String(details).slice(0, 2000) });
+  } catch {
+    // logging never blocks the roster
+  }
+}
+
+/**
+ * @param {Object} intern - Interns DB record (status Offboarding, internship_end_date set)
+ * @param {Array} departments - Departments service list (already fetched by the roster read)
+ * @returns {Promise<{ status: 'launched'|'exists'|'not_launched', planInstanceId?: number, reason?: string }>}
+ */
+export async function ensureOffboardingPlanForIntern(intern, departments = []) {
+  const endDate = intern?.internship_end_date ? String(intern.internship_end_date).slice(0, 10) : null;
+  if (!endDate) return { status: "not_launched", reason: "No internship end date." };
+
+  // Same department resolution as the rosters: only a department the Departments service knows.
+  const department = departments.find((d) => String(d.id) === String(intern.department_id)) ?? null;
+  const tasks = await composeApplicableTasks("intern", department?.id ?? null);
+  // Nothing configured under Offboarding > Plans for them yet: no plan, no local writes, no log noise.
+  if (tasks.length === 0) return { status: "not_launched", reason: "No Offboarding tasks are configured for them yet." };
+
+  let employee;
+  try {
+    employee = await resolveOrCreateEmployeeForIntern(intern.id);
+  } catch (error) {
+    await logOffboardingLaunch("offboarding_plan_auto_launch_failed", intern.id, `Could not create the local record for ${intern.ref_number ?? intern.id}: ${error.message ?? error}`, { oncePerDay: true });
+    return { status: "not_launched", reason: String(error.message ?? error) };
+  }
+
+  const conn = await pool.getConnection();
+  const lockName = `offboarding_launch_${employee.id}`;
+  try {
+    const [[{ got }]] = await conn.query("SELECT GET_LOCK(?, 15) AS got", [lockName]);
+    if (got !== 1) return { status: "not_launched", reason: "Another launch for this person is in progress." };
+
+    const [[existing]] = await conn.query(
+      "SELECT id FROM offboarding_plan_instances WHERE employee_id = ? ORDER BY id DESC LIMIT 1",
+      [employee.id],
+    );
+    if (existing) return { status: "exists", planInstanceId: existing.id };
+
+    try {
+      const planInstanceId = await launchInstance({
+        employeeId: employee.id,
+        personType: "intern",
+        departmentId: department?.id ?? null,
+        anchorDate: endDate,
+        syncEndDate: false,
+      });
+      await logOffboardingLaunch("offboarding_plan_auto_launched", employee.id, `Launched offboarding plan ${planInstanceId} for ${intern.ref_number ?? intern.id}, anchored on internship_end_date ${endDate} (Day 0).`);
+      return { status: "launched", planInstanceId };
+    } catch (error) {
+      await logOffboardingLaunch("offboarding_plan_auto_launch_failed", employee.id, String(error.message ?? error), { oncePerDay: true });
+      return { status: "not_launched", reason: String(error.message ?? error) };
+    }
+  } finally {
+    await conn.query("SELECT RELEASE_LOCK(?)", [lockName]).catch(() => {});
+    conn.release();
+  }
 }
