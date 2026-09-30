@@ -105,8 +105,15 @@ export const routes = {
           throw error;
         }
         if (!intern) throw new NotFoundError(`No intern with id ${internId} in the Interns database.`);
-        const departments = await departmentsClient.listDepartments().catch(() => []);
-        const entry = internToReadOnlyEntry(intern, new Map(departments.map((d) => [String(d.id), d])));
+        const [departments, supervisors] = await Promise.all([
+          departmentsClient.listDepartments().catch(() => []),
+          departmentsClient.listSupervisors().catch(() => []),
+        ]);
+        const entry = internToReadOnlyEntry(
+          intern,
+          new Map(departments.map((d) => [String(d.id), d])),
+          new Map(supervisors.map((s) => [String(s.id), s])),
+        );
         sendJson(res, ctx.cid, 200, { employee: { ...entry, ...getInternPersonalDetails(intern) } });
         return;
       }

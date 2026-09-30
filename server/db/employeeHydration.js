@@ -77,7 +77,7 @@ function resolveEffectiveRecord(records, status, referenceDate) {
 // hydrated in this call — avoids an N+1 query (and N+1 external Departments
 // API calls) per employee.
 async function loadLookups() {
-  const [[positions], [locations], [schedules], [employeeTypes], [employeeTags], [tagAssignments], departments] = await Promise.all([
+  const [[positions], [locations], [schedules], [employeeTypes], [employeeTags], [tagAssignments], departments, supervisors] = await Promise.all([
     pool.query("SELECT * FROM positions"),
     pool.query("SELECT * FROM locations"),
     pool.query("SELECT * FROM schedules"),
@@ -85,6 +85,7 @@ async function loadLookups() {
     pool.query("SELECT * FROM employee_tags"),
     pool.query("SELECT * FROM employee_tag_assignments"),
     departmentsClient.listDepartments().catch(() => []), // read-through; a failed external call shouldn't break the employee list
+    departmentsClient.listSupervisors().catch(() => []), // same — no supervisors just means none shown
   ]);
 
   return {
@@ -99,7 +100,18 @@ async function loadLookups() {
       return map;
     }, new Map()),
     departmentsById: new Map(departments.map((d) => [d.id, d])),
+    supervisorsById: new Map(supervisors.map((s) => [String(s.id), s])),
   };
+}
+
+// A department's supervisor from the Departments service (department.supervisorId -> GET
+// /api/supervisors), in the same { id, fullName, workEmail } shape as a local supervisor, plus
+// `source: "department"`. null when the department has none or it can't be resolved.
+export function resolveDepartmentSupervisor(department, supervisorsById) {
+  const sup = department?.supervisorId ? supervisorsById?.get(String(department.supervisorId)) : null;
+  if (!sup) return null;
+  const fullName = `${sup.firstName ?? ""} ${sup.lastName ?? ""}`.trim() || null;
+  return { id: sup.id, fullName, workEmail: sup.email ?? null, source: "department" };
 }
 
 function normalizeDirectoryType(employeeType) {
@@ -141,7 +153,11 @@ function hydrateOne(employeeRow, recordsByEmployeeId, employeesById, lookups) {
     directoryType: normalizeDirectoryType(empType),
     resolvedTags: tagIds.map((id) => lookups.employeeTagsById.get(id)).filter(Boolean).map((t) => ({ id: t.id, name: t.name, category: t.category, color: t.color })),
     manager: manager ? { id: manager.id, fullName: manager.fullName, workEmail: manager.workEmail } : null,
-    supervisor: supervisor ? { id: supervisor.id, fullName: supervisor.fullName, workEmail: supervisor.workEmail } : null,
+    // A supervisor set on this person's own employment record wins; otherwise their department's
+    // supervisor from the Departments service.
+    supervisor: supervisor
+      ? { id: supervisor.id, fullName: supervisor.fullName, workEmail: supervisor.workEmail }
+      : resolveDepartmentSupervisor(dept, lookups.supervisorsById),
   };
 }
 

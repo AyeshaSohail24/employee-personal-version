@@ -4,9 +4,9 @@
 // "DEP-0001"). Unlike the Interns API, this service returns its objects
 // UNWRAPPED — no `data` envelope — confirmed against its own /openapi.json.
 //
-// This client's API client is also granted `department:read`/`department:write`
-// only — NOT `supervisor:*` — so the /api/supervisors endpoints aren't called
-// here yet; add them once that grant exists.
+// This app's API client is granted `department:read`/`department:write` and
+// `supervisor:read` — each department's `supervisorId` resolves to a person via
+// GET /api/supervisors (id, firstName, lastName, email, status).
 import { EXTERNAL_CLIENTS } from "../config.js";
 import { getServiceAccessToken } from "./gatewayClientCredentials.js";
 import { getCorrelationId } from "../http/requestContext.js";
@@ -41,6 +41,7 @@ async function call(path, { method = "GET", body, scope = "department:read" } = 
 // live lookup by name should stay live.
 let departmentsCache = null; // { value, at }
 const DEPARTMENTS_TTL_MS = 30_000;
+let supervisorsCache = null; // { value, at } — same short, shared lifetime as departments
 
 export const departmentsClient = {
   // Returns a plain array — this service does not paginate/wrap it.
@@ -55,6 +56,19 @@ export const departmentsClient = {
     });
   },
   getDepartment: (departmentId) => call(`/api/departments/${departmentId}`),
+
+  // Every department supervisor (a department's `supervisorId` points at one of these). Needs the
+  // `supervisor:read` grant. Plain array, cached like listDepartments().
+  listSupervisors() {
+    if (supervisorsCache && Date.now() - supervisorsCache.at < DEPARTMENTS_TTL_MS) {
+      return Promise.resolve(supervisorsCache.value);
+    }
+    return call("/api/supervisors", { scope: "supervisor:read" }).then((value) => {
+      const list = Array.isArray(value) ? value : value?.data ?? [];
+      supervisorsCache = { value: list, at: Date.now() };
+      return list;
+    });
+  },
 
   createDepartment: (data) => call("/api/departments", { method: "POST", body: data, scope: "department:write" }),
 

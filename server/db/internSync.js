@@ -6,7 +6,7 @@ import { pool } from "./pool.js";
 import { getRow, insertRow } from "./crud.js";
 import { createEmployee, updateEmployee, createEmploymentRecord } from "./employees.js";
 import { getEmployeeTypeByCode } from "./orgStructure.js";
-import { hydrateEmployees } from "./employeeHydration.js";
+import { hydrateEmployees, resolveDepartmentSupervisor } from "./employeeHydration.js";
 import { internsClient } from "../clients/internsClient.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
 import { toAppDateString } from "../dates.js";
@@ -90,7 +90,7 @@ export function applyInternOverlay(employee, intern) {
 // `readOnlyFromInternsDb: true`. Fields this app keeps itself (position, manager, tags…) are empty.
 export const INTERN_ONLY_ID_PREFIX = "intern-";
 
-export function internToReadOnlyEntry(intern, departmentsById = new Map()) {
+export function internToReadOnlyEntry(intern, departmentsById = new Map(), supervisorsById = new Map()) {
   const department = departmentsById.get(String(intern.department_id ?? "")) ?? null;
   const firstName = intern.first_name ?? "";
   const lastName = intern.last_name ?? "";
@@ -116,7 +116,7 @@ export function internToReadOnlyEntry(intern, departmentsById = new Map()) {
     location: null,
     schedule: null,
     manager: null,
-    supervisor: null,
+    supervisor: resolveDepartmentSupervisor(department, supervisorsById), // their department's, from the Departments service
     employeeType: { code: "INTERN", name: "Intern" },
     directoryType: "Intern",
     resolvedTags: [],
@@ -140,9 +140,13 @@ export async function listInternsWithoutLocalRecord(interns, { status, departmen
     .filter((i) => !status || i.status === status)
     .filter((i) => !departmentId || String(i.department_id ?? "") === String(departmentId));
   if (missing.length === 0) return [];
-  const departments = await departmentsClient.listDepartments().catch(() => []);
+  const [departments, supervisors] = await Promise.all([
+    departmentsClient.listDepartments().catch(() => []),
+    departmentsClient.listSupervisors().catch(() => []),
+  ]);
   const departmentsById = new Map(departments.map((d) => [String(d.id), d]));
-  return missing.map((intern) => internToReadOnlyEntry(intern, departmentsById));
+  const supervisorsById = new Map(supervisors.map((s) => [String(s.id), s]));
+  return missing.map((intern) => internToReadOnlyEntry(intern, departmentsById, supervisorsById));
 }
 
 // Resolves the signed-in gateway user's own photo for the app header — the
