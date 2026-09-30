@@ -220,9 +220,8 @@ export const formerService = {
     if (!title || !title.trim()) {
       throw new Error('Document Title is required.');
     }
-    if (!documentType) {
-      throw new Error('Document Type is required.');
-    }
+    // Document Type and Document Date are optional (the Former page's in-place form only asks for
+    // Title, File and Description); older records that have them still show them.
     if (!fileName) {
       throw new Error('Please select a file.');
     }
@@ -233,7 +232,7 @@ export const formerService = {
       id: `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       employeeId,
       title: title.trim(),
-      documentType,
+      documentType: documentType || null,
       fileName,
       fileSize,
       documentDate: documentDate || null,

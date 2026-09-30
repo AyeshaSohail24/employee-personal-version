@@ -4,7 +4,6 @@ import { ArrowLeft, User, FilePlus, NotebookPen, PencilLine, ClipboardCheck, Fil
 import { formerService } from '../../services/formerService.js';
 import { resolveExitTypeDisplay, EXIT_TYPES, DEFAULT_EXIT_TYPE } from '../../domain/formerDomain.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
-import AddDocumentModal from '../../components/former/AddDocumentModal.jsx';
 import { Select } from '../../components/common/Select.jsx';
 
 function ProfileField({ label, value }) {
@@ -58,7 +57,15 @@ export default function HistoricalRecordPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const [isAddDocumentOpen, setIsAddDocumentOpen] = useState(false);
+  // Documents are added in place (no popup): Document Title, File and Description only.
+  const [isAddingDocument, setIsAddingDocument] = useState(false);
+  const [docTitle, setDocTitle] = useState('');
+  const [docFile, setDocFile] = useState(null);
+  const [docDescription, setDocDescription] = useState('');
+  const [docErrors, setDocErrors] = useState({});
+  const [isSavingDocument, setIsSavingDocument] = useState(false);
+  const documentsSectionRef = useRef(null);
+  const docTitleRef = useRef(null);
   // HR Notes are added in place (no popup): Title + Note only, saved as a "General" note.
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
@@ -105,6 +112,49 @@ export default function HistoricalRecordPage() {
   // page, so Add Document/Add Note/Edit Exit Information all feel immediate.
   const refreshDocuments = () => formerService.getDocuments(employeeId).then(setDocuments);
   const refreshNotes = () => formerService.getNotesForPersonnel(employeeId).then(setNotes);
+
+  const openDocumentForm = () => {
+    setDocTitle('');
+    setDocFile(null);
+    setDocDescription('');
+    setDocErrors({});
+    setIsAddingDocument(true);
+    setTimeout(() => {
+      documentsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      docTitleRef.current?.focus();
+    }, 0);
+  };
+
+  const cancelDocumentForm = () => {
+    setIsAddingDocument(false);
+    setDocErrors({});
+  };
+
+  const saveDocument = async () => {
+    const errors = {};
+    if (!docTitle.trim()) errors.title = 'Document Title is required';
+    if (!docFile) errors.file = 'Please select a file';
+    if (Object.keys(errors).length > 0) {
+      setDocErrors(errors);
+      return;
+    }
+    setIsSavingDocument(true);
+    try {
+      await formerService.addDocument(record.employee.id, {
+        title: docTitle.trim(),
+        fileName: docFile.name,
+        fileSize: docFile.size,
+        description: docDescription.trim(),
+      });
+      await refreshDocuments();
+      setIsAddingDocument(false);
+      setDocErrors({});
+    } catch (err) {
+      setDocErrors({ form: err.message || 'Failed to add document.' });
+    } finally {
+      setIsSavingDocument(false);
+    }
+  };
 
   const openNoteForm = () => {
     setNoteTitle('');
@@ -221,7 +271,7 @@ export default function HistoricalRecordPage() {
             <User size={14} />
             <span>View Personnel Details</span>
           </Link>
-          <button type="button" className="btn-secondary" onClick={() => setIsAddDocumentOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+          <button type="button" className="btn-secondary" onClick={openDocumentForm} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
             <FilePlus size={14} />
             <span>Add Document</span>
           </button>
@@ -380,21 +430,80 @@ export default function HistoricalRecordPage() {
         )}
       </ProfileSection>
 
-      {/* 5. Documents */}
+      {/* 5. Documents — added in place: Document Title, File, Description. */}
+      <div ref={documentsSectionRef}>
       <ProfileSection
         title="Documents"
         action={
-          <button
-            type="button"
-            className="btn-compact-override"
-            onClick={() => setIsAddDocumentOpen(true)}
-            style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
-          >
-            <FilePlus size={12} />
-            <span>Add Document</span>
-          </button>
+          isAddingDocument ? null : (
+            <button
+              type="button"
+              className="btn-compact-override"
+              onClick={openDocumentForm}
+              style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
+            >
+              <FilePlus size={12} />
+              <span>Add Document</span>
+            </button>
+          )
         }
       >
+        {isAddingDocument && (
+          <div
+            className="former-document-inline-form"
+            onKeyDown={(e) => { if (e.key === 'Escape' && !isSavingDocument) cancelDocumentForm(); }}
+            style={{ padding: '0.75rem', marginBottom: '0.9rem', border: '1px solid var(--color-primary-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-light)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+          >
+            {docErrors.form && <div style={{ fontSize: '0.78rem', color: '#B91C1C' }}>{docErrors.form}</div>}
+            <div>
+              <label htmlFor="former-doc-title" className="form-label">Document Title <span className="required-star">*</span></label>
+              <input
+                id="former-doc-title"
+                ref={docTitleRef}
+                type="text"
+                className="form-input"
+                value={docTitle}
+                maxLength={255}
+                disabled={isSavingDocument}
+                onChange={(e) => { setDocTitle(e.target.value); if (docErrors.title) setDocErrors((p) => ({ ...p, title: null })); }}
+              />
+              {docErrors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{docErrors.title}</span>}
+            </div>
+            <div>
+              <label htmlFor="former-doc-file" className="form-label">File <span className="required-star">*</span></label>
+              <input
+                id="former-doc-file"
+                type="file"
+                className="form-input"
+                disabled={isSavingDocument}
+                onChange={(e) => { setDocFile(e.target.files && e.target.files[0] ? e.target.files[0] : null); if (docErrors.file) setDocErrors((p) => ({ ...p, file: null })); }}
+              />
+              {docFile && <span className="form-hint" style={{ color: 'var(--text-muted)' }}>Selected: {docFile.name} ({Math.max(1, Math.round(docFile.size / 1024))} KB)</span>}
+              {docErrors.file && <span className="form-hint" style={{ color: '#DC2626' }}>{docErrors.file}</span>}
+            </div>
+            <div>
+              <label htmlFor="former-doc-description" className="form-label">Description <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
+              <textarea
+                id="former-doc-description"
+                className="form-textarea"
+                rows={3}
+                value={docDescription}
+                disabled={isSavingDocument}
+                onChange={(e) => setDocDescription(e.target.value)}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
+              <button type="button" className="btn-secondary email-drafts-toolbar-btn" onClick={cancelDocumentForm} disabled={isSavingDocument} style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>
+                <X size={13} />
+                <span>Cancel</span>
+              </button>
+              <button type="button" className="btn-primary email-drafts-toolbar-btn" onClick={saveDocument} disabled={isSavingDocument} style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>
+                <Check size={13} />
+                <span>{isSavingDocument ? 'Adding...' : 'Add Document'}</span>
+              </button>
+            </div>
+          </div>
+        )}
         {documents.length === 0 ? (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>No documents have been added yet.</p>
         ) : (
@@ -405,8 +514,8 @@ export default function HistoricalRecordPage() {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>{doc.title}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                    {doc.documentType} · {doc.fileName}
-                    {doc.documentDate ? ` · ${formatDateDisplay(doc.documentDate)}` : ''}
+                    {/* Type/date only on older documents that recorded them. */}
+                    {[doc.documentType, doc.fileName, doc.documentDate ? formatDateDisplay(doc.documentDate) : null].filter(Boolean).join(' · ')}
                   </div>
                   {doc.description && (
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginTop: '0.35rem' }}>{doc.description}</div>
@@ -417,6 +526,7 @@ export default function HistoricalRecordPage() {
           </div>
         )}
       </ProfileSection>
+      </div>
 
       {/* 6. HR Notes — reuses the EXISTING Notes module; also visible on /notes. Added in place. */}
       <div ref={notesSectionRef}>
@@ -519,12 +629,6 @@ export default function HistoricalRecordPage() {
         </div>
       </ProfileSection>
 
-      <AddDocumentModal
-        isOpen={isAddDocumentOpen}
-        onClose={() => setIsAddDocumentOpen(false)}
-        employeeId={employee.id}
-        onSuccess={refreshDocuments}
-      />
     </div>
   );
 }
