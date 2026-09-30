@@ -12,6 +12,7 @@ import {
   withDefaultExitInfo,
 } from '../domain/formerDomain.js';
 import { toLocalDateString } from '../utils/dateUtils.js';
+import { saveDocumentFile, getDocumentFile, deleteDocumentFile } from '../utils/documentFileStore.js';
 
 // A DATE column as the local (Malaysia) calendar date. They arrive as full timestamps whose UTC
 // form depends on the server's time zone ("2026-09-29T00:00:00.000Z" from a UTC server,
@@ -208,15 +209,14 @@ export const formerService = {
   },
 
   /**
-   * Records a document METADATA entry against this Personnel ID. IMPORTANT — this PoC has no
-   * backend file-storage layer anywhere in the app (confirmed by an exhaustive search before
-   * building this module: no upload endpoint, no blob/base64 persistence pattern, no attachment
-   * service). This deliberately does NOT pretend otherwise: it stores the real title/type/date/
-   * description the user entered plus the selected file's own name and size (both read directly
-   * from the browser File object, genuinely true facts about what was selected), but never the
-   * file's actual bytes. A real backend integration would only need to change this one function.
+   * Records a document against this Personnel ID. This app has no backend file storage, so — like
+   * the document's details (title, file name, size, description), which live in this browser's
+   * storage — the file itself is kept in this browser too (IndexedDB, utils/documentFileStore.js,
+   * keyed by the document id; `hasFile: true`) so it can be opened later. Documents added before
+   * that have no stored file (`hasFile` absent). A backend integration would change only this
+   * function, getDocumentFile() and deleteDocument().
    */
-  async addDocument(employeeId, { title, documentType, fileName, fileSize = null, documentDate = null, description = '' } = {}) {
+  async addDocument(employeeId, { title, documentType, fileName, fileSize = null, documentDate = null, description = '', file = null } = {}) {
     if (!title || !title.trim()) {
       throw new Error('Document Title is required.');
     }
@@ -226,15 +226,27 @@ export const formerService = {
       throw new Error('Please select a file.');
     }
 
+    const id = `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // The file first: if the browser can't store it, nothing is recorded (no un-openable document).
+    if (file) {
+      try {
+        await saveDocumentFile(id, file);
+      } catch (err) {
+        throw new Error(`The file couldn't be saved in this browser (${err?.message || 'storage unavailable'}).`);
+      }
+    }
+
     const db = loadDatabase();
     const docs = db.employeeDocuments || [];
     const newDoc = {
-      id: `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id,
       employeeId,
       title: title.trim(),
       documentType: documentType || null,
       fileName,
       fileSize,
+      fileType: file?.type || null,
+      hasFile: Boolean(file),
       documentDate: documentDate || null,
       description: (description || '').trim(),
       createdAt: new Date().toISOString(),
@@ -242,6 +254,11 @@ export const formerService = {
     db.employeeDocuments = [newDoc, ...docs];
     saveDatabase(db);
     return newDoc;
+  },
+
+  /** The stored file for a document (a File/Blob), or null if none was saved (older documents). */
+  async getDocumentFile(documentId) {
+    return getDocumentFile(documentId).catch(() => null);
   },
 
   /** Removes one document record from this Personnel ID (the same browser-stored metadata addDocument() writes). */
@@ -252,6 +269,7 @@ export const formerService = {
     if (remaining.length === docs.length) throw new Error('That document no longer exists.');
     db.employeeDocuments = remaining;
     saveDatabase(db);
+    await deleteDocumentFile(documentId).catch(() => {}); // its stored file, if any
   },
 
   /**

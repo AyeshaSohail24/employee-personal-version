@@ -144,6 +144,7 @@ export default function HistoricalRecordPage() {
         title: docTitle.trim(),
         fileName: docFile.name,
         fileSize: docFile.size,
+        file: docFile,
         description: docDescription.trim(),
       });
       await refreshDocuments();
@@ -154,6 +155,34 @@ export default function HistoricalRecordPage() {
     } finally {
       setIsSavingDocument(false);
     }
+  };
+
+  // Opens a document's stored file: PDFs, images and text in a new tab; anything else (e.g. Word)
+  // downloads under its original name. The tab is opened synchronously on the click (then pointed
+  // at the file once it's read) so pop-up blockers don't stop it.
+  const openDocument = async (doc) => {
+    if (!doc.hasFile) return;
+    const type = doc.fileType || '';
+    const viewable = type.startsWith('image/') || type === 'application/pdf' || type.startsWith('text/');
+    const tab = viewable ? window.open('', '_blank') : null;
+    const file = await formerService.getDocumentFile(doc.id);
+    if (!file) {
+      if (tab) tab.close();
+      alert("This document's file isn't available in this browser.");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    if (tab) {
+      tab.location.href = url;
+    } else {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.fileName || 'document';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
 
   const [deletingDocumentId, setDeletingDocumentId] = useState(null);
@@ -523,7 +552,16 @@ export default function HistoricalRecordPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {documents.map((doc) => (
-              <div key={doc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.75rem', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
+              <div
+                key={doc.id}
+                className={doc.hasFile ? 'directory-table-row' : undefined}
+                role={doc.hasFile ? 'button' : undefined}
+                tabIndex={doc.hasFile ? 0 : undefined}
+                title={doc.hasFile ? `Open ${doc.fileName}` : undefined}
+                onClick={() => openDocument(doc)}
+                onKeyDown={(e) => { if (doc.hasFile && (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); openDocument(doc); } }}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.75rem', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}
+              >
                 <FileText size={18} style={{ color: 'var(--color-primary)', flexShrink: 0, marginTop: '0.1rem' }} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>{doc.title}</div>
@@ -534,6 +572,11 @@ export default function HistoricalRecordPage() {
                   {doc.description && (
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginTop: '0.35rem' }}>{doc.description}</div>
                   )}
+                  {!doc.hasFile && (
+                    <div style={{ fontSize: '0.72rem', color: '#B45309', marginTop: '0.35rem' }}>
+                      File not saved (added before files were stored) — add it again to open it.
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -541,7 +584,7 @@ export default function HistoricalRecordPage() {
                   title="Delete this document"
                   aria-label={`Delete ${doc.title}`}
                   disabled={deletingDocumentId === doc.id}
-                  onClick={() => deleteDocument(doc)}
+                  onClick={(e) => { e.stopPropagation(); deleteDocument(doc); }}
                   style={{ flexShrink: 0 }}
                 >
                   <Trash2 size={14} />
