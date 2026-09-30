@@ -47,7 +47,7 @@ export const formerService = {
 
     const db = loadDatabase();
     const exitRecords = db.formerExitRecords || [];
-    const exitByEmployeeId = new Map(exitRecords.map((r) => [r.employeeId, r]));
+    const exitByEmployeeId = new Map(exitRecords.map((r) => [String(r.employeeId), r]));
 
     const allInstances = await offboardingService.getAllInstances();
     const offboardingByEmployeeId = new Map();
@@ -64,7 +64,7 @@ export const formerService = {
     // the Exit Type column and filter show it too.
     let employeesWithExit = res.employees.map((emp) => ({
       ...emp,
-      exitInfo: withDefaultExitInfo(exitByEmployeeId.get(emp.id) || null),
+      exitInfo: withDefaultExitInfo(exitByEmployeeId.get(String(emp.id)) || null),
       offboardingInstance: offboardingByEmployeeId.get(emp.id) || null,
     }));
 
@@ -100,9 +100,12 @@ export const formerService = {
   },
 
   // The recorded Exit Information, or the default (Contract Ended) when none has been recorded.
+  // Ids are compared as text: the record page passes the id from the URL ("35") while saves use the
+  // employee's own numeric id (35) — a strict === never matched them, so after a reload the page
+  // showed the default and a save wiped stored remarks.
   async getExitInfo(employeeId) {
     const db = loadDatabase();
-    return withDefaultExitInfo((db.formerExitRecords || []).find((r) => r.employeeId === employeeId) || null);
+    return withDefaultExitInfo((db.formerExitRecords || []).find((r) => String(r.employeeId) === String(employeeId)) || null);
   },
 
   /**
@@ -125,7 +128,7 @@ export const formerService = {
 
     const db = loadDatabase();
     const records = db.formerExitRecords || [];
-    const index = records.findIndex((r) => r.employeeId === employeeId);
+    const index = records.findIndex((r) => String(r.employeeId) === String(employeeId));
     const nowIso = new Date().toISOString();
 
     if (index === -1) {
@@ -159,7 +162,7 @@ export const formerService = {
   async getDocuments(employeeId) {
     const db = loadDatabase();
     return (db.employeeDocuments || [])
-      .filter((d) => d.employeeId === employeeId)
+      .filter((d) => String(d.employeeId) === String(employeeId)) // URL id is text, stored id numeric
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   },
 

@@ -242,7 +242,8 @@ export function filterNotes(notes = [], { search = '', category = '', relatedEmp
   const query = search.trim().toLowerCase();
 
   return notes.filter((note) => {
-    if (relatedEmployeeId && note.relatedEmployeeId !== relatedEmployeeId) return false;
+    // Compared as text: the Former record page passes the URL id ("35"), notes store the numeric id.
+    if (relatedEmployeeId && String(note.relatedEmployeeId) !== String(relatedEmployeeId)) return false;
     if (category && note.category !== category) return false;
 
     if (query) {

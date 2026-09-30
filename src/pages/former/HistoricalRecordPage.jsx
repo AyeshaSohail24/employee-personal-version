@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, User, FilePlus, NotebookPen, PencilLine, ClipboardCheck, FileText, History } from 'lucide-react';
+import { ArrowLeft, User, FilePlus, NotebookPen, PencilLine, ClipboardCheck, FileText, History, Check, X } from 'lucide-react';
 import { formerService } from '../../services/formerService.js';
-import { resolveExitTypeDisplay } from '../../domain/formerDomain.js';
+import { resolveExitTypeDisplay, EXIT_TYPES, DEFAULT_EXIT_TYPE } from '../../domain/formerDomain.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
 import AddDocumentModal from '../../components/former/AddDocumentModal.jsx';
 import AddNoteModal from '../../components/former/AddNoteModal.jsx';
-import EditExitInfoModal from '../../components/former/EditExitInfoModal.jsx';
+import { Select } from '../../components/common/Select.jsx';
 
 function ProfileField({ label, value }) {
   return (
@@ -61,7 +61,11 @@ export default function HistoricalRecordPage() {
 
   const [isAddDocumentOpen, setIsAddDocumentOpen] = useState(false);
   const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
-  const [isEditExitOpen, setIsEditExitOpen] = useState(false);
+  // Exit Type is edited in place (no popup): Edit swaps the value for a dropdown with Save/Cancel.
+  const [isEditingExit, setIsEditingExit] = useState(false);
+  const [draftExitType, setDraftExitType] = useState(DEFAULT_EXIT_TYPE);
+  const [isSavingExit, setIsSavingExit] = useState(false);
+  const [exitError, setExitError] = useState('');
 
   const loadRecord = useCallback(async () => {
     setLoading(true);
@@ -95,6 +99,38 @@ export default function HistoricalRecordPage() {
   // page, so Add Document/Add Note/Edit Exit Information all feel immediate.
   const refreshDocuments = () => formerService.getDocuments(employeeId).then(setDocuments);
   const refreshNotes = () => formerService.getNotesForPersonnel(employeeId).then(setNotes);
+
+  const startEditingExit = () => {
+    const current = record?.exitInfo?.exitType;
+    setDraftExitType(EXIT_TYPES.includes(current) ? current : DEFAULT_EXIT_TYPE);
+    setExitError('');
+    setIsEditingExit(true);
+  };
+
+  const cancelEditingExit = () => {
+    setIsEditingExit(false);
+    setExitError('');
+  };
+
+  // Saves only the Exit Type; any Exit Remarks recorded earlier are passed back unchanged, so a save
+  // never wipes them. Refreshes just the exit info (no full-page reload).
+  const saveExitType = async () => {
+    setIsSavingExit(true);
+    setExitError('');
+    try {
+      await formerService.setExitInfo(record.employee.id, {
+        exitType: draftExitType,
+        exitRemarks: record.exitInfo?.exitRemarks || '',
+      });
+      const exitInfo = await formerService.getExitInfo(record.employee.id);
+      setRecord((prev) => ({ ...prev, exitInfo }));
+      setIsEditingExit(false);
+    } catch (err) {
+      setExitError(err.message || 'Could not save the Exit Type.');
+    } finally {
+      setIsSavingExit(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -211,19 +247,58 @@ export default function HistoricalRecordPage() {
       <ProfileSection
         title="Exit Information"
         action={
-          <button
-            type="button"
-            className="btn-compact-override"
-            onClick={() => setIsEditExitOpen(true)}
-            style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
-          >
-            <PencilLine size={12} />
-            <span>Edit</span>
-          </button>
+          isEditingExit ? (
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button
+                type="button"
+                className="btn-secondary email-drafts-toolbar-btn"
+                onClick={cancelEditingExit}
+                disabled={isSavingExit}
+                style={{ textTransform: 'none', letterSpacing: 'normal', padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}
+              >
+                <X size={13} />
+                <span>Cancel</span>
+              </button>
+              <button
+                type="button"
+                className="btn-primary email-drafts-toolbar-btn"
+                onClick={saveExitType}
+                disabled={isSavingExit}
+                style={{ textTransform: 'none', letterSpacing: 'normal', padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}
+              >
+                <Check size={13} />
+                <span>{isSavingExit ? 'Saving...' : 'Save'}</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn-compact-override"
+              onClick={startEditingExit}
+              style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
+            >
+              <PencilLine size={12} />
+              <span>Edit</span>
+            </button>
+          )
         }
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
-          <ProfileField label="Exit Type" value={resolveExitTypeDisplay(exitInfo)} />
+          {isEditingExit ? (
+            <div onKeyDown={(e) => { if (e.key === 'Escape' && !isSavingExit) cancelEditingExit(); }}>
+              <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Exit Type</div>
+              <Select
+                id="former-exit-type-inline"
+                variant="form"
+                value={draftExitType}
+                onChange={(e) => setDraftExitType(e.target.value)}
+                options={EXIT_TYPES.map((t) => ({ value: t, label: t }))}
+              />
+              {exitError && <div style={{ fontSize: '0.76rem', color: '#B91C1C', marginTop: '0.3rem' }}>{exitError}</div>}
+            </div>
+          ) : (
+            <ProfileField label="Exit Type" value={resolveExitTypeDisplay(exitInfo)} />
+          )}
           <ProfileField label="Final Working Date" value={employee.contractEndDate ? formatDateDisplay(employee.contractEndDate) : null} />
           <ProfileField label="Offboarding Started" value={offboardingInstance?.startedAt ? formatDateDisplay(offboardingInstance.startedAt) : null} />
           <ProfileField label="Offboarding Completed" value={offboardingInstance?.completedAt ? formatDateDisplay(offboardingInstance.completedAt) : null} />
@@ -234,9 +309,6 @@ export default function HistoricalRecordPage() {
               return stage?.date ? formatDateDisplay(stage.date) : null;
             })()}
           />
-          <div style={{ gridColumn: '1 / -1' }}>
-            <ProfileField label="Exit Remarks" value={exitInfo?.exitRemarks} />
-          </div>
         </div>
       </ProfileSection>
 
@@ -365,13 +437,6 @@ export default function HistoricalRecordPage() {
         onClose={() => setIsAddNoteOpen(false)}
         employeeId={employee.id}
         onSuccess={refreshNotes}
-      />
-      <EditExitInfoModal
-        isOpen={isEditExitOpen}
-        onClose={() => setIsEditExitOpen(false)}
-        employeeId={employee.id}
-        currentExitInfo={exitInfo}
-        onSuccess={loadRecord}
       />
     </div>
   );
