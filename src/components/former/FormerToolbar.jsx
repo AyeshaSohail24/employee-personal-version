@@ -12,6 +12,13 @@ const PERSONNEL_TYPE_OPTIONS = [
   { value: 'Intern', label: 'Interns' },
 ];
 
+// The Exit Type filter offers only these — "Internship Completed" and "Other" aren't needed as
+// filters. EXIT_TYPES itself is unchanged (Edit Exit Information still uses the full list).
+const HIDDEN_EXIT_TYPE_FILTERS = ['Internship Completed', 'Other'];
+const EXIT_TYPE_FILTER_OPTIONS = EXIT_TYPES
+  .filter((t) => !HIDDEN_EXIT_TYPE_FILTERS.includes(t))
+  .map((t) => ({ value: t, label: t }));
+
 export default function FormerToolbar({
   search,
   onSearchChange,
@@ -84,7 +91,7 @@ export default function FormerToolbar({
               value={selectedExitType}
               onChange={(e) => onExitTypeChange(e.target.value)}
               placeholder="All Exit Types"
-              options={EXIT_TYPES.map((t) => ({ value: t, label: t }))}
+              options={EXIT_TYPE_FILTER_OPTIONS}
             />
           </div>
 
