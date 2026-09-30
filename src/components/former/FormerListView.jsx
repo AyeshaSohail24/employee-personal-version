@@ -18,21 +18,18 @@ export default function FormerListView({ employees = [] }) {
         <table className="widget-table">
           <thead>
             <tr>
-              <th style={{ width: '22%' }}>PERSONNEL</th>
-              <th style={{ width: '9%' }}>TYPE</th>
-              <th style={{ width: '14%' }}>FORMER ROLE</th>
-              <th style={{ width: '14%' }}>DEPARTMENT</th>
-              <th style={{ width: '14%' }}>EMPLOYMENT PERIOD</th>
-              <th style={{ width: '9%' }}>TENURE</th>
-              <th style={{ width: '10%' }}>EXIT TYPE</th>
-              <th style={{ width: '8%' }}>OFFBOARDING</th>
+              <th style={{ width: '28%' }}>PERSONNEL</th>
+              <th style={{ width: '11%' }}>TYPE</th>
+              <th style={{ width: '19%' }}>DEPARTMENT</th>
+              <th style={{ width: '18%' }}>EMPLOYMENT PERIOD</th>
+              <th style={{ width: '11%' }}>TENURE</th>
+              <th style={{ width: '13%' }}>EXIT TYPE</th>
             </tr>
           </thead>
           <tbody>
             {employees.map((emp) => {
               const typePill = TYPE_PILL_STYLES[emp.directoryType] || { bg: '#F1F5F9', color: '#475569' };
               const tenure = formatTenure(emp.startDate, emp.contractEndDate);
-              const isOffboardingCompleted = emp.offboardingInstance?.derivedStatus === 'Completed';
               const openRecord = () => navigate(`/former/${emp.id}`);
 
               return (
@@ -74,17 +71,12 @@ export default function FormerListView({ employees = [] }) {
                     </span>
                   </td>
 
-                  {/* 3. FORMER ROLE */}
-                  <td>
-                    <div className="table-text-main">{emp.position ? emp.position.name : '—'}</div>
-                  </td>
-
-                  {/* 4. DEPARTMENT */}
+                  {/* 3. DEPARTMENT */}
                   <td>
                     <div className="table-text-main">{emp.department ? emp.department.name : '—'}</div>
                   </td>
 
-                  {/* 5. EMPLOYMENT PERIOD */}
+                  {/* 4. EMPLOYMENT PERIOD */}
                   <td>
                     <div className="dates-cell">
                       <span className="dates-start">{formatDateDisplay(emp.startDate)}</span>
@@ -94,20 +86,14 @@ export default function FormerListView({ employees = [] }) {
                     </div>
                   </td>
 
-                  {/* 6. TENURE */}
+                  {/* 5. TENURE */}
                   <td>
                     <div className="table-text-main">{tenure || '—'}</div>
                   </td>
 
-                  {/* 7. EXIT TYPE — never fabricated; "—" when no Exit Information was ever recorded */}
+                  {/* 6. EXIT TYPE — never fabricated; "—" when no Exit Information was ever recorded */}
                   <td>
                     <div className="table-text-main">{resolveExitTypeDisplay(emp.exitInfo) || '—'}</div>
-                  </td>
-
-                  {/* 8. OFFBOARDING — reuses the existing offboarding system's own derived status;
-                      never fabricated when no plan instance exists for this person. */}
-                  <td>
-                    <div className="table-text-main">{isOffboardingCompleted ? 'Completed' : '—'}</div>
                   </td>
                 </tr>
               );
