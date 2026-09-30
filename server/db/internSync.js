@@ -35,12 +35,34 @@ export async function getLinkedIntern(employee) {
 // (Admin/Employee/Intern/Manager/Supervisor), not a job title — every intern would just show
 // "Intern", duplicating the Type field already shown, so it's left out rather than wiring in a
 // technically-present but meaningless value.
+//
+// Also passes through the application details the Interns DB now carries (filled by the Application
+// portal / Recruitment hand-off): nationality, education, the position applied for, acquisition
+// channel, free-text notes, profile links and document URLs (resume, university support letter,
+// signed offer letter, IC/passport scan). Read live on every request, never stored here; null when
+// the Interns DB has no value. The intern's `position` is exposed as `internPosition` so it can't
+// be confused with this app's own positions table (employee.position).
 export function getInternPersonalDetails(intern) {
   if (!intern) return null;
   return {
     icPassportNumber: intern.ic_passport_number ?? null,
     homeAddress: intern.home_address ?? null,
     photoUrl: intern.photo_url ?? null,
+    nationality: intern.nationality ?? null,
+    highestEducation: intern.highest_level_of_education ?? null,
+    university: intern.university ?? null,
+    internPosition: intern.position ?? null,
+    acquisitionChannel: intern.acquisition_channel ?? null,
+    anythingElse: intern.anything_else ?? null,
+    additionalInfo: intern.additional_info ?? null,
+    linkedIn: intern.linkedin ?? null,
+    github: intern.github ?? null,
+    portfolio: intern.portfolio ?? null,
+    resumeUrl: intern.resume_url ?? null,
+    supportLetterUrl: intern.support_letter_url ?? null,
+    offerLetterUrl: intern.offer_letter_url ?? null,
+    idDocumentUrl: intern.id_document_url ?? null,
+    recruitmentApplicantId: intern.recruitment_applicant_id ?? null,
   };
 }
 

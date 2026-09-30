@@ -185,6 +185,7 @@ export default function PersonnelDetailsPage() {
           value={profile.educationApplication.originalEndDate ? formatDateDisplay(profile.educationApplication.originalEndDate) : null}
         />
         <ProfileField label="Anything Else" value={profile.educationApplication.anythingElse} />
+        <ProfileField label="Additional Information" value={profile.educationApplication.additionalInfo} />
       </ProfileSection>
 
       <ProfileSection title="Links & Documents">
@@ -192,6 +193,9 @@ export default function PersonnelDetailsPage() {
         <ProfileLinkField label="GitHub" url={profile.links.github} />
         <ProfileLinkField label="Resume / CV" url={profile.links.resume} />
         <ProfileLinkField label="Portfolio" url={profile.links.portfolio} />
+        <ProfileLinkField label="University Support Letter" url={profile.links.supportLetter} />
+        <ProfileLinkField label="Offer Letter" url={profile.links.offerLetter} />
+        <ProfileLinkField label="IC / Passport Scan" url={profile.links.idDocument} />
       </ProfileSection>
 
       <ProfileSection title="Employment / Internship Details">

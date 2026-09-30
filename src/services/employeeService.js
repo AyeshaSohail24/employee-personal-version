@@ -97,29 +97,33 @@ export const employeeService = {
         // there's no Interns DB record to read from at all.
         icPassportNumber: employee.icPassportNumber || null,
         homeAddress: employee.homeAddress || null,
-        // Confirmed NOT tracked anywhere in the Interns DB's own schema either (checked its
-        // published OpenAPI Intern properties directly) — genuinely no source to read this from,
-        // not just "not yet collected".
-        nationality: null,
+        // Live-read from the Interns DB the same way (getInternPersonalDetails()) — filled there by
+        // the Application portal / Recruitment hand-off; null when it has no value.
+        nationality: employee.nationality || null,
       },
-      // Reserved for the future application/shortlisting microapp integration — none of this
-      // data exists in the current PoC model for any person, so every field is null (never
-      // fabricated), rendered as "—" by the Profile UI.
+      // Live-read from the Interns DB for an intern-linked employee (GET /employees/{id} — see
+      // internSync.js's getInternPersonalDetails()); null (rendered "—") when it has no value or for
+      // a non-intern employee. The Interns DB has no "original" (applied-for) start/end dates —
+      // only the actual internship dates, shown under Employment — so those two stay null.
       educationApplication: {
-        highestEducation: null,
-        university: null,
-        interestedPosition: null,
-        acquisitionChannel: null,
+        highestEducation: employee.highestEducation || null,
+        university: employee.university || null,
+        interestedPosition: employee.internPosition || null,
+        acquisitionChannel: employee.acquisitionChannel || null,
         originalStartDate: null,
         originalEndDate: null,
-        anythingElse: null,
+        anythingElse: employee.anythingElse || null,
+        additionalInfo: employee.additionalInfo || null,
       },
-      // Reserved the same way — real values render as links when present, "—" otherwise.
+      // Live-read the same way — real values render as links when present, "—" otherwise.
       links: {
-        linkedIn: null,
-        github: null,
-        resume: null,
-        portfolio: null,
+        linkedIn: employee.linkedIn || null,
+        github: employee.github || null,
+        resume: employee.resumeUrl || null,
+        portfolio: employee.portfolio || null,
+        supportLetter: employee.supportLetterUrl || null,
+        offerLetter: employee.offerLetterUrl || null,
+        idDocument: employee.idDocumentUrl || null,
       },
       employment: {
         personnelId: employee.employeeId,
