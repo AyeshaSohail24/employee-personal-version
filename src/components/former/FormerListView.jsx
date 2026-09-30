@@ -1,6 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { History } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
 import { formatTenure, resolveExitTypeDisplay } from '../../domain/formerDomain.js';
 
@@ -9,22 +8,24 @@ const TYPE_PILL_STYLES = {
   Intern: { bg: '#E0F2FE', color: '#0369A1' },
 };
 
+// Each row opens that person's historical record (/former/{id}) — the whole row is clickable, like
+// the Personnel list (EmployeeListView), with Enter/Space from the keyboard.
 export default function FormerListView({ employees = [] }) {
+  const navigate = useNavigate();
   return (
     <div className="directory-table-card">
       <div className="widget-table-wrapper">
         <table className="widget-table">
           <thead>
             <tr>
-              <th style={{ width: '20%' }}>PERSONNEL</th>
-              <th style={{ width: '8%' }}>TYPE</th>
-              <th style={{ width: '13%' }}>FORMER ROLE</th>
-              <th style={{ width: '12%' }}>DEPARTMENT</th>
-              <th style={{ width: '13%' }}>EMPLOYMENT PERIOD</th>
-              <th style={{ width: '10%' }}>TENURE</th>
-              <th style={{ width: '11%' }}>EXIT TYPE</th>
+              <th style={{ width: '22%' }}>PERSONNEL</th>
+              <th style={{ width: '9%' }}>TYPE</th>
+              <th style={{ width: '14%' }}>FORMER ROLE</th>
+              <th style={{ width: '14%' }}>DEPARTMENT</th>
+              <th style={{ width: '14%' }}>EMPLOYMENT PERIOD</th>
+              <th style={{ width: '9%' }}>TENURE</th>
+              <th style={{ width: '10%' }}>EXIT TYPE</th>
               <th style={{ width: '8%' }}>OFFBOARDING</th>
-              <th style={{ width: '11%' }}>DETAILS</th>
             </tr>
           </thead>
           <tbody>
@@ -32,9 +33,23 @@ export default function FormerListView({ employees = [] }) {
               const typePill = TYPE_PILL_STYLES[emp.directoryType] || { bg: '#F1F5F9', color: '#475569' };
               const tenure = formatTenure(emp.startDate, emp.contractEndDate);
               const isOffboardingCompleted = emp.offboardingInstance?.derivedStatus === 'Completed';
+              const openRecord = () => navigate(`/former/${emp.id}`);
 
               return (
-                <tr key={emp.id}>
+                <tr
+                  key={emp.id}
+                  className="directory-table-row"
+                  tabIndex={0}
+                  title={`View ${emp.fullName}'s record`}
+                  aria-label={`View ${emp.fullName}'s record`}
+                  onClick={openRecord}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openRecord();
+                    }
+                  }}
+                >
                   {/* 1. PERSONNEL — avatar, name, Personnel ID (never the internal id) */}
                   <td style={{ overflow: 'hidden' }}>
                     <div className="table-user-cell">
@@ -93,14 +108,6 @@ export default function FormerListView({ employees = [] }) {
                       never fabricated when no plan instance exists for this person. */}
                   <td>
                     <div className="table-text-main">{isOffboardingCompleted ? 'Completed' : '—'}</div>
-                  </td>
-
-                  {/* 9. DETAILS */}
-                  <td>
-                    <Link to={`/former/${emp.id}`} className="btn-compact-override" style={{ whiteSpace: 'nowrap', textDecoration: 'none' }}>
-                      <History size={12} />
-                      <span>View Record</span>
-                    </Link>
                   </td>
                 </tr>
               );
