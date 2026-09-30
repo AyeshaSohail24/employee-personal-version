@@ -1,30 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { X, PencilLine, AlertCircle } from 'lucide-react';
 import { formerService } from '../../services/formerService.js';
-import { EXIT_TYPES, OTHER_EXIT_TYPE, isCustomExitTypeRequired } from '../../domain/formerDomain.js';
+import { EXIT_TYPES, DEFAULT_EXIT_TYPE } from '../../domain/formerDomain.js';
 import { Select } from '../common/Select.jsx';
 
 /**
- * The one small, explicitly-scoped edit action Former allows on a historical record: Exit Type,
- * (conditionally) Specify Exit Type, and Exit Remarks only. Deliberately does NOT expose
+ * The one small, explicitly-scoped edit action Former allows on a historical record: Exit Type
+ * (Contract Ended / Resignation / Termination) and Exit Remarks only. Deliberately does NOT expose
  * employment dates, department/position, status, or anything else historical — those remain
  * read-only here, changed only through the existing Personnel/Offboarding mechanisms that
- * originally produced them.
+ * originally produced them. A record saved earlier with an Exit Type that's no longer offered
+ * ("Internship Completed" / "Other") opens with the default (Contract Ended) selected — it only
+ * changes if HR saves.
  */
 export default function EditExitInfoModal({ isOpen, onClose, employeeId, currentExitInfo, onSuccess }) {
-  const [exitType, setExitType] = useState('');
-  const [customExitType, setCustomExitType] = useState('');
+  const [exitType, setExitType] = useState(DEFAULT_EXIT_TYPE);
   const [exitRemarks, setExitRemarks] = useState('');
-  const [customExitTypeError, setCustomExitTypeError] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setExitType(currentExitInfo?.exitType || '');
-      setCustomExitType(currentExitInfo?.customExitType || '');
+      const current = currentExitInfo?.exitType;
+      setExitType(EXIT_TYPES.includes(current) ? current : DEFAULT_EXIT_TYPE);
       setExitRemarks(currentExitInfo?.exitRemarks || '');
-      setCustomExitTypeError('');
       setError('');
       setIsSubmitting(false);
     }
@@ -32,31 +31,11 @@ export default function EditExitInfoModal({ isOpen, onClose, employeeId, current
 
   if (!isOpen) return null;
 
-  const showCustomExitType = isCustomExitTypeRequired(exitType);
-
-  const handleExitTypeChange = (value) => {
-    setExitType(value);
-    // Switching away from Other: the custom value is no longer active exit information — clear
-    // it here too (not just on save) so the field never re-appears prefilled with stale text if
-    // HR flips back and forth before saving.
-    if (value !== OTHER_EXIT_TYPE) {
-      setCustomExitType('');
-      setCustomExitTypeError('');
-    }
-  };
-
   const handleSubmitForm = async (e) => {
     e.preventDefault();
-
-    if (showCustomExitType && !customExitType.trim()) {
-      setCustomExitTypeError('Please specify the exit type.');
-      return;
-    }
-    setCustomExitTypeError('');
-
     setIsSubmitting(true);
     try {
-      await formerService.setExitInfo(employeeId, { exitType: exitType || null, customExitType, exitRemarks });
+      await formerService.setExitInfo(employeeId, { exitType, exitRemarks });
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
@@ -97,29 +76,11 @@ export default function EditExitInfoModal({ isOpen, onClose, employeeId, current
               <label className="form-label">Exit Type</label>
               <Select
                 variant="form"
-                placeholder="Not recorded"
                 value={exitType}
-                onChange={(e) => handleExitTypeChange(e.target.value)}
+                onChange={(e) => setExitType(e.target.value)}
                 options={EXIT_TYPES.map((t) => ({ value: t, label: t }))}
               />
             </div>
-
-            {showCustomExitType && (
-              <div className="form-group">
-                <label className="form-label">Specify Exit Type <span className="required-star">*</span></label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Enter exit type"
-                  value={customExitType}
-                  onChange={(e) => {
-                    setCustomExitType(e.target.value);
-                    if (customExitTypeError) setCustomExitTypeError('');
-                  }}
-                />
-                {customExitTypeError && <span className="form-hint" style={{ color: '#DC2626' }}>{customExitTypeError}</span>}
-              </div>
-            )}
 
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Exit Remarks <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>

@@ -12,14 +12,13 @@
 // Controlled Exit Type categories. A person's actual exit type is stored via formerService
 // (a small satellite record keyed by employeeId, never a field invented on the fly by the UI —
 // see formerService.getExitInfo/setExitInfo) and is either one of these exact values or null
-// (never fabricated). "Other" is a real, storable category here — distinct from Notes' "Other /
-// Custom" free-text sentinel, since Exit Type has no free-text variant in this first version.
+// (never fabricated). Only these three can be chosen now (Edit Exit Information and the Exit Type
+// filter); "Internship Completed" and "Other" were removed as options. A record saved earlier with
+// one of those still displays as saved (see resolveExitTypeDisplay()).
 export const EXIT_TYPES = [
-  'Internship Completed',
   'Contract Ended',
   'Resignation',
   'Termination',
-  'Other',
 ];
 
 /**
