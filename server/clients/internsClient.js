@@ -60,6 +60,15 @@ export const internsClient = {
     return { interns: all };
   },
 
+  // The intern the Application portal created for this Recruitment applicant — the Interns DB's own
+  // documented hand-off link (Intern.recruitment_applicant_id, unique; GET
+  // /api/interns?recruitment_applicant_id=…). Filtered again here, so a service that ignored the
+  // query parameter could never hand back someone else. Null if the portal hasn't created one yet.
+  async findInternByApplicantId(applicantId) {
+    const { data } = await call(`/api/interns?recruitment_applicant_id=${encodeURIComponent(applicantId)}`);
+    return (data ?? []).find((i) => i.recruitment_applicant_id != null && String(i.recruitment_applicant_id) === String(applicantId)) ?? null;
+  },
+
   async getIntern(internId) {
     const { data } = await call(`/api/interns/${internId}`);
     return data;

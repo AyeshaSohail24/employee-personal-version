@@ -105,6 +105,18 @@ export const upcomingCandidateService = {
   },
 
   /**
+   * Accept (the tick), no form: links the intern record the Application portal already created for
+   * this applicant, moves them to Onboarding/Personnel, launches their onboarding plan and removes
+   * them from Upcoming (POST /applicants/{applicantId}/accept). Nothing is created in the Interns
+   * database; if the portal hasn't created their record yet the request is refused with the reason.
+   * @param {string} candidateId
+   * @returns {Promise<{ employee: Object, plan: Object, intern: { id: string, refNumber: string|null, status: string|null }, phaseMoved: boolean }>}
+   */
+  async acceptFromPortal(candidateId) {
+    return apiClient.post(`/applicants/${encodeURIComponent(candidateId)}/accept`, {});
+  },
+
+  /**
    * Legacy local-only "Accepted" mark (this browser's overlay). Superseded by acceptAndConvert();
    * kept so candidates already marked Accepted this way can still be undone.
    * @param {string} candidateId

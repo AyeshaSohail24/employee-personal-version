@@ -65,6 +65,102 @@ export async function getSuccessfulConversion(applicantId) {
   return rows[0] ?? null;
 }
 
+// Accept (the Upcoming page's tick), when the intern already exists: the Application portal — the
+// link applicants get with their offer letter — collects IC/passport, home address and the rest,
+// and creates the intern in the Interns DB itself, linked by recruitment_applicant_id. So this
+// never creates an intern: it finds the one the portal made, links this app's employee record to
+// it, records the conversion, moves the applicant to `completed`, and launches their onboarding
+// plan — the same steps 2–4 as convertApplicant() below. If the portal hasn't created the intern
+// yet, nothing is changed and HR is told why. The intern record is used exactly as the portal
+// saved it (its status is not changed here).
+export async function acceptPortalApplicant(applicantId) {
+  // Two accepts for the same applicant (double-click, two tabs) are serialised by a per-applicant
+  // MySQL advisory lock, so the "already accepted" check below can't be passed twice.
+  const conn = await pool.getConnection();
+  const lockName = `applicant_accept_${applicantId}`;
+  try {
+    const [[{ got }]] = await conn.query("SELECT GET_LOCK(?, 15) AS got", [lockName]);
+    if (got !== 1) throw new ConversionError("This candidate is already being accepted — try again in a moment.");
+    return await acceptPortalApplicantLocked(applicantId);
+  } finally {
+    await conn.query("SELECT RELEASE_LOCK(?)", [lockName]).catch(() => {});
+    conn.release();
+  }
+}
+
+async function acceptPortalApplicantLocked(applicantId) {
+  const existing = await getSuccessfulConversion(applicantId);
+  if (existing) {
+    throw new ConversionError(`This candidate was already accepted and linked to ${existing.external_ref_number ?? "their intern record"}.`);
+  }
+
+  const applicant = await applicantsClient.getApplicant(applicantId);
+  if (!applicant) throw new ConversionError("This applicant no longer exists in the Recruitment system.");
+  const name = `${applicant.first_name ?? ""} ${applicant.last_name ?? ""}`.trim() || applicant.fullName || "This candidate";
+
+  let intern;
+  try {
+    intern = await internsClient.findInternByApplicantId(applicantId);
+  } catch (error) {
+    throw new ConversionError(`Couldn't reach the Interns database to find ${name}'s record, so nothing was changed. ${String(error.message ?? error).replace(/^Interns API [^:]+: /, "")}`);
+  }
+  if (!intern) {
+    throw new ConversionError(`${name} isn't in the Interns database yet — the Application portal hasn't created their intern record (none is linked to this applicant). Nothing was changed; try again once they've completed the portal.`);
+  }
+
+  // One email per employee (employees.work_email is unique) — unless it's already this intern's own record.
+  const [[emailOwner]] = await pool.query(
+    "SELECT employee_code, first_name, last_name, intern_external_id FROM employees WHERE LOWER(work_email) = LOWER(?) LIMIT 1",
+    [intern.email_address ?? applicant.email ?? ""],
+  );
+  if (emailOwner && emailOwner.intern_external_id !== intern.id) {
+    throw new ConversionError(`${intern.email_address ?? applicant.email} is already used by ${`${emailOwner.first_name} ${emailOwner.last_name}`.trim()} (${emailOwner.employee_code}). Each employee needs their own email address, so nothing was changed.`);
+  }
+
+  let employee;
+  try {
+    employee = await resolveOrCreateEmployeeForIntern(intern.id);
+    await pool.query("UPDATE employees SET source_applicant_id = ? WHERE id = ?", [applicantId, employee.id]);
+    await insertRow("applicant_conversions", {
+      applicant_id: applicantId,
+      employee_id: employee.id,
+      target_system: "interns_db",
+      status: "success",
+      external_id: intern.id,
+      external_ref_number: intern.ref_number ?? null,
+      pushed_at: new Date(),
+    });
+  } catch (error) {
+    throw new ConversionError(`${name}'s intern record (${intern.ref_number ?? intern.id}) was found, but this app couldn't finish linking it (${String(error.message ?? error)}). Try again, or open the Onboarding page to complete it.`);
+  }
+
+  let phaseMoved = true;
+  try {
+    await applicantsClient.moveApplicantPhase(applicantId, "completed");
+  } catch (error) {
+    phaseMoved = false;
+    await pool.query(
+      "UPDATE applicant_conversions SET response_message = ? WHERE applicant_id = ? AND status = 'success'",
+      [`Recruitment phase not updated: ${String(error.message ?? error)}`.slice(0, 1000), applicantId],
+    ).catch(() => {});
+  }
+
+  let plan;
+  try {
+    plan = await ensureOnboardingPlan(employee.id);
+  } catch (error) {
+    plan = { status: "not_launched", reason: String(error.message ?? error) };
+  }
+
+  return {
+    employee: await getRow("employees", employee.id),
+    plan,
+    intern: { id: intern.id, refNumber: intern.ref_number ?? null, status: intern.status ?? null },
+    conversion: await getSuccessfulConversion(applicantId),
+    phaseMoved,
+  };
+}
+
 export async function convertApplicant(applicantId, input = {}) {
   const fields = validateInput(input);
 

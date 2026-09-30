@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Search, X, CheckCircle2, Link2, AlertTriangle } from 'lucide-react';
 import { upcomingCandidateService } from '../../services/upcomingCandidateService.js';
 import { candidateEmailService } from '../../services/candidateEmailService.js';
@@ -8,7 +8,6 @@ import CandidateTable from '../../components/upcoming/CandidateTable.jsx';
 import CandidateSearchResults from '../../components/upcoming/CandidateSearchResults.jsx';
 import DirectoryEmptyState from '../../components/employees/DirectoryEmptyState.jsx';
 import EmailDraftsPanel from '../../components/upcoming/EmailDraftsPanel.jsx';
-import AcceptCandidateModal from '../../components/upcoming/AcceptCandidateModal.jsx';
 import DepartmentMappingModal from '../../components/upcoming/DepartmentMappingModal.jsx';
 import { Select } from '../../components/common/Select.jsx';
 
@@ -134,9 +133,12 @@ export default function UpcomingPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Accept opens the Accept form (AcceptCandidateModal): on success the candidate is now an
-  // Onboarding intern, so they drop out of this list on the reload below.
-  const [acceptingCandidate, setAcceptingCandidate] = useState(null);
+  // Accept (the tick) links the intern record the Application portal already created — no form
+  // (upcomingCandidateService.acceptFromPortal()). On success they're in Onboarding, so they drop out
+  // of this list on the reload below; if the portal hasn't created their record, the reason is shown.
+  // A ref, not state: a quick double-click fires both clicks before a state update lands.
+  const acceptingRef = useRef(false);
+  const [acceptError, setAcceptError] = useState('');
   const [isMappingOpen, setIsMappingOpen] = useState(false);
 
   // Job department names (from the Recruitment system) that didn't resolve to a real department.
@@ -150,16 +152,29 @@ export default function UpcomingPage() {
   const [acceptedMessage, setAcceptedMessage] = useState('');
   const [planWarning, setPlanWarning] = useState('');
 
-  const handleAccept = (candidate) => {
+  const handleAccept = async (candidate) => {
+    if (acceptingRef.current) return;
+    acceptingRef.current = true;
     setAcceptedMessage('');
-    setAcceptingCandidate(candidate);
+    setPlanWarning('');
+    setAcceptError('');
+    try {
+      const result = await upcomingCandidateService.acceptFromPortal(candidate.id);
+      await handleAccepted(candidate, result);
+    } catch (err) {
+      setAcceptError(err?.message || `Could not accept ${candidate.fullName}. Please try again.`);
+    } finally {
+      acceptingRef.current = false;
+    }
   };
 
-  const handleAccepted = async (result) => {
-    const name = acceptingCandidate?.fullName || 'The candidate';
-    setAcceptingCandidate(null);
-    const ref = result?.intern?.refNumber ? ` as ${result.intern.refNumber}` : '';
-    const added = `${name} was added to the Interns database${ref} and is now in Onboarding and Personnel`;
+  const handleAccepted = async (candidate, result) => {
+    const name = candidate?.fullName || 'The candidate';
+    const ref = result?.intern?.refNumber ? ` (${result.intern.refNumber})` : '';
+    const statusNote = result?.intern?.status && result.intern.status !== 'Onboarding'
+      ? ` Note: their Interns database status is ${result.intern.status}, so they won't show on Onboarding → Progress until it's Onboarding.`
+      : '';
+    const added = `${name} was linked to their Interns database record${ref} and is now in Onboarding and Personnel${statusNote ? '.' + statusNote : ''}`;
     // Accept launches their onboarding plan too; if it couldn't, Accept still succeeded — say why.
     if (result?.plan?.status === 'not_launched') {
       setAcceptedMessage(`${added}.`);
@@ -214,12 +229,14 @@ export default function UpcomingPage() {
           onChanged={() => loadData()}
         />
       )}
-      {acceptingCandidate && (
-        <AcceptCandidateModal
-          candidate={acceptingCandidate}
-          onClose={() => setAcceptingCandidate(null)}
-          onAccepted={handleAccepted}
-        />
+      {acceptError && (
+        <div className="accept-plan-warning" role="alert">
+          <AlertTriangle size={15} />
+          <span>{acceptError}</span>
+          <button type="button" className="modal-close-btn" aria-label="Dismiss" onClick={() => setAcceptError('')}>
+            <X size={14} />
+          </button>
+        </div>
       )}
       {acceptedMessage && (
         <div className="sync-status-text" role="status" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', margin: '0 0 1rem' }}>
