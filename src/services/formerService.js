@@ -9,6 +9,7 @@ import {
   OTHER_EXIT_TYPE,
   formatTenure,
   buildLifecycleHistory,
+  withDefaultExitInfo,
 } from '../domain/formerDomain.js';
 
 /**
@@ -59,9 +60,11 @@ export const formerService = {
       }
     });
 
+    // No recorded Exit Information -> the default (Contract Ended — see withDefaultExitInfo()), so
+    // the Exit Type column and filter show it too.
     let employeesWithExit = res.employees.map((emp) => ({
       ...emp,
-      exitInfo: exitByEmployeeId.get(emp.id) || null,
+      exitInfo: withDefaultExitInfo(exitByEmployeeId.get(emp.id) || null),
       offboardingInstance: offboardingByEmployeeId.get(emp.id) || null,
     }));
 
@@ -96,9 +99,10 @@ export const formerService = {
     return { employee, exitInfo, offboardingInstance, tenure, lifecycleHistory };
   },
 
+  // The recorded Exit Information, or the default (Contract Ended) when none has been recorded.
   async getExitInfo(employeeId) {
     const db = loadDatabase();
-    return (db.formerExitRecords || []).find((r) => r.employeeId === employeeId) || null;
+    return withDefaultExitInfo((db.formerExitRecords || []).find((r) => r.employeeId === employeeId) || null);
   },
 
   /**

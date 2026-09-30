@@ -31,6 +31,18 @@ export function isValidExitType(value) {
   return EXIT_TYPES.includes(value);
 }
 
+// Everyone reaches Former through Offboarding (the Interns DB moves them on after their internship
+// end date), so a person with no recorded Exit Information is shown as having exited this way.
+// Applied when reading (formerService), never written: an Exit Type recorded through Edit Exit
+// Information always takes precedence, and the stored data stays exactly as it was.
+export const DEFAULT_EXIT_TYPE = 'Contract Ended';
+
+/** The recorded Exit Information, or the default one (flagged `isDefault`) when none is recorded. */
+export function withDefaultExitInfo(exitInfo) {
+  if (exitInfo && exitInfo.exitType) return exitInfo;
+  return { ...(exitInfo || {}), exitType: DEFAULT_EXIT_TYPE, customExitType: null, exitRemarks: exitInfo?.exitRemarks || '', isDefault: true };
+}
+
 // The one controlled Exit Type value that requires a free-text elaboration (customExitType) —
 // distinct from Exit Remarks, which is optional additional context on ANY Exit Type, not a
 // substitute for naming what "Other" actually was.
