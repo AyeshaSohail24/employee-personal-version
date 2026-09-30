@@ -367,11 +367,11 @@ export default function HistoricalRecordPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem', marginBottom: '1rem' }}>
               <ProfileField label="Plan Status" value={offboardingInstance.derivedStatus} />
               <ProfileField label="Tasks Completed" value={`${offboardingInstance.progress.completedTasksCount} of ${offboardingInstance.progress.totalTasks}`} />
-              <ProfileField label="Final Working Date" value={offboardingInstance.startedAt ? formatDateDisplay(offboardingInstance.startedAt) : null} />
+              <ProfileField label="Final Working Date" value={offboardingInstance.anchorDate ? formatDateDisplay(offboardingInstance.anchorDate) : null} />
               <ProfileField label="Completed Date" value={offboardingInstance.completedAt ? formatDateDisplay(offboardingInstance.completedAt) : null} />
             </div>
             {isOffboardingCompleted && (
-              <Link to={`/offboarding/employees/${employee.id}`} className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}>
+              <Link to={`/offboarding/employees/${employee.id}?from=history`} className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}>
                 <ClipboardCheck size={14} />
                 <span>View Completed Offboarding</span>
               </Link>

@@ -11,6 +11,44 @@ import {
   buildLifecycleHistory,
   withDefaultExitInfo,
 } from '../domain/formerDomain.js';
+import { toLocalDateString } from '../utils/dateUtils.js';
+
+// A DATE column as the local (Malaysia) calendar date. They arrive as full timestamps whose UTC
+// form depends on the server's time zone ("2026-09-29T00:00:00.000Z" from a UTC server,
+// "2026-09-28T16:00:00.000Z" from a UTC+8 one) — both are the 29th in Malaysia, while slicing the
+// text would give the 28th for the second.
+const dateOnly = (value) => (value ? toLocalDateString(value) || null : null);
+
+/**
+ * This person's REAL offboarding plan (the same one Offboarding → Progress/History use — GET
+ * /offboarding/instances?employee_id=), summarised for the Historical Record page. Completion
+ * follows the Offboarding History rule: every required task done; the completion date is the plan's
+ * recorded completed_at, or — for a plan completed before that was recorded — the date its last task
+ * was ticked. null when they have no plan (or aren't a local record, e.g. "intern-…" ids).
+ */
+async function getRealOffboardingSummary(employeeId) {
+  if (String(employeeId).startsWith('intern-')) return null;
+  let plan;
+  try {
+    plan = await offboardingService.getRealInstanceForEmployee(employeeId);
+  } catch {
+    return null;
+  }
+  const instance = plan?.instance;
+  if (!instance) return null;
+  const tasks = plan.taskInstances || [];
+  const required = tasks.filter((t) => t.required);
+  const isComplete = required.length > 0 && required.every((t) => t.completed);
+  const lastTicked = tasks.map((t) => toLocalDateString(t.completed_at)).filter(Boolean).sort().pop() || null;
+  return {
+    id: instance.id,
+    startedAt: dateOnly(instance.started_at),
+    anchorDate: dateOnly(instance.anchor_date), // the Final Working Date (Day 0)
+    completedAt: isComplete ? (dateOnly(instance.completed_at) || lastTicked) : null,
+    derivedStatus: isComplete ? 'Completed' : 'In Progress',
+    progress: { completedTasksCount: tasks.filter((t) => t.completed).length, totalTasks: tasks.length },
+  };
+}
 
 /**
  * Data-access boundary for the Former Personnel module. Deliberately thin: Former is a
@@ -90,9 +128,12 @@ export const formerService = {
     const employee = await employeeService.getById(employeeId);
     if (!employee || employee.status !== 'Former') return null;
 
-    const exitInfo = await this.getExitInfo(employeeId);
-    const instances = await offboardingService.getAllInstances({ employeeId });
-    const offboardingInstance = instances && instances.length > 0 ? instances[0] : null;
+    // The real offboarding plan (not the old browser-stored mock plans, which never contain real
+    // people — that's why Offboarding Started/Completed used to show "—").
+    const [exitInfo, offboardingInstance] = await Promise.all([
+      this.getExitInfo(employeeId),
+      getRealOffboardingSummary(employee.id),
+    ]);
     const tenure = formatTenure(employee.startDate, employee.contractEndDate);
     const lifecycleHistory = buildLifecycleHistory(employee, offboardingInstance);
 
