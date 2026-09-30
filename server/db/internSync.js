@@ -61,6 +61,68 @@ export function applyInternOverlay(employee, intern) {
   };
 }
 
+// A Personnel list entry built IN MEMORY from a live Interns DB record, for an intern this app has
+// no local employee record for yet (e.g. just added in the Interns DB). Read-only: nothing is
+// created or saved anywhere — Personnel simply shows what the Interns DB has right now. Same shape
+// as a hydrated employee, with `id` "intern-<internId>" (read back by GET /employees/{id}) and
+// `readOnlyFromInternsDb: true`. Fields this app keeps itself (position, manager, tags…) are empty.
+export const INTERN_ONLY_ID_PREFIX = "intern-";
+
+export function internToReadOnlyEntry(intern, departmentsById = new Map()) {
+  const department = departmentsById.get(String(intern.department_id ?? "")) ?? null;
+  const firstName = intern.first_name ?? "";
+  const lastName = intern.last_name ?? "";
+  return {
+    id: `${INTERN_ONLY_ID_PREFIX}${intern.id}`,
+    employeeId: intern.ref_number ?? null,
+    firstName,
+    lastName,
+    fullName: `${firstName} ${lastName}`.trim(),
+    workEmail: intern.email_address ?? null,
+    workPhone: intern.phone_number ?? null,
+    photo: `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase(),
+    photoUrl: intern.photo_url ?? null,
+    status: intern.status ?? null,
+    workMode: intern.mode ?? null,
+    allowance: intern.allowance ?? null,
+    startDate: intern.internship_start_date ?? null,
+    contractEndDate: intern.internship_end_date ?? null,
+    internExternalId: intern.id,
+    internRefNumber: intern.ref_number ?? null,
+    department: department ? { id: department.id, name: department.name } : null,
+    position: null,
+    location: null,
+    schedule: null,
+    manager: null,
+    supervisor: null,
+    employeeType: { code: "INTERN", name: "Intern" },
+    directoryType: "Intern",
+    resolvedTags: [],
+    currentEmploymentRecord: null,
+    futureEmploymentRecord: null,
+    historicalEmploymentRecord: null,
+    effectiveEmploymentRecord: null,
+    readOnlyFromInternsDb: true,
+  };
+}
+
+// Interns the Interns DB has that no local employee record is linked to, as read-only list entries
+// (internToReadOnlyEntry()), honouring GET /employees' own status/department filters against their
+// live values. `interns` is the list the caller already fetched; null (Interns DB unreachable)
+// adds nothing. Reads only — never creates the missing local records.
+export async function listInternsWithoutLocalRecord(interns, { status, departmentId } = {}) {
+  if (!interns || interns.length === 0) return [];
+  const [linked] = await pool.query("SELECT intern_external_id FROM employees WHERE intern_external_id IS NOT NULL");
+  const linkedIds = new Set(linked.map((r) => r.intern_external_id));
+  const missing = interns.filter((i) => !linkedIds.has(i.id))
+    .filter((i) => !status || i.status === status)
+    .filter((i) => !departmentId || String(i.department_id ?? "") === String(departmentId));
+  if (missing.length === 0) return [];
+  const departments = await departmentsClient.listDepartments().catch(() => []);
+  const departmentsById = new Map(departments.map((d) => [String(d.id), d]));
+  return missing.map((intern) => internToReadOnlyEntry(intern, departmentsById));
+}
+
 // Resolves the signed-in gateway user's own photo for the app header — the
 // identity token itself carries no picture claim (sub/email/name/role only,
 // per MICROAPP_AUTH.md), so this follows that same doc's documented pattern

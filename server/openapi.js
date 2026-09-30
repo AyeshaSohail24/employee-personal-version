@@ -198,7 +198,7 @@ export const openapi = {
 
     "/employees/sync": {
       get: {
-        summary: "Read-only refresh: the same live-overlaid data GET /employees already returns, re-fetched on demand.",
+        summary: "Read-only refresh: the same live-overlaid data GET /employees already returns, re-fetched on demand — including interns the Interns DB has that this app has no record for (shown from their live record, never created). Fails if the Interns DB can't be reached.",
         security: scoped("employees:read"),
         "x-rizurf": {
           name: "Sync Personnel", purpose: "Retrieve the latest data from the Interns DB (the source of truth) and refresh what Personnel displays — never writes to the local roster or the Interns DB, so this never requires write permission",
