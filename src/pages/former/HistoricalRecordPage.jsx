@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, User, FilePlus, NotebookPen, PencilLine, ClipboardCheck, FileText, History, Check, X } from 'lucide-react';
 import { formerService } from '../../services/formerService.js';
 import { resolveExitTypeDisplay, EXIT_TYPES, DEFAULT_EXIT_TYPE } from '../../domain/formerDomain.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
 import AddDocumentModal from '../../components/former/AddDocumentModal.jsx';
-import AddNoteModal from '../../components/former/AddNoteModal.jsx';
 import { Select } from '../../components/common/Select.jsx';
 
 function ProfileField({ label, value }) {
@@ -60,7 +59,14 @@ export default function HistoricalRecordPage() {
   const [notFound, setNotFound] = useState(false);
 
   const [isAddDocumentOpen, setIsAddDocumentOpen] = useState(false);
-  const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
+  // HR Notes are added in place (no popup): Title + Note only, saved as a "General" note.
+  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteContent, setNoteContent] = useState('');
+  const [noteErrors, setNoteErrors] = useState({});
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const notesSectionRef = useRef(null);
+  const noteTitleRef = useRef(null);
   // Exit Type is edited in place (no popup): Edit swaps the value for a dropdown with Save/Cancel.
   const [isEditingExit, setIsEditingExit] = useState(false);
   const [draftExitType, setDraftExitType] = useState(DEFAULT_EXIT_TYPE);
@@ -99,6 +105,44 @@ export default function HistoricalRecordPage() {
   // page, so Add Document/Add Note/Edit Exit Information all feel immediate.
   const refreshDocuments = () => formerService.getDocuments(employeeId).then(setDocuments);
   const refreshNotes = () => formerService.getNotesForPersonnel(employeeId).then(setNotes);
+
+  const openNoteForm = () => {
+    setNoteTitle('');
+    setNoteContent('');
+    setNoteErrors({});
+    setIsAddingNote(true);
+    // Bring the HR Notes section into view (the top "Add Note" button is far from it) and focus Title.
+    setTimeout(() => {
+      notesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      noteTitleRef.current?.focus();
+    }, 0);
+  };
+
+  const cancelNoteForm = () => {
+    setIsAddingNote(false);
+    setNoteErrors({});
+  };
+
+  const saveNote = async () => {
+    const errors = {};
+    if (!noteTitle.trim()) errors.title = 'Title is required';
+    if (!noteContent.trim()) errors.content = 'Note is required';
+    if (Object.keys(errors).length > 0) {
+      setNoteErrors(errors);
+      return;
+    }
+    setIsSavingNote(true);
+    try {
+      await formerService.addNoteForPersonnel(record.employee.id, { title: noteTitle.trim(), content: noteContent.trim(), category: 'General' });
+      await refreshNotes();
+      setIsAddingNote(false);
+      setNoteErrors({});
+    } catch (err) {
+      setNoteErrors({ form: err.message || 'Failed to add note.' });
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
 
   const startEditingExit = () => {
     const current = record?.exitInfo?.exitType;
@@ -181,7 +225,7 @@ export default function HistoricalRecordPage() {
             <FilePlus size={14} />
             <span>Add Document</span>
           </button>
-          <button type="button" className="btn-primary" onClick={() => setIsAddNoteOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+          <button type="button" className="btn-primary" onClick={openNoteForm} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
             <NotebookPen size={14} />
             <span>Add Note</span>
           </button>
@@ -374,21 +418,69 @@ export default function HistoricalRecordPage() {
         )}
       </ProfileSection>
 
-      {/* 6. HR Notes — reuses the EXISTING Notes module; also visible on /notes. */}
+      {/* 6. HR Notes — reuses the EXISTING Notes module; also visible on /notes. Added in place. */}
+      <div ref={notesSectionRef}>
       <ProfileSection
         title="HR Notes"
         action={
-          <button
-            type="button"
-            className="btn-compact-override"
-            onClick={() => setIsAddNoteOpen(true)}
-            style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
-          >
-            <NotebookPen size={12} />
-            <span>Add Note</span>
-          </button>
+          isAddingNote ? null : (
+            <button
+              type="button"
+              className="btn-compact-override"
+              onClick={openNoteForm}
+              style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
+            >
+              <NotebookPen size={12} />
+              <span>Add Note</span>
+            </button>
+          )
         }
       >
+        {isAddingNote && (
+          <div
+            className="former-note-inline-form"
+            onKeyDown={(e) => { if (e.key === 'Escape' && !isSavingNote) cancelNoteForm(); }}
+            style={{ padding: '0.75rem', marginBottom: '0.9rem', border: '1px solid var(--color-primary-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-light)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+          >
+            {noteErrors.form && <div style={{ fontSize: '0.78rem', color: '#B91C1C' }}>{noteErrors.form}</div>}
+            <div>
+              <label htmlFor="former-note-title" className="form-label">Title <span className="required-star">*</span></label>
+              <input
+                id="former-note-title"
+                ref={noteTitleRef}
+                type="text"
+                className="form-input"
+                value={noteTitle}
+                maxLength={255}
+                disabled={isSavingNote}
+                onChange={(e) => { setNoteTitle(e.target.value); if (noteErrors.title) setNoteErrors((p) => ({ ...p, title: null })); }}
+              />
+              {noteErrors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{noteErrors.title}</span>}
+            </div>
+            <div>
+              <label htmlFor="former-note-content" className="form-label">Note <span className="required-star">*</span></label>
+              <textarea
+                id="former-note-content"
+                className="form-textarea"
+                rows={4}
+                value={noteContent}
+                disabled={isSavingNote}
+                onChange={(e) => { setNoteContent(e.target.value); if (noteErrors.content) setNoteErrors((p) => ({ ...p, content: null })); }}
+              />
+              {noteErrors.content && <span className="form-hint" style={{ color: '#DC2626' }}>{noteErrors.content}</span>}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
+              <button type="button" className="btn-secondary email-drafts-toolbar-btn" onClick={cancelNoteForm} disabled={isSavingNote} style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>
+                <X size={13} />
+                <span>Cancel</span>
+              </button>
+              <button type="button" className="btn-primary email-drafts-toolbar-btn" onClick={saveNote} disabled={isSavingNote} style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>
+                <Check size={13} />
+                <span>{isSavingNote ? 'Adding...' : 'Add Note'}</span>
+              </button>
+            </div>
+          </div>
+        )}
         {notes.length === 0 ? (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>No notes have been added yet.</p>
         ) : (
@@ -398,7 +490,7 @@ export default function HistoricalRecordPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>{note.title}</span>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    {note.category} · {formatDateDisplay(note.createdAt ? note.createdAt.slice(0, 10) : null)}
+                    {formatDateDisplay(note.createdAt ? note.createdAt.slice(0, 10) : null)}
                   </span>
                 </div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginTop: '0.35rem', whiteSpace: 'pre-wrap' }}>{note.content}</div>
@@ -407,6 +499,7 @@ export default function HistoricalRecordPage() {
           </div>
         )}
       </ProfileSection>
+      </div>
 
       {/* 7. Lifecycle History — only genuinely-available dates are shown; never invented, never
           defaulted to today. */}
@@ -431,12 +524,6 @@ export default function HistoricalRecordPage() {
         onClose={() => setIsAddDocumentOpen(false)}
         employeeId={employee.id}
         onSuccess={refreshDocuments}
-      />
-      <AddNoteModal
-        isOpen={isAddNoteOpen}
-        onClose={() => setIsAddNoteOpen(false)}
-        employeeId={employee.id}
-        onSuccess={refreshNotes}
       />
     </div>
   );
