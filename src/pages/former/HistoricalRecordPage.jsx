@@ -186,7 +186,9 @@ export default function HistoricalRecordPage() {
           <ProfileField label="Personnel ID" value={employee.employeeId} />
           <ProfileField label="Type" value={employee.directoryType} />
           <ProfileField label="Status" value="Former" />
-          <ProfileField label={isIntern ? 'Former Internship Role' : 'Former Position'} value={employee.position ? employee.position.name : null} />
+          {/* Interns have no role here (this app's positions table isn't used for them), so only an
+              employee's former position is shown. */}
+          {!isIntern && <ProfileField label="Former Position" value={employee.position ? employee.position.name : null} />}
           <ProfileField label="Former Department" value={employee.department ? employee.department.name : null} />
         </div>
       </ProfileSection>
@@ -194,7 +196,7 @@ export default function HistoricalRecordPage() {
       {/* 2. Employment / Internship Record */}
       <ProfileSection title={isIntern ? 'Internship Record' : 'Employment Record'}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
-          <ProfileField label={isIntern ? 'Internship Role' : 'Former Position'} value={employee.position ? employee.position.name : null} />
+          {!isIntern && <ProfileField label="Former Position" value={employee.position ? employee.position.name : null} />}
           <ProfileField label="Department" value={employee.department ? employee.department.name : null} />
           <ProfileField label="Supervisor" value={employee.supervisor?.fullName || employee.manager?.fullName} />
           <ProfileField label="Work Mode" value={employee.workMode} />
