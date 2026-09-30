@@ -1364,6 +1364,12 @@ body {
   min-width: 1080px;
 }
 
+/* Former Personnel has fewer columns than Personnel, so it needs far less room before scrolling —
+   the 1080px above would stretch its first column and add a scrollbar it doesn't need. */
+.directory-table-card .widget-table.former-list-table {
+  min-width: 720px;
+}
+
 .directory-table-card .widget-table th,
 .directory-table-card .widget-table td {
   padding: 0.7rem 0.55rem;

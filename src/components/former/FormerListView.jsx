@@ -15,15 +15,15 @@ export default function FormerListView({ employees = [] }) {
   return (
     <div className="directory-table-card">
       <div className="widget-table-wrapper">
-        <table className="widget-table">
+        <table className="widget-table former-list-table">
           <thead>
             <tr>
-              <th style={{ width: '28%' }}>PERSONNEL</th>
-              <th style={{ width: '11%' }}>TYPE</th>
-              <th style={{ width: '19%' }}>DEPARTMENT</th>
+              <th style={{ width: '22%' }}>PERSONNEL</th>
+              <th style={{ width: '12%' }}>TYPE</th>
+              <th style={{ width: '20%' }}>DEPARTMENT</th>
               <th style={{ width: '18%' }}>EMPLOYMENT PERIOD</th>
-              <th style={{ width: '11%' }}>TENURE</th>
-              <th style={{ width: '13%' }}>EXIT TYPE</th>
+              <th style={{ width: '13%' }}>TENURE</th>
+              <th style={{ width: '15%' }}>EXIT TYPE</th>
             </tr>
           </thead>
           <tbody>
