@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, User, FilePlus, NotebookPen, PencilLine, ClipboardCheck, FileText, History, Check, X } from 'lucide-react';
+import { ArrowLeft, User, FilePlus, NotebookPen, PencilLine, ClipboardCheck, FileText, History, Check, X, Trash2 } from 'lucide-react';
 import { formerService } from '../../services/formerService.js';
 import { resolveExitTypeDisplay, EXIT_TYPES, DEFAULT_EXIT_TYPE } from '../../domain/formerDomain.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
@@ -153,6 +153,20 @@ export default function HistoricalRecordPage() {
       setDocErrors({ form: err.message || 'Failed to add document.' });
     } finally {
       setIsSavingDocument(false);
+    }
+  };
+
+  const [deletingDocumentId, setDeletingDocumentId] = useState(null);
+  const deleteDocument = async (doc) => {
+    if (!window.confirm(`Delete the document "${doc.title}"?\n\nThis removes it from ${record.employee.fullName}'s record. This can't be undone.`)) return;
+    setDeletingDocumentId(doc.id);
+    try {
+      await formerService.deleteDocument(record.employee.id, doc.id);
+      await refreshDocuments();
+    } catch (err) {
+      alert(`Failed to delete the document: ${err.message}`);
+    } finally {
+      setDeletingDocumentId(null);
     }
   };
 
@@ -511,7 +525,7 @@ export default function HistoricalRecordPage() {
             {documents.map((doc) => (
               <div key={doc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.75rem', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
                 <FileText size={18} style={{ color: 'var(--color-primary)', flexShrink: 0, marginTop: '0.1rem' }} />
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>{doc.title}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
                     {/* Type/date only on older documents that recorded them. */}
@@ -521,6 +535,17 @@ export default function HistoricalRecordPage() {
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginTop: '0.35rem' }}>{doc.description}</div>
                   )}
                 </div>
+                <button
+                  type="button"
+                  className="plan-task-icon-btn plan-task-icon-btn-danger"
+                  title="Delete this document"
+                  aria-label={`Delete ${doc.title}`}
+                  disabled={deletingDocumentId === doc.id}
+                  onClick={() => deleteDocument(doc)}
+                  style={{ flexShrink: 0 }}
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
             ))}
           </div>

@@ -244,6 +244,16 @@ export const formerService = {
     return newDoc;
   },
 
+  /** Removes one document record from this Personnel ID (the same browser-stored metadata addDocument() writes). */
+  async deleteDocument(employeeId, documentId) {
+    const db = loadDatabase();
+    const docs = db.employeeDocuments || [];
+    const remaining = docs.filter((d) => !(d.id === documentId && String(d.employeeId) === String(employeeId)));
+    if (remaining.length === docs.length) throw new Error('That document no longer exists.');
+    db.employeeDocuments = remaining;
+    saveDatabase(db);
+  },
+
   /**
    * Notes linked to this Personnel ID — reuses the existing Notes module's own getAll() with its
    * new (additive, optional) relatedEmployeeId filter, never a second notes store. Scoped to
