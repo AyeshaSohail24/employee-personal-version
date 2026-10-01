@@ -214,6 +214,9 @@ This permanently removes their offboarding plan and its tasks from History. Thei
           <p className="page-subtitle">
             View and track individual offboarding progress for interns.
           </p>
+          <p className="directory-row-click-hint">
+            <strong>Note:</strong> Click the Completed Exit Plans card to view history.
+          </p>
         </div>
       </div>
 
@@ -304,10 +307,6 @@ This permanently removes their offboarding plan and its tasks from History. Thei
           <div className="summary-card-subtext">Offboarding workflows completed</div>
         </button>
       </div>
-
-      <p className="directory-row-click-hint onboarding-summary-note">
-        <strong>Note:</strong> Click the Completed Exit Plans card to view history.
-      </p>
 
       {/* Tabs on the left, search on the right — the search box filters whichever tab is open. */}
       <div className="underline-tabs onboarding-tabs-row" style={{ marginBottom: '1.25rem' }}>
