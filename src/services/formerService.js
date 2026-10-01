@@ -256,6 +256,41 @@ export const formerService = {
     return newDoc;
   },
 
+  /**
+   * Edits one document: its title and description, and — only when a new `file` is given — replaces
+   * its stored file (name, size and type follow). Leaving `file` out keeps the current file.
+   */
+  async updateDocument(employeeId, documentId, { title, description = '', file = null } = {}) {
+    if (!title || !title.trim()) {
+      throw new Error('Document Title is required.');
+    }
+    const db = loadDatabase();
+    const docs = db.employeeDocuments || [];
+    const index = docs.findIndex((d) => d.id === documentId && String(d.employeeId) === String(employeeId));
+    if (index === -1) throw new Error('That document no longer exists.');
+
+    if (file) {
+      try {
+        await saveDocumentFile(documentId, file);
+      } catch (err) {
+        throw new Error(`The new file couldn't be saved in this browser (${err?.message || 'storage unavailable'}).`);
+      }
+    }
+
+    const updated = {
+      ...docs[index],
+      title: title.trim(),
+      description: (description || '').trim(),
+      ...(file ? { fileName: file.name, fileSize: file.size, fileType: file.type || null, hasFile: true } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    // Re-read before writing: the file save above was asynchronous.
+    const fresh = loadDatabase();
+    fresh.employeeDocuments = (fresh.employeeDocuments || []).map((d) => (d.id === documentId ? updated : d));
+    saveDatabase(fresh);
+    return updated;
+  },
+
   /** The stored file for a document (a File/Blob), or null if none was saved (older documents). */
   async getDocumentFile(documentId) {
     return getDocumentFile(documentId).catch(() => null);

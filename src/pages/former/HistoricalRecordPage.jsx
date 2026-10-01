@@ -114,6 +114,7 @@ export default function HistoricalRecordPage() {
   const refreshNotes = () => formerService.getNotesForPersonnel(employeeId).then(setNotes);
 
   const openDocumentForm = () => {
+    setEditingDocId(null); // one document form open at a time
     setDocTitle('');
     setDocFile(null);
     setDocDescription('');
@@ -183,6 +184,50 @@ export default function HistoricalRecordPage() {
       a.remove();
     }
     setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
+  // Editing a document in place (no popup): Title, Description and an optional replacement file.
+  const [editingDocId, setEditingDocId] = useState(null);
+  const [editDocTitle, setEditDocTitle] = useState('');
+  const [editDocDescription, setEditDocDescription] = useState('');
+  const [editDocFile, setEditDocFile] = useState(null);
+  const [editDocErrors, setEditDocErrors] = useState({});
+  const [isSavingDocEdit, setIsSavingDocEdit] = useState(false);
+
+  const startEditingDocument = (doc) => {
+    setIsAddingDocument(false);
+    setEditingDocId(doc.id);
+    setEditDocTitle(doc.title || '');
+    setEditDocDescription(doc.description || '');
+    setEditDocFile(null);
+    setEditDocErrors({});
+  };
+
+  const cancelEditingDocument = () => {
+    setEditingDocId(null);
+    setEditDocErrors({});
+  };
+
+  const saveDocumentEdit = async () => {
+    if (!editDocTitle.trim()) {
+      setEditDocErrors({ title: 'Document Title is required' });
+      return;
+    }
+    setIsSavingDocEdit(true);
+    try {
+      await formerService.updateDocument(record.employee.id, editingDocId, {
+        title: editDocTitle.trim(),
+        description: editDocDescription.trim(),
+        file: editDocFile,
+      });
+      await refreshDocuments();
+      setEditingDocId(null);
+      setEditDocErrors({});
+    } catch (err) {
+      setEditDocErrors({ form: err.message || 'Failed to save the document.' });
+    } finally {
+      setIsSavingDocEdit(false);
+    }
   };
 
   const [deletingDocumentId, setDeletingDocumentId] = useState(null);
@@ -551,7 +596,66 @@ export default function HistoricalRecordPage() {
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>No documents have been added yet.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {documents.map((doc) => (
+            {documents.map((doc) => (editingDocId === doc.id ? (
+              <div
+                key={doc.id}
+                className="former-document-edit-form"
+                onKeyDown={(e) => { if (e.key === 'Escape' && !isSavingDocEdit) cancelEditingDocument(); }}
+                style={{ padding: '0.75rem', border: '1px solid var(--color-primary-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-light)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+              >
+                {editDocErrors.form && <div style={{ fontSize: '0.78rem', color: '#B91C1C' }}>{editDocErrors.form}</div>}
+                <div>
+                  <label htmlFor="former-doc-edit-title" className="form-label">Document Title <span className="required-star">*</span></label>
+                  <input
+                    id="former-doc-edit-title"
+                    type="text"
+                    className="form-input"
+                    value={editDocTitle}
+                    maxLength={255}
+                    autoFocus
+                    disabled={isSavingDocEdit}
+                    onChange={(e) => { setEditDocTitle(e.target.value); if (editDocErrors.title) setEditDocErrors((p) => ({ ...p, title: null })); }}
+                  />
+                  {editDocErrors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{editDocErrors.title}</span>}
+                </div>
+                <div>
+                  <label htmlFor="former-doc-edit-file" className="form-label">Replace file <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
+                  <input
+                    id="former-doc-edit-file"
+                    type="file"
+                    className="form-input"
+                    disabled={isSavingDocEdit}
+                    onChange={(e) => setEditDocFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                  />
+                  <span className="form-hint" style={{ color: 'var(--text-muted)' }}>
+                    {editDocFile
+                      ? `New file: ${editDocFile.name} (${Math.max(1, Math.round(editDocFile.size / 1024))} KB)`
+                      : `Current file: ${doc.fileName || '—'} — leave empty to keep it.`}
+                  </span>
+                </div>
+                <div>
+                  <label htmlFor="former-doc-edit-description" className="form-label">Description <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
+                  <textarea
+                    id="former-doc-edit-description"
+                    className="form-textarea"
+                    rows={3}
+                    value={editDocDescription}
+                    disabled={isSavingDocEdit}
+                    onChange={(e) => setEditDocDescription(e.target.value)}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
+                  <button type="button" className="btn-secondary email-drafts-toolbar-btn" onClick={cancelEditingDocument} disabled={isSavingDocEdit} style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>
+                    <X size={13} />
+                    <span>Cancel</span>
+                  </button>
+                  <button type="button" className="btn-primary email-drafts-toolbar-btn" onClick={saveDocumentEdit} disabled={isSavingDocEdit} style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>
+                    <Check size={13} />
+                    <span>{isSavingDocEdit ? 'Saving...' : 'Save'}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
               <div
                 key={doc.id}
                 className={doc.hasFile ? 'directory-table-row' : undefined}
@@ -578,19 +682,31 @@ export default function HistoricalRecordPage() {
                     </div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  className="plan-task-icon-btn plan-task-icon-btn-danger"
-                  title="Delete this document"
-                  aria-label={`Delete ${doc.title}`}
-                  disabled={deletingDocumentId === doc.id}
-                  onClick={(e) => { e.stopPropagation(); deleteDocument(doc); }}
-                  style={{ flexShrink: 0 }}
-                >
-                  <Trash2 size={14} />
-                </button>
+                <div className="plan-task-actions" style={{ flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    className="plan-task-icon-btn"
+                    title="Edit this document"
+                    aria-label={`Edit ${doc.title}`}
+                    onClick={(e) => { e.stopPropagation(); startEditingDocument(doc); }}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <PencilLine size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="plan-task-icon-btn plan-task-icon-btn-danger"
+                    title="Delete this document"
+                    aria-label={`Delete ${doc.title}`}
+                    disabled={deletingDocumentId === doc.id}
+                    onClick={(e) => { e.stopPropagation(); deleteDocument(doc); }}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-            ))}
+            )))}
           </div>
         )}
       </ProfileSection>
