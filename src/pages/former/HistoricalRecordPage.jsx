@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, User, FilePlus, NotebookPen, PencilLine, ClipboardCheck, FileText, History, Check, X, Trash2 } from 'lucide-react';
 import { formerService } from '../../services/formerService.js';
 import { resolveExitTypeDisplay, EXIT_TYPES, DEFAULT_EXIT_TYPE } from '../../domain/formerDomain.js';
@@ -51,6 +51,7 @@ const LIFECYCLE_STAGE_LABELS = {
 
 export default function HistoricalRecordPage() {
   const { employeeId } = useParams();
+  const navigate = useNavigate();
   const [record, setRecord] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -409,21 +410,6 @@ export default function HistoricalRecordPage() {
         >
           <ArrowLeft size={14} /> Back to Former
         </Link>
-
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <Link to={`/employees/${employee.id}`} className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}>
-            <User size={14} />
-            <span>View Personnel Details</span>
-          </Link>
-          <button type="button" className="btn-secondary" onClick={openDocumentForm} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-            <FilePlus size={14} />
-            <span>Add Document</span>
-          </button>
-          <button type="button" className="btn-primary" onClick={openNoteForm} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-            <NotebookPen size={14} />
-            <span>Add Note</span>
-          </button>
-        </div>
       </div>
 
       {/* Identity Header */}
@@ -454,7 +440,20 @@ export default function HistoricalRecordPage() {
       </div>
 
       {/* 1. Former Personnel Summary */}
-      <ProfileSection title="Former Personnel Summary">
+      <ProfileSection
+        title="Former Personnel Summary"
+        action={
+          <button
+            type="button"
+            className="btn-compact-override"
+            onClick={() => navigate(`/employees/${employee.id}`)}
+            style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
+          >
+            <User size={12} />
+            <span>View Personnel Details</span>
+          </button>
+        }
+      >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
           <ProfileField label="Full Name" value={employee.fullName} />
           <ProfileField label="Personnel ID" value={employee.employeeId} />
