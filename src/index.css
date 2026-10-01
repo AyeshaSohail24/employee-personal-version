@@ -8548,3 +8548,47 @@ input.form-control:focus {
   flex-shrink: 0;
   margin-top: 0.1rem;
 }
+
+/* Former record — section header actions (View Personnel Details, Edit, Add Document, Add Note) */
+.former-section-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.775rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--color-primary-active);
+  background-color: var(--color-primary-light);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.former-section-action svg {
+  flex-shrink: 0;
+}
+
+.former-section-action:hover {
+  color: #FFFFFF;
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.former-section-action:active {
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(0);
+}
+
+.former-section-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.3);
+}

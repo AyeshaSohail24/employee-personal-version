@@ -445,11 +445,10 @@ export default function HistoricalRecordPage() {
         action={
           <button
             type="button"
-            className="btn-compact-override"
+            className="former-section-action"
             onClick={() => navigate(`/employees/${employee.id}`)}
-            style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
           >
-            <User size={12} />
+            <User size={14} />
             <span>View Personnel Details</span>
           </button>
         }
@@ -510,11 +509,10 @@ export default function HistoricalRecordPage() {
           ) : (
             <button
               type="button"
-              className="btn-compact-override"
+              className="former-section-action"
               onClick={startEditingExit}
-              style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
             >
-              <PencilLine size={12} />
+              <PencilLine size={14} />
               <span>Edit</span>
             </button>
           )
@@ -581,11 +579,10 @@ export default function HistoricalRecordPage() {
           isAddingDocument ? null : (
             <button
               type="button"
-              className="btn-compact-override"
+              className="former-section-action"
               onClick={openDocumentForm}
-              style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
             >
-              <FilePlus size={12} />
+              <FilePlus size={14} />
               <span>Add Document</span>
             </button>
           )
@@ -775,11 +772,10 @@ export default function HistoricalRecordPage() {
           isAddingNote ? null : (
             <button
               type="button"
-              className="btn-compact-override"
+              className="former-section-action"
               onClick={openNoteForm}
-              style={{ textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}
             >
-              <NotebookPen size={12} />
+              <NotebookPen size={14} />
               <span>Add Note</span>
             </button>
           )
