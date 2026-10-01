@@ -224,6 +224,9 @@ This permanently removes their onboarding plan and its tasks from History. Their
           <p className="page-subtitle">
             View and track individual onboarding progress for interns.
           </p>
+          <p className="directory-row-click-hint">
+            <strong>Note:</strong> Click the Completed Plans card to view history.
+          </p>
         </div>
       </div>
 
@@ -314,10 +317,6 @@ This permanently removes their onboarding plan and its tasks from History. Their
           <div className="summary-card-subtext">Onboarding workflows completed</div>
         </button>
       </div>
-
-      <p className="directory-row-click-hint onboarding-summary-note">
-        <strong>Note:</strong> Click the Completed Plans card to view history.
-      </p>
 
       {/* Tabs on the left, search on the right — the search box filters whichever tab is open. */}
       <div className="underline-tabs onboarding-tabs-row" style={{ marginBottom: '1.25rem' }}>
