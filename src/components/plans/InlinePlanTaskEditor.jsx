@@ -35,8 +35,6 @@ const formatOffset = (n) => (n === null ? '' : n > 0 ? `+${n}` : String(n));
 export default function InlinePlanTaskEditor({ task = null, anchorDate, anchorLabel = 'start date', planLabel = 'onboarding', onSubmit, onCancel }) {
   const isNew = !task;
   const today = getTodayLocalDateString();
-  // TEMPORARY (testing only — revert to `today`): lets the due date be set to yesterday, to try the overdue row colour.
-  const earliestDueDate = addDaysToLocalDate(today, -1);
   const anchor = String(anchorDate || '').slice(0, 10);
   const originalDueDate = isNew ? '' : String(task.due_date || task.originally_calculated_due_date || '').slice(0, 10);
   // A new task starts on the anchor date, or today if that has already passed.
@@ -72,7 +70,7 @@ export default function InlinePlanTaskEditor({ task = null, anchorDate, anchorLa
       setError('Relative timing must be a whole number of days between -365 and 365 (e.g. -2, 0, 15).');
       return;
     }
-    if (dueDate < earliestDueDate && dueDate !== originalDueDate) { setError("The due date can't be before yesterday (testing)."); return; }
+    if (dueDate < today && dueDate !== originalDueDate) { setError("The due date can't be before today."); return; }
     setSaving(true);
     try {
       const details = { title: title.trim(), description: description.trim(), dueDate };
@@ -148,7 +146,7 @@ export default function InlinePlanTaskEditor({ task = null, anchorDate, anchorLa
           type="date"
           className="form-input plan-task-inline-date"
           value={dueDate}
-          min={earliestDueDate}
+          min={today}
           disabled={saving}
           onChange={(e) => handleDateChange(e.target.value)}
           aria-label="Due date"
