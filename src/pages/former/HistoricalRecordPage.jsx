@@ -548,25 +548,33 @@ export default function HistoricalRecordPage() {
       </ProfileSection>
 
       {/* 4. Offboarding Record — reuses the EXISTING offboarding system, never a duplicate. */}
-      <ProfileSection title="Offboarding Record">
+      <ProfileSection
+        title="Offboarding Record"
+        action={
+          isOffboardingCompleted ? (
+            <button
+              type="button"
+              className="former-section-action"
+              onClick={() => navigate(`/offboarding/employees/${employee.id}?from=history`)}
+            >
+              <ClipboardCheck size={14} />
+              <span>View Completed Offboarding</span>
+            </button>
+          ) : null
+        }
+      >
         {!offboardingInstance ? (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
             No offboarding plan is on record for this person.
           </p>
         ) : (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
               <ProfileField label="Plan Status" value={offboardingInstance.derivedStatus} />
               <ProfileField label="Tasks Completed" value={`${offboardingInstance.progress.completedTasksCount} of ${offboardingInstance.progress.totalTasks}`} />
               <ProfileField label="Final Working Date" value={offboardingInstance.anchorDate ? formatDateDisplay(offboardingInstance.anchorDate) : null} />
               <ProfileField label="Completed Date" value={offboardingInstance.completedAt ? formatDateDisplay(offboardingInstance.completedAt) : null} />
             </div>
-            {isOffboardingCompleted && (
-              <Link to={`/offboarding/employees/${employee.id}?from=history`} className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}>
-                <ClipboardCheck size={14} />
-                <span>View Completed Offboarding</span>
-              </Link>
-            )}
           </div>
         )}
       </ProfileSection>
