@@ -458,7 +458,7 @@ This permanently removes their onboarding plan and its tasks from History. Their
                           <span
                             className="presence-badge"
                             style={
-                              plan.status === 'Completed'
+                              plan.status === 'Completed' || (plan.status === 'In Progress' && plan.progressPercentage > 0)
                                 ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' }
                                 : plan.status === 'Needs Attention'
                                 ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA' }
