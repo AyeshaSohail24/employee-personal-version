@@ -244,7 +244,63 @@ export default function HistoricalRecordPage() {
     }
   };
 
+  // Editing an HR note in place (Title + Note), and deleting one — both through the Notes module.
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [editNoteTitle, setEditNoteTitle] = useState('');
+  const [editNoteContent, setEditNoteContent] = useState('');
+  const [editNoteErrors, setEditNoteErrors] = useState({});
+  const [isSavingNoteEdit, setIsSavingNoteEdit] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState(null);
+
+  const startEditingNote = (note) => {
+    setIsAddingNote(false);
+    setEditingNoteId(note.id);
+    setEditNoteTitle(note.title || '');
+    setEditNoteContent(note.content || '');
+    setEditNoteErrors({});
+  };
+
+  const cancelEditingNote = () => {
+    setEditingNoteId(null);
+    setEditNoteErrors({});
+  };
+
+  const saveNoteEdit = async () => {
+    const errors = {};
+    if (!editNoteTitle.trim()) errors.title = 'Title is required';
+    if (!editNoteContent.trim()) errors.content = 'Note is required';
+    if (Object.keys(errors).length > 0) {
+      setEditNoteErrors(errors);
+      return;
+    }
+    setIsSavingNoteEdit(true);
+    try {
+      await formerService.updateNoteForPersonnel(editingNoteId, { title: editNoteTitle.trim(), content: editNoteContent.trim() });
+      await refreshNotes();
+      setEditingNoteId(null);
+      setEditNoteErrors({});
+    } catch (err) {
+      setEditNoteErrors({ form: err.message || 'Failed to save the note.' });
+    } finally {
+      setIsSavingNoteEdit(false);
+    }
+  };
+
+  const deleteNote = async (note) => {
+    if (!window.confirm(`Delete the note "${note.title}"?\n\nIt's also removed from the Notes module. This can't be undone.`)) return;
+    setDeletingNoteId(note.id);
+    try {
+      await formerService.deleteNoteForPersonnel(note.id);
+      await refreshNotes();
+    } catch (err) {
+      alert(`Failed to delete the note: ${err.message}`);
+    } finally {
+      setDeletingNoteId(null);
+    }
+  };
+
   const openNoteForm = () => {
+    setEditingNoteId(null); // one note form open at a time
     setNoteTitle('');
     setNoteContent('');
     setNoteErrors({});
@@ -779,17 +835,85 @@ export default function HistoricalRecordPage() {
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>No notes have been added yet.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {notes.map((note) => (
-              <div key={note.id} style={{ padding: '0.75rem', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>{note.title}</span>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    {formatDateDisplay(note.createdAt ? note.createdAt.slice(0, 10) : null)}
-                  </span>
+            {notes.map((note) => (editingNoteId === note.id ? (
+              <div
+                key={note.id}
+                className="former-note-edit-form"
+                onKeyDown={(e) => { if (e.key === 'Escape' && !isSavingNoteEdit) cancelEditingNote(); }}
+                style={{ padding: '0.75rem', border: '1px solid var(--color-primary-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-light)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+              >
+                {editNoteErrors.form && <div style={{ fontSize: '0.78rem', color: '#B91C1C' }}>{editNoteErrors.form}</div>}
+                <div>
+                  <label htmlFor="former-note-edit-title" className="form-label">Title <span className="required-star">*</span></label>
+                  <input
+                    id="former-note-edit-title"
+                    type="text"
+                    className="form-input"
+                    value={editNoteTitle}
+                    maxLength={255}
+                    autoFocus
+                    disabled={isSavingNoteEdit}
+                    onChange={(e) => { setEditNoteTitle(e.target.value); if (editNoteErrors.title) setEditNoteErrors((p) => ({ ...p, title: null })); }}
+                  />
+                  {editNoteErrors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{editNoteErrors.title}</span>}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginTop: '0.35rem', whiteSpace: 'pre-wrap' }}>{note.content}</div>
+                <div>
+                  <label htmlFor="former-note-edit-content" className="form-label">Note <span className="required-star">*</span></label>
+                  <textarea
+                    id="former-note-edit-content"
+                    className="form-textarea"
+                    rows={4}
+                    value={editNoteContent}
+                    disabled={isSavingNoteEdit}
+                    onChange={(e) => { setEditNoteContent(e.target.value); if (editNoteErrors.content) setEditNoteErrors((p) => ({ ...p, content: null })); }}
+                  />
+                  {editNoteErrors.content && <span className="form-hint" style={{ color: '#DC2626' }}>{editNoteErrors.content}</span>}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
+                  <button type="button" className="btn-secondary email-drafts-toolbar-btn" onClick={cancelEditingNote} disabled={isSavingNoteEdit} style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>
+                    <X size={13} />
+                    <span>Cancel</span>
+                  </button>
+                  <button type="button" className="btn-primary email-drafts-toolbar-btn" onClick={saveNoteEdit} disabled={isSavingNoteEdit} style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>
+                    <Check size={13} />
+                    <span>{isSavingNoteEdit ? 'Saving...' : 'Save'}</span>
+                  </button>
+                </div>
               </div>
-            ))}
+            ) : (
+              <div key={note.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.75rem', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>{note.title}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      {formatDateDisplay(note.createdAt ? note.createdAt.slice(0, 10) : null)}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginTop: '0.35rem', whiteSpace: 'pre-wrap' }}>{note.content}</div>
+                </div>
+                <div className="plan-task-actions" style={{ flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    className="plan-task-icon-btn"
+                    title="Edit this note"
+                    aria-label={`Edit note ${note.title}`}
+                    onClick={() => startEditingNote(note)}
+                  >
+                    <PencilLine size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="plan-task-icon-btn plan-task-icon-btn-danger"
+                    title="Delete this note"
+                    aria-label={`Delete note ${note.title}`}
+                    disabled={deletingNoteId === note.id}
+                    onClick={() => deleteNote(note)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            )))}
           </div>
         )}
       </ProfileSection>

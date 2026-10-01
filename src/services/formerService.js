@@ -325,4 +325,14 @@ export const formerService = {
   async addNoteForPersonnel(employeeId, { title, content, category } = {}) {
     return notesService.create({ title, content, category, relatedEmployeeId: employeeId });
   },
+
+  /** Edits an HR note's title and text — through the EXISTING Notes module (same note there). */
+  async updateNoteForPersonnel(noteId, { title, content } = {}) {
+    return notesService.update(noteId, { title, content });
+  },
+
+  /** Permanently deletes an HR note — through the EXISTING Notes module, so it's gone there too. */
+  async deleteNoteForPersonnel(noteId) {
+    return notesService.deletePermanently(noteId);
+  },
 };
