@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Calendar,
   CheckCircle2,
-  RotateCcw,
   FileText,
   Pencil,
   Trash2,
@@ -37,54 +36,70 @@ export default function OffboardingEmployeeDetailPage() {
   const [instance, setInstance] = useState(null);
   const [taskInstances, setTaskInstances] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [togglingId, setTogglingId] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  // Ticking a task updates the page straight away; these keep the background save + refresh in step.
+  const savingTaskIds = useRef(new Set());
+  const changeVersion = useRef(0);
 
   useEffect(() => {
     loadData();
   }, [employeeId]);
 
-  const loadData = async () => {
-    setLoading(true);
+  // The full-page "Loading…" is only for the first load; refreshes after a change happen quietly.
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    const version = changeVersion.current;
     try {
       const [emp, plan] = await Promise.all([
         employeeService.getById(employeeId),
         offboardingService.getRealInstanceForEmployee(employeeId),
       ]);
+      // A tick made while this was loading wins — don't overwrite it with older data.
+      if (silent && version !== changeVersion.current) return;
       setEmployee(emp);
       setInstance(plan.instance);
       setTaskInstances(plan.taskInstances || []);
     } catch (err) {
+      if (silent) return;
       console.error('Failed to load offboarding employee detail:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  const handleToggleTaskComplete = async (taskInstanceId, isCompleted) => {
-    setTogglingId(taskInstanceId);
+  const handleToggleTaskComplete = async (task) => {
+    if (savingTaskIds.current.has(task.id)) return;
+    const completed = !task.completed;
+    const setTaskState = (done, completedAt) => setTaskInstances((prev) => prev.map((t) => (
+      t.id === task.id ? { ...t, completed: done, completed_at: completedAt } : t
+    )));
+    changeVersion.current += 1;
+    savingTaskIds.current.add(task.id);
+    setTaskState(completed, completed ? new Date().toISOString() : null);
     try {
-      await offboardingService.setRealTaskInstanceCompleted(taskInstanceId, !isCompleted);
-      await loadData();
+      await offboardingService.setRealTaskInstanceCompleted(task.id, completed);
     } catch (err) {
+      setTaskState(task.completed, task.completed_at);
       alert(`Failed to update task state: ${err.message}`);
     } finally {
-      setTogglingId(null);
+      savingTaskIds.current.delete(task.id);
     }
+    // Quietly pick up anything the server changed alongside (plan completed, status moved on).
+    if (savingTaskIds.current.size === 0) loadData({ silent: true });
   };
 
   const handleAddTask = async (details) => {
     await offboardingService.addRealTaskToInstance(instance.id, details);
     setIsAddingTask(false);
-    await loadData();
+    await loadData({ silent: true });
   };
 
   const handleSaveTask = async (details) => {
     await offboardingService.updateRealTaskInstance(editingTask.id, details);
     setEditingTask(null);
-    await loadData();
+    await loadData({ silent: true });
   };
 
   const handleDeleteTask = async (task) => {
@@ -97,7 +112,7 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
     setDeletingId(task.id);
     try {
       await offboardingService.deleteRealTaskInstance(task.id);
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       alert(`Failed to remove the task: ${err.message}`);
     } finally {
@@ -318,16 +333,14 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
                             </span>
                           ) : (
                           <div className="plan-task-actions">
-                            <button
-                              type="button"
-                              className={isDone ? 'btn-compact-clear' : 'btn-compact-override'}
-                              style={!isDone ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' } : undefined}
-                              disabled={togglingId === task.id}
-                              onClick={() => handleToggleTaskComplete(task.id, isDone)}
-                            >
-                              {isDone ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
-                              <span>{isDone ? 'Reopen' : 'Done'}</span>
-                            </button>
+                            <input
+                              type="checkbox"
+                              className="plan-task-checkbox"
+                              checked={isDone}
+                              onChange={() => handleToggleTaskComplete(task)}
+                              title={isDone ? 'Done — untick to reopen' : 'Tick when done'}
+                              aria-label={`${isDone ? 'Reopen' : 'Mark done'}: ${task.title}`}
+                            />
                             <button
                               type="button"
                               className="plan-task-icon-btn"
