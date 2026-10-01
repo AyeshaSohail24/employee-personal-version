@@ -201,7 +201,6 @@ export default function PersonnelDetailsPage() {
       <ProfileSection title="Employment / Internship Details">
         <ProfileField label="Personnel ID" value={profile.employment.personnelId} />
         <ProfileField label="Type" value={profile.employment.type} />
-        <ProfileField label="Position" value={profile.employment.position} />
         <ProfileField label="Department" value={profile.employment.department} />
         <ProfileField label="Work Mode" value={profile.employment.workMode} />
         <ProfileField label="Salary" value={profile.employment.salaryStatus} />
