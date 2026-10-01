@@ -13,7 +13,7 @@ import { employeeService } from '../../services/employeeService.js';
 import { offboardingService } from '../../services/offboardingService.js';
 import Avatar from '../../components/common/Avatar.jsx';
 import InlinePlanTaskEditor from '../../components/plans/InlinePlanTaskEditor.jsx';
-import { toLocalDateString } from '../../utils/dateUtils.js';
+import { toLocalDateString, getTodayLocalDateString } from '../../utils/dateUtils.js';
 
 // Real-data offboarding detail view for one (real) intern's local employee
 // record — mirrors onboarding/OnboardingEmployeeDetailPage.jsx. The plan is
@@ -143,6 +143,7 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
     );
   }
 
+  const today = getTodayLocalDateString();
   const totalTasks = taskInstances.length;
   const completedTasks = taskInstances.filter((t) => t.completed).length;
   const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -293,6 +294,12 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
                 <tbody>
                   {taskInstances.map((task) => {
                     const isDone = Boolean(task.completed);
+                    // Open tasks: light yellow on the due date, light red once it has passed.
+                    const dueDate = (task.due_date || task.originally_calculated_due_date || '').slice(0, 10);
+                    const dueClass = isHistorical || isDone || !dueDate ? ''
+                      : dueDate === today ? ' plan-task-row-due-today'
+                      : dueDate < today ? ' plan-task-row-overdue'
+                      : '';
 
                     if (!isHistorical && editingTask?.id === task.id) {
                       return (
@@ -308,7 +315,7 @@ Only ${name}'s plan changes — the task stays in Offboarding > Plans for everyo
                     }
 
                     return (
-                      <tr key={task.id} className="presence-table-row" style={isDone ? { opacity: 0.8, backgroundColor: '#F8FAFC' } : undefined}>
+                      <tr key={task.id} className={`presence-table-row${dueClass}`} style={isDone ? { opacity: 0.8, backgroundColor: '#F8FAFC' } : undefined}>
                         <td style={{ textAlign: 'center', fontWeight: 600 }}>{task.sequence}</td>
                         <td>
                           <div style={{ fontWeight: 600, color: 'var(--text-main)', textDecoration: isDone ? 'line-through' : 'none' }}>

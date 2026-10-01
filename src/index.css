@@ -8631,3 +8631,20 @@ input.form-control:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.3);
 }
+
+/* Onboarding / Offboarding plan detail — open tasks due today (light yellow) or past due (light red). */
+.presence-table-row.plan-task-row-due-today td {
+  background-color: #FEFCE8;
+}
+
+.presence-table-row.plan-task-row-due-today:hover td {
+  background-color: #FEF9C3;
+}
+
+.presence-table-row.plan-task-row-overdue td {
+  background-color: #FEF2F2;
+}
+
+.presence-table-row.plan-task-row-overdue:hover td {
+  background-color: #FEE2E2;
+}
