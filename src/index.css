@@ -8638,7 +8638,7 @@ input.form-control:focus {
 }
 
 .presence-table-row.plan-task-row-due-today:hover td {
-  background-color: #FEF9C3;
+  background-color: #FEFBE0;
 }
 
 .presence-table-row.plan-task-row-overdue td {
