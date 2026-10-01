@@ -93,7 +93,7 @@ export default function FormerPersonnelPage() {
         <div>
           <h1 className="page-title">Former Personnel</h1>
           <p className="page-description">Historical employment and internship records for people who have left Rizurf.</p>
-          <p className="directory-row-click-hint">Note: Click any row to view their record.</p>
+          <p className="directory-row-click-hint"><strong>Note:</strong> Click any row to view their record.</p>
         </div>
         <div className="header-actions">
           <div className="directory-count-badge">{resultCountText}</div>
