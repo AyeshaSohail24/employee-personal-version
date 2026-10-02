@@ -48,6 +48,9 @@ export default function UpcomingPage() {
   const [pageTab, setPageTab] = useState('messages');
   const [allCandidates, setAllCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed load is shown as such (with Retry) — never as an empty list, which looks like
+  // every candidate has disappeared.
+  const [loadError, setLoadError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusTab, setStatusTab] = useState('all');
   const [search, setSearch] = useState('');
@@ -73,8 +76,10 @@ export default function UpcomingPage() {
     setLoading(true);
     try {
       setAllCandidates(await fetchAll());
+      setLoadError('');
     } catch (err) {
       console.error('Failed to load Upcoming candidates:', err);
+      setLoadError(err?.message || 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -90,8 +95,10 @@ export default function UpcomingPage() {
     setIsRefreshing(true);
     try {
       setAllCandidates(await fetchAll());
+      setLoadError('');
     } catch (err) {
       console.error('Failed to refresh Upcoming candidates:', err);
+      setLoadError(err?.message || 'Unknown error');
     } finally {
       setIsRefreshing(false);
     }
@@ -116,6 +123,7 @@ export default function UpcomingPage() {
   // Gmail-style search: matches name, email, AND full message content (subject/body across
   // every sent/received message in each candidate's thread) via candidateEmailService, not just
   // the fields on the candidate record — debounced since it fetches each candidate's thread.
+  // It searches within the selected tab (All/Unseen/Rejected) and never marks replies seen.
   useEffect(() => {
     const q = search.trim();
     if (!q) {
@@ -124,14 +132,16 @@ export default function UpcomingPage() {
       return undefined;
     }
     setIsSearching(true);
+    let cancelled = false; // a newer search (or tab) replaces this one's results
+    const tab = STATUS_TABS.find((t) => t.key === statusTab) || STATUS_TABS[0];
     const timer = setTimeout(() => {
-      candidateEmailService.searchCandidates(q)
-        .then(setSearchResults)
+      candidateEmailService.searchCandidates(q, { match: tab.match })
+        .then((results) => { if (!cancelled) setSearchResults(results); })
         .catch((err) => console.error('Candidate search failed:', err))
-        .finally(() => setIsSearching(false));
+        .finally(() => { if (!cancelled) setIsSearching(false); });
     }, 250);
-    return () => clearTimeout(timer);
-  }, [search]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [search, statusTab]);
 
   // Accept (the tick) links the intern record the Application portal already created — no form
   // (upcomingCandidateService.acceptFromPortal()). On success they're in Onboarding, so they drop out
@@ -290,6 +300,92 @@ export default function UpcomingPage() {
         )}
       </div>
 
+      {!isSearchActive && (
+        <div className="filters-group" style={{ marginTop: '1.25rem' }}>
+          <div className="filter-item">
+            <label htmlFor="cand-sort-field">Sort by:</label>
+            <Select
+              id="cand-sort-field"
+              variant="filter"
+              value={sortField}
+              onChange={(e) => setSortField(e.target.value)}
+              options={SORT_FIELD_OPTIONS}
+            />
+          </div>
+          <div className="filter-item">
+            <label htmlFor="cand-sort-direction">Order:</label>
+            <Select
+              id="cand-sort-direction"
+              variant="filter"
+              value={sortDirection}
+              onChange={(e) => setSortDirection(e.target.value)}
+              options={SORT_DIRECTION_OPTIONS}
+            />
+          </div>
+          <div className="filter-item">
+            <label htmlFor="cand-dept-filter">Department:</label>
+            <Select
+              id="cand-dept-filter"
+              variant="filter"
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              placeholder="All Departments"
+              options={departments.map((d) => ({ value: d.id, label: d.name }))}
+            />
+          </div>
+          <button
+            type="button"
+            className="dept-mapping-link"
+            onClick={() => setIsMappingOpen(true)}
+            title="Link Recruitment department names to real departments"
+          >
+            <Link2 size={14} />
+            <span>Map departments</span>
+            {unmatchedDepartmentNames.length > 0 && (
+              <span className="underline-tab-badge">{unmatchedDepartmentNames.length}</span>
+            )}
+          </button>
+        </div>
+      )}
+
+      <div className="underline-tabs">
+        <button
+          type="button"
+          className="underline-tab-refresh-btn"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          title="Refresh candidates"
+        >
+          <RefreshCw size={15} className={isRefreshing ? 'icon-spin' : undefined} />
+        </button>
+        {STATUS_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={`underline-tab-item ${statusTab === tab.key ? 'active' : ''}`}
+            onClick={() => setStatusTab(tab.key)}
+          >
+            {tab.label}
+            {tab.key === 'unseen' && unseenCount > 0 && (
+              <span className="underline-tab-badge">{unseenCount}</span>
+            )}
+            {tab.key === 'rejected' && rejectedCount > 0 && (
+              <span className="underline-tab-badge underline-tab-badge-muted">{rejectedCount}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {loadError && (
+        <div className="accept-plan-warning" role="alert" style={{ marginTop: '1rem' }}>
+          <AlertTriangle size={15} />
+          <span>Couldn’t load candidates from the Recruitment system — the list below may be out of date or empty. ({loadError})</span>
+          <button type="button" className="btn-secondary" onClick={allCandidates.length ? handleRefresh : loadData} disabled={isRefreshing || loading}>
+            Retry
+          </button>
+        </div>
+      )}
+
       {isSearchActive ? (
         <div style={{ marginTop: '1.25rem' }}>
           {isSearching ? (
@@ -299,102 +395,30 @@ export default function UpcomingPage() {
           )}
         </div>
       ) : (
-        <>
-          <div className="filters-group" style={{ marginTop: '1.25rem' }}>
-            <div className="filter-item">
-              <label htmlFor="cand-sort-field">Sort by:</label>
-              <Select
-                id="cand-sort-field"
-                variant="filter"
-                value={sortField}
-                onChange={(e) => setSortField(e.target.value)}
-                options={SORT_FIELD_OPTIONS}
-              />
-            </div>
-            <div className="filter-item">
-              <label htmlFor="cand-sort-direction">Order:</label>
-              <Select
-                id="cand-sort-direction"
-                variant="filter"
-                value={sortDirection}
-                onChange={(e) => setSortDirection(e.target.value)}
-                options={SORT_DIRECTION_OPTIONS}
-              />
-            </div>
-            <div className="filter-item">
-              <label htmlFor="cand-dept-filter">Department:</label>
-              <Select
-                id="cand-dept-filter"
-                variant="filter"
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                placeholder="All Departments"
-                options={departments.map((d) => ({ value: d.id, label: d.name }))}
-              />
-            </div>
-            <button
-              type="button"
-              className="dept-mapping-link"
-              onClick={() => setIsMappingOpen(true)}
-              title="Link Recruitment department names to real departments"
-            >
-              <Link2 size={14} />
-              <span>Map departments</span>
-              {unmatchedDepartmentNames.length > 0 && (
-                <span className="underline-tab-badge">{unmatchedDepartmentNames.length}</span>
-              )}
-            </button>
-          </div>
-
-          <div className="underline-tabs">
-            <button
-              type="button"
-              className="underline-tab-refresh-btn"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              title="Refresh candidates"
-            >
-              <RefreshCw size={15} className={isRefreshing ? 'icon-spin' : undefined} />
-            </button>
-            {STATUS_TABS.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                className={`underline-tab-item ${statusTab === tab.key ? 'active' : ''}`}
-                onClick={() => setStatusTab(tab.key)}
-              >
-                {tab.label}
-                {tab.key === 'unseen' && unseenCount > 0 && (
-                  <span className="underline-tab-badge">{unseenCount}</span>
-                )}
-                {tab.key === 'rejected' && rejectedCount > 0 && (
-                  <span className="underline-tab-badge underline-tab-badge-muted">{rejectedCount}</span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ marginTop: '1.25rem' }}>
-            {loading ? (
-              <div className="directory-table-card skeleton-box" style={{ height: '320px' }} />
-            ) : candidates.length === 0 ? (
+        <div style={{ marginTop: '1.25rem' }}>
+          {loading ? (
+            <div className="directory-table-card skeleton-box" style={{ height: '320px' }} />
+          ) : candidates.length === 0 ? (
+            loadError ? null : (
               <DirectoryEmptyState
                 message={statusTab === 'rejected'
                   ? 'No rejected candidates.'
-                  : 'No candidates match the current search or filter criteria.'}
+                  : statusTab === 'unseen'
+                    ? 'No unseen replies.'
+                    : 'No candidates match the current search or filter criteria.'}
               />
-            ) : (
-              <CandidateTable
-                candidates={candidates}
-                mode={statusTab === 'rejected' ? 'rejected' : 'active'}
-                onAccept={handleAccept}
-                onReject={handleReject}
-                onUndoAccept={handleUndoAccept}
-                onRestore={handleRestore}
-              />
-            )}
-          </div>
-        </>
+            )
+          ) : (
+            <CandidateTable
+              candidates={candidates}
+              mode={statusTab === 'rejected' ? 'rejected' : 'active'}
+              onAccept={handleAccept}
+              onReject={handleReject}
+              onUndoAccept={handleUndoAccept}
+              onRestore={handleRestore}
+            />
+          )}
+        </div>
       )}
       </>
       )}

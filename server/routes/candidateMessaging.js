@@ -34,7 +34,8 @@ export const routes = {
       const messages = await db.listMessages(ctx.params.applicantId, parseListQuery(ctx.url));
       // Reading the thread marks its replies seen — mirrors opening a
       // message in an inbox; see db/candidateMessaging.js's own comment.
-      await db.markRepliesSeen(ctx.params.applicantId);
+      // ?markSeen=false reads without doing that (e.g. searching message text).
+      if (ctx.url.searchParams.get("markSeen") !== "false") await db.markRepliesSeen(ctx.params.applicantId);
       sendJson(res, ctx.cid, 200, { messages });
     },
     async post(req, res, ctx) {

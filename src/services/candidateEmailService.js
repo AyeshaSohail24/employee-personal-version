@@ -164,12 +164,20 @@ export const candidateEmailService = {
    * server-side (db/candidateMessaging.js's markRepliesSeen()) — opening the thread is what
    * clears the notification badge, nothing here does that separately.
    *
+   * The Recruitment API reuses a deleted applicant's id, so messages from before this applicant's
+   * record was created (`recordCreatedAt`, with a day's margin — it has no timezone) belonged to
+   * someone else and are left out. `markSeen: false` reads without clearing unseen replies.
+   *
    * @param {string} candidateId
+   * @param {{ markSeen?: boolean, recordCreatedAt?: string|null }} [options]
    * @returns {Promise<Array<{ id: string, direction: 'sent'|'received', subject: string, body: string, at: string }>>}
    */
-  async getThread(candidateId) {
-    const { messages } = await apiClient.get(`/candidates/${candidateId}/messages`);
+  async getThread(candidateId, { markSeen = true, recordCreatedAt = null } = {}) {
+    const { messages } = await apiClient.get(`/candidates/${candidateId}/messages${markSeen ? '' : '?markSeen=false'}`);
+    const createdTime = recordCreatedAt ? new Date(recordCreatedAt).getTime() : NaN;
+    const earliest = Number.isNaN(createdTime) ? -Infinity : createdTime - 24 * 60 * 60 * 1000;
     return messages
+      .filter((m) => !(new Date(m.sent_at).getTime() < earliest))
       .map((m) => ({
         id: String(m.id),
         direction: m.direction,
@@ -188,21 +196,28 @@ export const candidateEmailService = {
    * (no message text hit), the most recent message is still returned as the preview — the same
    * way Gmail shows a thread's latest message even when the match was on the sender.
    *
+   * Searching only reads the threads — it never marks anyone's replies seen (only opening a
+   * conversation does). `match` limits it to the Upcoming tab being viewed (All/Unseen/Rejected);
+   * without one it searches the active pipeline.
+   *
    * @param {string} query
+   * @param {{ match?: (candidate: Object) => boolean }} [options]
    * @returns {Promise<Array<{ candidate: Object, message: Object|null, matchedIn: 'name'|'email'|'message' }>>}
    */
-  async searchCandidates(query) {
+  async searchCandidates(query, { match } = {}) {
     const q = (query || '').trim().toLowerCase();
     if (!q) return [];
 
-    const candidates = await upcomingCandidateService.queryCandidates({ scope: 'active' });
+    const candidates = match
+      ? (await upcomingCandidateService.getAll()).filter(match)
+      : await upcomingCandidateService.queryCandidates({ scope: 'active' });
     const results = [];
 
     for (const candidate of candidates) {
       const nameMatch = normalizedIncludes(candidate.fullName, q);
       const emailMatch = normalizedIncludes(candidate.email, q);
 
-      const messages = await this.getThread(candidate.id);
+      const messages = await this.getThread(candidate.id, { markSeen: false, recordCreatedAt: candidate.recordCreatedAt });
       const messageMatch = messages.find((m) => normalizedIncludes(m.subject, q) || normalizedIncludes(m.body, q));
 
       if (!nameMatch && !emailMatch && !messageMatch) continue;

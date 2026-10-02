@@ -18,6 +18,25 @@ import { departmentsClient } from "../clients/departmentsClient.js";
 import { checkForReplies } from "../messaging/imapReplyChecker.js";
 import { loadDepartmentAliasMap, resolveDepartment } from "./departmentAliases.js";
 
+// The Recruitment API reuses an applicant id once that applicant is deleted, so anything this app
+// stored under an id (a conversion, messages, a Shortlisted date) from before the current
+// applicant's record was created belongs to someone else and must be ignored. Its created_at
+// carries no timezone (read as UTC here), so a day's margin keeps the comparison safe.
+const ID_REUSE_MARGIN_MS = 24 * 60 * 60 * 1000;
+
+function parseApiTimestamp(value) {
+  if (!value) return null;
+  const text = String(value).trim().replace(" ", "T");
+  const date = new Date(/(?:[zZ]|[+-]\d\d:?\d\d)$/.test(text) ? text : `${text}Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function predatesApplicant(at, applicantCreatedAt) {
+  if (!at || !applicantCreatedAt) return false;
+  const time = new Date(at).getTime();
+  return !Number.isNaN(time) && time < applicantCreatedAt.getTime() - ID_REUSE_MARGIN_MS;
+}
+
 export async function listConfirmationCandidates() {
   const [, applicants, jobs, departments, aliasMap] = await Promise.all([
     checkForReplies().catch(() => {}),
@@ -35,14 +54,27 @@ export async function listConfirmationCandidates() {
   // original text so HR can map it.
 
   // Anyone already accepted (converted into an intern — applicantConversion.js) leaves Upcoming
-  // straight away, even if moving their Recruitment phase to `completed` failed.
-  const [convertedRows] = await pool.query("SELECT DISTINCT applicant_id FROM applicant_conversions WHERE status = 'success'");
-  const convertedIds = new Set(convertedRows.map((r) => String(r.applicant_id)));
+  // straight away, even if moving their Recruitment phase to `completed` failed. A conversion
+  // recorded before this applicant's record existed was for a deleted applicant whose id was reused.
+  const [convertedRows] = await pool.query("SELECT applicant_id, created_at FROM applicant_conversions WHERE status = 'success'");
+  const conversionsById = new Map();
+  for (const row of convertedRows) {
+    const key = String(row.applicant_id);
+    if (!conversionsById.has(key)) conversionsById.set(key, []);
+    conversionsById.get(key).push(row.created_at);
+  }
+  const isConverted = (a) => (conversionsById.get(String(a.id)) ?? [])
+    .some((at) => !predatesApplicant(at, parseApiTimestamp(a.created_at)));
+
+  // Someone moved back out of `confirmation` has left Upcoming: forget their Shortlisted date so
+  // that, if they come back, it's the date they came back.
+  await forgetShortlistedDates(applicants.filter((a) => a.phase !== "confirmation").map((a) => String(a.id)));
 
   const candidates = applicants
-    .filter((a) => a.phase === "confirmation" && !convertedIds.has(String(a.id)))
+    .filter((a) => a.phase === "confirmation" && !isConverted(a))
     .map((a) => {
       const job = jobsById.get(a.job_id) ?? null;
+      const createdAt = parseApiTimestamp(a.created_at);
       const departmentName = job?.department ?? null;
       const matchedDepartment = departmentName ? resolveDepartment(departmentName, departments, aliasMap) : null;
 
@@ -65,6 +97,9 @@ export async function listConfirmationCandidates() {
         firstName: a.first_name ?? null,
         lastName: a.last_name ?? null,
         proposedStartDate: a.start_date ?? null,
+        // When this applicant's Recruitment record was created — the client uses it to leave out
+        // messages stored under a reused id (see ID_REUSE_MARGIN_MS above).
+        recordCreatedAt: createdAt ? createdAt.toISOString() : null,
       };
     });
 
@@ -75,14 +110,16 @@ export async function listConfirmationCandidates() {
     `SELECT applicant_id, direction, is_seen, sent_at FROM candidate_messages WHERE applicant_id IN (${placeholders})`,
     candidates.map((c) => c.id),
   );
+  const createdAtById = new Map(candidates.map((c) => [c.id, parseApiTimestamp(c.recordCreatedAt)]));
   const messagesByApplicantId = new Map();
   for (const row of messageRows) {
     const key = String(row.applicant_id);
+    if (predatesApplicant(row.sent_at, createdAtById.get(key))) continue; // a previous applicant's
     if (!messagesByApplicantId.has(key)) messagesByApplicantId.set(key, []);
     messagesByApplicantId.get(key).push(row);
   }
 
-  const shortlistedAtById = await recordShortlistedDates(candidates, messagesByApplicantId);
+  const shortlistedAtById = await recordShortlistedDates(candidates);
 
   return candidates.map((candidate) => {
     const messages = messagesByApplicantId.get(candidate.id) ?? [];
@@ -98,12 +135,13 @@ export async function listConfirmationCandidates() {
   });
 }
 
-// "Shortlisted" = the date a candidate first appeared in Upcoming. The Recruitment API records no
+// "Shortlisted" = the date a candidate came into Upcoming. The Recruitment API records no
 // shortlisted or phase-change time, so this app notes it itself (upcoming_candidates_seen) the
-// first time a candidate shows up in this list, and never changes it afterwards. For candidates
-// already in Upcoming before this was recorded, their earliest message is used when older than
-// today, since they must have been in Upcoming before HR emailed them.
-export async function recordShortlistedDates(candidates, messagesByApplicantId) {
+// first time a candidate shows up in this list, and keeps it while they stay in Upcoming. It's
+// forgotten when they're seen back out of `confirmation` (forgetShortlistedDates()), and a date
+// from before their Recruitment record was created belonged to a deleted applicant whose id was
+// reused — both start afresh from now.
+export async function recordShortlistedDates(candidates) {
   const ids = candidates.map((c) => c.id);
   const placeholders = ids.map(() => "?").join(",");
   const [seenRows] = await pool.query(
@@ -112,16 +150,16 @@ export async function recordShortlistedDates(candidates, messagesByApplicantId) 
   );
   const byId = new Map(seenRows.map((r) => [String(r.applicant_id), r.first_seen_at]));
 
+  const staleIds = candidates
+    .filter((c) => byId.has(c.id) && predatesApplicant(byId.get(c.id), parseApiTimestamp(c.recordCreatedAt)))
+    .map((c) => c.id);
+  if (staleIds.length > 0) {
+    await forgetShortlistedDates(staleIds);
+    for (const id of staleIds) byId.delete(id);
+  }
+
   const now = new Date();
-  const newRows = ids
-    .filter((id) => !byId.has(id))
-    .map((id) => {
-      const earliestMessage = (messagesByApplicantId.get(id) ?? [])
-        .map((m) => new Date(m.sent_at))
-        .filter((d) => !Number.isNaN(d.getTime()))
-        .sort((a, b) => a - b)[0];
-      return [id, earliestMessage && earliestMessage < now ? earliestMessage : now];
-    });
+  const newRows = ids.filter((id) => !byId.has(id)).map((id) => [id, now]);
 
   if (newRows.length > 0) {
     // INSERT IGNORE: if two requests race, the first recorded date wins.
@@ -134,4 +172,13 @@ export async function recordShortlistedDates(candidates, messagesByApplicantId) 
   }
 
   return new Map([...byId].map(([id, at]) => [id, at instanceof Date ? at.toISOString() : at]));
+}
+
+// Drops the recorded Shortlisted date for applicants no longer in Upcoming (see above).
+export async function forgetShortlistedDates(applicantIds) {
+  if (applicantIds.length === 0) return;
+  await pool.query(
+    `DELETE FROM upcoming_candidates_seen WHERE applicant_id IN (${applicantIds.map(() => "?").join(",")})`,
+    applicantIds,
+  );
 }
