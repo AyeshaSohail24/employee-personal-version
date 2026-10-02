@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh.js';
 import { RefreshCw, Search, X, CheckCircle2, Link2, AlertTriangle } from 'lucide-react';
 import { upcomingCandidateService } from '../../services/upcomingCandidateService.js';
 import { candidateEmailService } from '../../services/candidateEmailService.js';
@@ -72,22 +73,27 @@ export default function UpcomingPage() {
 
   const fetchAll = useCallback(() => upcomingCandidateService.getAll(), []);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  // `silent` (the automatic refresh): no loading screen, and a failure keeps the list shown
+  // (no error banner for a background refresh).
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       setAllCandidates(await fetchAll());
       setLoadError('');
     } catch (err) {
       console.error('Failed to load Upcoming candidates:', err);
-      setLoadError(err?.message || 'Unknown error');
+      if (!silent) setLoadError(err?.message || 'Unknown error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [fetchAll]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Re-read the candidates every 10 minutes while the tab is visible (src/hooks/useAutoRefresh.js).
+  useAutoRefresh(() => loadData({ silent: true }));
 
   // Manual refresh — reuses the same fetch as loadData() but never flips `loading`, so the
   // table stays visible (only the icon spins) instead of flashing back to the skeleton. Always

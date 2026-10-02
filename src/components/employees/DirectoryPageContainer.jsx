@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh.js';
 import { useSearchParams } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { employeeService } from '../../services/employeeService';
@@ -87,8 +88,9 @@ export default function DirectoryPageContainer({
   // Fetch queried employees whenever scope or filter states change. `sourceEmployees`, if given,
   // is filtered/sorted in place of a fresh GET /employees read — used by handleSync() below so the
   // live-overlaid (but never persisted) Sync Personnel result is what actually gets displayed.
-  const fetchEmployees = useCallback(async (sourceEmployees) => {
-    setLoading(true);
+  // `silent` (the automatic refresh): no loading screen, and a failure keeps the list shown.
+  const fetchEmployees = useCallback(async (sourceEmployees, { silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const res = await employeeService.queryEmployees({
         baseLifecycleScope,
@@ -107,13 +109,17 @@ export default function DirectoryPageContainer({
     } catch (err) {
       console.error('Failed to query employees:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [baseLifecycleScope, statusFilter, departmentId, typeFilter, modeFilter, search, sortBy]);
 
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
+
+  // An open Personnel page re-reads the live list (Interns DB) every 10 minutes while visible —
+  // read-only, same as a page load (src/hooks/useAutoRefresh.js).
+  useAutoRefresh(() => fetchEmployees(undefined, { silent: true }));
 
   // Sync Personnel: strictly read -> retrieve -> refresh/display (employeeService.syncEmployees(),
   // GET /employees/sync) — reads the local roster and overlays each intern-linked employee's live

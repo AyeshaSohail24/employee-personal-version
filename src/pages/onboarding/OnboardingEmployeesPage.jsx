@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh.js';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users,
@@ -171,25 +172,30 @@ This permanently removes their onboarding plan and its tasks from History. Their
     loadData();
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  // `silent` (the automatic refresh): no loading screen, and anything that fails to load keeps
+  // what's shown (including History).
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       // History failing (e.g. a slow Departments lookup) never blanks the current roster.
       const [roster, completed] = await Promise.all([
         onboardingService.getInternsProgress(),
         onboardingService.getOnboardingHistory().catch((err) => {
           console.error('Failed to load onboarding history:', err);
-          return [];
+          return silent ? null : [];
         }),
       ]);
       setInterns(roster);
-      setHistory(completed);
+      if (completed) setHistory(completed);
     } catch (err) {
       console.error('Failed to load interns:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  // Re-read the live roster every 10 minutes while the tab is visible (src/hooks/useAutoRefresh.js).
+  useAutoRefresh(() => loadData({ silent: true }));
 
   // Summary cards. Active = every current plan not yet completed (the overall workload), split into
   // In Progress (on track, including 0% plans) and Needs Attention (an overdue required task).

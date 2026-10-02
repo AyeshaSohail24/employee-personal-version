@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh.js';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users,
@@ -158,25 +159,30 @@ This permanently removes their offboarding plan and its tasks from History. Thei
     loadData();
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  // `silent` (the automatic refresh): no loading screen, and anything that fails to load keeps
+  // what's shown (including History).
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       // History failing (e.g. a slow Departments lookup) never blanks the current roster.
       const [roster, completed] = await Promise.all([
         offboardingService.getInternsProgress(),
         offboardingService.getOffboardingHistory().catch((err) => {
           console.error('Failed to load offboarding history:', err);
-          return [];
+          return silent ? null : [];
         }),
       ]);
       setInterns(roster);
-      setHistory(completed);
+      if (completed) setHistory(completed);
     } catch (err) {
       console.error('Failed to load interns:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  // Re-read the live roster every 10 minutes while the tab is visible (src/hooks/useAutoRefresh.js).
+  useAutoRefresh(() => loadData({ silent: true }));
 
   // Summary card metrics. Completed = every completed offboarding plan (History), including people
   // now Former — not only those still in the current roster.

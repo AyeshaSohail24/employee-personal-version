@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh.js';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { employeeService } from '../../services/employeeService.js';
@@ -93,6 +94,13 @@ export default function PersonnelDetailsPage() {
       cancelled = true;
     };
   }, [employeeId]);
+
+  // Quietly re-read their live details every 10 minutes while the tab is visible; a failed or empty
+  // read keeps what's shown.
+  useAutoRefresh(async () => {
+    const result = await employeeService.getProfile(employeeId);
+    if (result) setProfile(result);
+  });
 
   if (loading) {
     return (

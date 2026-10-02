@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh.js';
 import { UserCheck, UserPlus, UserMinus, UserX, Clock, AlertCircle, RefreshCw } from 'lucide-react';
 import { dashboardService } from '../../services/dashboardService';
 import StatCard from '../../components/dashboard/StatCard';
@@ -22,23 +23,29 @@ export default function DashboardPage() {
   const [error, setError] = useState(null);
   const [profileEmployeeId, setProfileEmployeeId] = useState(null);
 
-  const fetchDashboardData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `silent` (the automatic refresh): no loading screen, and a failure keeps the data shown.
+  const fetchDashboardData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const summary = await dashboardService.getDashboardSummary({ personnelType });
       setData(summary);
     } catch (err) {
       console.error('DashboardPage: Failed to fetch dashboard summary', err);
-      setError('Unable to load HR dashboard data. Please try again.');
+      if (!silent) setError('Unable to load HR dashboard data. Please try again.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [personnelType]);
 
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  // Re-read every 10 minutes while the tab is visible (src/hooks/useAutoRefresh.js).
+  useAutoRefresh(() => fetchDashboardData({ silent: true }));
 
   const personnelTypeSwitcher = (
     <div className="view-switcher-group">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh.js';
 import { History } from 'lucide-react';
 import { formerService } from '../../services/formerService.js';
 import { apiClient } from '../../services/apiClient.js';
@@ -41,8 +42,9 @@ export default function FormerPersonnelPage() {
     loadOptions();
   }, []);
 
-  const fetchFormerPersonnel = useCallback(async () => {
-    setLoading(true);
+  // `silent` (the automatic refresh): no loading screen, and a failure keeps the list shown.
+  const fetchFormerPersonnel = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const res = await formerService.getFormerDirectory({
         search,
@@ -57,13 +59,16 @@ export default function FormerPersonnelPage() {
     } catch (err) {
       console.error('Failed to query former personnel:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [search, typeFilter, departmentId, exitType, sortBy]);
 
   useEffect(() => {
     fetchFormerPersonnel();
   }, [fetchFormerPersonnel]);
+
+  // Re-read every 10 minutes while the tab is visible (src/hooks/useAutoRefresh.js).
+  useAutoRefresh(() => fetchFormerPersonnel({ silent: true }));
 
   const handleResetFilters = () => {
     setSearch('');
