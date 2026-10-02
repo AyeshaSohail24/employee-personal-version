@@ -41,7 +41,6 @@
 
   /* Sizing & Radius */
   --sidebar-width: 260px;
-  --sidebar-collapsed-width: 76px;
   --header-height: 64px;
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -73,8 +72,6 @@ body {
 
 /* App Shell Structure */
 .app-container {
-  /* Width the sidebar currently takes — the page and header follow it. */
-  --sidebar-current-width: var(--sidebar-width);
   display: flex;
   min-height: 100vh;
   width: 100%;
@@ -83,7 +80,7 @@ body {
 
 /* Sidebar Styling */
 .app-sidebar {
-  width: var(--sidebar-current-width);
+  width: var(--sidebar-width);
   background-color: var(--bg-sidebar);
   color: var(--text-on-dark);
   display: flex;
@@ -178,10 +175,10 @@ body {
 }
 
 .nav-item.active {
-  background-color: #FFFFFF;
-  color: var(--bg-sidebar);
+  background-color: var(--bg-sidebar-active);
+  color: #FFFFFF;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  border-left: 3px solid var(--color-primary);
 }
 
 .nav-item.active .nav-icon {
@@ -257,7 +254,7 @@ body {
 
 /* Main Content Area */
 .main-wrapper {
-  margin-left: var(--sidebar-current-width);
+  margin-left: var(--sidebar-width);
   padding-top: var(--header-height);
   flex: 1;
   display: flex;
@@ -271,7 +268,7 @@ body {
   position: fixed;
   top: 0;
   right: 0;
-  left: var(--sidebar-current-width);
+  left: var(--sidebar-width);
   height: var(--header-height);
   background-color: var(--glass-bg);
   backdrop-filter: var(--glass-backdrop);
@@ -931,7 +928,6 @@ body {
 
 @media (max-width: 768px) {
   .app-sidebar {
-    width: var(--sidebar-width);
     transform: translateX(-100%);
   }
   .app-sidebar.mobile-open {
@@ -8718,230 +8714,4 @@ input.form-control:focus {
 .dept-mapping-kind-job {
   background-color: #EFF6FF;
   color: #1D4ED8;
-}
-
-/* ==========================================================================
-   Sidebar — collapse toggle, icon rail, tooltips, flyout menus, phone backdrop
-   ========================================================================== */
-.app-container.sidebar-collapsed {
-  --sidebar-current-width: var(--sidebar-collapsed-width);
-}
-
-.sidebar-nav {
-  overflow-x: hidden;
-}
-
-.nav-section + .nav-section {
-  margin-top: 1.25rem;
-}
-
-.nav-label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.nav-group-title {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.nav-group-header.has-active {
-  color: #FFFFFF;
-  font-weight: 600;
-}
-
-.nav-item:focus-visible,
-.nav-group-header:focus-visible,
-.subnav-item:focus-visible,
-.sidebar-collapse-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--color-primary);
-}
-
-.brand-logo-wrap {
-  display: block;
-  overflow: hidden;
-  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* Collapse / expand button — white rounded square, like the reference. */
-.sidebar-collapse-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 8px;
-  background-color: #FFFFFF;
-  color: var(--bg-sidebar);
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  transition: transform 0.15s ease, background-color 0.15s ease;
-}
-
-.sidebar-collapse-btn:hover {
-  background-color: var(--color-primary-light);
-  transform: scale(1.06);
-}
-
-.sidebar-expand-row {
-  display: flex;
-  justify-content: center;
-  padding: 0.75rem 0 0.25rem;
-}
-
-/* Icon rail */
-.app-sidebar.is-collapsed .sidebar-header {
-  justify-content: center;
-  padding: 0;
-}
-
-.app-sidebar.is-collapsed .brand-logo-wrap {
-  width: 30px; /* just the building/R mark at the left of the logo */
-}
-
-.app-sidebar.is-collapsed .brand-logo {
-  max-width: none;
-  margin-left: -5px;
-}
-
-.app-sidebar.is-collapsed .sidebar-nav {
-  padding: 0.75rem 0.65rem;
-}
-
-.app-sidebar.is-collapsed .nav-section-title {
-  font-size: 0;
-  height: 1px;
-  padding: 0;
-  margin: 0 0.5rem 0.6rem;
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.app-sidebar.is-collapsed .nav-section + .nav-section {
-  margin-top: 0.85rem;
-}
-
-.app-sidebar.is-collapsed .nav-item,
-.app-sidebar.is-collapsed .nav-group-header {
-  justify-content: center;
-  padding: 0.65rem;
-  margin-bottom: 0.2rem;
-}
-
-.app-sidebar.is-collapsed .nav-label {
-  display: none;
-}
-
-.app-sidebar.is-collapsed .nav-group-header.has-active,
-.app-sidebar.is-collapsed .nav-group-header.is-open {
-  background-color: #FFFFFF;
-  color: var(--bg-sidebar);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-}
-
-.app-sidebar.is-collapsed .nav-group-header.has-active svg,
-.app-sidebar.is-collapsed .nav-item.active .nav-icon {
-  color: var(--color-primary);
-}
-
-/* Label tooltip beside an icon (collapsed rail) */
-.sidebar-tooltip {
-  position: fixed;
-  z-index: 60;
-  transform: translateY(-50%);
-  padding: 0.4rem 0.75rem;
-  border-radius: 8px;
-  background-color: #FFFFFF;
-  color: var(--text-main);
-  font-size: 0.8rem;
-  font-weight: 600;
-  white-space: nowrap;
-  pointer-events: none;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
-  animation: sidebar-pop 0.12s ease-out;
-}
-
-.sidebar-tooltip::before {
-  content: "";
-  position: absolute;
-  left: -4px;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  background-color: #FFFFFF;
-  transform: translateY(-50%) rotate(45deg);
-}
-
-/* Sub-page menu beside a group icon (collapsed rail) */
-.sidebar-flyout {
-  position: fixed;
-  z-index: 60;
-  min-width: 190px;
-  padding: 0.45rem;
-  border-radius: 12px;
-  background-color: #FFFFFF;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
-  animation: sidebar-pop 0.12s ease-out;
-}
-
-.sidebar-flyout-title {
-  padding: 0.35rem 0.6rem 0.4rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.sidebar-flyout-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.6rem;
-  border-radius: 8px;
-  color: var(--text-main);
-  font-size: 0.85rem;
-  font-weight: 500;
-  text-decoration: none;
-  transition: background-color 0.12s ease, color 0.12s ease;
-}
-
-.sidebar-flyout-item:hover,
-.sidebar-flyout-item:focus-visible {
-  outline: none;
-  background-color: var(--bg-subtle);
-}
-
-.sidebar-flyout-item.active {
-  background-color: var(--color-primary-light);
-  color: var(--color-primary-active);
-  font-weight: 600;
-}
-
-@keyframes sidebar-pop {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* Phone drawer backdrop */
-.sidebar-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 35;
-  background-color: rgba(15, 23, 42, 0.45);
-  animation: sidebar-pop 0.2s ease-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .app-sidebar,
-  .main-wrapper,
-  .app-header,
-  .brand-logo-wrap {
-    transition: none;
-  }
 }
