@@ -8715,3 +8715,148 @@ input.form-control:focus {
   background-color: #EFF6FF;
   color: #1D4ED8;
 }
+
+/* ==========================================================================
+   Sidebar: hover rail (desktop) / drawer (phone & tablet) — RIZURF_SIDEBAR_RAIL.md
+   Kept at the end of the file so these win over the base sidebar rules above.
+   ========================================================================== */
+.app-sidebar {
+  overflow: hidden; /* hides labels while the rail is narrow */
+}
+
+.sidebar-nav {
+  overflow-x: hidden;
+}
+
+.nav-item,
+.nav-group-header,
+.subnav-item {
+  white-space: nowrap; /* labels never wrap while the rail animates */
+}
+
+.nav-icon {
+  flex: none;
+}
+
+/* The logo's building mark alone (same image, cropped) — shown on the narrow rail. */
+.brand-icon {
+  display: none;
+  width: 30px;
+  overflow: hidden;
+}
+
+.brand-icon .brand-logo {
+  max-width: none;
+  margin-left: -5px;
+}
+
+.mobile-toggle {
+  display: none;
+}
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 35; /* above the header (30), below the drawer (40) */
+  background-color: rgba(15, 23, 42, 0.45);
+}
+
+/* ---------- Desktop: the hover rail ---------- */
+@media (min-width: 1001px) {
+  .app-sidebar {
+    width: 56px;
+    min-width: 56px;
+    transform: none;
+    transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Widen on hover or when a keyboard user tabs in. :has(:focus-visible), not :focus-within —
+     a mouse click must not leave it stuck open. */
+  .app-sidebar:hover,
+  .app-sidebar:has(:focus-visible) {
+    width: 208px;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.25);
+  }
+
+  /* The page and header reserve only the 56px rail; the widened rail overlaps them. */
+  .main-wrapper {
+    margin-left: 56px;
+  }
+
+  .app-header {
+    left: 56px;
+  }
+
+  /* Icons stay put while it widens: 7px + 12px item padding centres an 18px icon in 56px. */
+  .app-sidebar .sidebar-nav {
+    padding: 1rem 7px;
+  }
+
+  .app-sidebar .sidebar-header {
+    padding: 0 13px;
+  }
+
+  /* Labels, section titles and chevrons fade in with the width. */
+  .app-sidebar :is(.nav-text, .nav-section-title, .nav-chevron) {
+    opacity: 0;
+    transition: opacity 0.14s ease;
+  }
+
+  .app-sidebar:is(:hover, :has(:focus-visible)) :is(.nav-text, .nav-section-title, .nav-chevron) {
+    opacity: 1;
+  }
+
+  /* Sub-pages (an open accordion) only while widened. */
+  .app-sidebar:not(:hover):not(:has(:focus-visible)) .nav-sublist {
+    display: none;
+  }
+
+  /* Small mark collapsed, full logo expanded. */
+  .app-sidebar:not(:hover):not(:has(:focus-visible)) .brand-full {
+    display: none;
+  }
+
+  .app-sidebar:not(:hover):not(:has(:focus-visible)) .brand-icon {
+    display: block;
+  }
+}
+
+/* ---------- Phone / tablet: the drawer ---------- */
+@media (max-width: 1000px) {
+  .mobile-toggle {
+    display: block;
+  }
+
+  .app-sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    transform: translateX(-100%); /* parked off-screen */
+    transition: transform 0.22s ease;
+  }
+
+  .app-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop.visible {
+    display: block;
+  }
+
+  .main-wrapper {
+    margin-left: 0;
+  }
+
+  .app-header {
+    left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar,
+  .app-sidebar .nav-text,
+  .app-sidebar .nav-section-title,
+  .app-sidebar .nav-chevron {
+    transition: none !important;
+  }
+}

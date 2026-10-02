@@ -61,8 +61,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
           the old branding already had it — this task changes only what renders inside the link,
           never its destination/behavior. */}
       <div className="sidebar-header">
-        <NavLink to="/dashboard" className="brand-title-group" onClick={closeMobile}>
-          <img src={rizurfLogo} alt="Rizurf Realty" className="brand-logo" />
+        <NavLink to="/dashboard" className="brand-title-group" onClick={closeMobile} aria-label="Rizurf Realty — Dashboard">
+          <span className="brand-icon" aria-hidden="true">
+            <img src={rizurfLogo} alt="" className="brand-logo" />
+          </span>
+          <img src={rizurfLogo} alt="Rizurf Realty" className="brand-logo brand-full" />
         </NavLink>
       </div>
 
@@ -75,17 +78,19 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             to="/dashboard"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             onClick={closeMobile}
+            title="Dashboard"
           >
             <LayoutDashboard className="nav-icon" size={18} />
-            <span>Dashboard</span>
+            <span className="nav-text">Dashboard</span>
           </NavLink>
           <NavLink
             to="/employees"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             onClick={closeMobile}
+            title="Personnel"
           >
             <Users className="nav-icon" size={18} />
-            <span>Personnel</span>
+            <span className="nav-text">Personnel</span>
           </NavLink>
         </div>
 
@@ -98,9 +103,10 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             to="/upcoming"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             onClick={closeMobile}
+            title="Upcoming"
           >
             <UserClockIcon className="nav-icon" size={18} />
-            <span>Upcoming</span>
+            <span className="nav-text">Upcoming</span>
           </NavLink>
 
           {/* Onboarding */}
@@ -108,12 +114,14 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             <button
               className="nav-group-header"
               onClick={() => toggleSection('onboarding')}
+              title="Onboarding"
+              aria-expanded={Boolean(openSections.onboarding)}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <UserPlus2 size={18} />
-                <span>Onboarding</span>
+                <UserPlus2 className="nav-icon" size={18} />
+                <span className="nav-text">Onboarding</span>
               </span>
-              {openSections.onboarding ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              {openSections.onboarding ? <ChevronDown className="nav-chevron" size={16} /> : <ChevronRight className="nav-chevron" size={16} />}
             </button>
             {openSections.onboarding && (
               <div className="nav-sublist">
@@ -140,12 +148,14 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             <button
               className="nav-group-header"
               onClick={() => toggleSection('offboarding')}
+              title="Offboarding"
+              aria-expanded={Boolean(openSections.offboarding)}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <UserMinus2 size={18} />
-                <span>Offboarding</span>
+                <UserMinus2 className="nav-icon" size={18} />
+                <span className="nav-text">Offboarding</span>
               </span>
-              {openSections.offboarding ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              {openSections.offboarding ? <ChevronDown className="nav-chevron" size={16} /> : <ChevronRight className="nav-chevron" size={16} />}
             </button>
             {openSections.offboarding && (
               <div className="nav-sublist">
@@ -172,9 +182,10 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             to="/former"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             onClick={closeMobile}
+            title="Former"
           >
             <UserX2 className="nav-icon" size={18} />
-            <span>Former</span>
+            <span className="nav-text">Former</span>
           </NavLink>
         </div>
 
@@ -187,12 +198,14 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             <button
               className="nav-group-header"
               onClick={() => toggleSection('notes')}
+              title="Notes"
+              aria-expanded={Boolean(openSections.notes)}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <NotebookPen size={18} />
-                <span>Notes</span>
+                <NotebookPen className="nav-icon" size={18} />
+                <span className="nav-text">Notes</span>
               </span>
-              {openSections.notes ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              {openSections.notes ? <ChevronDown className="nav-chevron" size={16} /> : <ChevronRight className="nav-chevron" size={16} />}
             </button>
             {openSections.notes && (
               <div className="nav-sublist">
