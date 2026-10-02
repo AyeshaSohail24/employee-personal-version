@@ -66,13 +66,51 @@ export function getInternPersonalDetails(intern) {
   };
 }
 
+// Departments + their supervisors from the Departments service, for applyInternOverlay()'s live
+// department. departmentsById is null when the Departments service can't be read — the stored
+// department is then shown rather than none.
+export async function loadDepartmentLookups() {
+  const [departments, supervisors] = await Promise.all([
+    departmentsClient.listDepartments().catch(() => null),
+    departmentsClient.listSupervisors().catch(() => []),
+  ]);
+  return {
+    departmentsById: departments ? new Map(departments.map((d) => [String(d.id), d])) : null,
+    supervisorsById: new Map((supervisors ?? []).map((s) => [String(s.id), s])),
+  };
+}
+
 // The actual field-overlay transform, shared by overlayInternFields() below (the bulk GET
-// /employees list) and GET /employees/{id} (Personnel Details) — one definition of "what a live
-// intern record overrides on a hydrated employee," so the two read paths can never quietly drift
-// apart on which fields are live vs. stale-tolerant. Pure and read-only: no store is touched here.
-export function applyInternOverlay(employee, intern) {
+// /employees list, and so the Sync Personnel button) and GET /employees/{id} (Personnel Details) —
+// one definition of "what a live intern record overrides on a hydrated employee," so the read
+// paths can never quietly drift apart on which fields are live vs. stale-tolerant. Pure and
+// read-only: no store is touched here.
+//
+// Name, email and phone come live from the Interns DB too (they're edited there, not here), and so
+// does the department when `lookups` (loadDepartmentLookups()) can resolve it — with that
+// department's supervisor, unless this person has their own supervisor set on their employment
+// record. Anything the Interns DB leaves empty keeps the stored value.
+export function applyInternOverlay(employee, intern, lookups = null) {
+  const firstName = intern.first_name ?? employee.firstName;
+  const lastName = intern.last_name ?? employee.lastName;
+  const namesChanged = firstName !== employee.firstName || lastName !== employee.lastName;
+  const liveDepartment = intern.department_id && lookups?.departmentsById
+    ? lookups.departmentsById.get(String(intern.department_id)) ?? null
+    : null;
+  const departmentChanged = liveDepartment && String(liveDepartment.id) !== String(employee.department?.id ?? "");
+  const supervisorFromDepartment = !employee.supervisor || employee.supervisor.source === "department";
   return {
     ...employee,
+    firstName,
+    lastName,
+    fullName: namesChanged ? `${firstName ?? ""} ${lastName ?? ""}`.trim() : employee.fullName,
+    photo: namesChanged ? `${(firstName ?? "")[0] ?? ""}${(lastName ?? "")[0] ?? ""}`.toUpperCase() : employee.photo,
+    workEmail: intern.email_address ?? employee.workEmail,
+    workPhone: intern.phone_number ?? employee.workPhone,
+    ...(departmentChanged ? {
+      department: { id: liveDepartment.id, name: liveDepartment.name },
+      supervisor: supervisorFromDepartment ? resolveDepartmentSupervisor(liveDepartment, lookups.supervisorsById) : employee.supervisor,
+    } : {}),
     employeeId: intern.ref_number ?? employee.employeeId,
     status: intern.status ?? employee.status,
     workMode: intern.mode ?? employee.workMode,
@@ -421,10 +459,9 @@ export async function fetchInternsForOverlay() {
 // Read-only live overlay, applied to an already-hydrated employee LIST (the bulk GET /employees
 // path — GET /employees/{id} applies the same applyInternOverlay() transform directly against the
 // one intern record it already fetches, rather than this list-oriented batch lookup). Every
-// intern-linked employee's Personnel ID/Status/Mode/Allowance/Start Date/Contract End Date is
-// replaced in memory with whatever the Interns DB (the source of truth) currently reports — the
-// same set of fields createLocalEmployeeFromIntern() pulls from there when a record is first
-// created. Nothing is written to either the local employees table or the Interns DB; nothing here
+// intern-linked employee's name, email, phone, department, Personnel ID, Status, Mode, Allowance,
+// Start Date and Contract End Date are replaced in memory with whatever the Interns DB (the source
+// of truth) currently reports (applyInternOverlay()). Nothing is written to either the local employees table or the Interns DB; nothing here
 // calls createEmployee/updateEmployee/createEmploymentRecord or internsClient.createIntern/
 // updateIntern/deleteIntern. Wired into GET /employees itself (not only the Sync button — see
 // server/routes/employees.js), so a full browser refresh shows the same live values Sync does,
@@ -442,7 +479,10 @@ export async function fetchInternsForOverlay() {
 export async function overlayInternFields(hydratedEmployees, prefetchedInterns) {
   if (!hydratedEmployees.some((e) => e.internExternalId)) return hydratedEmployees;
 
-  const interns = prefetchedInterns !== undefined ? prefetchedInterns : await fetchInternsForOverlay();
+  const [interns, lookups] = await Promise.all([
+    prefetchedInterns !== undefined ? prefetchedInterns : fetchInternsForOverlay(),
+    loadDepartmentLookups(),
+  ]);
   if (!interns) return hydratedEmployees; // unreachable — show the local snapshot as-is rather than failing the whole page load
   const internsById = new Map(interns.map((intern) => [intern.id, intern]));
 
@@ -453,7 +493,7 @@ export async function overlayInternFields(hydratedEmployees, prefetchedInterns) 
     if (!employee.internExternalId) return [employee];
     const intern = internsById.get(employee.internExternalId);
     if (!intern) return [];
-    return [applyInternOverlay(employee, intern)];
+    return [applyInternOverlay(employee, intern, lookups)];
   });
 }
 

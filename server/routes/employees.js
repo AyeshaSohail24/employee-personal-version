@@ -1,6 +1,6 @@
 import * as db from "../db/employees.js";
 import { hydrateEmployees, hydrateEmployee } from "../db/employeeHydration.js";
-import { overlayInternFields, applyInternOverlay, fetchInternsForOverlay, getInternPersonalDetails, getLinkedInternForDetails, listInternsWithoutLocalRecord, internToReadOnlyEntry, INTERN_ONLY_ID_PREFIX } from "../db/internSync.js";
+import { overlayInternFields, applyInternOverlay, loadDepartmentLookups, fetchInternsForOverlay, getInternPersonalDetails, getLinkedInternForDetails, listInternsWithoutLocalRecord, internToReadOnlyEntry, INTERN_ONLY_ID_PREFIX } from "../db/internSync.js";
 import { internsClient } from "../clients/internsClient.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
@@ -120,13 +120,14 @@ export const routes = {
       const employee = await db.getEmployee(ctx.params.id);
       if (!employee) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);
 
-      const [hydrated, { intern, deleted }] = await Promise.all([
+      const [hydrated, { intern, deleted }, lookups] = await Promise.all([
         hydrateEmployee(employee),
         getLinkedInternForDetails(employee),
+        employee.intern_external_id ? loadDepartmentLookups() : null,
       ]);
       if (deleted) throw new NotFoundError(`No employee with id ${ctx.params.id}.`);
 
-      const overlaid = intern ? applyInternOverlay(hydrated, intern) : hydrated;
+      const overlaid = intern ? applyInternOverlay(hydrated, intern, lookups) : hydrated;
       const internPersonalDetails = getInternPersonalDetails(intern);
       sendJson(res, ctx.cid, 200, { employee: { ...overlaid, ...internPersonalDetails } });
     },
