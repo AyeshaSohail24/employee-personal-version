@@ -11,10 +11,12 @@ import { filterCandidates, calculateCandidateSummary, countUnreadReplies, RESPON
  * candidate_messages table — a real email send (candidateEmailService) and a real reply (IMAP,
  * see server/messaging/imapReplyChecker.js) both land there (server/db/upcomingCandidates.js).
  * offerType is real too, read straight from the Recruitment API's own `allowance` field (null for
- * an applicant created before that field existed — never guessed). Only the accept/reject
- * response decision itself has no backend equivalent, so that stays a local overlay keyed by the
- * real candidate id (db.upcomingCandidateOverlay), created lazily with sensible defaults the
- * first time it's touched.
+ * an applicant created before that field existed — never guessed). Rejected is real and shared
+ * too: Reject/Restore are stored by the server for every HR user
+ * (PUT/DELETE /candidates/{id}/rejection — server/db/upcomingRejections.js), and GET /candidates
+ * says which candidates are rejected. Only the legacy local "Accepted" mark (acceptCandidate(),
+ * superseded by acceptFromPortal()) still lives in this browser's overlay
+ * (db.upcomingCandidateOverlay); an old browser-only rejection there is ignored.
  */
 
 const DEFAULT_OVERLAY = () => ({
@@ -37,16 +39,27 @@ function setOverlay(db, candidateId, patch) {
 
 export const upcomingCandidateService = {
   /**
-   * Retrieves every real candidate at the confirmation phase, merged with this app's own local
-   * offer-workflow overlay for each.
+   * Retrieves every real candidate at the confirmation phase, with their shared Rejected state
+   * and this browser's legacy local overlay. `fresh: true` skips the short-lived GET cache, so a
+   * manual refresh also picks up other HR users' Reject/Restore straight away.
+   * @param {{ fresh?: boolean }} [options]
    * @returns {Promise<Array<Object>>}
    */
-  async getAll() {
-    const { candidates } = await apiClient.get('/candidates');
+  async getAll({ fresh = false } = {}) {
+    const { candidates } = await apiClient.get('/candidates', { fresh });
     const db = loadDatabase();
     // Overlay first, real candidate fields last — emailStatus/notificationRead are real
     // (server-derived) and must never be clobbered by the local overlay's own defaults.
-    return candidates.map((c) => ({ ...getOverlay(db, c.id), ...c }));
+    return candidates.map((c) => {
+      const overlay = getOverlay(db, c.id);
+      const localStatus = overlay.responseStatus === RESPONSE_STATUS.REJECTED ? RESPONSE_STATUS.AWAITING : overlay.responseStatus;
+      return {
+        ...overlay,
+        ...c,
+        responseStatus: c.rejected ? RESPONSE_STATUS.REJECTED : localStatus,
+        rejectedAt: c.rejected ? c.rejectedAt : null,
+      };
+    });
   },
 
   /**
@@ -154,35 +167,29 @@ export const upcomingCandidateService = {
   },
 
   /**
-   * Moves a candidate to Rejected. This is a soft move, never a hard delete: the record is
-   * preserved (with rejectedAt set) and simply excluded from the active Candidates scope by
-   * queryCandidates()/filterCandidates() — it remains visible and restorable in the Rejected tab.
+   * Moves a candidate to Rejected for every HR user (stored by the server — PUT
+   * /candidates/{id}/rejection). A soft move, never a delete: the candidate is untouched in the
+   * Recruitment system, simply excluded from the active list, and stays visible and restorable in
+   * the Rejected tab. Also clears this browser's legacy local "Accepted" mark, as before.
    * @param {string} candidateId
    * @returns {Promise<Object>}
    */
   async rejectCandidate(candidateId) {
+    await apiClient.put(`/candidates/${encodeURIComponent(candidateId)}/rejection`);
     const db = loadDatabase();
-    setOverlay(db, candidateId, {
-      responseStatus: RESPONSE_STATUS.REJECTED,
-      rejectedAt: new Date().toISOString(),
-      acceptedAt: null,
-    });
+    setOverlay(db, candidateId, { responseStatus: RESPONSE_STATUS.AWAITING, acceptedAt: null, rejectedAt: null });
     saveDatabase(db);
     return this.getById(candidateId);
   },
 
   /**
-   * Restores a Rejected candidate back to the active pipeline (Awaiting Response).
+   * Restores a Rejected candidate to the active pipeline for every HR user (DELETE
+   * /candidates/{id}/rejection).
    * @param {string} candidateId
    * @returns {Promise<Object>}
    */
   async restoreCandidate(candidateId) {
-    const db = loadDatabase();
-    setOverlay(db, candidateId, {
-      responseStatus: RESPONSE_STATUS.AWAITING,
-      rejectedAt: null,
-    });
-    saveDatabase(db);
+    await apiClient.delete(`/candidates/${encodeURIComponent(candidateId)}/rejection`);
     return this.getById(candidateId);
   },
 

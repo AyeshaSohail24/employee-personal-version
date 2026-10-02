@@ -183,10 +183,15 @@ export function countUnreadReplies(candidates = []) {
  */
 export function sortCandidates(candidates = [], sortBy = 'date-desc') {
   const sorted = [...candidates];
+  // Candidates whose Shortlisted date isn't recorded (no shortlistedAt) go last in either order.
+  const byShortlisted = (direction) => (a, b) => {
+    if (!a.shortlistedAt || !b.shortlistedAt) return (a.shortlistedAt ? 0 : 1) - (b.shortlistedAt ? 0 : 1);
+    return direction * (Date.parse(a.shortlistedAt) - Date.parse(b.shortlistedAt));
+  };
 
   switch (sortBy) {
     case 'date-asc':
-      sorted.sort((a, b) => (a.shortlistedAt || '').localeCompare(b.shortlistedAt || ''));
+      sorted.sort(byShortlisted(1));
       break;
     case 'name-asc':
       sorted.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
@@ -202,7 +207,7 @@ export function sortCandidates(candidates = [], sortBy = 'date-desc') {
       break;
     case 'date-desc':
     default:
-      sorted.sort((a, b) => (b.shortlistedAt || '').localeCompare(a.shortlistedAt || ''));
+      sorted.sort(byShortlisted(-1));
       break;
   }
 

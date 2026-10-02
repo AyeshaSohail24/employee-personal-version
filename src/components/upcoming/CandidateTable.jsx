@@ -32,6 +32,17 @@ function toIsoDate(isoTimestamp) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// The Shortlisted date comes only from the Recruitment system (when the candidate last entered
+// Upcoming). Until Recruitment records it, say so — never show an estimated date in its place.
+const SHORTLISTED_NOT_RECORDED_HINT = 'The Recruitment system hasn’t recorded when this candidate entered Upcoming yet.';
+
+function ShortlistedDate({ candidate }) {
+  if (!candidate.shortlistedAt) {
+    return <span className="shortlisted-not-recorded" title={SHORTLISTED_NOT_RECORDED_HINT}>Not recorded</span>;
+  }
+  return formatDateDisplay(toIsoDate(candidate.shortlistedAt));
+}
+
 function CandidateIdentity({ candidate, isUnreadReply }) {
   return (
     <>
@@ -156,7 +167,7 @@ export default function CandidateTable({
                     </td>
                     <td className="gmail-date-cell">
                       <span className="gmail-date-text">
-                        {formatDateDisplay(toIsoDate(mode === 'active' ? candidate.shortlistedAt : candidate.rejectedAt))}
+                        {mode === 'active' ? <ShortlistedDate candidate={candidate} /> : formatDateDisplay(toIsoDate(candidate.rejectedAt))}
                       </span>
                       {mode === 'active' ? (
                         <ActiveRowActions candidate={candidate} onAccept={onAccept} onReject={onReject} onUndoAccept={onUndoAccept} />
@@ -214,7 +225,7 @@ export default function CandidateTable({
                 </div>
                 {mode === 'active' && (
                   <div className="detail-row" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Shortlisted {formatDateDisplay(toIsoDate(candidate.shortlistedAt))}
+                    Shortlisted <ShortlistedDate candidate={candidate} />
                   </div>
                 )}
               </div>

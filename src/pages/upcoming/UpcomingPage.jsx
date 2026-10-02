@@ -90,11 +90,12 @@ export default function UpcomingPage() {
   }, [loadData]);
 
   // Manual refresh — reuses the same fetch as loadData() but never flips `loading`, so the
-  // table stays visible (only the icon spins) instead of flashing back to the skeleton.
+  // table stays visible (only the icon spins) instead of flashing back to the skeleton. Always
+  // fresh (no short-lived cache), so another HR user's Reject/Restore shows straight away.
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      setAllCandidates(await fetchAll());
+      setAllCandidates(await upcomingCandidateService.getAll({ fresh: true }));
       setLoadError('');
     } catch (err) {
       console.error('Failed to refresh Upcoming candidates:', err);
@@ -207,15 +208,26 @@ export default function UpcomingPage() {
   const handleRestore = async (candidateId) => {
     const candidate = allCandidates.find((c) => c.id === candidateId);
     if (!window.confirm(`Restore ${candidate?.fullName || 'this candidate'} to the active candidates list?`)) return;
-    await upcomingCandidateService.restoreCandidate(candidateId);
+    setAcceptError('');
+    try {
+      await upcomingCandidateService.restoreCandidate(candidateId);
+    } catch (err) {
+      // Shown in the same error banner as Accept (it's shared state now — a failed save must be visible).
+      setAcceptError(`Could not restore ${candidate?.fullName || 'the candidate'}: ${err?.message || 'please try again.'}`);
+    }
     await loadData();
   };
 
   const handleReject = async (candidate) => {
-    if (!window.confirm(`Move candidate to Rejected?\n\n${candidate.fullName} will be removed from the active Candidates pipeline and preserved in the Rejected tab.`)) {
+    if (!window.confirm(`Move candidate to Rejected?\n\n${candidate.fullName} will be removed from the active Candidates pipeline and preserved in the Rejected tab for every HR user. Nothing changes in the Recruitment system.`)) {
       return;
     }
-    await upcomingCandidateService.rejectCandidate(candidate.id);
+    setAcceptError('');
+    try {
+      await upcomingCandidateService.rejectCandidate(candidate.id);
+    } catch (err) {
+      setAcceptError(`Could not reject ${candidate.fullName}: ${err?.message || 'please try again.'}`);
+    }
     await loadData();
   };
 

@@ -8648,3 +8648,10 @@ input.form-control:focus {
 .presence-table-row.plan-task-row-overdue:hover td {
   background-color: #FEE2E2;
 }
+
+/* Upcoming — Shortlisted date the Recruitment system hasn't recorded yet. */
+.shortlisted-not-recorded {
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: help;
+}

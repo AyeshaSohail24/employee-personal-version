@@ -80,6 +80,7 @@ DROP TABLE IF EXISTS `candidate_messages`;
 DROP TABLE IF EXISTS `applicant_conversions`;
 DROP TABLE IF EXISTS `email_templates`;
 DROP TABLE IF EXISTS `email_placeholders`;
+DROP TABLE IF EXISTS `upcoming_candidate_rejections`;
 DROP TABLE IF EXISTS `upcoming_candidates_seen`;
 DROP TABLE IF EXISTS `department_aliases`;
 DROP TABLE IF EXISTS `offboarding_task_instances`;
@@ -603,6 +604,22 @@ CREATE TABLE IF NOT EXISTS `department_aliases` (
 CREATE TABLE IF NOT EXISTS `upcoming_candidates_seen` (
     `applicant_id` VARCHAR(64) PRIMARY KEY, -- soft ref -> applicants.id (Applicants DB, external)
     `first_seen_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 24c. UPCOMING_CANDIDATE_REJECTIONS — candidates HR moved to Upcoming's Rejected
+--      tab (Reject; Restore removes the row). Shared by every HR user, instead of
+--      each browser keeping its own. Nothing here changes the candidate in the
+--      Recruitment system. The Recruitment API reuses a deleted applicant's id,
+--      so `applicant_key` (that applicant's Recruitment created_at, else email —
+--      only ever compared, never shown) keeps a new applicant with the same id
+--      from inheriting the rejection (server/db/upcomingRejections.js).
+--      Created on an existing database by
+--      `npm run create-upcoming-candidate-rejections-table`.
+CREATE TABLE IF NOT EXISTS `upcoming_candidate_rejections` (
+    `applicant_id` VARCHAR(64) PRIMARY KEY, -- soft ref -> applicants.id (Applicants DB, external)
+    `applicant_key` VARCHAR(255) NOT NULL,
+    `rejected_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `rejected_by` VARCHAR(255) NULL -- the HR user's email (or gateway subject)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 25. CANDIDATE_MESSAGES — the full message thread (sent + received) for a
