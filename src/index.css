@@ -8655,3 +8655,63 @@ input.form-control:focus {
   font-style: italic;
   cursor: help;
 }
+
+/* Map Departments — Add a mapping form and the Department/Job label on saved mappings. */
+.dept-mapping-add {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    "kind name name"
+    "dept dept add";
+  align-items: end;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  border: 1px dashed var(--border-light);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-subtle);
+}
+
+.dept-mapping-add .form-label {
+  margin-bottom: 0.25rem;
+}
+
+.dept-mapping-add-kind { grid-area: kind; min-width: 0; }
+.dept-mapping-add-name { grid-area: name; min-width: 0; }
+.dept-mapping-add-dept { grid-area: dept; min-width: 0; }
+.dept-mapping-add > button { grid-area: add; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .dept-mapping-add {
+    grid-template-columns: 1fr;
+    grid-template-areas: "kind" "name" "dept" "add";
+  }
+}
+
+/* Saved/pending rows: room for long job titles, wrapping instead of being cut off. */
+.dept-mapping-row {
+  grid-template-columns: minmax(0, 15rem) auto minmax(0, 1fr) auto;
+}
+
+.dept-mapping-row .dept-mapping-alias {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  border-radius: 12px;
+  line-height: 1.35;
+}
+
+.dept-mapping-kind {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 700;
+  vertical-align: middle;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-active);
+}
+
+.dept-mapping-kind-job {
+  background-color: #EFF6FF;
+  color: #1D4ED8;
+}

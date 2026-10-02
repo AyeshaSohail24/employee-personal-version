@@ -11,15 +11,26 @@ function mapRejectionError(error) {
 }
 
 export const routes = {
-  // HR's mappings from a Recruitment job's department text to a real department.
+  // HR's mappings from a Recruitment job's department text (kind "department") or job title
+  // (kind "job") to a real department. POST adds a new one (refused if that name is already
+  // mapped); PUT creates or changes one.
   "/department-aliases": {
     async get(req, res, ctx) {
       sendJson(res, ctx.cid, 200, { aliases: await aliases.listDepartmentAliases() });
     },
+    async post(req, res, ctx) {
+      const body = await readJsonBody(req);
+      try {
+        sendJson(res, ctx.cid, 201, { alias: await aliases.saveDepartmentAlias({ ...body, createOnly: true }) });
+      } catch (error) {
+        if (error instanceof aliases.DepartmentAliasError) throw new ValidationError(error.message);
+        throw error;
+      }
+    },
     async put(req, res, ctx) {
       const body = await readJsonBody(req);
       try {
-        sendJson(res, ctx.cid, 200, { alias: await aliases.saveDepartmentAlias(body) });
+        sendJson(res, ctx.cid, 200, { alias: await aliases.saveDepartmentAlias({ ...body, createOnly: false }) });
       } catch (error) {
         if (error instanceof aliases.DepartmentAliasError) throw new ValidationError(error.message);
         throw error;
@@ -29,7 +40,9 @@ export const routes = {
   "/department-aliases/{alias}": {
     async delete(req, res, ctx) {
       try {
-        await aliases.deleteDepartmentAlias(ctx.params.alias);
+        const kind = ctx.url.searchParams.get("kind") ?? "department";
+        if (!aliases.MAPPING_KINDS.includes(kind)) throw new ValidationError(`kind must be one of: ${aliases.MAPPING_KINDS.join(", ")}.`);
+        await aliases.deleteDepartmentAlias(ctx.params.alias, kind);
       } catch (error) {
         if (error instanceof aliases.DepartmentAliasError) throw new NotFoundError(error.message);
         throw error;

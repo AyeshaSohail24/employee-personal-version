@@ -49,10 +49,11 @@ export async function listConfirmationCandidates() {
 
   const jobsById = new Map(jobs.map((j) => [j.id, j]));
   // A job's `department` is a plain display string (e.g. "Engineering"), not an id — resolved
-  // against the real Departments API by name, or HR's mapping (departmentAliases.js), both
-  // ignoring case and extra spaces. Anything still unmatched falls back to a display-only
-  // { id: null, name } that the department filter can't select, and `jobDepartment` keeps the
-  // original text so HR can map it.
+  // against the real Departments API: HR's mapping for that job's title first (for a job filed
+  // under the wrong department in Recruitment), then a name match, then HR's mapping for the
+  // department text (departmentAliases.js), all ignoring case and extra spaces. Anything still
+  // unmatched falls back to a display-only { id: null, name } that the department filter can't
+  // select, and `jobDepartment` keeps the original text so HR can map it.
 
   // Anyone already accepted (converted into an intern — applicantConversion.js) leaves Upcoming
   // straight away, even if moving their Recruitment phase to `completed` failed. A conversion
@@ -75,7 +76,7 @@ export async function listConfirmationCandidates() {
       const job = jobsById.get(a.job_id) ?? null;
       const createdAt = parseApiTimestamp(a.created_at);
       const departmentName = job?.department ?? null;
-      const matchedDepartment = departmentName ? resolveDepartment(departmentName, departments, aliasMap) : null;
+      const matchedDepartment = resolveDepartment(departmentName, departments, aliasMap, job?.title ?? null);
 
       return {
         id: String(a.id),
@@ -89,6 +90,7 @@ export async function listConfirmationCandidates() {
             ? { id: null, name: departmentName }
             : null,
         jobDepartment: departmentName,
+        jobTitle: job?.title ?? null,
         offerType: a.allowance ?? null,
         resumeAvailable: Boolean(a.resume),
         // Exposed for email placeholders (src/domain/emailPlaceholders.js). Already on every

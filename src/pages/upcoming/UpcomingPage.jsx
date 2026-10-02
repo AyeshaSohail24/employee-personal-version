@@ -160,6 +160,14 @@ export default function UpcomingPage() {
     }
     return [...names.values()].sort((a, b) => a.localeCompare(b));
   }, [allCandidates]);
+  // Every department name and job title the current candidates use — suggestions in Map Departments.
+  const distinctSorted = (values) => {
+    const names = new Map();
+    for (const v of values) if (v && v.trim()) names.set(v.trim().replace(/\s+/g, ' ').toLowerCase(), v.trim().replace(/\s+/g, ' '));
+    return [...names.values()].sort((a, b) => a.localeCompare(b));
+  };
+  const knownDepartmentNames = useMemo(() => distinctSorted(allCandidates.map((c) => c.jobDepartment)), [allCandidates]);
+  const knownJobTitles = useMemo(() => distinctSorted(allCandidates.map((c) => c.jobTitle)), [allCandidates]);
   const [acceptedMessage, setAcceptedMessage] = useState('');
   const [planWarning, setPlanWarning] = useState('');
 
@@ -247,6 +255,8 @@ export default function UpcomingPage() {
       {isMappingOpen && (
         <DepartmentMappingModal
           unmatchedNames={unmatchedDepartmentNames}
+          knownDepartmentNames={knownDepartmentNames}
+          knownJobTitles={knownJobTitles}
           onClose={() => setIsMappingOpen(false)}
           onChanged={() => loadData()}
         />
