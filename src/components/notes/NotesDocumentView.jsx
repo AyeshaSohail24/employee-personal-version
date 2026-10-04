@@ -47,7 +47,7 @@ function buildBlankDraft() {
 
 /**
  * Google-Docs-tabs-inspired notepad workspace: a compact note list on the left, the selected
- * note as a directly-editable document on the right — no NoteEditorModal round-trip. Reads/
+ * note as a directly-editable document on the right — no popup. Reads/
  * writes through notesService directly (same as Card View's modal), so both save paths call
  * the exact same create()/update(), and NotesPage's `notes` list stays the single source of
  * truth (this component owns only its own in-progress editing draft, never a parallel store).
@@ -64,6 +64,9 @@ export default function NotesDocumentView({
   onNotesChanged,
   onDirtyChange,
   variant = 'my',
+  // The page header's New Note: start a new note here (in the page, no popup), then report back.
+  createRequested = false,
+  onCreateRequestHandled,
 }) {
   const [mobileShowingDocument, setMobileShowingDocument] = useState(false);
   const [categoryOptions, setCategoryOptions] = useState(NOTE_CATEGORIES);
@@ -160,6 +163,14 @@ export default function NotesDocumentView({
       setMobileShowingDocument(true);
     });
   };
+
+  // New Note from the page header — same as this view's own New Note (guarded the same way).
+  useEffect(() => {
+    if (!createRequested) return;
+    handleCreateNewClick();
+    if (onCreateRequestHandled) onCreateRequestHandled();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createRequested]);
 
   // Switches the currently-selected (already-saved) note from read state into edit state — a
   // local UI toggle only, never guarded (the draft is already clean/synced to baseline at this

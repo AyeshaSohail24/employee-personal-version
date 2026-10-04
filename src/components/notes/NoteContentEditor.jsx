@@ -5,7 +5,7 @@ import { NOTE_HIGHLIGHT_COLORS } from '../../domain/noteDomain.js';
 /**
  * Small shared contentEditable-based editor for note content, offering Bold/Italic/Underline,
  * a small fixed-palette Highlight, and Bulleted/Numbered lists — no heading/font/color/table/
- * link/image toolbar, no rich-text library. Reused identically by NoteEditorModal (Card View)
+ * link/image toolbar, no rich-text library. Reused identically by NoteEditorForm (Card View)
  * and NotesDocumentView (inline editing + new blank document) so there is exactly one
  * formatting implementation in the whole app.
  *

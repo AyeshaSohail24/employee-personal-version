@@ -21,20 +21,18 @@ const ACCENT_OPTIONS = Object.entries(NOTE_ACCENTS).map(([value, meta]) => ({
 }));
 
 /**
- * The Create/Edit form for a single personal note — one implementation used in two places:
- *  - layout "modal": inside NoteEditorModal (New Note);
- *  - layout "inline": directly on the Notes page in Card View (Edit Note), in place of the card.
- * Same fields, validation and save either way. Content uses the shared NoteContentEditor
- * (Bold/Italic/Underline only) — the same component Document View's inline editor uses.
+ * The New Note / Edit Note form for a single personal note, shown directly on the Notes page in
+ * Card View (no popup): New Note at the top of the grid, Edit in place of the card being edited.
+ * Content uses the shared NoteContentEditor (Bold/Italic/Underline only) — the same component
+ * Document View's inline editor uses.
  *
  * The form state is set once when it mounts (callers remount it per note via `key`), so a list
  * reload while editing never resets what's been typed. `onSaved(resultNote)` runs after a
  * successful save; `onCancel` on Cancel, the ×, or Escape. `onDirtyChange(bool)` reports unsaved
- * edits (inline only uses it).
+ * edits, so the page can ask before they're discarded.
  */
-export default function NoteEditorForm({ note = null, layout = 'modal', onSaved, onCancel, onDirtyChange }) {
+export default function NoteEditorForm({ note = null, onSaved, onCancel, onDirtyChange }) {
   const isEditing = Boolean(note);
-  const inline = layout === 'inline';
   const [initial] = useState(() => buildInitialFormState(note));
   const [formData, setFormData] = useState(initial);
   const [categoryOptions, setCategoryOptions] = useState(NOTE_CATEGORIES);
@@ -48,12 +46,11 @@ export default function NoteEditorForm({ note = null, layout = 'modal', onSaved,
     notesService.getCategoryOptions().then(setCategoryOptions).catch(() => {});
   }, []);
 
-  // Inline: bring the form into view and put the cursor in Title.
+  // Bring the form into view and put the cursor in Title.
   useEffect(() => {
-    if (!inline) return;
     rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     titleRef.current?.focus({ preventScroll: true });
-  }, [inline]);
+  }, []);
 
   const isDirty = JSON.stringify(formData) !== JSON.stringify(initial);
   useEffect(() => {
@@ -115,16 +112,16 @@ export default function NoteEditorForm({ note = null, layout = 'modal', onSaved,
     <form
       ref={rootRef}
       onSubmit={handleSubmit}
-      className={inline ? 'note-inline-editor' : undefined}
+      className="note-inline-editor"
       // Escape cancels — unless a popup (e.g. a note's Reminder) is open on top: that Escape is its.
-      onKeyDown={inline ? (e) => {
+      onKeyDown={(e) => {
         if (e.key !== 'Escape' || saving || document.querySelector('.modal-backdrop')) return;
         e.stopPropagation();
         onCancel();
-      } : undefined}
-      aria-label={inline ? `Edit note: ${note?.title ?? ''}` : undefined}
+      }}
+      aria-label={isEditing ? `Edit note: ${note.title}` : 'New note'}
     >
-      <div className={inline ? 'note-inline-editor-header' : 'modal-header'}>
+      <div className="note-inline-editor-header">
         <div className="modal-title-group">
           <div className="modal-icon-badge">
             <NotebookPen size={20} />
@@ -134,12 +131,12 @@ export default function NoteEditorForm({ note = null, layout = 'modal', onSaved,
             <p className="modal-subtitle">Keep a quick personal working note for yourself.</p>
           </div>
         </div>
-        <button type="button" className="modal-close-btn" onClick={onCancel} disabled={saving} aria-label="Cancel editing">
+        <button type="button" className="modal-close-btn" onClick={onCancel} disabled={saving} aria-label={isEditing ? 'Cancel editing' : 'Cancel new note'}>
           <X size={18} />
         </button>
       </div>
 
-      <div className={inline ? 'note-inline-editor-body' : 'modal-body modal-body-spacious'}>
+      <div className="note-inline-editor-body">
         {error && (
           <div className="modal-error-alert" style={{ marginBottom: '1.25rem' }}>
             <AlertTriangle size={16} />
@@ -218,7 +215,7 @@ export default function NoteEditorForm({ note = null, layout = 'modal', onSaved,
         </div>
       </div>
 
-      <div className={inline ? 'note-inline-editor-footer' : 'modal-footer modal-footer-spacious'}>
+      <div className="note-inline-editor-footer">
         <button type="button" className="btn-secondary" onClick={onCancel} disabled={saving}>
           Cancel
         </button>
