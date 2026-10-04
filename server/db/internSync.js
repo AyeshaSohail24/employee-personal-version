@@ -66,6 +66,26 @@ export function getInternPersonalDetails(intern) {
   };
 }
 
+// THE rule for who a linked person is right now: their live Interns DB record wins, this app's
+// stored copy (employees row / employment record) is only the fallback when the Interns DB has no
+// value or no record. Every place that shows a person's name, Personnel ID, department, status or
+// photo reads it through this (applyInternOverlay() for Personnel, and the Onboarding/Offboarding
+// History lists), so a change made in the Interns DB shows the same everywhere. Pure, read-only.
+// `stored`: { firstName, lastName, refNumber, departmentId, status, photoUrl } from this app.
+export function liveIdentity(intern, stored = {}) {
+  const firstName = intern?.first_name ?? stored.firstName ?? null;
+  const lastName = intern?.last_name ?? stored.lastName ?? null;
+  return {
+    firstName,
+    lastName,
+    fullName: `${firstName ?? ""} ${lastName ?? ""}`.trim(),
+    refNumber: intern?.ref_number ?? stored.refNumber ?? null,
+    departmentId: intern?.department_id ?? stored.departmentId ?? null,
+    status: intern?.status ?? stored.status ?? null,
+    photoUrl: intern?.photo_url ?? stored.photoUrl ?? null,
+  };
+}
+
 // Departments + their supervisors from the Departments service, for applyInternOverlay()'s live
 // department. departmentsById is null when the Departments service can't be read — the stored
 // department is then shown rather than none.
@@ -91,8 +111,8 @@ export async function loadDepartmentLookups() {
 // department's supervisor, unless this person has their own supervisor set on their employment
 // record. Anything the Interns DB leaves empty keeps the stored value.
 export function applyInternOverlay(employee, intern, lookups = null) {
-  const firstName = intern.first_name ?? employee.firstName;
-  const lastName = intern.last_name ?? employee.lastName;
+  const live = liveIdentity(intern, { firstName: employee.firstName, lastName: employee.lastName });
+  const { firstName, lastName } = live;
   const namesChanged = firstName !== employee.firstName || lastName !== employee.lastName;
   const liveDepartment = intern.department_id && lookups?.departmentsById
     ? lookups.departmentsById.get(String(intern.department_id)) ?? null
@@ -103,7 +123,7 @@ export function applyInternOverlay(employee, intern, lookups = null) {
     ...employee,
     firstName,
     lastName,
-    fullName: namesChanged ? `${firstName ?? ""} ${lastName ?? ""}`.trim() : employee.fullName,
+    fullName: namesChanged ? live.fullName : employee.fullName,
     photo: namesChanged ? `${(firstName ?? "")[0] ?? ""}${(lastName ?? "")[0] ?? ""}`.toUpperCase() : employee.photo,
     workEmail: intern.email_address ?? employee.workEmail,
     workPhone: intern.phone_number ?? employee.workPhone,

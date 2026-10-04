@@ -1,6 +1,6 @@
 import { pool } from "./pool.js";
 import { listRows, getRow, insertRow, updateRow, RowNotFoundError } from "./crud.js";
-import { syncOffboardingLaunchToIntern, getLinkedIntern, resolveOrCreateEmployeeForIntern, fetchInternsForOverlay } from "./internSync.js";
+import { syncOffboardingLaunchToIntern, getLinkedIntern, resolveOrCreateEmployeeForIntern, fetchInternsForOverlay, liveIdentity } from "./internSync.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
 import { internsClient } from "../clients/internsClient.js";
 import { toAppDateString } from "../dates.js";
@@ -393,15 +393,22 @@ export async function listOffboardingHistory() {
       const lastEpoch = Math.max(0, ...planTasks.map((t) => Number(t.completedEpoch) || 0));
       const lastTicked = lastEpoch > 0 ? toAppDateString(new Date(lastEpoch * 1000)) : null;
       const intern = p.internId ? internsById.get(p.internId) : null;
-      const department = departmentsById.get(String(departmentIdByEmployee.get(p.employeeId) ?? ""));
+      // Name, Personnel ID, department, status and photo: live from the Interns DB, the same rule
+      // as Personnel (liveIdentity()) — this app's stored copy only when it has none.
+      const live = liveIdentity(intern, {
+        firstName: p.first_name, lastName: p.last_name, refNumber: p.refNumber,
+        departmentId: departmentIdByEmployee.get(p.employeeId), status: p.localStatus,
+      });
+      const department = departmentsById.get(String(live.departmentId ?? ""))
+        ?? departmentsById.get(String(departmentIdByEmployee.get(p.employeeId) ?? ""));
       return {
         planInstanceId: p.planInstanceId,
         employeeId: p.employeeId,
-        refNumber: intern?.ref_number ?? p.refNumber,
-        fullName: `${p.first_name} ${p.last_name}`.trim(),
+        refNumber: live.refNumber,
+        fullName: live.fullName,
         department: department ? { id: department.id, name: department.name } : null,
-        currentStatus: intern?.status ?? p.localStatus,
-        photoUrl: intern?.photo_url ?? null,
+        currentStatus: live.status,
+        photoUrl: live.photoUrl,
         anchorDate: p.anchorDate,
         startedAt: p.startedAt,
         completedAt: p.recordedCompletedAt ?? lastTicked,
