@@ -8964,3 +8964,57 @@ input.form-control:focus {
 .header-notification-item.tone-primary :is(.header-notification-item-type, .header-notification-item-icon) {
   color: var(--color-primary-active);
 }
+
+/* Notes Card View — Edit Note in place: the same form as the New Note popup, shown in the grid
+   instead of the card being edited, across the full width. Header/body/footer mirror the popup. */
+.notes-grid-editor {
+  grid-column: 1 / -1;
+}
+
+.note-inline-editor {
+  background-color: var(--bg-card);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  scroll-margin-top: calc(var(--header-height) + 1rem);
+}
+
+.note-inline-editor-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.note-inline-editor-body {
+  padding: 1.5rem 1.75rem;
+}
+
+.note-inline-editor-body .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.note-inline-editor-body .form-label {
+  margin-bottom: 0.5rem;
+}
+
+.note-inline-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.1rem 1.75rem;
+  border-top: 1px solid var(--border-light);
+  background-color: var(--bg-subtle);
+}
+
+@media (max-width: 640px) {
+  .note-inline-editor-header,
+  .note-inline-editor-body,
+  .note-inline-editor-footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}

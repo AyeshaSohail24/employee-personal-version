@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Search, NotebookPen, LayoutGrid, FileStack } from 'lucide-react';
 import { notesService } from '../../services/notesService.js';
@@ -6,6 +6,7 @@ import { NOTE_CATEGORIES, NOTE_SORT_OPTIONS } from '../../domain/noteDomain.js';
 import NoteCard from '../../components/notes/NoteCard.jsx';
 import NotesDocumentView from '../../components/notes/NotesDocumentView.jsx';
 import NoteEditorModal from '../../components/notes/NoteEditorModal.jsx';
+import NoteEditorForm from '../../components/notes/NoteEditorForm.jsx';
 import DeleteNoteModal from '../../components/notes/DeleteNoteModal.jsx';
 import ReminderModal from '../../components/notes/ReminderModal.jsx';
 import Select from '../../components/common/Select.jsx';
@@ -60,8 +61,13 @@ export default function NotesPage({ variant = 'my' }) {
   const [category, setCategory] = useState('');
   const [sortBy, setSortBy] = useState(NOTE_SORT_OPTIONS.UPDATED);
 
+  // New Note opens the popup (NoteEditorModal). Edit Note (Card View) opens the same form in place
+  // on the page, instead of the card being edited (inlineEditNote) — one at a time.
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [editingNote, setEditingNote] = useState(null);
+  const [inlineEditNote, setInlineEditNote] = useState(null);
+  // Read at the moment of leaving (a ref, not state) so a click straight after typing still sees it.
+  const inlineDirtyRef = useRef(false);
+  const setInlineDirty = useCallback((dirty) => { inlineDirtyRef.current = dirty; }, []);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [reminderTarget, setReminderTarget] = useState(null);
   const [categoryOptions, setCategoryOptions] = useState(NOTE_CATEGORIES);
@@ -101,7 +107,13 @@ export default function NotesPage({ variant = 'my' }) {
     setCategory('');
     setSortBy(NOTE_SORT_OPTIONS.UPDATED);
     setSelectedNoteId(null);
+    setInlineEditNote(null);
   }, [variant]);
+
+  // Leaving the in-page editor with unsaved changes asks first (the popup it replaced blocked
+  // everything else until Cancel/Save, so this is the only way edits could otherwise be lost).
+  const confirmLeaveInlineEdit = () => !inlineEditNote || !inlineDirtyRef.current
+    || window.confirm(`Discard your unsaved changes to "${inlineEditNote.title}"?`);
 
   useEffect(() => {
     try {
@@ -140,23 +152,54 @@ export default function NotesPage({ variant = 'my' }) {
   }, [viewMode, loading, notes, selectedNoteId, isDocumentDirty]);
 
   const handleOpenCreate = () => {
-    setEditingNote(null);
+    if (!confirmLeaveInlineEdit()) return;
+    setInlineEditNote(null);
     setIsEditorOpen(true);
   };
 
+  // Card View: Edit (or clicking a card) opens the form in place of that card.
   const handleOpenEdit = (note) => {
-    setEditingNote(note);
-    setIsEditorOpen(true);
+    if (inlineEditNote?.id === note.id) return;
+    if (!confirmLeaveInlineEdit()) return;
+    setInlineEditNote(note);
   };
 
-  // Card View's New Note / Edit flow only — Document View now saves inline via notesService
-  // directly (see NotesDocumentView) rather than round-tripping through this modal.
+  const handleInlineSaved = () => {
+    setInlineEditNote(null);
+    loadNotes();
+  };
+
+  const handleChangeViewMode = (mode) => {
+    if (mode === viewMode) return;
+    if (!confirmLeaveInlineEdit()) return;
+    setInlineEditNote(null);
+    setViewMode(mode);
+  };
+
+  // New Note (popup) — Document View saves inline via notesService directly (see
+  // NotesDocumentView) rather than round-tripping through this modal.
   const handleEditorSuccess = (resultNote) => {
     loadNotes();
-    if (resultNote && !editingNote) {
+    if (resultNote) {
       setSelectedNoteId(resultNote.id);
     }
   };
+
+  const inlineEditor = inlineEditNote && (
+    <div key={`edit-${inlineEditNote.id}`} className="notes-grid-editor">
+      <NoteEditorForm
+        key={inlineEditNote.id}
+        note={inlineEditNote}
+        layout="inline"
+        onSaved={handleInlineSaved}
+        onCancel={() => setInlineEditNote(null)}
+        onDirtyChange={setInlineDirty}
+      />
+    </div>
+  );
+  // If the note being edited is no longer listed (e.g. a search now hides it), the editor stays
+  // open at the top of the grid instead of disappearing with unsaved changes.
+  const inlineNoteListed = Boolean(inlineEditNote) && notes.some((n) => n.id === inlineEditNote.id);
 
   const handleTogglePin = async (note) => {
     try {
@@ -235,7 +278,7 @@ export default function NotesPage({ variant = 'my' }) {
           <button
             type="button"
             className={`view-btn ${viewMode === 'card' ? 'active' : ''}`}
-            onClick={() => setViewMode('card')}
+            onClick={() => handleChangeViewMode('card')}
             title="Card View"
           >
             <LayoutGrid size={15} />
@@ -244,7 +287,7 @@ export default function NotesPage({ variant = 'my' }) {
           <button
             type="button"
             className={`view-btn ${viewMode === 'document' ? 'active' : ''}`}
-            onClick={() => setViewMode('document')}
+            onClick={() => handleChangeViewMode('document')}
             title="Document View"
           >
             <FileStack size={15} />
@@ -253,7 +296,10 @@ export default function NotesPage({ variant = 'my' }) {
         </div>
       </div>
 
-      {loading ? (
+      {/* While a note is being edited in place, reloads (search, pin, reminder…) refresh the list in
+          place instead of swapping it for the loading message — that would unmount the editor and
+          lose what has been typed. */}
+      {loading && !inlineEditNote ? (
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           Loading notes...
         </div>
@@ -274,7 +320,7 @@ export default function NotesPage({ variant = 'my' }) {
           onDirtyChange={setIsDocumentDirty}
           variant={variant}
         />
-      ) : notes.length === 0 ? (
+      ) : notes.length === 0 && !inlineEditNote ? (
         <div className="table-container-card notes-empty-state">
           <NotebookPen size={32} style={{ color: 'var(--border-dark)', marginBottom: '0.75rem' }} />
           {isSearchActive ? (
@@ -312,7 +358,9 @@ export default function NotesPage({ variant = 'my' }) {
         />
       ) : (
         <div className="notes-grid">
-          {notes.map((note) => (
+          {/* One keyed list (editor included), so the editor is moved, never re-created, when the
+              list changes — re-creating it would lose what has been typed. */}
+          {[...(inlineNoteListed ? [] : [inlineEditor]), ...notes.map((note) => (inlineEditNote?.id === note.id ? inlineEditor : (
             <NoteCard
               key={note.id}
               note={note}
@@ -324,14 +372,14 @@ export default function NotesPage({ variant = 'my' }) {
               onDeleteRequest={setDeleteTarget}
               onReminderRequest={setReminderTarget}
             />
-          ))}
+          )))].filter(Boolean)}
         </div>
       )}
 
       <NoteEditorModal
         isOpen={isEditorOpen}
         onClose={() => setIsEditorOpen(false)}
-        note={editingNote}
+        note={null}
         onSuccess={handleEditorSuccess}
       />
 
