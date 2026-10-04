@@ -1186,7 +1186,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: 1rem;
   padding: 0.6rem 0.8rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
@@ -1226,8 +1226,18 @@ body {
 .dashboard-person-row-when {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 1.1rem;
   flex-shrink: 0;
+}
+
+/* Phones: a little less, so the name keeps room before it truncates. */
+@media (max-width: 480px) {
+  .dashboard-person-row {
+    gap: 0.75rem;
+  }
+  .dashboard-person-row-when {
+    gap: 0.85rem;
+  }
 }
 
 /* UPDATED — this list is now only ever rendered while a widget is EXPANDED ("See more" clicked);
