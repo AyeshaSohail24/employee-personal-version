@@ -10,6 +10,20 @@ import { formatDateDisplay } from '../../utils/dateUtils.js';
 // Icon per ERP reminder kind (see reminderService / server/db/reminders.js).
 const KIND_ICON = { task: ListChecks, ending: CalendarClock, starting: UserPlus, reply: MessageSquare };
 
+// Colour of the type label and icon (only those — the card, title and text stay neutral), from the
+// ERP's status palette: error = overdue, warning = due today / ending, info = due soon / candidate
+// reply, success = starting, primary = note reminder.
+function toneFor(notification) {
+  if (notification.type !== 'erp_reminder') return 'primary';
+  switch (notification.kind) {
+    case 'task': return notification.state === 'overdue' ? 'error' : notification.state === 'today' ? 'warning' : 'info';
+    case 'ending': return 'warning';
+    case 'starting': return 'success';
+    case 'reply': return 'info';
+    default: return 'primary';
+  }
+}
+
 function isErp(notification) {
   return notification.type === 'erp_reminder';
 }
@@ -101,13 +115,13 @@ export default function NotificationPanel({ isOpen, onClose }) {
             const erp = isErp(notification);
             const Icon = erp ? KIND_ICON[notification.kind] ?? Bell : Bell;
             const label = erp ? reminderLabel(notification) : 'Note Reminder';
-            const urgent = erp && notification.kind === 'task' && notification.state === 'overdue';
+            const tone = toneFor(notification);
             return (
               <div
                 key={notification.id}
                 role="button"
                 tabIndex={0}
-                className={`header-notification-item unread ${urgent ? 'is-overdue' : ''}`}
+                className={`header-notification-item unread tone-${tone}`}
                 data-kind={erp ? notification.kind : 'note'}
                 onClick={() => handleNotificationClick(notification)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleNotificationClick(notification); }}

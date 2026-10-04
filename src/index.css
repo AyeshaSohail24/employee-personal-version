@@ -8862,7 +8862,6 @@ input.form-control:focus {
 }
 
 /* Reminders (bell + Soonest Due Tasks) — overdue in red, due today in amber. */
-.header-notification-item.is-overdue .header-notification-item-type,
 .dashboard-task-row.is-overdue .dashboard-task-row-time {
   color: #DC2626;
   font-weight: 700;
@@ -8871,4 +8870,26 @@ input.form-control:focus {
 .dashboard-task-row.is-due-today .dashboard-task-row-time {
   color: #B45309;
   font-weight: 700;
+}
+
+/* Bell: the type label and its icon carry the status colour; card, title and text stay neutral.
+   Darker shades of each, for contrast on the light teal unread card. */
+.header-notification-item.tone-error :is(.header-notification-item-type, .header-notification-item-icon) {
+  color: #B91C1C;
+}
+
+.header-notification-item.tone-warning :is(.header-notification-item-type, .header-notification-item-icon) {
+  color: #B45309;
+}
+
+.header-notification-item.tone-info :is(.header-notification-item-type, .header-notification-item-icon) {
+  color: #1D4ED8;
+}
+
+.header-notification-item.tone-success :is(.header-notification-item-type, .header-notification-item-icon) {
+  color: #047857;
+}
+
+.header-notification-item.tone-primary :is(.header-notification-item-type, .header-notification-item-icon) {
+  color: var(--color-primary-active);
 }
