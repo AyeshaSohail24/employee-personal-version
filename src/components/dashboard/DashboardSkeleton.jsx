@@ -24,6 +24,7 @@ export default function DashboardSkeleton() {
       <div className="dashboard-widgets-row" style={{ marginTop: '2.25rem' }}>
         <div className="dashboard-widget skeleton-box" style={{ height: '200px' }} />
         <div className="dashboard-widget skeleton-box" style={{ height: '200px' }} />
+        <div className="dashboard-widget skeleton-box" style={{ height: '200px' }} />
       </div>
     </div>
   );

@@ -1156,17 +1156,78 @@ body {
    direct user request ("don't make Ending Within 7 Days AND Soonest Due Tasks horizontal or
    stretched out"). Wraps to a single column on narrow viewports so neither card gets squeezed.
    Gap widened (1rem -> 1.25rem) per a later direct user request for more spacing between them. */
+/* Starting Within 7 Days | Ending Within 7 Days | Soonest Due Tasks: one row of three on desktop,
+   two (Soonest Due Tasks full width below) on tablets, one column on phones. */
 .dashboard-widgets-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.25rem;
-  align-items: start;
+  align-items: stretch;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1199px) {
+  .dashboard-widgets-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-widgets-row > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
   .dashboard-widgets-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* A person row in the Starting/Ending cards: name + details on the left, date + countdown on the
+   right; the name truncates rather than pushing the date onto its own line in a narrow card. */
+.dashboard-person-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  background-color: var(--bg-subtle);
+}
+
+.dashboard-person-row-who {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.dashboard-person-row-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dashboard-person-row-meta {
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-person-row-when {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-shrink: 0;
 }
 
 /* UPDATED — this list is now only ever rendered while a widget is EXPANDED ("See more" clicked);

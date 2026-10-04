@@ -30,14 +30,15 @@ export function reminderSource(kind) {
 }
 
 /**
- * Ending Within 7 Days (Dashboard): the feed's end / final working dates within 7 days (Active and
- * Offboarding — the same items the bell notifies about), for one personnel-type filter, soonest
- * first. null when the feed hasn't loaded or its Personnel part failed.
+ * The Dashboard's people cards: the feed's 'starting' (Starting Within 7 Days — Upcoming and
+ * Onboarding start dates) or 'ending' (Ending Within 7 Days — Active and Offboarding end / final
+ * working dates) items — the same items the bell notifies about — for one personnel-type filter,
+ * soonest first. null when the feed hasn't loaded or its Personnel part failed.
  */
-export function endingSoonFromFeed(feed, personnelType = 'All') {
+export function peopleFromFeed(feed, kind, personnelType = 'All') {
   if (feed?.sources?.personnel !== 'ok') return null;
   return feed.items
-    .filter((item) => item.kind === 'ending' && (personnelType === 'All' || item.personType === personnelType))
+    .filter((item) => item.kind === kind && (personnelType === 'All' || item.personType === personnelType))
     .map((item) => ({
       id: item.personId,
       fullName: item.personName,
@@ -46,11 +47,11 @@ export function endingSoonFromFeed(feed, personnelType = 'All') {
       directoryType: item.personType,
       department: item.department,
       status: item.status,
-      contractEndDate: item.date,
-      daysUntilEnd: item.days,
+      date: item.date,
+      days: item.days,
       link: item.link,
     }))
-    .sort((x, y) => x.daysUntilEnd - y.daysUntilEnd || x.fullName.localeCompare(y.fullName));
+    .sort((x, y) => x.days - y.days || x.fullName.localeCompare(y.fullName));
 }
 
 // Label shown above a notification / task row.

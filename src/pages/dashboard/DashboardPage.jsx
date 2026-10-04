@@ -3,12 +3,13 @@ import { useAutoRefresh } from '../../hooks/useAutoRefresh.js';
 import { UserCheck, UserPlus, UserMinus, UserX, Clock, AlertCircle, RefreshCw } from 'lucide-react';
 import { dashboardService } from '../../services/dashboardService';
 import StatCard from '../../components/dashboard/StatCard';
+import StartingWithin7DaysWidget from '../../components/dashboard/StartingWithin7DaysWidget';
 import EndingWithin7DaysWidget from '../../components/dashboard/EndingWithin7DaysWidget';
 import SoonestDueTasksWidget from '../../components/dashboard/SoonestDueTasksWidget';
 import DashboardSkeleton from '../../components/dashboard/DashboardSkeleton';
 import PersonnelProfileModal from '../../components/employees/PersonnelProfileModal';
 import { useNotifications } from '../../state/NotificationContext';
-import { endingSoonFromFeed } from '../../services/reminderService.js';
+import { peopleFromFeed } from '../../services/reminderService.js';
 
 // Same 3-way segmented control style already used elsewhere in the app (e.g. Launch Plan's
 // employee/intern picker) — this is a PERSONNEL TYPE filter, not a lifecycle status filter.
@@ -24,8 +25,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [profileEmployeeId, setProfileEmployeeId] = useState(null);
-  // Ending Within 7 Days and Soonest Due Tasks read the reminders feed the header bell uses
-  // (NotificationContext), so all three always agree.
+  // Starting Within 7 Days, Ending Within 7 Days and Soonest Due Tasks read the reminders feed the
+  // header bell uses (NotificationContext), so they always agree with it and with each other.
   const { reminders, refreshReminders } = useNotifications();
 
   // `silent` (the automatic refresh): no loading screen, and a failure keeps the data shown.
@@ -111,7 +112,8 @@ export default function DashboardPage() {
   }
 
   const { metrics } = data;
-  const endingWithin7Days = endingSoonFromFeed(reminders, personnelType);
+  const startingWithin7Days = peopleFromFeed(reminders, 'starting', personnelType);
+  const endingWithin7Days = peopleFromFeed(reminders, 'ending', personnelType);
 
   return (
     <div className="dashboard-page-wrapper">
@@ -178,6 +180,7 @@ export default function DashboardPage() {
           widget with many rows never grows the page itself taller. Workforce Lifecycle
           Distribution was removed earlier (redundant with the 5 lifecycle count cards above). */}
       <div className="dashboard-widgets-row" style={{ marginTop: '2.25rem' }}>
+        <StartingWithin7DaysWidget people={startingWithin7Days} onViewProfile={setProfileEmployeeId} />
         <EndingWithin7DaysWidget people={endingWithin7Days} onViewProfile={setProfileEmployeeId} />
         <SoonestDueTasksWidget />
       </div>
