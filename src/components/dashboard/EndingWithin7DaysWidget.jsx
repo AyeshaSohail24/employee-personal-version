@@ -17,18 +17,20 @@ function formatTimeRemaining(daysUntilEnd) {
 const DEFAULT_VISIBLE_COUNT = 2;
 
 /**
- * Dashboard section showing personnel whose canonical contractEndDate falls within the next 7
- * days (0-7 inclusive) — see dashboardService.getDashboardSummary() for the eligibility rule and
- * date-window calculation, both centralized there rather than duplicated in this component.
- * Respects the Dashboard's All/Employees/Interns filter because `people` is already the same
- * filtered array the lifecycle cards and distribution are built from.
+ * Dashboard section showing Active and Offboarding personnel whose end / final working date falls
+ * within the next 7 days (0-7 inclusive) — the ERP reminders feed's "ending" items, the same ones
+ * the header bell notifies about (reminderService.endingSoonFromFeed() / server/db/reminders.js),
+ * already filtered by the Dashboard's All/Employees/Interns choice. `people` is null while the
+ * feed hasn't loaded (or its Personnel part failed).
  *
  * `onViewProfile`, when supplied, is wired to the SAME PersonnelProfileModal the Personnel
  * directory's "View Profile" already uses (never a second profile implementation) — clicking a
  * person's name opens it. Entirely optional: the row still renders cleanly without it.
  */
-export default function EndingWithin7DaysWidget({ people = [], onViewProfile }) {
+export default function EndingWithin7DaysWidget({ people: peopleOrNull = [], onViewProfile }) {
   const [expanded, setExpanded] = useState(false);
+  const notLoaded = peopleOrNull === null;
+  const people = peopleOrNull ?? [];
   const visiblePeople = expanded ? people : people.slice(0, DEFAULT_VISIBLE_COUNT);
   const hiddenCount = people.length - DEFAULT_VISIBLE_COUNT;
 
@@ -47,7 +49,7 @@ export default function EndingWithin7DaysWidget({ people = [], onViewProfile }) 
       </div>
 
       {people.length === 0 ? (
-        <p className="empty-widget-text">Nobody is ending within the next 7 days.</p>
+        <p className="empty-widget-text">{notLoaded ? 'Checking end dates…' : 'Nobody is ending within the next 7 days.'}</p>
       ) : (
         <>
           <div

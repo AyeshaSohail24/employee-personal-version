@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient.js';
+import { apiClient, notifyDataChanged } from './apiClient.js';
 import { upcomingCandidateService } from './upcomingCandidateService.js';
 import { emailTemplateService } from './emailTemplateService.js';
 import { emailPlaceholderService } from './emailPlaceholderService.js';
@@ -174,6 +174,8 @@ export const candidateEmailService = {
    */
   async getThread(candidateId, { markSeen = true, recordCreatedAt = null } = {}) {
     const { messages } = await apiClient.get(`/candidates/${candidateId}/messages${markSeen ? '' : '?markSeen=false'}`);
+    // Opening the thread marked its replies seen on the server — lets the bell drop the reply now.
+    if (markSeen && messages.some((m) => m.direction === 'received' && !m.is_seen)) notifyDataChanged();
     const createdTime = recordCreatedAt ? new Date(recordCreatedAt).getTime() : NaN;
     const earliest = Number.isNaN(createdTime) ? -Infinity : createdTime - 24 * 60 * 60 * 1000;
     return messages

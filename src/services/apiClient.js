@@ -67,21 +67,30 @@ function cachedGet(path, { fresh = false } = {}) {
   return promise.then(structuredClone);
 }
 
-async function write(path, options) {
+// `quiet`: a write that changes nothing the reminders feed shows (e.g. marking a notification read)
+// doesn't ask it to re-read.
+async function write(path, options, { quiet = false } = {}) {
   try {
     return await request(path, options);
   } finally {
     // Cleared whether the write succeeded or not — a failed response can still mean the server
     // applied part of it, so nothing read before it can be trusted afterwards.
     getCache.clear();
+    if (!quiet) notifyDataChanged();
   }
+}
+
+// Tells whatever shows derived data (the notification bell's reminders feed — NotificationContext)
+// that the app's data just changed, so it re-reads instead of waiting for its next refresh.
+export function notifyDataChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('rizurf:data-changed'));
 }
 
 export const apiClient = {
   get: (path, options) => cachedGet(path, options),
   post: (path, data) => write(path, { method: 'POST', body: JSON.stringify(data ?? {}) }),
   patch: (path, data) => write(path, { method: 'PATCH', body: JSON.stringify(data ?? {}) }),
-  put: (path, data) => write(path, { method: 'PUT', body: JSON.stringify(data ?? {}) }),
+  put: (path, data, options) => write(path, { method: 'PUT', body: JSON.stringify(data ?? {}) }, options),
   delete: (path) => write(path, { method: 'DELETE' }),
   invalidate: () => getCache.clear(),
 };

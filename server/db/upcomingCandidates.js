@@ -38,13 +38,32 @@ function predatesApplicant(at, applicantCreatedAt) {
   return !Number.isNaN(time) && time < applicantCreatedAt.getTime() - ID_REUSE_MARGIN_MS;
 }
 
+// Who is in Upcoming: applicants at the `confirmation` phase who haven't already been accepted.
+// Anyone already accepted (converted into an intern — applicantConversion.js) leaves Upcoming
+// straight away, even if moving their Recruitment phase to `completed` failed. A conversion
+// recorded before this applicant's record existed was for a deleted applicant whose id was reused.
+// Shared by the Upcoming list and the reminders feed (listUnseenCandidateReplies()).
+async function loadIsInUpcoming() {
+  const [convertedRows] = await pool.query("SELECT applicant_id, created_at FROM applicant_conversions WHERE status = 'success'");
+  const conversionsById = new Map();
+  for (const row of convertedRows) {
+    const key = String(row.applicant_id);
+    if (!conversionsById.has(key)) conversionsById.set(key, []);
+    conversionsById.get(key).push(row.created_at);
+  }
+  const isConverted = (a) => (conversionsById.get(String(a.id)) ?? [])
+    .some((at) => !predatesApplicant(at, parseApiTimestamp(a.created_at)));
+  return (a) => a.phase === "confirmation" && !isConverted(a);
+}
+
 export async function listConfirmationCandidates() {
-  const [, applicants, jobs, departments, aliasMap] = await Promise.all([
+  const [, applicants, jobs, departments, aliasMap, isInUpcoming] = await Promise.all([
     checkForReplies().catch(() => {}),
     applicantsClient.listApplicants({}),
     applicantsClient.listJobs(),
     departmentsClient.listDepartments().catch(() => []),
     loadDepartmentAliasMap(),
+    loadIsInUpcoming(),
   ]);
 
   const jobsById = new Map(jobs.map((j) => [j.id, j]));
@@ -55,22 +74,9 @@ export async function listConfirmationCandidates() {
   // unmatched falls back to a display-only { id: null, name } that the department filter can't
   // select, and `jobDepartment` keeps the original text so HR can map it.
 
-  // Anyone already accepted (converted into an intern — applicantConversion.js) leaves Upcoming
-  // straight away, even if moving their Recruitment phase to `completed` failed. A conversion
-  // recorded before this applicant's record existed was for a deleted applicant whose id was reused.
-  const [convertedRows] = await pool.query("SELECT applicant_id, created_at FROM applicant_conversions WHERE status = 'success'");
-  const conversionsById = new Map();
-  for (const row of convertedRows) {
-    const key = String(row.applicant_id);
-    if (!conversionsById.has(key)) conversionsById.set(key, []);
-    conversionsById.get(key).push(row.created_at);
-  }
-  const isConverted = (a) => (conversionsById.get(String(a.id)) ?? [])
-    .some((at) => !predatesApplicant(at, parseApiTimestamp(a.created_at)));
-
   const keyById = new Map();
   const candidates = applicants
-    .filter((a) => a.phase === "confirmation" && !isConverted(a))
+    .filter(isInUpcoming)
     .map((a) => {
       keyById.set(String(a.id), applicantKey(a));
       const job = jobsById.get(a.job_id) ?? null;
@@ -145,4 +151,37 @@ export async function listConfirmationCandidates() {
       notificationRead: !hasUnseenReply,
     };
   });
+}
+
+// Unseen replies from candidates currently in Upcoming and not rejected — for the reminders feed
+// (server/db/reminders.js). Read-only: it never marks anything seen and never checks the mailbox
+// (opening Upcoming does that). Messages from before this applicant's record existed belonged to a
+// previous applicant with the same (reused) id and are ignored, same as the Upcoming list.
+export async function listUnseenCandidateReplies() {
+  const [rows] = await pool.query(
+    "SELECT id, applicant_id, sent_at FROM candidate_messages WHERE direction = 'received' AND is_seen = FALSE ORDER BY sent_at ASC",
+  );
+  if (rows.length === 0) return [];
+  const [applicants, isInUpcoming] = await Promise.all([applicantsClient.listApplicants({}), loadIsInUpcoming()]);
+  const inUpcoming = applicants.filter(isInUpcoming);
+  const rejections = await loadRejections(inUpcoming.map((a) => String(a.id)));
+  const byId = new Map(inUpcoming
+    .filter((a) => rejections.get(String(a.id))?.applicantKey !== applicantKey(a))
+    .map((a) => [String(a.id), a]));
+
+  const replies = new Map();
+  for (const row of rows) {
+    const applicant = byId.get(String(row.applicant_id));
+    if (!applicant || predatesApplicant(row.sent_at, parseApiTimestamp(applicant.created_at))) continue;
+    const entry = replies.get(applicant.id) ?? {
+      applicantId: String(applicant.id),
+      fullName: applicant.fullName || `${applicant.first_name ?? ""} ${applicant.last_name ?? ""}`.trim(),
+      count: 0,
+    };
+    entry.count += 1;
+    entry.latestMessageId = row.id;
+    entry.latestAt = new Date(row.sent_at).toISOString();
+    replies.set(applicant.id, entry);
+  }
+  return [...replies.values()];
 }

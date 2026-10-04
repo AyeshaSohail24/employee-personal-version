@@ -4,6 +4,7 @@ import { overlayInternFields, applyInternOverlay, loadDepartmentLookups, fetchIn
 import { internsClient } from "../clients/internsClient.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
+import { buildReminders } from "../db/reminders.js";
 import { sendJson, NotFoundError, ValidationError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
 
@@ -31,6 +32,13 @@ async function listEmployeesLive(query, { internsPromise = fetchInternsForOverla
 }
 
 export const routes = {
+  // Everything that needs attention soon across the ERP — the bell, Soonest Due Tasks and Ending
+  // Within 7 Days all read this one feed (server/db/reminders.js). Read-only.
+  "/reminders": {
+    async get(req, res, ctx) {
+      sendJson(res, ctx.cid, 200, await buildReminders(listEmployeesLive({ limit: 200, offset: 0 })));
+    },
+  },
   // The "Sync Personnel" button: re-reads Personnel live from the Interns DB right now — a fresh
   // fetch of every intern, overlaid onto the existing records, anyone removed there left out, and
   // anyone added there shown from their live record. A GET that only reads: nothing is created or

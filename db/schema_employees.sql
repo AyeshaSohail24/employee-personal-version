@@ -80,6 +80,7 @@ DROP TABLE IF EXISTS `candidate_messages`;
 DROP TABLE IF EXISTS `applicant_conversions`;
 DROP TABLE IF EXISTS `email_templates`;
 DROP TABLE IF EXISTS `email_placeholders`;
+DROP TABLE IF EXISTS `notification_reads`;
 DROP TABLE IF EXISTS `upcoming_candidate_rejections`;
 DROP TABLE IF EXISTS `upcoming_candidates_seen`;
 DROP TABLE IF EXISTS `department_aliases`;
@@ -620,6 +621,19 @@ CREATE TABLE IF NOT EXISTS `upcoming_candidate_rejections` (
     `applicant_key` VARCHAR(255) NOT NULL,
     `rejected_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `rejected_by` VARCHAR(255) NULL -- the HR user's email (or gateway subject)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 24d. NOTIFICATION_READS — which notifications each HR account has read, so the
+--      bell's read/unread follows the signed-in account (gateway user id) across
+--      browsers and devices, independently per account. notification_key is a
+--      reminders-feed key (server/db/reminders.js) or note:<noteId>:<reminderAt>.
+--      No row = unread. Rows older than 180 days are dropped.
+--      Created by `npm run create-notification-reads-table`.
+CREATE TABLE IF NOT EXISTS `notification_reads` (
+    `account_key` VARCHAR(191) NOT NULL, -- "user:<gateway sub>"
+    `notification_key` VARCHAR(255) NOT NULL,
+    `read_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`account_key`, `notification_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 25. CANDIDATE_MESSAGES — the full message thread (sent + received) for a

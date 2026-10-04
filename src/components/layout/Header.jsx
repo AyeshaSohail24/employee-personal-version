@@ -21,7 +21,7 @@ export default function Header({ toggleMobileSidebar }) {
   const location = useLocation();
   const { currentRole } = useRole();
   const session = useSession();
-  const { unreadCount } = useNotifications();
+  const { unreadCount, refreshRemindersIfStale } = useNotifications();
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
 
   // Loaded after the app has rendered (GET /session/photo) rather than holding first paint;
@@ -142,9 +142,10 @@ export default function Header({ toggleMobileSidebar }) {
           />
         </div>
 
-        {/* Notification Bell — the in-app notification center. Currently surfaces Note
-            Reminder notifications only; the unread dot is only rendered while there is at
-            least one unread notification, never a permanent/fake indicator. */}
+        {/* Notification Bell — the in-app notification center: Note reminders plus the ERP
+            reminders feed (tasks due today/overdue, start and end dates, candidate replies — see
+            NotificationContext). Opening it re-reads the feed if it is over a minute old. The unread
+            dot only shows while there is at least one unread notification. */}
         <div className="notification-bell-wrapper">
           <button
             type="button"
@@ -152,7 +153,7 @@ export default function Header({ toggleMobileSidebar }) {
             aria-label="Notifications"
             aria-haspopup="menu"
             aria-expanded={isNotificationPanelOpen}
-            onClick={() => setIsNotificationPanelOpen((open) => !open)}
+            onClick={() => { if (!isNotificationPanelOpen) refreshRemindersIfStale(); setIsNotificationPanelOpen((open) => !open); }}
           >
             <Bell size={20} />
             {unreadCount > 0 && <span className="notification-dot" />}

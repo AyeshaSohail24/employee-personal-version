@@ -26,6 +26,7 @@ import { routes as candidateMessagingRoutes } from "./routes/candidateMessaging.
 import { routes as upcomingCandidatesRoutes } from "./routes/upcomingCandidates.js";
 import { routes as noteRoutes } from "./routes/notes.js";
 import { routes as adminRoutes } from "./routes/admin.js";
+import { routes as notificationReadRoutes } from "./routes/notificationReads.js";
 
 const routes = {
   ...metaRoutes,
@@ -39,6 +40,7 @@ const routes = {
   ...upcomingCandidatesRoutes,
   ...noteRoutes,
   ...adminRoutes,
+  ...notificationReadRoutes,
 };
 
 const matchRoute = buildRouteMatcher(openapi);

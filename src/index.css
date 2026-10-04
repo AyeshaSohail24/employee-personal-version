@@ -8860,3 +8860,15 @@ input.form-control:focus {
     transition: none !important;
   }
 }
+
+/* Reminders (bell + Soonest Due Tasks) — overdue in red, due today in amber. */
+.header-notification-item.is-overdue .header-notification-item-type,
+.dashboard-task-row.is-overdue .dashboard-task-row-time {
+  color: #DC2626;
+  font-weight: 700;
+}
+
+.dashboard-task-row.is-due-today .dashboard-task-row-time {
+  color: #B45309;
+  font-weight: 700;
+}

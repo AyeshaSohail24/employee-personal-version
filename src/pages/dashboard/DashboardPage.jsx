@@ -7,6 +7,8 @@ import EndingWithin7DaysWidget from '../../components/dashboard/EndingWithin7Day
 import SoonestDueTasksWidget from '../../components/dashboard/SoonestDueTasksWidget';
 import DashboardSkeleton from '../../components/dashboard/DashboardSkeleton';
 import PersonnelProfileModal from '../../components/employees/PersonnelProfileModal';
+import { useNotifications } from '../../state/NotificationContext';
+import { endingSoonFromFeed } from '../../services/reminderService.js';
 
 // Same 3-way segmented control style already used elsewhere in the app (e.g. Launch Plan's
 // employee/intern picker) — this is a PERSONNEL TYPE filter, not a lifecycle status filter.
@@ -22,6 +24,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [profileEmployeeId, setProfileEmployeeId] = useState(null);
+  // Ending Within 7 Days and Soonest Due Tasks read the reminders feed the header bell uses
+  // (NotificationContext), so all three always agree.
+  const { reminders, refreshReminders } = useNotifications();
 
   // `silent` (the automatic refresh): no loading screen, and a failure keeps the data shown.
   const fetchDashboardData = useCallback(async ({ silent = false } = {}) => {
@@ -46,6 +51,11 @@ export default function DashboardPage() {
 
   // Re-read every 10 minutes while the tab is visible (src/hooks/useAutoRefresh.js).
   useAutoRefresh(() => fetchDashboardData({ silent: true }));
+
+  // Opening the Dashboard re-reads the feed (it's shared, so this is one request for all three).
+  useEffect(() => {
+    refreshReminders();
+  }, [refreshReminders]);
 
   const personnelTypeSwitcher = (
     <div className="view-switcher-group">
@@ -100,7 +110,8 @@ export default function DashboardPage() {
     );
   }
 
-  const { metrics, endingWithin7Days } = data;
+  const { metrics } = data;
+  const endingWithin7Days = endingSoonFromFeed(reminders, personnelType);
 
   return (
     <div className="dashboard-page-wrapper">

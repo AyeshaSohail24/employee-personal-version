@@ -196,6 +196,16 @@ export const openapi = {
       },
     },
 
+    "/reminders": {
+      get: { summary: "Everything across the ERP that needs attention soon (read-only).", security: scoped("employees:read"),
+        "x-rizurf": { name: "List Reminders", purpose: "One feed of what needs attention soon across the ERP, computed live on every request: open Onboarding/Offboarding plan tasks that are overdue, due today or due within 7 days (only on the current plan of someone still in that stage), start dates within 7 days (Upcoming/Onboarding), end or final working dates within 7 days (Active/Offboarding), and unseen replies from candidates in Upcoming (not rejected). Each item has a stable key, a date and a link to the page it concerns. Read-only — nothing is written or marked seen; `sources` says which parts loaded", use_when: ["Showing notifications or due/ending lists"], do_not_use_when: ["You need the full record — follow the item's link or use the module's own endpoint"], inputs: [], outputs: ["today", "windowDays", "sources", "items[]"], requires: [], related_endpoints: ["GET /employees", "GET /candidates"], tags: ["reminders", "notifications", "tasks", "due", "overdue", "dashboard"] } },
+    },
+    "/notification-reads": {
+      get: { summary: "The signed-in account's read notifications.", security: scoped("employees:read"),
+        "x-rizurf": { name: "List Read Notifications", purpose: "Which notifications (by stable key — a GET /reminders item key, or note:<noteId>:<reminderAt>) the signed-in HR account has read, so read/unread follows the account across browsers and devices. Only this account's; anything not listed is unread", use_when: ["Showing the notification bell's unread state"], do_not_use_when: [], inputs: [], outputs: ["keys[]", "available"], requires: ["available is false until the notification_reads table exists"], related_endpoints: ["PUT /notification-reads", "GET /reminders"], tags: ["notifications", "read", "unread", "bell"] } },
+      put: { summary: "Mark notifications read for the signed-in account.", security: scoped("employees:read"),
+        "x-rizurf": { name: "Mark Notifications Read", purpose: "Record that the signed-in HR account has read these notifications (by key). Idempotent; other accounts are unaffected", use_when: ["Opening a notification, its tick, or Mark all as read"], do_not_use_when: [], inputs: ["keys[] (1–500)"], outputs: ["marked"], requires: ["notification_reads table exists — otherwise 500 SERVICE_MISCONFIGURED"], related_endpoints: ["GET /notification-reads"], tags: ["notifications", "read", "bell"] } },
+    },
     "/employees/sync": {
       get: {
         summary: "Read-only refresh: the same live-overlaid data GET /employees already returns, re-fetched on demand — including interns the Interns DB has that this app has no record for (shown from their live record, never created). Fails if the Interns DB can't be reached.",
