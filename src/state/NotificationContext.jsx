@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { notificationService } from '../services/notificationService.js';
+import { notificationService, notificationKey } from '../services/notificationService.js';
+import { preloadNotificationSound, playNotificationSound } from '../services/notificationSound.js';
 import { reminderService } from '../services/reminderService.js';
 import { useAutoRefresh } from '../hooks/useAutoRefresh.js';
 import { useSession } from './SessionContext';
@@ -37,8 +38,15 @@ export function NotificationProvider({ children }) {
   const feedReadAt = useRef(0);
   const feedInFlight = useRef(null);
   const readsSyncedAt = useRef(0);
+  // New-notification sound: every notification key seen so far this session. One sound plays when
+  // a refresh brings unread notifications with keys never seen before — once for that whole batch.
+  // Nothing sounds until the first feed read has finished (`soundPrimed`), so what's already
+  // there when the app opens stays quiet; re-reads, read-state changes and re-renders add no keys.
+  const seenKeys = useRef(new Set());
+  const soundPrimed = useRef(false);
 
   const refresh = useCallback(async () => {
+    const canSound = soundPrimed.current;
     // A due-reminder check that throws for any reason must never permanently stall future
     // checks — without this try/catch, an uncaught rejection here would skip setNotifications()
     // forever after, leaving the bell/panel silently stuck on stale data with no visible error.
@@ -46,6 +54,14 @@ export function NotificationProvider({ children }) {
       await notificationService.checkDueReminders();
       notificationService.applyReadState(account);
       const all = await notificationService.getAll();
+      let arrived = false;
+      for (const n of all) {
+        const key = notificationKey(n);
+        if (seenKeys.current.has(key)) continue;
+        seenKeys.current.add(key);
+        if (!n.isRead) arrived = true;
+      }
+      if (arrived && canSound && mountedRef.current) playNotificationSound();
       if (mountedRef.current) setNotifications(all);
     } catch (err) {
       console.error('NotificationContext: failed to refresh due reminders.', err);
@@ -81,6 +97,7 @@ export function NotificationProvider({ children }) {
       } finally {
         feedInFlight.current = null;
         await refreshReads({ force: true });
+        soundPrimed.current = true;
       }
     })();
     return feedInFlight.current;
@@ -94,6 +111,7 @@ export function NotificationProvider({ children }) {
   }, [refreshReminders, refreshReads]);
 
   useEffect(() => {
+    preloadNotificationSound();
     refreshReminders();
     let timer = null;
     const onDataChanged = () => {
