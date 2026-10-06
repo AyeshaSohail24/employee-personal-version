@@ -20,11 +20,8 @@ export const BUILT_IN_PLACEHOLDER_TOKENS = ["ApplicantName", "PositionName", "Hi
 export const PLACEHOLDER_SOURCE_KEYS = [
   "applicantFirstName",
   "applicantLastName",
-  "applicantEmail",
-  "applicantPhone",
   "departmentName",
   "offerType",
-  "proposedStartDate",
   "todayDate",
   "fixedText",
 ];

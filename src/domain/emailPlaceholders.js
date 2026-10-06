@@ -27,10 +27,6 @@ function localToday() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function dateOrNull(value) {
-  return value ? formatDateDisplay(String(value)) : null;
-}
-
 /**
  * `resolve(candidate, placeholder)` returns the value, or null/'' when this candidate has none —
  * which the renderer treats as unresolved, so the email can't be sent with a gap in it.
@@ -54,22 +50,6 @@ export const PLACEHOLDER_SOURCES = [
     resolve: (c) => c?.lastName,
   },
   {
-    key: 'applicantEmail',
-    label: "Applicant's email address",
-    description: 'The email address the candidate applied with.',
-    example: 'aida@example.com',
-    mayBeMissing: false,
-    resolve: (c) => c?.email,
-  },
-  {
-    key: 'applicantPhone',
-    label: "Applicant's phone number",
-    description: 'The phone number from the application, if the candidate gave one.',
-    example: '+60 12-345 6789',
-    mayBeMissing: true,
-    resolve: (c) => c?.phone,
-  },
-  {
     key: 'departmentName',
     label: 'Department',
     description: 'The department of the job the candidate applied for.',
@@ -84,14 +64,6 @@ export const PLACEHOLDER_SOURCES = [
     example: 'Paid',
     mayBeMissing: false,
     resolve: (c) => c?.offerType,
-  },
-  {
-    key: 'proposedStartDate',
-    label: "Applicant's proposed start date",
-    description: 'The start date the candidate gave on their application (not a confirmed internship date).',
-    example: 'Jul 27, 2026',
-    mayBeMissing: true,
-    resolve: (c) => dateOrNull(c?.proposedStartDate),
   },
   {
     key: 'todayDate',
