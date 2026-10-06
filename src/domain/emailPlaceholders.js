@@ -16,7 +16,7 @@ import { formatDateDisplay } from '../utils/dateUtils.js';
 export const BUILT_IN_PLACEHOLDERS = [
   { token: 'ApplicantName', label: 'Applicant Name', description: "The candidate's full name." },
   { token: 'PositionName', label: 'Position Name', description: 'The position the candidate applied for.' },
-  { token: 'HiringEmployeeName', label: 'Hiring Employee Name', description: 'The name typed in "Hiring Employee Name" when the email is sent.' },
+  { token: 'HiringEmployeeName', label: 'Hiring Employee Name', description: 'The name of the HR user signed in when the email is written.' },
 ];
 
 export const FIXED_TEXT_SOURCE = 'fixedText';

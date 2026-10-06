@@ -7,6 +7,7 @@ import { emailTemplateService } from '../../services/emailTemplateService.js';
 import { emailPlaceholderService } from '../../services/emailPlaceholderService.js';
 import { resolvePlaceholderValue } from '../../domain/emailPlaceholders.js';
 import { Select } from '../../components/common/Select.jsx';
+import { useSession } from '../../state/SessionContext';
 
 function formatThreadTimestamp(isoString) {
   if (!isoString) return '';
@@ -32,13 +33,14 @@ const OFFER_PILL_UNSET = { bg: '#FEF2F2', color: '#DC2626' };
  * is picked up on the next getThread() call. Opening this page clears the candidate's unseen
  * reply flag, same as opening a message in an inbox.
  */
-// Candidate-facing correspondence signs as this team identity, never the
-// individual HR user who happens to be signed in.
-const HIRING_EMPLOYEE_NAME = 'Rizurf Onboarding Team';
+// {{HiringEmployeeName}} is the signed-in HR user's name (from the sign-in session, the same name
+// the header shows). Only if the session carries no name does it fall back to the team identity.
+const FALLBACK_HIRING_EMPLOYEE_NAME = 'Rizurf Onboarding Team';
 
 export default function CandidateThreadPage() {
   const { candidateId } = useParams();
-  const hiringEmployeeName = HIRING_EMPLOYEE_NAME;
+  const session = useSession();
+  const hiringEmployeeName = session?.name?.trim() || FALLBACK_HIRING_EMPLOYEE_NAME;
   const [candidate, setCandidate] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
