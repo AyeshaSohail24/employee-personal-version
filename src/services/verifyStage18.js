@@ -10390,11 +10390,11 @@ export async function verifyStage18() {
         '1308. NEW — Header.jsx\'s BREADCRUMB_LABEL_OVERRIDES maps \'/employees\' to \'Personnel\' — the breadcrumb reads Home > Personnel while the underlying route/URL stays exactly /employees'
       );
 
-      // 1309. Global search placeholder updated
+      // 1309. The header's global search box was removed (it was never wired to any search)
       assert(
-        headerSrcPersonnel.includes('placeholder="Search personnel, notes..."') &&
+        !headerSrcPersonnel.includes('aria-label="Global Search"') &&
         !headerSrcPersonnel.includes('placeholder="Search employees, notes..."'),
-        '1309. NEW — Header.jsx\'s global search placeholder reads "Search personnel, notes..." — wording only, no new search functionality was implemented'
+        '1309. Header.jsx has no global search box — it searched nothing, so it was removed (each page keeps its own search)'
       );
 
       // 1310. Page heading/description say "All Personnel" / mention personnel directory

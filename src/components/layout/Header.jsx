@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, Search, Bell, ChevronRight, User } from 'lucide-react';
+import { Menu, Bell, ChevronRight, User } from 'lucide-react';
 import { useRole } from '../../state/RoleContext';
 import { useSession } from '../../state/SessionContext';
 import { useNotifications } from '../../state/NotificationContext';
@@ -131,17 +131,6 @@ export default function Header({ toggleMobileSidebar }) {
       </div>
 
       <div className="header-right">
-        {/* Global Search */}
-        <div className="global-search">
-          <Search size={16} className="search-icon" />
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Search personnel, notes..."
-            aria-label="Global Search"
-          />
-        </div>
-
         {/* Notification Bell — the in-app notification center: Note reminders plus the ERP
             reminders feed (tasks due today/overdue, start and end dates, candidate replies — see
             NotificationContext). Opening it re-reads the feed if it is over a minute old. The unread

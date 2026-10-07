@@ -331,39 +331,6 @@ body {
   gap: 1rem;
 }
 
-/* Global Search Input */
-.global-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.search-input {
-  width: 240px;
-  padding: 0.45rem 0.75rem 0.45rem 2.25rem;
-  font-size: 0.85rem;
-  background-color: var(--border-subtle);
-  border: 1px solid transparent;
-  border-radius: var(--radius-full);
-  outline: none;
-  transition: all 0.2s ease;
-  color: var(--text-main);
-}
-
-.search-input:focus {
-  width: 300px;
-  background-color: #FFFFFF;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.15);
-}
-
-.search-icon {
-  position: absolute;
-  left: 0.75rem;
-  color: var(--text-muted);
-  pointer-events: none;
-}
-
 /* Role Switcher Component */
 .role-switcher {
   display: flex;
@@ -917,15 +884,6 @@ body {
 }
 
 /* Responsive Media Queries */
-@media (max-width: 1024px) {
-  .search-input {
-    width: 180px;
-  }
-  .search-input:focus {
-    width: 220px;
-  }
-}
-
 @media (max-width: 768px) {
   .app-sidebar {
     transform: translateX(-100%);
@@ -941,9 +899,6 @@ body {
   }
   .mobile-toggle {
     display: block;
-  }
-  .search-input {
-    display: none;
   }
   .user-info {
     display: none;
