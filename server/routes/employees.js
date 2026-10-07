@@ -5,6 +5,8 @@ import { internsClient } from "../clients/internsClient.js";
 import { departmentsClient } from "../clients/departmentsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { buildReminders } from "../db/reminders.js";
+import { accountKeyFor } from "../db/notificationReads.js";
+import { rememberAccount, publishFeedToGateway } from "../db/gatewayNotify.js";
 import { sendJson, NotFoundError, ValidationError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
 
@@ -31,12 +33,31 @@ async function listEmployeesLive(query, { internsPromise = fetchInternsForOverla
   return [...overlaid, ...internOnly];
 }
 
+/** The reminders feed as the bell sees it right now. */
+export function buildCurrentReminders() {
+  return buildReminders(listEmployeesLive({ limit: 200, offset: 0 }));
+}
+
+function safeAccountKey(principal) {
+  try {
+    return accountKeyFor(principal);
+  } catch {
+    return null;
+  }
+}
+
 export const routes = {
   // Everything that needs attention soon across the ERP — the bell, Soonest Due Tasks and Ending
   // Within 7 Days all read this one feed (server/db/reminders.js). Read-only.
+  // Each read also keeps the ERP's bell in the gateway up to date (server/db/gatewayNotify.js):
+  // changed unread counts and never-seen reminders are sent before answering (on a serverless host
+  // nothing may run after the response); nothing at all unless that's switched on.
   "/reminders": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, await buildReminders(listEmployeesLive({ limit: 200, offset: 0 })));
+      const feed = await buildCurrentReminders();
+      await rememberAccount(safeAccountKey(ctx.principal), ctx.principal);
+      await publishFeedToGateway(feed);
+      sendJson(res, ctx.cid, 200, feed);
     },
   },
   // The "Sync Personnel" button: re-reads Personnel live from the Interns DB right now — a fresh

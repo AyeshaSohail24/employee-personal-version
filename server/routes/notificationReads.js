@@ -1,4 +1,6 @@
 import * as reads from "../db/notificationReads.js";
+import { rememberAccount, publishFeedToGateway } from "../db/gatewayNotify.js";
+import { GATEWAY_NOTIFY } from "../config.js";
 import { sendJson, ValidationError } from "../http/errors.js";
 import { readJsonBody } from "../http/util.js";
 
@@ -15,12 +17,22 @@ export const routes = {
   // keys it has read, PUT { keys } marks more read. Another account's state is never visible.
   "/notification-reads": {
     async get(req, res, ctx) {
-      sendJson(res, ctx.cid, 200, await reads.listReadKeys(account(ctx)));
+      const key = account(ctx);
+      await rememberAccount(key, ctx.principal);
+      sendJson(res, ctx.cid, 200, await reads.listReadKeys(key));
     },
     async put(req, res, ctx) {
       const body = await readJsonBody(req);
       try {
-        sendJson(res, ctx.cid, 200, { marked: await reads.markKeysRead(account(ctx), body.keys) });
+        const key = account(ctx);
+        const marked = await reads.markKeysRead(key, body.keys);
+        await rememberAccount(key, ctx.principal);
+        // Reading lowers this account's unread count: update its badge in the gateway now.
+        if (GATEWAY_NOTIFY.enabled) {
+          const { buildCurrentReminders } = await import("./employees.js");
+          await publishFeedToGateway(await buildCurrentReminders());
+        }
+        sendJson(res, ctx.cid, 200, { marked });
       } catch (error) {
         if (error instanceof reads.NotificationReadError) throw new ValidationError(error.message);
         throw error;

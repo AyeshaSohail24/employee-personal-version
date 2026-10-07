@@ -75,6 +75,15 @@ function externalClient(prefix, fallbackAudience) {
   };
 }
 
+// The ERP's bell in the gateway (server/db/gatewayNotify.js — MICROAPP_BADGES.md): badge counts
+// and notifications sent with this app's API client (it needs the `gateway:badges` grant for this
+// app). Off unless GATEWAY_NOTIFY_ENABLED=1, so nothing reaches the gateway until it's switched on.
+export const GATEWAY_NOTIFY = {
+  enabled: process.env.GATEWAY_NOTIFY_ENABLED === "1",
+  clientId: sharedClientId(),
+  clientSecret: sharedClientSecret(),
+};
+
 // The three external systems this app links to via API only — never a direct
 // DB connection (see db/schema_employees.sql's architecture note).
 export const EXTERNAL_CLIENTS = {

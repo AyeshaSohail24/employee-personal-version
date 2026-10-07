@@ -15,7 +15,9 @@
     "create-upcoming-candidates-seen-table": "node --env-file=.env server/scripts/createTableFromSchema.js upcoming_candidates_seen",
     "create-department-aliases-table": "node --env-file=.env server/scripts/createTableFromSchema.js department_aliases",
     "create-upcoming-candidate-rejections-table": "node --env-file=.env server/scripts/createTableFromSchema.js upcoming_candidate_rejections",
-    "create-notification-reads-table": "node --env-file=.env server/scripts/createTableFromSchema.js notification_reads"
+    "create-notification-reads-table": "node --env-file=.env server/scripts/createTableFromSchema.js notification_reads",
+    "create-gateway-badge-accounts-table": "node --env-file=.env server/scripts/createTableFromSchema.js gateway_badge_accounts",
+    "create-reminder-first-seen-table": "node --env-file=.env server/scripts/createTableFromSchema.js reminder_first_seen"
   },
   "dependencies": {
     "html-to-image": "^1.11.13",

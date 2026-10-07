@@ -80,6 +80,8 @@ DROP TABLE IF EXISTS `candidate_messages`;
 DROP TABLE IF EXISTS `applicant_conversions`;
 DROP TABLE IF EXISTS `email_templates`;
 DROP TABLE IF EXISTS `email_placeholders`;
+DROP TABLE IF EXISTS `reminder_first_seen`;
+DROP TABLE IF EXISTS `gateway_badge_accounts`;
 DROP TABLE IF EXISTS `notification_reads`;
 DROP TABLE IF EXISTS `upcoming_candidate_rejections`;
 DROP TABLE IF EXISTS `upcoming_candidates_seen`;
@@ -634,6 +636,29 @@ CREATE TABLE IF NOT EXISTS `notification_reads` (
     `notification_key` VARCHAR(255) NOT NULL,
     `read_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`account_key`, `notification_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 24e. GATEWAY_BADGE_ACCOUNTS — every HR account that uses the ERP's bell, and the
+--      number last shown on the ERP's icon in the gateway for them (Your apps), so
+--      a count is sent only when it changes — up and down (MICROAPP_BADGES.md).
+--      account_key matches notification_reads. server/db/gatewayNotify.js.
+--      Created by `npm run create-gateway-badge-accounts-table`.
+CREATE TABLE IF NOT EXISTS `gateway_badge_accounts` (
+    `account_key` VARCHAR(191) NOT NULL PRIMARY KEY, -- "user:<gateway sub>"
+    `sub` VARCHAR(191) NULL, -- gateway user id
+    `email` VARCHAR(255) NULL,
+    `last_count` INT NULL, -- count last sent to the gateway (NULL = never sent)
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 24f. REMINDER_FIRST_SEEN — when each reminders-feed item (by its key) first
+--      appeared, so only genuinely new ones are sent to the gateway as
+--      notifications (banner, its bell, system pop-ups), each once.
+--      server/db/gatewayNotify.js.
+--      Created by `npm run create-reminder-first-seen-table`.
+CREATE TABLE IF NOT EXISTS `reminder_first_seen` (
+    `notification_key` VARCHAR(255) NOT NULL PRIMARY KEY, -- a server/db/reminders.js key
+    `first_seen_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 25. CANDIDATE_MESSAGES — the full message thread (sent + received) for a
