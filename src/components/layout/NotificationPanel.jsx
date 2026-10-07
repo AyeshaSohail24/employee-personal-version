@@ -1,32 +1,10 @@
-import React, { useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Bell, Check, CheckCheck, ListChecks, CalendarClock, UserPlus, MessageSquare } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Bell, Check, CheckCheck } from 'lucide-react';
 import { useNotifications } from '../../state/NotificationContext';
-import { notesService } from '../../services/notesService.js';
 import { formatReminderLabel } from '../../domain/noteDomain.js';
-import { reminderLabel } from '../../services/reminderService.js';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
-
-// Icon per ERP reminder kind (see reminderService / server/db/reminders.js).
-const KIND_ICON = { task: ListChecks, ending: CalendarClock, starting: UserPlus, reply: MessageSquare };
-
-// Colour of the type label and icon (only those — the card, title and text stay neutral), from the
-// ERP's status palette: error = overdue, warning = due today / ending, info = due soon / candidate
-// reply, success = starting, primary = note reminder.
-function toneFor(notification) {
-  if (notification.type !== 'erp_reminder') return 'primary';
-  switch (notification.kind) {
-    case 'task': return notification.state === 'overdue' ? 'error' : notification.state === 'today' ? 'warning' : 'info';
-    case 'ending': return 'warning';
-    case 'starting': return 'success';
-    case 'reply': return 'info';
-    default: return 'primary';
-  }
-}
-
-function isErp(notification) {
-  return notification.type === 'erp_reminder';
-}
+import { notificationsOn, setNotificationsOn } from '../../services/notificationPrefs.js';
+import { isErp, iconFor, labelFor, toneFor, useOpenNotification } from './notificationDisplay.js';
 
 /** "Oct 05, 2026" for a date, "Oct 05, 2026, 3:04 PM" for a reply time. */
 function erpTimeLabel(notification) {
@@ -49,8 +27,12 @@ function erpTimeLabel(notification) {
  */
 export default function NotificationPanel({ isOpen, onClose }) {
   const { unreadNotifications, markAsRead, markAllAsRead } = useNotifications();
-  const navigate = useNavigate();
+  const openNotification = useOpenNotification();
   const panelRef = useRef(null);
+  const [alertsOn, setAlertsOn] = useState(notificationsOn);
+
+  // Re-read when the panel opens: the switch is shared with the gateway and other Rizurf apps.
+  useEffect(() => { if (isOpen) setAlertsOn(notificationsOn()); }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -68,21 +50,14 @@ export default function NotificationPanel({ isOpen, onClose }) {
   // Most pressing first: overdue/due now (oldest due first), then everything else by due date.
   const sorted = [...unreadNotifications].sort((a, b) => String(a.dueAt || '').localeCompare(String(b.dueAt || '')));
 
-  const handleNotificationClick = async (notification) => {
-    await markAsRead(notification.id);
+  const handleNotificationClick = (notification) => {
     onClose();
+    openNotification(notification);
+  };
 
-    if (isErp(notification)) {
-      if (notification.link) navigate(notification.link);
-      return;
-    }
-
-    // The associated note may since have been permanently deleted — handle that safely rather
-    // than navigating into a note that no longer exists.
-    const note = await notesService.getById(notification.noteId).catch(() => null);
-    if (!note) return;
-
-    navigate(note.isArchived ? '/notes/archived' : '/notes', { state: { openNoteId: note.id } });
+  const handleAlertsChange = (on) => {
+    setNotificationsOn(on);
+    setAlertsOn(on);
   };
 
   // Marks only this one notification as read, WITHOUT navigating anywhere — must stop
@@ -113,8 +88,8 @@ export default function NotificationPanel({ isOpen, onClose }) {
         ) : (
           sorted.map((notification) => {
             const erp = isErp(notification);
-            const Icon = erp ? KIND_ICON[notification.kind] ?? Bell : Bell;
-            const label = erp ? reminderLabel(notification) : 'Note Reminder';
+            const Icon = iconFor(notification);
+            const label = labelFor(notification);
             const tone = toneFor(notification);
             return (
               <div
@@ -150,6 +125,25 @@ export default function NotificationPanel({ isOpen, onClose }) {
           })
         )}
       </div>
+
+      {/* The Rizurf "Notifications" switch (saved on this device; the gateway uses the same one). */}
+      <label className="notification-alerts-row" htmlFor="notifyToggle">
+        <span className="notification-alerts-text">
+          <span className="notification-alerts-title">Notifications</span>
+          <span className="notification-alerts-sub" id="notifyToggleSub">
+            {alertsOn ? 'Banner and sound in this app' : 'Off: no banners or sounds in this app'}
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          id="notifyToggle"
+          className="notification-alerts-switch"
+          role="switch"
+          checked={alertsOn}
+          aria-describedby="notifyToggleSub"
+          onChange={(e) => handleAlertsChange(e.target.checked)}
+        />
+      </label>
     </div>
   );
 }

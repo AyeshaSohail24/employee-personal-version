@@ -8973,3 +8973,219 @@ input.form-control:focus {
     padding-right: 1rem;
   }
 }
+
+/* New-notification banners (RIZURF_NOTIFICATION_STANDARD.md §4c): top right, over the header,
+   gone after 6 s. Same layout as every Rizurf app's banner, in this app's own colours; the round
+   icon on the left carries the bell's status colour for the kind of reminder. */
+.notify-stack {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 210;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.notify-banner {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 36px 12px 12px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  animation: notifyIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.notify-banner:hover {
+  border-color: var(--color-primary);
+}
+
+.notify-banner:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.notify-banner.leaving {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+.notify-banner-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background-color: var(--border-subtle);
+}
+
+.notify-banner.tone-error .notify-banner-icon { color: #B91C1C; background-color: #FEF2F2; }
+.notify-banner.tone-warning .notify-banner-icon { color: #B45309; background-color: #FFFBEB; }
+.notify-banner.tone-info .notify-banner-icon { color: #1D4ED8; background-color: #EFF6FF; }
+.notify-banner.tone-success .notify-banner-icon { color: #047857; background-color: #ECFDF5; }
+.notify-banner.tone-primary .notify-banner-icon { color: var(--color-primary-active); background-color: var(--color-primary-light); }
+
+.notify-banner-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.notify-banner-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.notify-banner-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notify-banner-time {
+  flex: none;
+  font-size: 0.72rem;
+  color: var(--text-light);
+}
+
+.notify-banner-sub {
+  font-size: 0.82rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notify-banner-body {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notify-banner-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notify-banner-close:hover {
+  background: var(--border-subtle);
+  color: var(--text-main);
+}
+
+@keyframes notifyIn {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notify-banner { animation: none; transition: none; }
+}
+
+/* Bell panel footer: the "Notifications" switch (§4e), saved on this device. */
+.notification-alerts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.5rem;
+  border-top: 1px solid var(--border-light);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.notification-alerts-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notification-alerts-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.notification-alerts-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.notification-alerts-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border-radius: var(--radius-full);
+  background-color: var(--border-light);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.notification-alerts-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease;
+}
+
+.notification-alerts-switch:checked {
+  background-color: var(--color-primary);
+}
+
+.notification-alerts-switch:checked::after {
+  transform: translateX(16px);
+}
+
+.notification-alerts-switch:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-alerts-switch, .notification-alerts-switch::after { transition: none; }
+}

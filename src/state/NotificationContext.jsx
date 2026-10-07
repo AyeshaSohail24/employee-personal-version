@@ -1,23 +1,29 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { notificationService, notificationKey } from '../services/notificationService.js';
 import { preloadNotificationSound, playNotificationSound } from '../services/notificationSound.js';
+import { notificationsOn } from '../services/notificationPrefs.js';
 import { reminderService } from '../services/reminderService.js';
 import { useAutoRefresh } from '../hooks/useAutoRefresh.js';
 import { useSession } from './SessionContext';
 
 const NotificationContext = createContext();
 
-// Lightweight polling interval while the app is open — this is a frontend PoC with no backend
-// scheduler/push, so due reminders can only ever be detected while the app is actually running
-// (on load, on this interval, and immediately after a reminder is set/removed). 30s is frequent
-// enough to feel responsive for a reminder due "now" without being wasteful.
-const POLL_INTERVAL_MS = 30000;
-
-// The ERP reminders feed (server — reminderService) is re-read on load, every 10 minutes while the
-// tab is visible (useAutoRefresh, same as every live page), when the app's data changes (any save —
-// see apiClient's 'rizurf:data-changed'), and when the bell is opened if it's over a minute old.
+// Polling (RIZURF_NOTIFICATION_STANDARD.md §2): a small Web Worker ticks every 4 seconds, because
+// browsers slow a background tab's own timers to once a minute. On each tick, due Note reminders are
+// checked every 30 seconds and the ERP reminders feed (server — reminderService) is re-read every
+// minute — the feed reads the Interns DB, Recruitment API and this app's tables, so it is polled
+// less often than a chat list would be. A background tab keeps polling for its first 30 minutes,
+// then stops until it is shown again. The feed is also re-read when the app's data changes (any
+// save — see apiClient's 'rizurf:data-changed') and when the bell is opened if it's over a minute old.
+const TICK_MS = 4000;
+const LOCAL_CHECK_MS = 30 * 1000;
+const FEED_POLL_MS = 60 * 1000;
+const BACKGROUND_POLL_FOR_MS = 30 * 60 * 1000;
 export const DATA_CHANGED_EVENT = 'rizurf:data-changed';
 const FEED_STALE_AFTER_MS = 60 * 1000;
+
+// Top-right banners for new notifications (§1): at most 3 per refresh and 3 on screen.
+const MAX_BANNERS = 3;
 const DATA_CHANGED_DEBOUNCE_MS = 800;
 
 // Read/unread belongs to the signed-in HR account (server — notificationService.syncReadState()).
@@ -38,12 +44,14 @@ export function NotificationProvider({ children }) {
   const feedReadAt = useRef(0);
   const feedInFlight = useRef(null);
   const readsSyncedAt = useRef(0);
-  // New-notification sound: every notification key seen so far this session. One sound plays when
-  // a refresh brings unread notifications with keys never seen before — once for that whole batch.
-  // Nothing sounds until the first feed read has finished (`soundPrimed`), so what's already
-  // there when the app opens stays quiet; re-reads, read-state changes and re-renders add no keys.
+  // New notifications: every notification key seen so far this session. When a refresh brings
+  // unread notifications with keys never seen before, each gets a banner (up to 3) and one sound
+  // plays for the whole batch. Nothing is announced until the first feed read has finished
+  // (`soundPrimed`), so what's already there when the app opens stays quiet; re-reads, read-state
+  // changes and re-renders add no keys. The Notifications switch (notificationPrefs) silences both.
   const seenKeys = useRef(new Set());
   const soundPrimed = useRef(false);
+  const [banners, setBanners] = useState([]);
 
   const refresh = useCallback(async () => {
     const canSound = soundPrimed.current;
@@ -54,14 +62,19 @@ export function NotificationProvider({ children }) {
       await notificationService.checkDueReminders();
       notificationService.applyReadState(account);
       const all = await notificationService.getAll();
-      let arrived = false;
+      const arrived = [];
       for (const n of all) {
         const key = notificationKey(n);
         if (seenKeys.current.has(key)) continue;
         seenKeys.current.add(key);
-        if (!n.isRead) arrived = true;
+        if (!n.isRead) arrived.push(n);
       }
-      if (arrived && canSound && mountedRef.current) playNotificationSound();
+      // Not announced: anything about the page being looked at right now (you can see it there).
+      const announce = arrived.filter((n) => !isWatching(n)).slice(0, MAX_BANNERS);
+      if (announce.length > 0 && canSound && mountedRef.current && notificationsOn()) {
+        setBanners((prev) => [...prev, ...announce.map((n) => ({ bannerId: `${notificationKey(n)}@${Date.now()}`, notification: n }))].slice(-MAX_BANNERS));
+        playNotificationSound();
+      }
       if (mountedRef.current) setNotifications(all);
     } catch (err) {
       console.error('NotificationContext: failed to refresh due reminders.', err);
@@ -130,7 +143,28 @@ export function NotificationProvider({ children }) {
   useEffect(() => {
     mountedRef.current = true;
     refresh();
-    const interval = setInterval(refresh, POLL_INTERVAL_MS);
+    let localCheckedAt = Date.now();
+    let hiddenSince = 0;
+    const tick = () => {
+      const now = Date.now();
+      if (document.visibilityState === 'visible') hiddenSince = 0;
+      else {
+        hiddenSince = hiddenSince || now;
+        if (now - hiddenSince > BACKGROUND_POLL_FOR_MS) return;
+      }
+      if (now - localCheckedAt >= LOCAL_CHECK_MS) { localCheckedAt = now; refresh(); }
+      if (feedReadAt.current && now - feedReadAt.current >= FEED_POLL_MS) refreshReminders({ fresh: true });
+    };
+    let ticker = null;
+    let interval = null;
+    try {
+      const url = URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${TICK_MS})`], { type: 'text/javascript' }));
+      ticker = new Worker(url);
+      URL.revokeObjectURL(url);
+      ticker.onmessage = tick;
+    } catch {
+      interval = setInterval(tick, TICK_MS);
+    }
 
     // Browsers throttle (or fully suspend) setInterval timers in backgrounded/minimized tabs, so
     // a reminder that became due while the tab was out of focus might not surface until the next
@@ -147,11 +181,16 @@ export function NotificationProvider({ children }) {
 
     return () => {
       mountedRef.current = false;
+      ticker?.terminate();
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [refresh, refreshReads]);
+  }, [refresh, refreshReads, refreshReminders]);
+
+  const dismissBanner = useCallback((bannerId) => {
+    setBanners((prev) => prev.filter((b) => b.bannerId !== bannerId));
+  }, []);
 
   // Read for the signed-in account — shown straight away, saved to the account on the server.
   const markAsRead = useCallback(async (id) => {
@@ -180,9 +219,17 @@ export function NotificationProvider({ children }) {
   const value = {
     notifications, unreadNotifications, unreadCount, markAsRead, markAllAsRead, refresh,
     reminders, feedError, refreshReminders, refreshRemindersIfStale,
+    banners, dismissBanner,
   };
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
+}
+
+// The notification is about the page on screen right now (and the window has focus) — e.g. a
+// candidate's reply while their conversation is open. Like a chat you're watching, it isn't announced.
+function isWatching(notification) {
+  if (!notification.link || document.visibilityState !== 'visible' || !document.hasFocus()) return false;
+  return window.location.pathname === notification.link.split(/[?#]/)[0];
 }
 
 export function useNotifications() {

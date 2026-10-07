@@ -7,6 +7,7 @@ import { useNotifications } from '../../state/NotificationContext';
 import { employeeService } from '../../services/employeeService.js';
 import { apiClient } from '../../services/apiClient.js';
 import NotificationPanel from './NotificationPanel';
+import NotificationBanners from './NotificationBanners';
 import Avatar from '../common/Avatar.jsx';
 
 function initialsFor(name, email) {
@@ -149,6 +150,7 @@ export default function Header({ toggleMobileSidebar }) {
           </button>
           <NotificationPanel isOpen={isNotificationPanelOpen} onClose={() => setIsNotificationPanelOpen(false)} />
         </div>
+        <NotificationBanners />
 
         {/* Profile Avatar Menu — the real signed-in identity from the gateway
             session (SessionContext), not the app's own capability-role stub
