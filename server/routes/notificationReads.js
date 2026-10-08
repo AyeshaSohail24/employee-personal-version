@@ -1,6 +1,5 @@
 import * as reads from "../db/notificationReads.js";
-import { rememberAccount, publishFeedToGateway } from "../db/gatewayNotify.js";
-import { GATEWAY_NOTIFY } from "../config.js";
+import { rememberAccount, nudgeGateway } from "../db/gatewayNotify.js";
 import { sendJson, ValidationError } from "../http/errors.js";
 import { readJsonBody } from "../http/util.js";
 
@@ -27,11 +26,8 @@ export const routes = {
         const key = account(ctx);
         const marked = await reads.markKeysRead(key, body.keys);
         await rememberAccount(key, ctx.principal);
-        // Reading lowers this account's unread count: update its badge in the gateway now.
-        if (GATEWAY_NOTIFY.enabled) {
-          const { buildCurrentReminders } = await import("./employees.js");
-          await publishFeedToGateway(await buildCurrentReminders());
-        }
+        // Reading lowers this account's unread count: the gateway re-reads it now (§6b).
+        await nudgeGateway();
         sendJson(res, ctx.cid, 200, { marked });
       } catch (error) {
         if (error instanceof reads.NotificationReadError) throw new ValidationError(error.message);

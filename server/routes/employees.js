@@ -6,7 +6,7 @@ import { departmentsClient } from "../clients/departmentsClient.js";
 import { RowNotFoundError } from "../db/crud.js";
 import { buildReminders } from "../db/reminders.js";
 import { accountKeyFor } from "../db/notificationReads.js";
-import { rememberAccount, publishFeedToGateway } from "../db/gatewayNotify.js";
+import { rememberAccount, syncFeed, nudgeGateway } from "../db/gatewayNotify.js";
 import { sendJson, NotFoundError, ValidationError } from "../http/errors.js";
 import { parseListQuery, readJsonBody } from "../http/util.js";
 
@@ -49,14 +49,15 @@ function safeAccountKey(principal) {
 export const routes = {
   // Everything that needs attention soon across the ERP — the bell, Soonest Due Tasks and Ending
   // Within 7 Days all read this one feed (server/db/reminders.js). Read-only.
-  // Each read also keeps the ERP's bell in the gateway up to date (server/db/gatewayNotify.js):
-  // changed unread counts and never-seen reminders are sent before answering (on a serverless host
-  // nothing may run after the response); nothing at all unless that's switched on.
+  // Each read also keeps the ERP's bell in the gateway up to date (server/db/gatewayNotify.js): a
+  // new reminder or a changed unread count nudges the gateway to read GET /gateway/badges — before
+  // answering, since on a serverless host nothing may run after the response. Nothing at all
+  // unless that's switched on.
   "/reminders": {
     async get(req, res, ctx) {
       const feed = await buildCurrentReminders();
       await rememberAccount(safeAccountKey(ctx.principal), ctx.principal);
-      await publishFeedToGateway(feed);
+      if ((await syncFeed(feed)).changed) await nudgeGateway();
       sendJson(res, ctx.cid, 200, feed);
     },
   },

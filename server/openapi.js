@@ -200,6 +200,10 @@ export const openapi = {
       get: { summary: "Everything across the ERP that needs attention soon (read-only).", security: scoped("employees:read"),
         "x-rizurf": { name: "List Reminders", purpose: "One feed of what needs attention soon across the ERP, computed live on every request: open Onboarding/Offboarding plan tasks that are overdue, due today or due within 7 days (only on the current plan of someone still in that stage), start dates within 7 days (Upcoming/Onboarding), end or final working dates within 7 days (Active/Offboarding), and unseen replies from candidates in Upcoming (not rejected). Each item has a stable key, a date and a link to the page it concerns. Read-only — nothing is written or marked seen; `sources` says which parts loaded", use_when: ["Showing notifications or due/ending lists"], do_not_use_when: ["You need the full record — follow the item's link or use the module's own endpoint"], inputs: [], outputs: ["today", "windowDays", "sources", "items[]"], requires: [], related_endpoints: ["GET /employees", "GET /candidates"], tags: ["reminders", "notifications", "tasks", "due", "overdue", "dashboard"] } },
     },
+    "/gateway/badges": {
+      get: { summary: "Unread ERP reminder counts and recent reminders per HR account, for the gateway.",
+        "x-rizurf": { name: "Gateway Badges", purpose: "Read by the gateway only (a token it signs, scope gateway:badges:read): each HR account's number of unread ERP reminders for the ERP's icon in Your apps, and the recent reminders as gateway notifications (banner, bell, system pop-ups)", use_when: ["The gateway reading the ERP's icon badges and notifications"], do_not_use_when: ["Showing the bell inside the ERP — use GET /reminders and GET /notification-reads"], inputs: [], outputs: ["badges[] (sub|email, count)", "notifications[] (id, sub|email, title, subtitle, body, url, at)"], requires: ["GATEWAY_NOTIFY_ENABLED=1 — otherwise 404", "a gateway access token for this service with gateway:badges:read — otherwise 401"], related_endpoints: ["GET /reminders", "GET /notification-reads"], tags: ["gateway", "badges", "notifications"] } },
+    },
     "/notification-reads": {
       get: { summary: "The signed-in account's read notifications.", security: scoped("employees:read"),
         "x-rizurf": { name: "List Read Notifications", purpose: "Which notifications (by stable key — a GET /reminders item key, or note:<noteId>:<reminderAt>) the signed-in HR account has read, so read/unread follows the account across browsers and devices. Only this account's; anything not listed is unread", use_when: ["Showing the notification bell's unread state"], do_not_use_when: [], inputs: [], outputs: ["keys[]", "available"], requires: ["available is false until the notification_reads table exists"], related_endpoints: ["PUT /notification-reads", "GET /reminders"], tags: ["notifications", "read", "unread", "bell"] } },
@@ -612,8 +616,10 @@ export function requiredScopesFor(routeKey, method) {
   return Object.values(requirement).flat();
 }
 
+// /gateway/badges is "public" only to the session/scope gate: its handler checks the gateway's
+// own token itself (server/routes/gateway.js) and turns everything else away with 401.
 export function isPublicRoute(routeKey) {
-  return routeKey === "/health" || routeKey === "/openapi.json";
+  return routeKey === "/health" || routeKey === "/openapi.json" || routeKey === "/gateway/badges";
 }
 
 export { SERVICE_ID };
