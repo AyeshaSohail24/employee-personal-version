@@ -249,7 +249,7 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
                 style={{
                   width: `${progressPercentage}%`,
                   height: '100%',
-                  background: '#129FA9',
+                  background: 'var(--primary)',
                   transition: 'width 0.4s ease',
                 }}
               />

@@ -5,7 +5,7 @@ const CARD_DEFS = [
   { key: 'shortlisted', label: 'Shortlisted', icon: Users, bg: '#EFF6FF', color: '#2563EB' },
   { key: 'pendingEmail', label: 'Pending Email', icon: Mail, bg: '#FFFBEB', color: '#D97706' },
   { key: 'emailSent', label: 'Email Sent', icon: Send, bg: '#F1F5F9', color: '#475569' },
-  { key: 'replies', label: 'Replies', icon: MessageSquareReply, bg: '#E6F7F8', color: '#0E848D' },
+  { key: 'replies', label: 'Replies', icon: MessageSquareReply, bg: 'var(--color-primary-light)', color: 'var(--primary-600)' },
   { key: 'accepted', label: 'Accepted', icon: CheckCircle2, bg: '#ECFDF5', color: '#059669' },
   { key: 'rejected', label: 'Rejected', icon: XCircle, bg: '#FEF2F2', color: '#DC2626' },
 ];

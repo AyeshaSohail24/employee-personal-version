@@ -17,7 +17,7 @@ const HISTORY_STATUS_STYLES = {
   Active: { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' },
   Offboarding: { backgroundColor: '#FFFBEB', color: '#D97706', borderColor: '#FDE68A' },
   Former: { backgroundColor: '#F1F5F9', color: '#475569', borderColor: '#CBD5E1' },
-  Onboarding: { backgroundColor: '#E6F7F8', color: '#0E848D', borderColor: '#99E6EB' },
+  Onboarding: { backgroundColor: 'var(--color-primary-light)', color: 'var(--primary-600)', borderColor: 'var(--color-primary-border)' },
 };
 
 // Offboarding History — completed offboarding plans, kept for reference after people move on to
@@ -236,7 +236,7 @@ This permanently removes their offboarding plan and its tasks from History. Thei
               style={{
                 backgroundColor: 'var(--color-primary-light)',
                 color: 'var(--color-primary-active)',
-                borderColor: '#99E6EB',
+                borderColor: 'var(--color-primary-border)',
               }}
             >
               <Users size={17} />
@@ -427,7 +427,7 @@ This permanently removes their offboarding plan and its tasks from History. Thei
                                 style={{
                                   width: `${plan.progressPercentage}%`,
                                   height: '100%',
-                                  background: plan.status === 'Needs Attention' ? '#EF4444' : plan.status === 'Completed' ? '#10B981' : '#129FA9',
+                                  background: plan.status === 'Needs Attention' ? 'var(--down)' : plan.status === 'Completed' ? 'var(--ok)' : 'var(--primary)',
                                 }}
                               />
                             </div>

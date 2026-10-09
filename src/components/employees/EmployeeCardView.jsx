@@ -6,7 +6,7 @@ import Avatar from '../common/Avatar.jsx';
 
 const STATUS_PILL_STYLES = {
   Active: { bg: '#ECFDF5', color: '#059669' },
-  Onboarding: { bg: '#E6F7F8', color: '#0E848D' },
+  Onboarding: { bg: 'var(--color-primary-light)', color: 'var(--primary-600)' },
   Upcoming: { bg: '#EFF6FF', color: '#2563EB' },
   Departing: { bg: '#FFFBEB', color: '#D97706' },
   Former: { bg: '#F1F5F9', color: '#475569' },
@@ -142,7 +142,7 @@ export default function EmployeeCardView({ employees = [] }) {
                 <div className="emp-tag-dots-group">
                   {emp.resolvedTags.map((tag) => (
                     <span key={tag.id} className="tag-dot-pill" title={`${tag.name} (${tag.category || 'Tag'})`}>
-                      <span className="tag-dot" style={{ backgroundColor: tag.color || '#129FA9' }} />
+                      <span className="tag-dot" style={{ backgroundColor: tag.color || 'var(--primary)' }} />
                       <span className="tag-name-text">{tag.name}</span>
                     </span>
                   ))}

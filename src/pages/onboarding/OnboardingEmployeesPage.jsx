@@ -17,7 +17,7 @@ const HISTORY_STATUS_STYLES = {
   Active: { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' },
   Offboarding: { backgroundColor: '#FFFBEB', color: '#D97706', borderColor: '#FDE68A' },
   Former: { backgroundColor: '#F1F5F9', color: '#475569', borderColor: '#CBD5E1' },
-  Onboarding: { backgroundColor: '#E6F7F8', color: '#0E848D', borderColor: '#99E6EB' },
+  Onboarding: { backgroundColor: 'var(--color-primary-light)', color: 'var(--primary-600)', borderColor: 'var(--color-primary-border)' },
 };
 
 // Onboarding History — completed onboarding plans, kept for reference after people move on.
@@ -246,7 +246,7 @@ This permanently removes their onboarding plan and its tasks from History. Their
               style={{
                 backgroundColor: 'var(--color-primary-light)',
                 color: 'var(--color-primary-active)',
-                borderColor: '#99E6EB',
+                borderColor: 'var(--color-primary-border)',
               }}
             >
               <Users size={17} />
@@ -438,7 +438,7 @@ This permanently removes their onboarding plan and its tasks from History. Their
                                 style={{
                                   width: `${plan.progressPercentage}%`,
                                   height: '100%',
-                                  background: plan.status === 'Needs Attention' ? '#EF4444' : '#129FA9',
+                                  background: plan.status === 'Needs Attention' ? 'var(--down)' : 'var(--primary)',
                                 }}
                               />
                             </div>
