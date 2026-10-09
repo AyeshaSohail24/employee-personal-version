@@ -64,8 +64,8 @@
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-600);
   --color-primary-active: var(--primary-600);
-  --color-primary-light: color-mix(in srgb, var(--primary) 11%, white);
-  --color-primary-border: color-mix(in srgb, var(--primary) 30%, white);
+  --color-primary-light: color-mix(in srgb, var(--primary) 11%, var(--bg));
+  --color-primary-border: color-mix(in srgb, var(--primary) 30%, var(--bg));
 
   --color-navy-dark: var(--navy);
   --color-navy-header: var(--navy);
@@ -75,7 +75,7 @@
   --bg-card: var(--bg);
   --bg-sidebar: var(--bg);
   --bg-sidebar-hover: var(--soft);
-  --bg-sidebar-active: color-mix(in srgb, var(--primary) 11%, white);
+  --bg-sidebar-active: color-mix(in srgb, var(--primary) 11%, var(--bg));
 
   --text-main: var(--ink);
   --text-muted: var(--muted);
@@ -98,6 +98,37 @@
 
   --glass-bg: var(--bg);
   --glass-backdrop: none;
+
+  color-scheme: light;
+}
+
+/* Dark theme — MICROAPP_DARK_MODE.md. The gateway button sets <html data-theme="dark">; only the
+   base tokens are redefined here, plus the aliases that mix with white (they'd stay light). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --navy: #e8e8e8;
+  --navy-700: #d4d4d4;
+  --ink: #d4d4d4;
+  --muted: #9d9d9d;
+  --line: #3c3c3c;
+  --bg: #252526;
+  --soft: #1e1e1e;
+
+  --primary: #3794ff;
+  --primary-600: #57a7ff;
+
+  --ok-bg: rgba(18, 161, 80, 0.14);   --ok-border: rgba(18, 161, 80, 0.4);   --ok-text: #73c991;
+  --warn-bg: rgba(232, 163, 23, 0.14); --warn-border: rgba(232, 163, 23, 0.4); --warn-text: #e2c08d;
+  --down-bg: rgba(224, 83, 61, 0.14);  --down-border: rgba(224, 83, 61, 0.4);  --down-text: #f48771;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 10px -2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 24px -6px rgba(0, 0, 0, 0.6);
+
+  --color-primary-light: rgba(55, 148, 255, 0.12);
+  --color-primary-border: rgba(55, 148, 255, 0.4);
+  --bg-sidebar-active: #37373d;
 }
 
 * {
@@ -232,7 +263,7 @@ body {
 
 .nav-item.active,
 .nav-item.active:hover {
-  background: color-mix(in srgb, var(--primary) 11%, white);
+  background: color-mix(in srgb, var(--primary) 11%, var(--bg));
   color: var(--primary);
 }
 
@@ -273,7 +304,7 @@ body {
 }
 
 .subnav-item.active {
-  background: color-mix(in srgb, var(--primary) 11%, white);
+  background: color-mix(in srgb, var(--primary) 11%, var(--bg));
   color: var(--primary);
 }
 
@@ -432,7 +463,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  background-color: #FFFFFF;
+  background-color: var(--bg);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   color: var(--text-main);
@@ -468,7 +499,7 @@ body {
 }
 
 .custom-select-trigger:hover {
-  border-color: #CBD5E1;
+  border-color: var(--line);
 }
 
 .custom-select-role .custom-select-trigger:hover {
@@ -495,7 +526,7 @@ body {
 }
 
 .custom-select-chevron {
-  color: #64748B;
+  color: var(--muted);
   flex-shrink: 0;
   transition: transform 0.15s ease;
 }
@@ -517,8 +548,8 @@ body {
   max-width: 320px;
   max-height: 250px;
   overflow-y: auto;
-  background-color: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  background-color: var(--bg);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   z-index: 9999;
@@ -538,7 +569,7 @@ body {
   justify-content: space-between;
   padding: 0.5rem 0.85rem;
   font-size: 0.825rem;
-  color: #1E293B;
+  color: var(--ink);
   cursor: pointer;
   white-space: nowrap;
   transition: background-color 0.12s ease, color 0.12s ease;
@@ -546,7 +577,7 @@ body {
 
 .custom-select-option:hover,
 .custom-select-option.highlighted {
-  background-color: #F8FAFC;
+  background-color: var(--soft);
 }
 
 .custom-select-option.selected {
@@ -674,7 +705,7 @@ body {
   max-height: 460px;
   display: flex;
   flex-direction: column;
-  background-color: #FFFFFF;
+  background-color: var(--bg);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
@@ -1270,8 +1301,8 @@ body {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background-color: #EFF6FF;
-  color: #2563EB;
+  background-color: var(--color-primary-light);
+  color: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1470,7 +1501,7 @@ body {
 }
 
 .directory-table-row:hover {
-  background-color: #F8FAFC;
+  background-color: var(--soft);
 }
 
 .directory-table-row:focus-visible {
@@ -1625,7 +1656,7 @@ body {
 
 /* Skeleton Loading Animation */
 .skeleton-box {
-  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+  background: linear-gradient(90deg, var(--soft) 25%, #E2E8F0 50%, var(--soft) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-lg);
@@ -2089,7 +2120,7 @@ body {
 }
 
 .filter-select:hover {
-  border-color: #CBD5E1;
+  border-color: var(--line);
 }
 
 .filter-select:focus {
@@ -2098,8 +2129,8 @@ body {
 }
 
 .filter-select:disabled {
-  background-color: #F8FAFC;
-  color: #94A3B8;
+  background-color: var(--soft);
+  color: var(--muted);
   cursor: not-allowed;
 }
 
@@ -2111,15 +2142,15 @@ body {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-error);
-  background-color: #FEF2F2;
-  border: 1px solid #FCA5A5;
+  background-color: var(--down-bg);
+  border: 1px solid var(--down-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .clear-filters-btn:hover {
-  background-color: #FEE2E2;
+  background-color: var(--down-bg);
 }
 
 /* Directory Table Extra Styling */
@@ -2614,8 +2645,8 @@ body {
 }
 
 .timeline-export-root {
-  background-color: #FFFFFF;
-  color: #111A2E;
+  background-color: var(--bg);
+  color: var(--navy);
   padding: 32px;
   font-family: var(--font);
   box-sizing: border-box;
@@ -2628,19 +2659,19 @@ body {
 .timeline-export-title {
   font-size: 22px;
   font-weight: 800;
-  color: #111A2E;
+  color: var(--navy);
 }
 
 .timeline-export-subtitle {
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: var(--navy-700);
   margin-top: 4px;
 }
 
 .timeline-export-generated {
   font-size: 11px;
-  color: #94A3B8;
+  color: var(--muted);
   margin-top: 2px;
 }
 
@@ -2650,7 +2681,7 @@ body {
   gap: 8px 18px;
   padding-bottom: 16px;
   margin-bottom: 16px;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid var(--line);
 }
 
 .timeline-export-legend-item {
@@ -2659,7 +2690,7 @@ body {
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #475569;
+  color: var(--navy-700);
 }
 
 .timeline-export-legend-dot {
@@ -2678,7 +2709,7 @@ body {
   display: flex;
   padding-bottom: 10px;
   margin-bottom: 6px;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid var(--line);
 }
 
 .timeline-export-name-col-spacer {
@@ -2703,13 +2734,13 @@ body {
 .timeline-export-emp-name {
   font-weight: 700;
   font-size: 13px;
-  color: #111A2E;
+  color: var(--navy);
 }
 
 .timeline-export-emp-id {
   display: block;
   font-size: 11px;
-  color: #64748B;
+  color: var(--muted);
   margin-top: 2px;
 }
 
@@ -2745,7 +2776,7 @@ body {
   transform: translateX(-50%);
   font-size: 11px;
   font-weight: 700;
-  color: #64748B;
+  color: var(--muted);
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -2754,7 +2785,7 @@ body {
   display: flex;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid var(--line);
   min-height: 48px;
 }
 
@@ -2777,7 +2808,7 @@ body {
   transform: translateY(-50%);
   font-size: 11px;
   font-weight: 600;
-  color: #111A2E;
+  color: var(--navy);
   white-space: nowrap;
 }
 
@@ -2794,12 +2825,12 @@ body {
 .timeline-export-ongoing-label {
   font-size: 10px;
   font-weight: 700;
-  color: #64748B;
+  color: var(--muted);
 }
 
 .timeline-export-missing-note {
   font-size: 12px;
-  color: #94A3B8;
+  color: var(--muted);
   font-style: italic;
 }
 
@@ -2970,21 +3001,21 @@ body {
 }
 
 .candidate-action-btn.accept {
-  color: #059669;
+  color: var(--ok-text);
 }
 
 .candidate-action-btn.accept:hover {
-  background-color: #ECFDF5;
-  border-color: #A7F3D0;
+  background-color: var(--ok-bg);
+  border-color: var(--ok-border);
 }
 
 .candidate-action-btn.reject {
-  color: #DC2626;
+  color: var(--down-text);
 }
 
 .candidate-action-btn.reject:hover {
-  background-color: #FEF2F2;
-  border-color: #FECACA;
+  background-color: var(--down-bg);
+  border-color: var(--down-border);
 }
 
 .candidate-action-btn.restore {
@@ -2997,12 +3028,12 @@ body {
 }
 
 .candidate-action-btn.undo {
-  color: #D97706;
+  color: var(--warn-text);
 }
 
 .candidate-action-btn.undo:hover {
-  background-color: #FFFBEB;
-  border-color: #FDE68A;
+  background-color: var(--warn-bg);
+  border-color: var(--warn-border);
 }
 
 /* Reusable modal layout: fixed header/footer, only the body scrolls internally.
@@ -3085,7 +3116,7 @@ body {
 }
 
 .app-scroll-area::-webkit-scrollbar-track {
-  background: #F1F5F9;
+  background: var(--soft);
   border-radius: 8px;
 }
 
@@ -3169,12 +3200,12 @@ body {
    small dot, so a row that needs attention reads as different at a glance without a whole
    separate badge column. */
 .gmail-row-unread {
-  background-color: #FFFBEB;
+  background-color: var(--warn-bg);
   box-shadow: inset 3px 0 0 0 #D97706;
 }
 
 .gmail-row-unread:hover {
-  background-color: #FEF3C7;
+  background-color: var(--warn-bg);
 }
 
 .gmail-row-unread .table-user-name {
@@ -3706,10 +3737,10 @@ body {
   gap: 0.5rem;
   margin-top: 1rem;
   padding: 0.65rem 0.85rem;
-  background-color: #FEF2F2;
-  border: 1px solid #FECACA;
+  background-color: var(--down-bg);
+  border: 1px solid var(--down-border);
   border-radius: var(--radius-md);
-  color: #B91C1C;
+  color: var(--down-text);
   font-size: 0.85rem;
   line-height: 1.45;
 }
@@ -3726,9 +3757,9 @@ body {
 
 /* Secondary destructive action — red outline at rest, solid red on hover. */
 .btn-danger-outline {
-  border: 1px solid #FCA5A5;
+  border: 1px solid var(--down-border);
   background-color: var(--bg-card);
-  color: #DC2626;
+  color: var(--down-text);
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   font-weight: 600;
@@ -3824,7 +3855,7 @@ body {
 }
 
 .placeholder-source-warning {
-  color: #B45309;
+  color: var(--warn-text);
 }
 
 .placeholder-card-usage {
@@ -3931,7 +3962,7 @@ body {
 }
 
 .bulk-result-error {
-  color: #DC2626;
+  color: var(--down-text);
   font-size: 0.75rem;
 }
 
@@ -4412,7 +4443,7 @@ body {
 
 .org-node-card.root-node {
   border-left: 4px solid var(--color-primary);
-  background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+  background: linear-gradient(135deg, var(--bg) 0%, var(--soft) 100%);
 }
 
 .org-node-header {
@@ -4600,8 +4631,8 @@ body {
   gap: 0.4rem;
   margin-top: 0.25rem;
   padding: 0.3rem 0.6rem;
-  background-color: #EFF6FF;
-  color: #2563EB;
+  background-color: var(--color-primary-light);
+  color: var(--primary);
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 600;
@@ -4858,7 +4889,7 @@ body {
 }
 
 .presence-data-table thead th {
-  background-color: #F8FAFC;
+  background-color: var(--soft);
   color: var(--text-muted);
   font-size: 0.725rem;
   font-weight: 700;
@@ -4875,7 +4906,7 @@ body {
 }
 
 .presence-table-row:hover {
-  background-color: #F8FAFC;
+  background-color: var(--soft);
 }
 
 .presence-table-row td {
@@ -4938,7 +4969,7 @@ body {
 .pos-title-text {
   font-size: 0.825rem;
   font-weight: 600;
-  color: #1E293B;
+  color: var(--ink);
   line-height: 1.25;
   white-space: nowrap;
 }
@@ -4966,7 +4997,7 @@ body {
 .loc-main-text {
   font-size: 0.815rem;
   font-weight: 600;
-  color: #334155;
+  color: var(--navy-700);
   line-height: 1.2;
 }
 
@@ -4987,8 +5018,8 @@ body {
 
 .workmode-badge.mode-onsite,
 .workmode-badge.mode-office {
-  background-color: #F1F5F9;
-  color: #475569;
+  background-color: var(--soft);
+  color: var(--navy-700);
 }
 
 .workmode-badge.mode-remote {
@@ -5019,13 +5050,13 @@ body {
   gap: 0.2rem;
   font-size: 0.725rem;
   font-weight: 500;
-  color: #64748B;
+  color: var(--muted);
   white-space: nowrap;
 }
 
 .source-subtle-badge.manual-override {
-  background-color: #FEF3C7;
-  color: #92400E;
+  background-color: var(--warn-bg);
+  color: var(--warn-text);
   font-weight: 700;
   padding: 0.12rem 0.4rem;
   border-radius: var(--radius-sm);
@@ -5066,19 +5097,19 @@ body {
   align-items: center;
   gap: 0.2rem;
   padding: 0.2rem 0.5rem;
-  background-color: #FEF2F2;
-  border: 1px solid #FECACA;
+  background-color: var(--down-bg);
+  border: 1px solid var(--down-border);
   border-radius: var(--radius-sm);
   font-size: 0.725rem;
   font-weight: 700;
-  color: #DC2626;
+  color: var(--down-text);
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
 
 .btn-compact-clear:hover {
-  background-color: #FEE2E2;
+  background-color: var(--down-bg);
 }
 
 .btn-compact-history {
@@ -5298,9 +5329,9 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background-color: #FEF2F2;
-  border: 1px solid #FECACA;
-  color: #DC2626;
+  background-color: var(--down-bg);
+  border: 1px solid var(--down-border);
+  color: var(--down-text);
   border-radius: var(--radius-md);
   font-size: 0.825rem;
   margin-bottom: 1rem;
@@ -5319,7 +5350,7 @@ body {
 }
 
 .required-star {
-  color: #DC2626;
+  color: var(--down-text);
 }
 
 .form-input,
@@ -5394,7 +5425,7 @@ input.form-control[type="email"] {
 .form-select:hover,
 .form-textarea:hover,
 input.form-control:hover {
-  border-color: #CBD5E1;
+  border-color: var(--line);
 }
 
 .form-input:focus,
@@ -5408,8 +5439,8 @@ input.form-control:focus {
 .form-select:disabled,
 .form-input:disabled,
 .form-textarea:disabled {
-  background-color: #F8FAFC;
-  color: #94A3B8;
+  background-color: var(--soft);
+  color: var(--muted);
   cursor: not-allowed;
 }
 
@@ -5444,7 +5475,7 @@ input.form-control:focus {
 .custom-select-container.disabled .custom-select-trigger {
   opacity: 0.6;
   cursor: not-allowed;
-  background-color: #F8FAFC;
+  background-color: var(--soft);
 }
 
 /* Icon-only action buttons (task move up/down/delete) — reuses the existing .icon-btn
@@ -5461,8 +5492,8 @@ input.form-control:focus {
 }
 
 .icon-btn-danger:hover {
-  background-color: #FEF2F2;
-  color: #DC2626;
+  background-color: var(--down-bg);
+  color: var(--down-text);
 }
 
 /* Responsive field grids for the Plan Template editor — wrap before fields get cramped at
@@ -5627,14 +5658,14 @@ input.form-control:focus {
    these configuration cards clear boundaries while staying flat/clean, not "KPI card" heavy. */
 .onboarding-scope-card {
   padding: 1.1rem;
-  border-color: #D6DEE8;
+  border-color: var(--line);
   box-shadow: var(--shadow-md);
   transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
 }
 
 .onboarding-scope-card:hover {
   box-shadow: var(--shadow-lg);
-  border-color: #C7D2DE;
+  border-color: var(--line);
   transform: translateY(-1px);
 }
 
@@ -5918,7 +5949,7 @@ input.form-control:focus {
 
 .history-item-card.active-override {
   border-left: 4px solid var(--color-primary);
-  background: linear-gradient(135deg, #FFFFFF 0%, #F0FDFA 100%);
+  background: linear-gradient(135deg, var(--bg) 0%, var(--ok-bg) 100%);
 }
 
 .history-item-card.ended-override {
@@ -5944,8 +5975,8 @@ input.form-control:focus {
   align-items: center;
   gap: 0.25rem;
   padding: 0.15rem 0.5rem;
-  background-color: #ECFDF5;
-  color: #059669;
+  background-color: var(--ok-bg);
+  color: var(--ok-text);
   font-size: 0.75rem;
   font-weight: 700;
   border-radius: var(--radius-full);
@@ -5956,8 +5987,8 @@ input.form-control:focus {
   align-items: center;
   gap: 0.25rem;
   padding: 0.15rem 0.5rem;
-  background-color: #F1F5F9;
-  color: #64748B;
+  background-color: var(--soft);
+  color: var(--muted);
   font-size: 0.75rem;
   font-weight: 700;
   border-radius: var(--radius-full);
@@ -6161,13 +6192,13 @@ input.form-control:focus {
 }
 
 .emp-status-sub-pill.former {
-  background-color: #F1F5F9;
-  color: #64748B;
+  background-color: var(--soft);
+  color: var(--muted);
 }
 
 .emp-status-sub-pill.departing {
-  background-color: #FFFBEB;
-  color: #D97706;
+  background-color: var(--warn-bg);
+  color: var(--warn-text);
 }
 
 .emp-status-sub-pill.onboarding {
@@ -6180,13 +6211,13 @@ input.form-control:focus {
    .emp-status-sub-pill (padding/shape but no background/text color), rendering as plain text
    instead of the colored pill every other status already got. */
 .emp-status-sub-pill.active {
-  background-color: #ECFDF5;
-  color: #059669;
+  background-color: var(--ok-bg);
+  color: var(--ok-text);
 }
 
 .emp-status-sub-pill.upcoming {
-  background-color: #EFF6FF;
-  color: #2563EB;
+  background-color: var(--color-primary-light);
+  color: var(--primary);
 }
 
 .act-due-block {
@@ -6212,7 +6243,7 @@ input.form-control:focus {
 }
 
 .overdue-days-tag {
-  color: #DC2626;
+  color: var(--down-text);
   font-weight: 600;
 }
 
@@ -6468,7 +6499,7 @@ input.form-control:focus {
 }
 
 .btn-secondary-cancel {
-  background-color: #ffffff;
+  background-color: var(--bg);
   color: var(--text-muted);
   font-weight: 600;
   font-size: 0.875rem;
@@ -6485,7 +6516,7 @@ input.form-control:focus {
 .btn-secondary-cancel:hover {
   background-color: var(--bg-app);
   color: var(--text-main);
-  border-color: #cbd5e1;
+  border-color: var(--line);
 }
 
 /* Underline Tab Bar (flat text tabs, active tab gets a teal underline over a full-width
@@ -6650,8 +6681,8 @@ input.form-control:focus {
 }
 
 .search-highlight {
-  background-color: #FEF3C7;
-  color: #92400E;
+  background-color: var(--warn-bg);
+  color: var(--warn-text);
   border-radius: 3px;
   padding: 0 0.1rem;
 }
@@ -6661,10 +6692,10 @@ input.form-control:focus {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  background-color: #f1f5f9;
+  background-color: var(--soft);
   padding: 0.35rem;
   border-radius: var(--radius-lg);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   width: fit-content;
 }
 
@@ -6676,7 +6707,7 @@ input.form-control:focus {
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: var(--radius-md);
-  color: #64748b;
+  color: var(--muted);
   border: none;
   background: transparent;
   cursor: pointer;
@@ -6689,7 +6720,7 @@ input.form-control:focus {
 }
 
 .config-tab-item.active {
-  background-color: #ffffff;
+  background-color: var(--bg);
   color: var(--color-primary);
   border: 1px solid var(--color-primary-border);
   box-shadow: var(--shadow-sm);
@@ -6703,8 +6734,8 @@ input.form-control:focus {
   border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 700;
-  background-color: #e2e8f0;
-  color: #475569;
+  background-color: var(--line);
+  color: var(--navy-700);
   transition: all 0.15s ease;
 }
 
@@ -6742,17 +6773,17 @@ input.form-control:focus {
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: var(--radius-md);
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-  background-color: #f8fafc;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  background-color: var(--soft);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .documents-config-filter-btn:hover {
   color: var(--text-main);
-  background-color: #ffffff;
-  border-color: #cbd5e1;
+  background-color: var(--bg);
+  border-color: var(--line);
 }
 
 .documents-config-filter-btn:focus-visible {
@@ -6775,8 +6806,8 @@ input.form-control:focus {
   border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 700;
-  background-color: #e2e8f0;
-  color: #475569;
+  background-color: var(--line);
+  color: var(--navy-700);
   transition: all 0.15s ease;
 }
 
@@ -6787,8 +6818,8 @@ input.form-control:focus {
 
 /* Polished SaaS Table System */
 .config-table-card {
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
+  background-color: var(--bg);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
@@ -6805,22 +6836,22 @@ input.form-control:focus {
 }
 
 .config-table th {
-  background-color: #f8fafc;
-  color: #475569;
+  background-color: var(--soft);
+  color: var(--navy-700);
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0.75rem 0.65rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 
 .config-table td {
   padding: 0.75rem 0.65rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--line);
   vertical-align: middle;
-  color: #1e293b;
+  color: var(--ink);
 }
 
 .config-table tr:last-child td {
@@ -6828,7 +6859,7 @@ input.form-control:focus {
 }
 
 .config-table tr:hover td {
-  background-color: #f8fafc;
+  background-color: var(--soft);
 }
 
 /* Documents Configuration Table Scoped Column Sizing */
@@ -6938,7 +6969,7 @@ input.form-control:focus {
   font-weight: 600;
   background-color: var(--status-active-bg);
   color: var(--status-active-text);
-  border: 1px solid #a7f3d0;
+  border: 1px solid var(--ok-border);
   white-space: nowrap;
 }
 
@@ -6949,9 +6980,9 @@ input.form-control:focus {
   border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 600;
-  background-color: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
+  background-color: var(--soft);
+  color: var(--muted);
+  border: 1px solid var(--line);
   white-space: nowrap;
 }
 
@@ -6962,9 +6993,9 @@ input.form-control:focus {
   border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 600;
-  background-color: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
+  background-color: var(--color-primary-light);
+  color: var(--primary);
+  border: 1px solid var(--color-primary-border);
   white-space: nowrap;
 }
 
@@ -6975,9 +7006,9 @@ input.form-control:focus {
   border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 600;
-  background-color: #f8fafc;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
+  background-color: var(--soft);
+  color: var(--muted);
+  border: 1px solid var(--line);
   white-space: nowrap;
 }
 
@@ -6988,9 +7019,9 @@ input.form-control:focus {
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 600;
-  background-color: #f8fafc;
-  color: #334155;
-  border: 1px solid #cbd5e1;
+  background-color: var(--soft);
+  color: var(--navy-700);
+  border: 1px solid var(--line);
   white-space: nowrap;
 }
 
@@ -7006,15 +7037,15 @@ input.form-control:focus {
 }
 
 .config-expiry-badge.active {
-  background-color: #fef3c7;
-  color: #b45309;
-  border: 1px solid #fde68a;
+  background-color: var(--warn-bg);
+  color: var(--warn-text);
+  border: 1px solid var(--warn-border);
 }
 
 .config-expiry-badge.inactive {
-  background-color: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
+  background-color: var(--soft);
+  color: var(--muted);
+  border: 1px solid var(--line);
 }
 
 /* Action Icon Buttons Group */
@@ -7032,36 +7063,36 @@ input.form-control:focus {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
-  border: 1px solid #e2e8f0;
-  background-color: #ffffff;
-  color: #64748b;
+  border: 1px solid var(--line);
+  background-color: var(--bg);
+  color: var(--muted);
   transition: all 0.15s ease;
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .config-action-btn:hover:not(:disabled) {
-  background-color: #f1f5f9;
-  color: #0f172a;
-  border-color: #cbd5e1;
+  background-color: var(--soft);
+  color: var(--ink);
+  border-color: var(--line);
 }
 
 .config-action-btn.deactivate:hover:not(:disabled) {
-  background-color: #fffbe6;
-  color: #d97706;
-  border-color: #fde68a;
+  background-color: var(--warn-bg);
+  color: var(--warn-text);
+  border-color: var(--warn-border);
 }
 
 .config-action-btn.activate:hover:not(:disabled) {
-  background-color: #ecfdf5;
-  color: #059669;
-  border-color: #a7f3d0;
+  background-color: var(--ok-bg);
+  color: var(--ok-text);
+  border-color: var(--ok-border);
 }
 
 .config-action-btn.delete:hover:not(:disabled) {
-  background-color: #fef2f2;
-  color: #dc2626;
-  border-color: #fecaca;
+  background-color: var(--down-bg);
+  color: var(--down-text);
+  border-color: var(--down-border);
 }
 
 .config-action-btn:disabled {
@@ -7083,10 +7114,10 @@ input.form-control:focus {
 }
 
 .config-modal-card {
-  background-color: #ffffff;
+  background-color: var(--bg);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   width: 100%;
   max-width: 520px;
   max-height: 90vh;
@@ -7103,8 +7134,8 @@ input.form-control:focus {
 
 .config-modal-header {
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  background-color: #f8fafc;
+  border-bottom: 1px solid var(--line);
+  background-color: var(--soft);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -7114,13 +7145,13 @@ input.form-control:focus {
 .config-modal-title {
   font-size: 1.125rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ink);
 }
 
 .config-modal-close {
   background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--muted);
   padding: 0.35rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -7131,8 +7162,8 @@ input.form-control:focus {
 }
 
 .config-modal-close:hover {
-  background-color: #e2e8f0;
-  color: #0f172a;
+  background-color: var(--line);
+  color: var(--ink);
 }
 
 .config-modal-body {
@@ -7145,8 +7176,8 @@ input.form-control:focus {
 
 .config-modal-footer {
   padding: 1.25rem 1.5rem;
-  border-top: 1px solid #e2e8f0;
-  background-color: #f8fafc;
+  border-top: 1px solid var(--line);
+  background-color: var(--soft);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -7179,17 +7210,17 @@ input.form-control:focus {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #475569;
+  color: var(--navy-700);
 }
 
 .config-form-control {
   width: 100%;
   padding: 0.6rem 0.85rem;
   font-size: 0.875rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background-color: #ffffff;
-  color: #0f172a;
+  background-color: var(--bg);
+  color: var(--ink);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
@@ -7206,7 +7237,7 @@ input.form-control:focus {
 
 .config-form-error {
   font-size: 0.75rem;
-  color: #dc2626;
+  color: var(--down-text);
   margin-top: 0.2rem;
 }
 
@@ -7223,7 +7254,7 @@ input.form-control:focus {
   width: 1.125rem;
   height: 1.125rem;
   border-radius: var(--radius-sm);
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line);
   accent-color: var(--color-primary);
   margin-top: 0.1rem;
 }
@@ -7237,8 +7268,8 @@ input.form-control:focus {
 }
 
 .config-mobile-card {
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
+  background-color: var(--bg);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   padding: 1rem;
   box-shadow: var(--shadow-sm);
@@ -7256,7 +7287,7 @@ input.form-control:focus {
 .config-mobile-card-title {
   font-size: 0.9375rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ink);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -7264,7 +7295,7 @@ input.form-control:focus {
 
 .config-mobile-card-body {
   font-size: 0.8125rem;
-  color: #64748b;
+  color: var(--muted);
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -7272,7 +7303,7 @@ input.form-control:focus {
 
 .config-mobile-card-footer {
   padding-top: 0.75rem;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -7355,7 +7386,7 @@ input.form-control:focus {
 
 .note-card {
   background-color: var(--bg-card);
-  border: 1px solid #D6DEE8;
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   padding: 1.15rem 1.25rem;
@@ -7368,12 +7399,12 @@ input.form-control:focus {
 
 .note-card:hover {
   box-shadow: var(--shadow-md);
-  border-color: #C7D2DE;
+  border-color: var(--line);
   transform: translateY(-1px);
 }
 
 /* Color accent — a thin top border only; the card body stays neutral/professional. */
-.note-card--accent-teal { border-top: 3px solid var(--color-primary); }
+.note-card--accent-teal { border-top: 3px solid var(--teal); }
 .note-card--accent-blue { border-top: 3px solid #2563EB; }
 .note-card--accent-green { border-top: 3px solid #059669; }
 .note-card--accent-amber { border-top: 3px solid #D97706; }
@@ -7436,7 +7467,7 @@ input.form-control:focus {
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--color-primary-active);
-  background: #F0FDFA;
+  background: var(--ok-bg);
   padding: 0.1rem 0.45rem;
   border-radius: 4px;
 }
@@ -7556,7 +7587,7 @@ input.form-control:focus {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   overflow: hidden;
-  background-color: #FFFFFF;
+  background-color: var(--bg);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -7623,7 +7654,7 @@ input.form-control:focus {
   top: calc(100% + 4px);
   left: 0;
   min-width: 150px;
-  background-color: #FFFFFF;
+  background-color: var(--bg);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
@@ -7667,7 +7698,7 @@ input.form-control:focus {
 }
 
 .note-highlight-swatch--none {
-  background-color: #FFFFFF;
+  background-color: var(--bg);
   border: 1.5px solid var(--border-dark);
 }
 
@@ -7685,7 +7716,7 @@ input.form-control:focus {
 
 .note-content-editable:empty::before {
   content: attr(data-placeholder);
-  color: var(--text-light, #94A3B8);
+  color: var(--text-light, var(--muted));
   pointer-events: none;
 }
 
@@ -7952,7 +7983,7 @@ input.form-control:focus {
 }
 
 .notes-document-title-input::placeholder {
-  color: var(--text-light, #94A3B8);
+  color: var(--text-light, var(--muted));
   font-weight: 700;
 }
 
@@ -8110,8 +8141,8 @@ input.form-control:focus {
 
 /* Unmatched names: a light amber tint so they read as "needs attention". */
 .dept-mapping-row-pending {
-  background-color: #FFFBEB;
-  border-color: #FDE68A;
+  background-color: var(--warn-bg);
+  border-color: var(--warn-border);
 }
 
 .dept-mapping-alias {
@@ -8157,7 +8188,7 @@ input.form-control:focus {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
   background-color: var(--bg-card);
-  color: #DC2626;
+  color: var(--down-text);
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
@@ -8258,7 +8289,7 @@ input.form-control:focus {
 }
 
 .plan-task-icon-btn-danger {
-  color: #DC2626;
+  color: var(--down-text);
 }
 
 .plan-task-icon-btn-danger:hover:not(:disabled) {
@@ -8299,7 +8330,7 @@ input.form-control:focus {
 .summary-card.summary-card-link:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
-  border-color: #A7F3D0;
+  border-color: var(--ok-border);
 }
 
 .summary-card.summary-card-link:focus-visible {
@@ -8331,9 +8362,9 @@ input.form-control:focus {
   padding: 0.9rem 1.1rem;
   margin-bottom: 1.25rem;
   border-radius: var(--radius-lg);
-  border: 1px solid #A7F3D0;
-  background-color: #ECFDF5;
-  color: #047857;
+  border: 1px solid var(--ok-border);
+  background-color: var(--ok-bg);
+  color: var(--ok-text);
 }
 
 .onboarding-history-banner.is-incomplete {
@@ -8371,7 +8402,7 @@ input.form-control:focus {
 .onboarding-history-done {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #059669;
+  color: var(--ok-text);
 }
 
 .onboarding-history-open {
@@ -8417,8 +8448,8 @@ input.form-control:focus {
   display: inline-block;
   padding: 0.12rem 0.45rem;
   border-radius: 4px;
-  background-color: #EFF6FF;
-  color: #1D4ED8;
+  background-color: var(--color-primary-light);
+  color: var(--primary);
   font-size: 0.72rem;
   font-weight: 600;
 }
@@ -8458,7 +8489,7 @@ input.form-control:focus {
 .scope-task-inline-day {
   font-size: 0.78rem;
   font-weight: 600;
-  color: #1D4ED8;
+  color: var(--primary);
 }
 
 .scope-task-inline-offset {
@@ -8470,11 +8501,11 @@ input.form-control:focus {
 .scope-task-inline-hint {
   font-size: 0.74rem;
   font-weight: 600;
-  color: #1D4ED8;
+  color: var(--primary);
 }
 
 .scope-task-inline-hint.is-invalid {
-  color: #B45309;
+  color: var(--warn-text);
 }
 
 .scope-task-inline-description {
@@ -8483,7 +8514,7 @@ input.form-control:focus {
 
 .scope-task-inline-error {
   font-size: 0.76rem;
-  color: #B91C1C;
+  color: var(--down-text);
 }
 
 .scope-task-inline-actions {
@@ -8585,7 +8616,7 @@ input.form-control:focus {
 .onboarding-launch-reason {
   font-size: 0.7rem;
   line-height: 1.35;
-  color: #B45309;
+  color: var(--warn-text);
   text-align: center;
 }
 
@@ -8597,9 +8628,9 @@ input.form-control:focus {
   margin: -0.5rem 0 1rem;
   padding: 0.6rem 0.8rem;
   border-radius: var(--radius-md);
-  border: 1px solid #FDE68A;
-  background-color: #FFFBEB;
-  color: #B45309;
+  border: 1px solid var(--warn-border);
+  background-color: var(--warn-bg);
+  color: var(--warn-text);
   font-size: 0.83rem;
   line-height: 1.45;
 }
@@ -8661,9 +8692,9 @@ input.form-control:focus {
   width: 20px;
   height: 20px;
   margin: 0 0.35rem 0 0;
-  border: 1.5px solid #CBD5E1;
+  border: 1.5px solid var(--line);
   border-radius: 6px;
-  background-color: var(--bg-card, #FFFFFF);
+  background-color: var(--bg-card, var(--bg));
   background-position: center;
   background-repeat: no-repeat;
   background-size: 14px 14px;
@@ -8694,19 +8725,19 @@ input.form-control:focus {
 
 /* Onboarding / Offboarding plan detail — open tasks due today (light yellow) or past due (light red). */
 .presence-table-row.plan-task-row-due-today td {
-  background-color: #FEFCE8;
+  background-color: var(--warn-bg);
 }
 
 .presence-table-row.plan-task-row-due-today:hover td {
-  background-color: #FEFBE0;
+  background-color: var(--warn-bg);
 }
 
 .presence-table-row.plan-task-row-overdue td {
-  background-color: #FEF2F2;
+  background-color: var(--down-bg);
 }
 
 .presence-table-row.plan-task-row-overdue:hover td {
-  background-color: #FEE2E2;
+  background-color: var(--down-bg);
 }
 
 /* Upcoming — Shortlisted date the Recruitment system hasn't recorded yet. */
@@ -8772,8 +8803,8 @@ input.form-control:focus {
 }
 
 .dept-mapping-kind-job {
-  background-color: #EFF6FF;
-  color: #1D4ED8;
+  background-color: var(--color-primary-light);
+  color: var(--primary);
 }
 
 /* ==========================================================================
@@ -8923,31 +8954,31 @@ input.form-control:focus {
 
 /* Reminders (bell + Soonest Due Tasks) — overdue in red, due today in amber. */
 .dashboard-task-row.is-overdue .dashboard-task-row-time {
-  color: #DC2626;
+  color: var(--down-text);
   font-weight: 700;
 }
 
 .dashboard-task-row.is-due-today .dashboard-task-row-time {
-  color: #B45309;
+  color: var(--warn-text);
   font-weight: 700;
 }
 
 /* Bell: the type label and its icon carry the status colour; card, title and text stay neutral.
    Darker shades of each, for contrast on the light teal unread card. */
 .header-notification-item.tone-error :is(.header-notification-item-type, .header-notification-item-icon) {
-  color: #B91C1C;
+  color: var(--down-text);
 }
 
 .header-notification-item.tone-warning :is(.header-notification-item-type, .header-notification-item-icon) {
-  color: #B45309;
+  color: var(--warn-text);
 }
 
 .header-notification-item.tone-info :is(.header-notification-item-type, .header-notification-item-icon) {
-  color: #1D4ED8;
+  color: var(--primary);
 }
 
 .header-notification-item.tone-success :is(.header-notification-item-type, .header-notification-item-icon) {
-  color: #047857;
+  color: var(--ok-text);
 }
 
 .header-notification-item.tone-primary :is(.header-notification-item-type, .header-notification-item-icon) {
@@ -9068,10 +9099,10 @@ input.form-control:focus {
   background-color: var(--border-subtle);
 }
 
-.notify-banner.tone-error .notify-banner-icon { color: #B91C1C; background-color: #FEF2F2; }
-.notify-banner.tone-warning .notify-banner-icon { color: #B45309; background-color: #FFFBEB; }
-.notify-banner.tone-info .notify-banner-icon { color: #1D4ED8; background-color: #EFF6FF; }
-.notify-banner.tone-success .notify-banner-icon { color: #047857; background-color: #ECFDF5; }
+.notify-banner.tone-error .notify-banner-icon { color: var(--down-text); background-color: var(--down-bg); }
+.notify-banner.tone-warning .notify-banner-icon { color: var(--warn-text); background-color: var(--warn-bg); }
+.notify-banner.tone-info .notify-banner-icon { color: var(--primary); background-color: var(--color-primary-light); }
+.notify-banner.tone-success .notify-banner-icon { color: var(--ok-text); background-color: var(--ok-bg); }
 .notify-banner.tone-primary .notify-banner-icon { color: var(--color-primary-active); background-color: var(--color-primary-light); }
 
 .notify-banner-text {
@@ -9202,7 +9233,7 @@ input.form-control:focus {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background-color: #FFFFFF;
+  background-color: var(--bg);
   box-shadow: var(--shadow-sm);
   transition: transform 0.2s ease;
 }
@@ -9281,13 +9312,13 @@ input.form-control:focus {
 }
 
 .btn-secondary {
-  background: #fff;
+  background: var(--bg);
   border: 1.5px solid var(--line);
   color: var(--navy-700);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #fff;
+  background: var(--bg);
   border-color: var(--primary);
   color: var(--primary);
 }
@@ -9325,7 +9356,7 @@ input.form-control:focus {
 .gmail-table-card,
 .stat-card,
 .presence-table-card {
-  background: #fff;
+  background: var(--bg);
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
   box-shadow: none;
@@ -9352,4 +9383,15 @@ input.form-control:focus {
 .presence-data-table td {
   border-bottom: 1px solid var(--line);
   color: var(--navy-700);
+}
+
+/* Logo swap for the dark theme (Sidebar.jsx renders both). */
+:root:not([data-theme="dark"]) .logo-dark,
+:root[data-theme="dark"] .logo-light {
+  display: none !important;
+}
+
+/* Highlighter marks keep their pastel fill, so their text stays dark in the dark theme. */
+:root[data-theme="dark"] mark[data-highlight] {
+  color: #1e1e1e;
 }

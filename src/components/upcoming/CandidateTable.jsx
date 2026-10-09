@@ -4,12 +4,12 @@ import { Check, X, RotateCcw, Undo2 } from 'lucide-react';
 import { formatDateDisplay } from '../../utils/dateUtils.js';
 
 const OFFER_PILL_STYLES = {
-  Paid: { bg: '#ECFDF5', color: '#059669' },
-  Unpaid: { bg: '#FEF3C7', color: '#D97706' },
+  Paid: { bg: 'var(--ok-bg)', color: 'var(--ok-text)' },
+  Unpaid: { bg: 'var(--warn-bg)', color: 'var(--warn-text)' },
 };
 // Real applicants created before the Recruitment API added its own allowance field carry no
 // offerType at all — shown as its own state, never silently defaulted to Paid.
-const OFFER_PILL_UNSET = { bg: '#FEF2F2', color: '#DC2626' };
+const OFFER_PILL_UNSET = { bg: 'var(--down-bg)', color: 'var(--down-text)' };
 
 // The viewer's local calendar date for a timestamp (a UTC slice would show the previous day for
 // anything before 8am in Malaysia).

@@ -52,7 +52,7 @@ function ProfileLinkField({ label, url }) {
 
 function ProfileSection({ title, children }) {
   return (
-    <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.25rem', background: '#FFF' }}>
+    <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.25rem', background: 'var(--bg)' }}>
       <div
         style={{
           fontSize: '0.75rem',
@@ -143,7 +143,7 @@ export default function PersonnelDetailsPage() {
 
       {/* Personnel Header — avatar, name, lifecycle status, Personnel ID (dynamic, never
           hardcoded), plus type/position/department when available from the hydrated record. */}
-      <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
+      <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: 'var(--bg)' }}>
         <div className="emp-identity-block" style={{ gap: '1rem' }}>
           <Avatar
             photoUrl={profile.photoUrl}

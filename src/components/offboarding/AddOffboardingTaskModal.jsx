@@ -99,7 +99,7 @@ export default function AddOffboardingTaskModal({ isOpen, onClose, onSuccess, pl
         <form onSubmit={handleSubmit}>
           <div className="modal-header">
             <div className="modal-title-group">
-              <div className="modal-icon-badge" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
+              <div className="modal-icon-badge" style={{ backgroundColor: 'var(--down-bg)', color: 'var(--down-text)' }}>
                 <ListPlus size={20} />
               </div>
               <div>
@@ -129,7 +129,7 @@ export default function AddOffboardingTaskModal({ isOpen, onClose, onSuccess, pl
                 value={formData.title}
                 onChange={(e) => handleChange('title', e.target.value)}
               />
-              {errors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.title}</span>}
+              {errors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.title}</span>}
             </div>
 
             <div className="form-group">

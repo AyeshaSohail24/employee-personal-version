@@ -98,8 +98,8 @@ export default function DashboardPage() {
           </div>
           {personnelTypeSwitcher}
         </div>
-        <div className="placeholder-card" style={{ borderColor: '#FCA5A5' }}>
-          <div className="placeholder-icon" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
+        <div className="placeholder-card" style={{ borderColor: 'var(--down-border)' }}>
+          <div className="placeholder-icon" style={{ backgroundColor: 'var(--down-bg)', color: 'var(--down-text)' }}>
             <AlertCircle size={28} />
           </div>
           <h2 className="placeholder-title">{error}</h2>

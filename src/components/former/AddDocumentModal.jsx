@@ -117,7 +117,7 @@ export default function AddDocumentModal({ isOpen, onClose, employeeId, onSucces
                 value={formData.title}
                 onChange={(e) => handleChange('title', e.target.value)}
               />
-              {errors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.title}</span>}
+              {errors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.title}</span>}
             </div>
 
             <div className="form-group">
@@ -129,7 +129,7 @@ export default function AddDocumentModal({ isOpen, onClose, employeeId, onSucces
                 onChange={(e) => handleChange('documentType', e.target.value)}
                 options={documentTypes.map((t) => ({ value: t.name, label: t.name }))}
               />
-              {errors.documentType && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.documentType}</span>}
+              {errors.documentType && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.documentType}</span>}
             </div>
 
             <div className="form-group">
@@ -140,7 +140,7 @@ export default function AddDocumentModal({ isOpen, onClose, employeeId, onSucces
                   Selected: {file.name} ({Math.round(file.size / 1024)} KB)
                 </span>
               )}
-              {errors.file && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.file}</span>}
+              {errors.file && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.file}</span>}
             </div>
 
             <div className="form-group">

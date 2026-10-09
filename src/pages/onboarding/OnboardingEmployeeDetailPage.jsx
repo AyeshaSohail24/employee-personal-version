@@ -184,7 +184,7 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
       )}
 
       {/* Header Summary Card */}
-      <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
+      <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: 'var(--bg)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
           <div className="emp-identity-block" style={{ gap: '1rem' }}>
             <Avatar
@@ -231,7 +231,7 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
       ) : (
         <div>
           {/* Progress Overview Card */}
-          <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
+          <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: 'var(--bg)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Onboarding Plan</h3>
@@ -316,7 +316,7 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
                     }
 
                     return (
-                      <tr key={task.id} className={`presence-table-row${dueClass}`} style={isDone ? { opacity: 0.8, backgroundColor: '#F8FAFC' } : undefined}>
+                      <tr key={task.id} className={`presence-table-row${dueClass}`} style={isDone ? { opacity: 0.8, backgroundColor: 'var(--soft)' } : undefined}>
                         <td style={{ textAlign: 'center', fontWeight: 600 }}>{task.sequence}</td>
                         <td>
                           <div style={{ fontWeight: 600, color: 'var(--text-main)', textDecoration: isDone ? 'line-through' : 'none' }}>
@@ -327,7 +327,7 @@ Only ${name}'s plan changes — the task stays in Onboarding > Plans for everyon
                           )}
                         </td>
                         <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                          <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.725rem', fontWeight: 600 }}>
+                          <span style={{ background: 'var(--color-primary-light)', color: 'var(--primary)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.725rem', fontWeight: 600 }}>
                             Day {task.relative_offset_days >= 0 ? `+${task.relative_offset_days}` : task.relative_offset_days}
                           </span>
                         </td>

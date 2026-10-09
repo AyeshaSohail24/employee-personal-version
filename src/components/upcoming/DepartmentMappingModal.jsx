@@ -253,7 +253,7 @@ export default function DepartmentMappingModal({ unmatchedNames = [], knownDepar
                     options={departmentOptions}
                   />
                   {!a.departmentName && (
-                    <span className="form-hint" style={{ color: '#B45309' }}>That department no longer exists — choose another.</span>
+                    <span className="form-hint" style={{ color: 'var(--warn-text)' }}>That department no longer exists — choose another.</span>
                   )}
                 </div>
                 <button

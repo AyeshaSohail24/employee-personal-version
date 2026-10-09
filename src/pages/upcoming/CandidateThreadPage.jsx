@@ -19,12 +19,12 @@ function formatThreadTimestamp(isoString) {
 }
 
 const OFFER_PILL_STYLES = {
-  Paid: { bg: '#ECFDF5', color: '#059669' },
-  Unpaid: { bg: '#FEF3C7', color: '#D97706' },
+  Paid: { bg: 'var(--ok-bg)', color: 'var(--ok-text)' },
+  Unpaid: { bg: 'var(--warn-bg)', color: 'var(--warn-text)' },
 };
 // Real applicants created before the Recruitment API added its own allowance field carry no
 // offerType at all — shown as its own state, never silently defaulted to Paid.
-const OFFER_PILL_UNSET = { bg: '#FEF2F2', color: '#DC2626' };
+const OFFER_PILL_UNSET = { bg: 'var(--down-bg)', color: 'var(--down-text)' };
 
 /**
  * Full-page conversation view for one candidate's offer-email correspondence — reads via
@@ -241,7 +241,7 @@ export default function CandidateThreadPage() {
               />
             </div>
             <span className="status-pill" style={{ backgroundColor: offerPill.bg, color: offerPill.color }}>{candidate.offerType || 'Not set'}</span>
-            <span className="status-pill" style={{ backgroundColor: '#F1F5F9', color: '#475569' }}>{candidate.positionName}</span>
+            <span className="status-pill" style={{ backgroundColor: 'var(--soft)', color: 'var(--navy-700)' }}>{candidate.positionName}</span>
           </div>
         </div>
 

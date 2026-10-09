@@ -231,7 +231,7 @@ export default function PlanEditorPage() {
         )}
 
         {/* Task Builder List */}
-        <div className="table-container-card" style={{ padding: '1.25rem', background: '#FFF' }}>
+        <div className="table-container-card" style={{ padding: '1.25rem', background: 'var(--bg)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h3 style={{ margin: 0, fontSize: '0.975rem', fontWeight: 600 }}>
               Tasks ({tasks.length})
@@ -261,7 +261,7 @@ export default function PlanEditorPage() {
                   padding: '1.25rem',
                   border: '1px solid var(--border-light)',
                   borderRadius: 'var(--radius-lg)',
-                  background: '#F8FAFC',
+                  background: 'var(--soft)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '1rem',

@@ -331,7 +331,7 @@ export default function NotesDocumentView({
               value={draft.title}
               onChange={(e) => handleDraftChange('title', e.target.value)}
             />
-            {formErrors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{formErrors.title}</span>}
+            {formErrors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{formErrors.title}</span>}
 
             <DocumentMetaFields
               draft={draft}
@@ -345,7 +345,7 @@ export default function NotesDocumentView({
               onChangeHtml={(html) => handleDraftChange('contentHtml', html)}
               className="notes-document-content-editor"
             />
-            {formErrors.content && <span className="form-hint" style={{ color: '#DC2626' }}>{formErrors.content}</span>}
+            {formErrors.content && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{formErrors.content}</span>}
 
             <div className="notes-document-save-row">
               <button type="button" className="btn-secondary" onClick={handleCancelNewNote} disabled={saving}>
@@ -456,7 +456,7 @@ export default function NotesDocumentView({
                   value={draft.title}
                   onChange={(e) => handleDraftChange('title', e.target.value)}
                 />
-                {formErrors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{formErrors.title}</span>}
+                {formErrors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{formErrors.title}</span>}
 
                 <DocumentMetaFields
                   draft={draft}
@@ -470,7 +470,7 @@ export default function NotesDocumentView({
                   onChangeHtml={(html) => handleDraftChange('contentHtml', html)}
                   className="notes-document-content-editor"
                 />
-                {formErrors.content && <span className="form-hint" style={{ color: '#DC2626' }}>{formErrors.content}</span>}
+                {formErrors.content && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{formErrors.content}</span>}
               </>
             )}
 
@@ -513,7 +513,7 @@ function DocumentMetaFields({ draft, onChange, categorySelectOptions, formErrors
               value={draft.customCategory}
               onChange={(e) => onChange('customCategory', e.target.value)}
             />
-            {formErrors.customCategory && <span className="form-hint" style={{ color: '#DC2626' }}>{formErrors.customCategory}</span>}
+            {formErrors.customCategory && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{formErrors.customCategory}</span>}
           </div>
         )}
       </div>

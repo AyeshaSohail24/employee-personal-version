@@ -4,8 +4,8 @@ import { formatDateDisplay } from '../../utils/dateUtils.js';
 import { formatTenure, resolveExitTypeDisplay } from '../../domain/formerDomain.js';
 
 const TYPE_PILL_STYLES = {
-  Employee: { bg: '#F1F5F9', color: '#475569' },
-  Intern: { bg: '#E0F2FE', color: '#0369A1' },
+  Employee: { bg: 'var(--soft)', color: 'var(--navy-700)' },
+  Intern: { bg: 'var(--color-primary-light)', color: 'var(--primary)' },
 };
 
 // Each row opens that person's historical record (/former/{id}) — the whole row is clickable, like
@@ -28,7 +28,7 @@ export default function FormerListView({ employees = [] }) {
           </thead>
           <tbody>
             {employees.map((emp) => {
-              const typePill = TYPE_PILL_STYLES[emp.directoryType] || { bg: '#F1F5F9', color: '#475569' };
+              const typePill = TYPE_PILL_STYLES[emp.directoryType] || { bg: 'var(--soft)', color: 'var(--navy-700)' };
               const tenure = formatTenure(emp.startDate, emp.contractEndDate);
               const openRecord = () => navigate(`/former/${emp.id}`);
 

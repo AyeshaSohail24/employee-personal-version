@@ -8,8 +8,8 @@ import { ApiError } from '../../services/apiClient.js';
 import { Select } from '../common/Select.jsx';
 
 const OFFER_PILL_STYLES = {
-  Paid: { bg: '#ECFDF5', color: '#059669' },
-  Unpaid: { bg: '#FEF3C7', color: '#D97706' },
+  Paid: { bg: 'var(--ok-bg)', color: 'var(--ok-text)' },
+  Unpaid: { bg: 'var(--warn-bg)', color: 'var(--warn-text)' },
 };
 
 // Every candidate's offer email is rendered from a draft of their offer type, so each of these

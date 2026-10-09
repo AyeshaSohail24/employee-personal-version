@@ -17,7 +17,7 @@ function ProfileField({ label, value }) {
 
 function ProfileSection({ title, action, children }) {
   return (
-    <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.25rem', background: '#FFF' }}>
+    <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.25rem', background: 'var(--bg)' }}>
       <div
         style={{
           display: 'flex',
@@ -413,7 +413,7 @@ export default function HistoricalRecordPage() {
       </div>
 
       {/* Identity Header */}
-      <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#FFF' }}>
+      <div className="table-container-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: 'var(--bg)' }}>
         <div className="emp-identity-block" style={{ gap: '1rem' }}>
           <div className="emp-avatar-circle" style={{ width: '52px', height: '52px', fontSize: '1.2rem', background: '#64748B' }}>
             {employee.photo}
@@ -529,7 +529,7 @@ export default function HistoricalRecordPage() {
                 onChange={(e) => setDraftExitType(e.target.value)}
                 options={EXIT_TYPES.map((t) => ({ value: t, label: t }))}
               />
-              {exitError && <div style={{ fontSize: '0.76rem', color: '#B91C1C', marginTop: '0.3rem' }}>{exitError}</div>}
+              {exitError && <div style={{ fontSize: '0.76rem', color: 'var(--down-text)', marginTop: '0.3rem' }}>{exitError}</div>}
             </div>
           ) : (
             <ProfileField label="Exit Type" value={resolveExitTypeDisplay(exitInfo)} />
@@ -602,7 +602,7 @@ export default function HistoricalRecordPage() {
             onKeyDown={(e) => { if (e.key === 'Escape' && !isSavingDocument) cancelDocumentForm(); }}
             style={{ padding: '0.75rem', marginBottom: '0.9rem', border: '1px solid var(--color-primary-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-light)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
           >
-            {docErrors.form && <div style={{ fontSize: '0.78rem', color: '#B91C1C' }}>{docErrors.form}</div>}
+            {docErrors.form && <div style={{ fontSize: '0.78rem', color: 'var(--down-text)' }}>{docErrors.form}</div>}
             <div>
               <label htmlFor="former-doc-title" className="form-label">Document Title <span className="required-star">*</span></label>
               <input
@@ -615,7 +615,7 @@ export default function HistoricalRecordPage() {
                 disabled={isSavingDocument}
                 onChange={(e) => { setDocTitle(e.target.value); if (docErrors.title) setDocErrors((p) => ({ ...p, title: null })); }}
               />
-              {docErrors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{docErrors.title}</span>}
+              {docErrors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{docErrors.title}</span>}
             </div>
             <div>
               <label htmlFor="former-doc-file" className="form-label">File <span className="required-star">*</span></label>
@@ -627,7 +627,7 @@ export default function HistoricalRecordPage() {
                 onChange={(e) => { setDocFile(e.target.files && e.target.files[0] ? e.target.files[0] : null); if (docErrors.file) setDocErrors((p) => ({ ...p, file: null })); }}
               />
               {docFile && <span className="form-hint" style={{ color: 'var(--text-muted)' }}>Selected: {docFile.name} ({Math.max(1, Math.round(docFile.size / 1024))} KB)</span>}
-              {docErrors.file && <span className="form-hint" style={{ color: '#DC2626' }}>{docErrors.file}</span>}
+              {docErrors.file && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{docErrors.file}</span>}
             </div>
             <div>
               <label htmlFor="former-doc-description" className="form-label">Description <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
@@ -663,7 +663,7 @@ export default function HistoricalRecordPage() {
                 onKeyDown={(e) => { if (e.key === 'Escape' && !isSavingDocEdit) cancelEditingDocument(); }}
                 style={{ padding: '0.75rem', border: '1px solid var(--color-primary-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-light)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
               >
-                {editDocErrors.form && <div style={{ fontSize: '0.78rem', color: '#B91C1C' }}>{editDocErrors.form}</div>}
+                {editDocErrors.form && <div style={{ fontSize: '0.78rem', color: 'var(--down-text)' }}>{editDocErrors.form}</div>}
                 <div>
                   <label htmlFor="former-doc-edit-title" className="form-label">Document Title <span className="required-star">*</span></label>
                   <input
@@ -676,7 +676,7 @@ export default function HistoricalRecordPage() {
                     disabled={isSavingDocEdit}
                     onChange={(e) => { setEditDocTitle(e.target.value); if (editDocErrors.title) setEditDocErrors((p) => ({ ...p, title: null })); }}
                   />
-                  {editDocErrors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{editDocErrors.title}</span>}
+                  {editDocErrors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{editDocErrors.title}</span>}
                 </div>
                 <div>
                   <label htmlFor="former-doc-edit-file" className="form-label">Replace file <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
@@ -737,7 +737,7 @@ export default function HistoricalRecordPage() {
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginTop: '0.35rem' }}>{doc.description}</div>
                   )}
                   {!doc.hasFile && (
-                    <div style={{ fontSize: '0.72rem', color: '#B45309', marginTop: '0.35rem' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--warn-text)', marginTop: '0.35rem' }}>
                       File not saved (added before files were stored) — add it again to open it.
                     </div>
                   )}
@@ -795,7 +795,7 @@ export default function HistoricalRecordPage() {
             onKeyDown={(e) => { if (e.key === 'Escape' && !isSavingNote) cancelNoteForm(); }}
             style={{ padding: '0.75rem', marginBottom: '0.9rem', border: '1px solid var(--color-primary-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-light)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
           >
-            {noteErrors.form && <div style={{ fontSize: '0.78rem', color: '#B91C1C' }}>{noteErrors.form}</div>}
+            {noteErrors.form && <div style={{ fontSize: '0.78rem', color: 'var(--down-text)' }}>{noteErrors.form}</div>}
             <div>
               <label htmlFor="former-note-title" className="form-label">Title <span className="required-star">*</span></label>
               <input
@@ -808,7 +808,7 @@ export default function HistoricalRecordPage() {
                 disabled={isSavingNote}
                 onChange={(e) => { setNoteTitle(e.target.value); if (noteErrors.title) setNoteErrors((p) => ({ ...p, title: null })); }}
               />
-              {noteErrors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{noteErrors.title}</span>}
+              {noteErrors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{noteErrors.title}</span>}
             </div>
             <div>
               <label htmlFor="former-note-content" className="form-label">Note <span className="required-star">*</span></label>
@@ -820,7 +820,7 @@ export default function HistoricalRecordPage() {
                 disabled={isSavingNote}
                 onChange={(e) => { setNoteContent(e.target.value); if (noteErrors.content) setNoteErrors((p) => ({ ...p, content: null })); }}
               />
-              {noteErrors.content && <span className="form-hint" style={{ color: '#DC2626' }}>{noteErrors.content}</span>}
+              {noteErrors.content && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{noteErrors.content}</span>}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
               <button type="button" className="btn-secondary email-drafts-toolbar-btn" onClick={cancelNoteForm} disabled={isSavingNote} style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>
@@ -845,7 +845,7 @@ export default function HistoricalRecordPage() {
                 onKeyDown={(e) => { if (e.key === 'Escape' && !isSavingNoteEdit) cancelEditingNote(); }}
                 style={{ padding: '0.75rem', border: '1px solid var(--color-primary-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-light)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
               >
-                {editNoteErrors.form && <div style={{ fontSize: '0.78rem', color: '#B91C1C' }}>{editNoteErrors.form}</div>}
+                {editNoteErrors.form && <div style={{ fontSize: '0.78rem', color: 'var(--down-text)' }}>{editNoteErrors.form}</div>}
                 <div>
                   <label htmlFor="former-note-edit-title" className="form-label">Title <span className="required-star">*</span></label>
                   <input
@@ -858,7 +858,7 @@ export default function HistoricalRecordPage() {
                     disabled={isSavingNoteEdit}
                     onChange={(e) => { setEditNoteTitle(e.target.value); if (editNoteErrors.title) setEditNoteErrors((p) => ({ ...p, title: null })); }}
                   />
-                  {editNoteErrors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{editNoteErrors.title}</span>}
+                  {editNoteErrors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{editNoteErrors.title}</span>}
                 </div>
                 <div>
                   <label htmlFor="former-note-edit-content" className="form-label">Note <span className="required-star">*</span></label>
@@ -870,7 +870,7 @@ export default function HistoricalRecordPage() {
                     disabled={isSavingNoteEdit}
                     onChange={(e) => { setEditNoteContent(e.target.value); if (editNoteErrors.content) setEditNoteErrors((p) => ({ ...p, content: null })); }}
                   />
-                  {editNoteErrors.content && <span className="form-hint" style={{ color: '#DC2626' }}>{editNoteErrors.content}</span>}
+                  {editNoteErrors.content && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{editNoteErrors.content}</span>}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
                   <button type="button" className="btn-secondary email-drafts-toolbar-btn" onClick={cancelEditingNote} disabled={isSavingNoteEdit} style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>

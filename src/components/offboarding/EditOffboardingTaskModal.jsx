@@ -120,7 +120,7 @@ export default function EditOffboardingTaskModal({ isOpen, onClose, onSuccess, p
         <form onSubmit={handleSubmit}>
           <div className="modal-header">
             <div className="modal-title-group">
-              <div className="modal-icon-badge" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
+              <div className="modal-icon-badge" style={{ backgroundColor: 'var(--down-bg)', color: 'var(--down-text)' }}>
                 <Pencil size={20} />
               </div>
               <div>
@@ -150,7 +150,7 @@ export default function EditOffboardingTaskModal({ isOpen, onClose, onSuccess, p
                 value={formData.title}
                 onChange={(e) => handleChange('title', e.target.value)}
               />
-              {errors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.title}</span>}
+              {errors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.title}</span>}
             </div>
 
             <div className="form-group">
@@ -183,7 +183,7 @@ export default function EditOffboardingTaskModal({ isOpen, onClose, onSuccess, p
                 value={formData.relativeOffsetDays}
                 onChange={(e) => handleChange('relativeOffsetDays', e.target.value)}
               />
-              {errors.relativeOffsetDays && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.relativeOffsetDays}</span>}
+              {errors.relativeOffsetDays && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.relativeOffsetDays}</span>}
 
               <div className="relative-timing-help">
                 <p>Set when the task should occur relative to the employee's Final Working Date anchor.</p>

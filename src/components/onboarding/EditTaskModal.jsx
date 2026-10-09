@@ -150,7 +150,7 @@ export default function EditTaskModal({ isOpen, onClose, onSuccess, planInstance
                 value={formData.title}
                 onChange={(e) => handleChange('title', e.target.value)}
               />
-              {errors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.title}</span>}
+              {errors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.title}</span>}
             </div>
 
             <div className="form-group">
@@ -183,7 +183,7 @@ export default function EditTaskModal({ isOpen, onClose, onSuccess, planInstance
                 value={formData.relativeOffsetDays}
                 onChange={(e) => handleChange('relativeOffsetDays', e.target.value)}
               />
-              {errors.relativeOffsetDays && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.relativeOffsetDays}</span>}
+              {errors.relativeOffsetDays && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.relativeOffsetDays}</span>}
 
               <div className="relative-timing-help">
                 <p>Set when the task should occur relative to the employee's Start Date anchor.</p>

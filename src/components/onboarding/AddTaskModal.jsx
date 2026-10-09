@@ -117,7 +117,7 @@ export default function AddTaskModal({ isOpen, onClose, onSuccess, planInstanceI
                 value={formData.title}
                 onChange={(e) => handleChange('title', e.target.value)}
               />
-              {errors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.title}</span>}
+              {errors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.title}</span>}
             </div>
 
             <div className="form-group">

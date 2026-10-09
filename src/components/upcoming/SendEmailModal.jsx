@@ -180,7 +180,7 @@ export default function SendEmailModal({ isOpen, onClose, candidates = [], onSen
           onChange={(e) => { setCc(e.target.value); setCcError(null); }}
           onBlur={handleCcBlur}
         />
-        {ccError && <span className="form-hint" style={{ color: '#DC2626' }}>{ccError}</span>}
+        {ccError && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{ccError}</span>}
       </div>
     </div>
   );
@@ -226,17 +226,17 @@ export default function SendEmailModal({ isOpen, onClose, candidates = [], onSen
                 {bulkPreviews.map((p) => (
                   <div key={p.candidateId} className="bulk-candidate-row">
                     <button type="button" className="bulk-candidate-toggle" onClick={() => toggleBulkExpand(p.candidateId)}>
-                      {p.error ? <XCircle size={15} style={{ color: '#DC2626' }} /> : <CheckCircle2 size={15} style={{ color: '#059669' }} />}
+                      {p.error ? <XCircle size={15} style={{ color: 'var(--down-text)' }} /> : <CheckCircle2 size={15} style={{ color: 'var(--ok-text)' }} />}
                       <span className="bulk-candidate-name">{p.candidate.fullName}</span>
                       {p.candidate.offerType ? (
-                        <span className="status-pill" style={p.candidate.offerType === 'Paid' ? { backgroundColor: '#ECFDF5', color: '#059669' } : { backgroundColor: '#FEF3C7', color: '#D97706' }}>
+                        <span className="status-pill" style={p.candidate.offerType === 'Paid' ? { backgroundColor: 'var(--ok-bg)', color: 'var(--ok-text)' } : { backgroundColor: 'var(--warn-bg)', color: 'var(--warn-text)' }}>
                           {p.candidate.offerType}
                         </span>
                       ) : (
-                        <span className="status-pill" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>Allowance not set</span>
+                        <span className="status-pill" style={{ backgroundColor: 'var(--down-bg)', color: 'var(--down-text)' }}>Allowance not set</span>
                       )}
                       {p.unresolvedPlaceholders.length > 0 && (
-                        <span className="status-pill" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>Missing name</span>
+                        <span className="status-pill" style={{ backgroundColor: 'var(--down-bg)', color: 'var(--down-text)' }}>Missing name</span>
                       )}
                       <span className="bulk-candidate-chevron">{p.expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
                     </button>
@@ -279,7 +279,7 @@ export default function SendEmailModal({ isOpen, onClose, candidates = [], onSen
                   const candidate = candidates.find((c) => c.id === r.candidateId);
                   return (
                     <div key={r.candidateId} className="bulk-result-row">
-                      {r.success ? <CheckCircle2 size={16} style={{ color: '#059669' }} /> : <XCircle size={16} style={{ color: '#DC2626' }} />}
+                      {r.success ? <CheckCircle2 size={16} style={{ color: 'var(--ok-text)' }} /> : <XCircle size={16} style={{ color: 'var(--down-text)' }} />}
                       <span>{candidate ? candidate.fullName : r.candidateId}</span>
                       {!r.success && <span className="bulk-result-error">{r.error}</span>}
                     </div>
@@ -302,7 +302,7 @@ export default function SendEmailModal({ isOpen, onClose, candidates = [], onSen
                   <label className="form-label">Email Body <span className="required-star">*</span></label>
                   <textarea className="form-textarea email-body-textarea app-scroll-area" rows={12} value={body} onChange={(e) => handleBodyChange(e.target.value)} />
                   {singleUnresolved.length > 0 && (
-                    <span className="form-hint" style={{ color: '#DC2626' }}>
+                    <span className="form-hint" style={{ color: 'var(--down-text)' }}>
                       Unresolved placeholder(s): {singleUnresolved.map((t) => `{{${t}}}`).join(', ')}
                     </span>
                   )}

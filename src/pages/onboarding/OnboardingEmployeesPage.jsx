@@ -14,9 +14,9 @@ import { formatDateDisplay } from '../../utils/dateUtils.js';
 import Avatar from '../../components/common/Avatar.jsx';
 
 const HISTORY_STATUS_STYLES = {
-  Active: { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' },
-  Offboarding: { backgroundColor: '#FFFBEB', color: '#D97706', borderColor: '#FDE68A' },
-  Former: { backgroundColor: '#F1F5F9', color: '#475569', borderColor: '#CBD5E1' },
+  Active: { backgroundColor: 'var(--ok-bg)', color: 'var(--ok-text)', borderColor: 'var(--ok-border)' },
+  Offboarding: { backgroundColor: 'var(--warn-bg)', color: 'var(--warn-text)', borderColor: 'var(--warn-border)' },
+  Former: { backgroundColor: 'var(--soft)', color: 'var(--navy-700)', borderColor: 'var(--line)' },
   Onboarding: { backgroundColor: 'var(--color-primary-light)', color: 'var(--primary-600)', borderColor: 'var(--color-primary-border)' },
 };
 
@@ -264,15 +264,15 @@ This permanently removes their onboarding plan and its tasks from History. Their
             <div
               className="summary-card-icon"
               style={{
-                backgroundColor: '#EFF6FF',
-                color: '#2563EB',
-                borderColor: '#BFDBFE',
+                backgroundColor: 'var(--color-primary-light)',
+                color: 'var(--primary)',
+                borderColor: 'var(--color-primary-border)',
               }}
             >
               <Clock size={17} />
             </div>
           </div>
-          <div className="summary-card-value" style={{ color: '#2563EB' }}>
+          <div className="summary-card-value" style={{ color: 'var(--primary)' }}>
             {inProgressCount}
           </div>
           <div className="summary-card-subtext">Workflows underway and on track</div>
@@ -284,15 +284,15 @@ This permanently removes their onboarding plan and its tasks from History. Their
             <div
               className="summary-card-icon"
               style={{
-                backgroundColor: '#FEF2F2',
-                color: '#DC2626',
-                borderColor: '#FECACA',
+                backgroundColor: 'var(--down-bg)',
+                color: 'var(--down-text)',
+                borderColor: 'var(--down-border)',
               }}
             >
               <AlertTriangle size={17} />
             </div>
           </div>
-          <div className="summary-card-value" style={{ color: '#DC2626' }}>
+          <div className="summary-card-value" style={{ color: 'var(--down-text)' }}>
             {needsAttentionCount}
           </div>
           <div className="summary-card-subtext">Overdue or at-risk required tasks</div>
@@ -309,15 +309,15 @@ This permanently removes their onboarding plan and its tasks from History. Their
             <div
               className="summary-card-icon"
               style={{
-                backgroundColor: '#ECFDF5',
-                color: '#059669',
-                borderColor: '#A7F3D0',
+                backgroundColor: 'var(--ok-bg)',
+                color: 'var(--ok-text)',
+                borderColor: 'var(--ok-border)',
               }}
             >
               <CheckCircle2 size={17} />
             </div>
           </div>
-          <div className="summary-card-value" style={{ color: '#059669' }}>
+          <div className="summary-card-value" style={{ color: 'var(--ok-text)' }}>
             {completedCount}
           </div>
           <div className="summary-card-subtext">Onboarding workflows completed</div>
@@ -465,17 +465,17 @@ This permanently removes their onboarding plan and its tasks from History. Their
                             className="presence-badge"
                             style={
                               plan.status === 'Completed' || (plan.status === 'In Progress' && plan.progressPercentage > 0)
-                                ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' }
+                                ? { backgroundColor: 'var(--ok-bg)', color: 'var(--ok-text)', borderColor: 'var(--ok-border)' }
                                 : plan.status === 'Needs Attention'
-                                ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FECACA' }
-                                : { backgroundColor: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' }
+                                ? { backgroundColor: 'var(--down-bg)', color: 'var(--down-text)', borderColor: 'var(--down-border)' }
+                                : { backgroundColor: 'var(--color-primary-light)', color: 'var(--primary)', borderColor: 'var(--color-primary-border)' }
                             }
                           >
                             {plan.status === 'In Progress' && plan.progressPercentage === 0 ? 'Not Started' : plan.status}
                           </span>
                         ) : (
                           <div className="onboarding-launch-status">
-                            <span className="presence-badge" style={{ backgroundColor: '#FFFBEB', color: '#B45309', borderColor: '#FDE68A' }}>
+                            <span className="presence-badge" style={{ backgroundColor: 'var(--warn-bg)', color: 'var(--warn-text)', borderColor: 'var(--warn-border)' }}>
                               Plan not launched
                             </span>
                             {(launch?.failedReason || intern.launchIssue) && (

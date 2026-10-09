@@ -42,7 +42,7 @@ export default function DropOffboardingPlanModal({ isOpen, onClose, onSuccess, p
       <div className="modal-card wide-modal confirmation-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
-            <div className="modal-icon-badge" style={{ backgroundColor: '#FEF2F2', color: '#DC2626', width: '48px', height: '48px' }}>
+            <div className="modal-icon-badge" style={{ backgroundColor: 'var(--down-bg)', color: 'var(--down-text)', width: '48px', height: '48px' }}>
               <XCircle size={22} />
             </div>
             <div>

@@ -14,11 +14,11 @@ export default function StartingWithin7DaysWidget({ people, onViewProfile }) {
       title="Starting Within 7 Days"
       subtitle="Personnel whose start date is within the next 7 days"
       icon={UserPlus}
-      tone={{ bg: '#ECFDF5', color: '#059669' }}
+      tone={{ bg: 'var(--ok-bg)', color: 'var(--ok-text)' }}
       dateLabel="Start Date"
       emptyText="Nobody is starting within the next 7 days."
       loadingText="Checking start dates…"
-      badge={(days) => (days === 0 ? { bg: '#D1FAE5', color: '#047857' } : { bg: '#ECFDF5', color: '#059669' })}
+      badge={(days) => (days === 0 ? { bg: '#D1FAE5', color: 'var(--ok-text)' } : { bg: 'var(--ok-bg)', color: 'var(--ok-text)' })}
       people={people}
       onViewProfile={onViewProfile}
     />

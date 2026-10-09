@@ -29,7 +29,7 @@ export default function OverdueTasksModal({ isOpen, onClose, tasks = [], onMarkC
       <div className="modal-card modal-scroll-shell" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
-            <div className="modal-icon-badge" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
+            <div className="modal-icon-badge" style={{ backgroundColor: 'var(--down-bg)', color: 'var(--down-text)' }}>
               <AlertTriangle size={20} />
             </div>
             <div>
@@ -67,7 +67,7 @@ export default function OverdueTasksModal({ isOpen, onClose, tasks = [], onMarkC
 
         <div className="modal-body">
           {tasks.length === 0 ? (
-            <div style={{ padding: '1.5rem 0', textAlign: 'center', color: '#059669', fontSize: '0.85rem' }}>
+            <div style={{ padding: '1.5rem 0', textAlign: 'center', color: 'var(--ok-text)', fontSize: '0.85rem' }}>
               <CheckCircle2 size={24} style={{ marginBottom: '0.35rem' }} />
               <div>All onboarding tasks are on schedule!</div>
             </div>
@@ -78,9 +78,9 @@ export default function OverdueTasksModal({ isOpen, onClose, tasks = [], onMarkC
                   key={task.id}
                   style={{
                     padding: '0.75rem',
-                    background: '#FEF2F2',
+                    background: 'var(--down-bg)',
                     borderRadius: '6px',
-                    border: '1px solid #FECACA',
+                    border: '1px solid var(--down-border)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.35rem',
@@ -90,7 +90,7 @@ export default function OverdueTasksModal({ isOpen, onClose, tasks = [], onMarkC
                     <span style={{ fontWeight: 600, fontSize: '0.815rem', color: '#991B1B' }}>
                       {task.title}
                     </span>
-                    <span style={{ fontSize: '0.7rem', color: '#DC2626', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--down-text)', fontWeight: 700, whiteSpace: 'nowrap' }}>
                       Due {task.dueDate}
                     </span>
                   </div>
@@ -101,7 +101,7 @@ export default function OverdueTasksModal({ isOpen, onClose, tasks = [], onMarkC
                     <button
                       type="button"
                       className="btn-compact-override"
-                      style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', backgroundColor: '#FFF', color: '#059669', borderColor: '#A7F3D0' }}
+                      style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', backgroundColor: 'var(--bg)', color: 'var(--ok-text)', borderColor: 'var(--ok-border)' }}
                       onClick={() => onMarkComplete(task.id)}
                     >
                       Mark Complete

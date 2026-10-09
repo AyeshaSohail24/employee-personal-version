@@ -14,8 +14,9 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import UserClockIcon from './icons/UserClockIcon.jsx';
-// Dark-ink logo variant: the sidebar is white per RIZURF_DESIGN_SYSTEM.md.
+// Dark-ink logo on the white sidebar; the white-wordmark one under data-theme="dark" (index.css swaps them).
 import rizurfLogo from '../../../images/logo-light-mode.png';
+import rizurfLogoDark from '../../../images/logo-dark-mode.png';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const location = useLocation();
@@ -57,9 +58,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
       <div className="sidebar-header">
         <NavLink to="/dashboard" className="brand-title-group" onClick={closeMobile} aria-label="Rizurf Realty — Dashboard">
           <span className="brand-icon" aria-hidden="true">
-            <img src={rizurfLogo} alt="" className="brand-logo" />
+            <img src={rizurfLogo} alt="" className="brand-logo logo-light" />
+            <img src={rizurfLogoDark} alt="" className="brand-logo logo-dark" />
           </span>
-          <img src={rizurfLogo} alt="Rizurf Realty" className="brand-logo brand-full" />
+          <img src={rizurfLogo} alt="Rizurf Realty" className="brand-logo brand-full logo-light" />
+          <img src={rizurfLogoDark} alt="Rizurf Realty" className="brand-logo brand-full logo-dark" />
         </NavLink>
       </div>
 

@@ -154,7 +154,7 @@ export default function NoteEditorForm({ note = null, onSaved, onCancel, onDirty
             value={formData.title}
             onChange={(e) => handleChange('title', e.target.value)}
           />
-          {errors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.title}</span>}
+          {errors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.title}</span>}
         </div>
 
         <div className="note-editor-field-row">
@@ -176,7 +176,7 @@ export default function NoteEditorForm({ note = null, onSaved, onCancel, onDirty
                   value={formData.customCategory}
                   onChange={(e) => handleChange('customCategory', e.target.value)}
                 />
-                {errors.customCategory && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.customCategory}</span>}
+                {errors.customCategory && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.customCategory}</span>}
               </div>
             )}
           </div>
@@ -199,7 +199,7 @@ export default function NoteEditorForm({ note = null, onSaved, onCancel, onDirty
             onChangeHtml={(html) => handleChange('contentHtml', html)}
             placeholder="Write your note here..."
           />
-          {errors.content && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.content}</span>}
+          {errors.content && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.content}</span>}
         </div>
 
         <div className="form-group" style={{ marginBottom: 0 }}>

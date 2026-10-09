@@ -59,7 +59,7 @@ export default function SoonestDueTasksWidget() {
     <div className="dashboard-widget">
       <div className="widget-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <div className="widget-icon-badge" style={{ backgroundColor: '#EFF6FF', color: '#2563EB' }}>
+          <div className="widget-icon-badge" style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--primary)' }}>
             <ListChecks size={14} />
           </div>
           <div>

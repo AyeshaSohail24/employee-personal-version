@@ -14,8 +14,8 @@ import DepartmentColorsModal from './DepartmentColorsModal.jsx';
 import TimelineExportView from './TimelineExportView.jsx';
 
 const TYPE_BADGE_STYLES = {
-  Employee: { bg: '#F1F5F9', color: '#475569' },
-  Intern: { bg: '#E0F2FE', color: '#0369A1' },
+  Employee: { bg: 'var(--soft)', color: 'var(--navy-700)' },
+  Intern: { bg: 'var(--color-primary-light)', color: 'var(--primary)' },
 };
 
 export default function EmployeeTimelineView({ employees = [] }) {

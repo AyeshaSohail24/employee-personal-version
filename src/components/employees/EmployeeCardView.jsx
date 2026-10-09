@@ -5,27 +5,27 @@ import { formatDateDisplay, calculateDurationProgress } from '../../utils/dateUt
 import Avatar from '../common/Avatar.jsx';
 
 const STATUS_PILL_STYLES = {
-  Active: { bg: '#ECFDF5', color: '#059669' },
+  Active: { bg: 'var(--ok-bg)', color: 'var(--ok-text)' },
   Onboarding: { bg: 'var(--color-primary-light)', color: 'var(--primary-600)' },
-  Upcoming: { bg: '#EFF6FF', color: '#2563EB' },
-  Departing: { bg: '#FFFBEB', color: '#D97706' },
-  Former: { bg: '#F1F5F9', color: '#475569' },
+  Upcoming: { bg: 'var(--color-primary-light)', color: 'var(--primary)' },
+  Departing: { bg: 'var(--warn-bg)', color: 'var(--warn-text)' },
+  Former: { bg: 'var(--soft)', color: 'var(--navy-700)' },
 };
 
 const MODE_PILL_STYLES = {
-  'On-site': { bg: '#F1F5F9', color: '#475569' },
+  'On-site': { bg: 'var(--soft)', color: 'var(--navy-700)' },
   Remote: { bg: '#EDE9FE', color: '#6D28D9' },
-  Hybrid: { bg: '#E0F2FE', color: '#0369A1' },
+  Hybrid: { bg: 'var(--color-primary-light)', color: 'var(--primary)' },
 };
 
 const SALARY_PILL_STYLES = {
-  Paid: { bg: '#ECFDF5', color: '#059669' },
-  Unpaid: { bg: '#FEF3C7', color: '#D97706' },
+  Paid: { bg: 'var(--ok-bg)', color: 'var(--ok-text)' },
+  Unpaid: { bg: 'var(--warn-bg)', color: 'var(--warn-text)' },
 };
 
 const TYPE_PILL_STYLES = {
-  Employee: { bg: '#F1F5F9', color: '#475569' },
-  Intern: { bg: '#E0F2FE', color: '#0369A1' },
+  Employee: { bg: 'var(--soft)', color: 'var(--navy-700)' },
+  Intern: { bg: 'var(--color-primary-light)', color: 'var(--primary)' },
 };
 
 const DURATION_FILL_CLASS = {
@@ -40,10 +40,10 @@ export default function EmployeeCardView({ employees = [] }) {
   return (
     <div className="employee-card-grid">
       {employees.map((emp) => {
-        const statusPill = STATUS_PILL_STYLES[emp.status] || { bg: '#F1F5F9', color: '#475569' };
-        const modePill = MODE_PILL_STYLES[emp.workMode] || { bg: '#F1F5F9', color: '#475569' };
-        const salaryPill = SALARY_PILL_STYLES[emp.allowance] || { bg: '#ECFDF5', color: '#059669' };
-        const typePill = TYPE_PILL_STYLES[emp.directoryType] || { bg: '#F1F5F9', color: '#475569' };
+        const statusPill = STATUS_PILL_STYLES[emp.status] || { bg: 'var(--soft)', color: 'var(--navy-700)' };
+        const modePill = MODE_PILL_STYLES[emp.workMode] || { bg: 'var(--soft)', color: 'var(--navy-700)' };
+        const salaryPill = SALARY_PILL_STYLES[emp.allowance] || { bg: 'var(--ok-bg)', color: 'var(--ok-text)' };
+        const typePill = TYPE_PILL_STYLES[emp.directoryType] || { bg: 'var(--soft)', color: 'var(--navy-700)' };
         const isFormer = emp.status === 'Former';
         const duration = calculateDurationProgress(emp.startDate, emp.contractEndDate);
         // The whole card opens the Personnel Details page, same as a List view row.

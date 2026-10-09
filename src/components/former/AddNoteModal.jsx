@@ -101,7 +101,7 @@ export default function AddNoteModal({ isOpen, onClose, employeeId, onSuccess })
                 value={formData.title}
                 onChange={(e) => handleChange('title', e.target.value)}
               />
-              {errors.title && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.title}</span>}
+              {errors.title && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.title}</span>}
             </div>
 
             <div className="form-group">
@@ -122,7 +122,7 @@ export default function AddNoteModal({ isOpen, onClose, employeeId, onSuccess })
                 value={formData.content}
                 onChange={(e) => handleChange('content', e.target.value)}
               />
-              {errors.content && <span className="form-hint" style={{ color: '#DC2626' }}>{errors.content}</span>}
+              {errors.content && <span className="form-hint" style={{ color: 'var(--down-text)' }}>{errors.content}</span>}
             </div>
           </div>
 

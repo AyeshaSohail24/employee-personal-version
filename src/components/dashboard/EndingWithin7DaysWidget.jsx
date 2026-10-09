@@ -14,11 +14,11 @@ export default function EndingWithin7DaysWidget({ people, onViewProfile }) {
       title="Ending Within 7 Days"
       subtitle="Personnel whose current period ends within the next 7 days"
       icon={CalendarClock}
-      tone={{ bg: '#FFFBEB', color: '#D97706' }}
+      tone={{ bg: 'var(--warn-bg)', color: 'var(--warn-text)' }}
       dateLabel="End Date"
       emptyText="Nobody is ending within the next 7 days."
       loadingText="Checking end dates…"
-      badge={(days) => (days === 0 ? { bg: '#FEF2F2', color: '#DC2626' } : { bg: '#FFFBEB', color: '#D97706' })}
+      badge={(days) => (days === 0 ? { bg: 'var(--down-bg)', color: 'var(--down-text)' } : { bg: 'var(--warn-bg)', color: 'var(--warn-text)' })}
       people={people}
       onViewProfile={onViewProfile}
     />

@@ -16,7 +16,7 @@ export default function UnsavedChangesModal({ isOpen, onDiscard, onKeepEditing }
       <div className="modal-card wide-modal confirmation-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
-            <div className="modal-icon-badge" style={{ backgroundColor: '#FFFBEB', color: '#B45309', width: '48px', height: '48px' }}>
+            <div className="modal-icon-badge" style={{ backgroundColor: 'var(--warn-bg)', color: 'var(--warn-text)', width: '48px', height: '48px' }}>
               <AlertTriangle size={22} />
             </div>
             <div>
