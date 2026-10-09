@@ -134,8 +134,8 @@ export default function DashboardPage() {
           title="Upcoming"
           value={metrics.upcomingCount}
           subtitle="Scheduled to start"
-          badgeBg="#EFF6FF"
-          badgeColor="#2563EB"
+          badgeBg="var(--color-primary-light)"
+          badgeColor="var(--primary)"
         />
 
         <StatCard
@@ -143,8 +143,8 @@ export default function DashboardPage() {
           title="Onboarding"
           value={metrics.onboardingCount}
           subtitle="Currently onboarding"
-          badgeBg="var(--color-primary-light)"
-          badgeColor="var(--color-primary)"
+          badgeBg="color-mix(in srgb, var(--teal) 16%, transparent)"
+          badgeColor="var(--teal)"
         />
 
         <StatCard
@@ -152,8 +152,8 @@ export default function DashboardPage() {
           title="Active"
           value={metrics.activeCount}
           subtitle="Currently active personnel"
-          badgeBg="#ECFDF5"
-          badgeColor="#059669"
+          badgeBg="var(--ok-bg)"
+          badgeColor="var(--ok-text)"
         />
 
         <StatCard
@@ -161,8 +161,8 @@ export default function DashboardPage() {
           title="Offboarding"
           value={metrics.departingCount}
           subtitle="Currently in offboarding"
-          badgeBg="#FFFBEB"
-          badgeColor="#D97706"
+          badgeBg="var(--warn-bg)"
+          badgeColor="var(--warn-text)"
         />
 
         <StatCard
@@ -170,8 +170,8 @@ export default function DashboardPage() {
           title="Former"
           value={metrics.formerCount}
           subtitle="Historical personnel records"
-          badgeBg="#F1F5F9"
-          badgeColor="#64748B"
+          badgeBg="var(--soft)"
+          badgeColor="var(--muted)"
         />
       </div>
 
