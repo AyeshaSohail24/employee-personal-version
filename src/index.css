@@ -75,7 +75,7 @@
   --bg-card: var(--bg);
   --bg-sidebar: var(--bg);
   --bg-sidebar-hover: var(--soft);
-  --bg-sidebar-active: color-mix(in srgb, var(--primary) 11%, var(--bg));
+  --bg-sidebar-active: #eceafd; /* --rz-active */
 
   --text-main: var(--ink);
   --text-muted: var(--muted);
@@ -213,7 +213,6 @@ body {
   padding: 10px 8px 8px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   scrollbar-width: none;
 }
 
@@ -263,8 +262,16 @@ body {
 
 .nav-item.active,
 .nav-item.active:hover {
-  background: color-mix(in srgb, var(--primary) 11%, var(--bg));
+  background: var(--bg-sidebar-active);
   color: var(--primary);
+}
+
+/* Full-width divider between nav groups, as in the gateway sidebar. */
+.nav-rule {
+  flex: none;
+  height: 1px;
+  margin: 6px -8px;
+  background: var(--line);
 }
 
 .nav-badge {
@@ -304,7 +311,7 @@ body {
 }
 
 .subnav-item.active {
-  background: color-mix(in srgb, var(--primary) 11%, var(--bg));
+  background: var(--bg-sidebar-active);
   color: var(--primary);
 }
 

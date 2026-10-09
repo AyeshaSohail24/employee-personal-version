@@ -70,7 +70,6 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
       <nav className="sidebar-nav">
         {/* MAIN Section */}
         <div>
-          <div className="nav-section-title">MAIN</div>
           <NavLink
             to="/dashboard"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
@@ -92,8 +91,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         </div>
 
         {/* PEOPLE Section */}
-        <div style={{ marginTop: '1.25rem' }}>
-          <div className="nav-section-title">PEOPLE</div>
+        <div className="nav-rule" role="separator" />
+        <div>
 
           {/* Upcoming (shortlisted candidates / pre-hire offer workflow) */}
           <NavLink
@@ -187,8 +186,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         </div>
 
         {/* WORK Section */}
-        <div style={{ marginTop: '1.25rem' }}>
-          <div className="nav-section-title">WORK</div>
+        <div className="nav-rule" role="separator" />
+        <div>
 
           {/* Notes — personal HR working notepad */}
           <div>
