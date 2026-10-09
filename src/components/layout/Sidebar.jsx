@@ -14,14 +14,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import UserClockIcon from './icons/UserClockIcon.jsx';
-// The official Rizurf Realty logo (building/R mark + "Rizurf Realty" wordmark) — already placed
-// in the project's own `images/` folder (outside `src/`), never copied/moved into `src/assets`
-// or `public/`. Vite resolves and bundles a relatively-imported image from anywhere reachable on
-// disk, not only from inside `src/`, so a plain ES import referencing it in place is the correct,
-// idiomatic way to wire it in — no new asset location was introduced. `logo-dark-mode.png` is the
-// variant with a light/white wordmark, needed because the sidebar itself has a dark navy
-// background — the standard-ink `logo-light-mode.png`/`Logo.png` would be unreadable here.
-import rizurfLogo from '../../../images/logo-dark-mode.png';
+// Dark-ink logo variant: the sidebar is white per RIZURF_DESIGN_SYSTEM.md.
+import rizurfLogo from '../../../images/logo-light-mode.png';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const location = useLocation();
@@ -80,7 +74,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             onClick={closeMobile}
             title="Dashboard"
           >
-            <LayoutDashboard className="nav-icon" size={18} />
+            <LayoutDashboard className="nav-icon" size={22} strokeWidth={2.2} />
             <span className="nav-text">Dashboard</span>
           </NavLink>
           <NavLink
@@ -89,7 +83,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             onClick={closeMobile}
             title="Personnel"
           >
-            <Users className="nav-icon" size={18} />
+            <Users className="nav-icon" size={22} strokeWidth={2.2} />
             <span className="nav-text">Personnel</span>
           </NavLink>
         </div>
@@ -105,7 +99,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             onClick={closeMobile}
             title="Upcoming"
           >
-            <UserClockIcon className="nav-icon" size={18} />
+            <UserClockIcon className="nav-icon" size={22} strokeWidth={2.2} />
             <span className="nav-text">Upcoming</span>
           </NavLink>
 
@@ -118,7 +112,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
               aria-expanded={Boolean(openSections.onboarding)}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <UserPlus2 className="nav-icon" size={18} />
+                <UserPlus2 className="nav-icon" size={22} strokeWidth={2.2} />
                 <span className="nav-text">Onboarding</span>
               </span>
               {openSections.onboarding ? <ChevronDown className="nav-chevron" size={16} /> : <ChevronRight className="nav-chevron" size={16} />}
@@ -152,7 +146,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
               aria-expanded={Boolean(openSections.offboarding)}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <UserMinus2 className="nav-icon" size={18} />
+                <UserMinus2 className="nav-icon" size={22} strokeWidth={2.2} />
                 <span className="nav-text">Offboarding</span>
               </span>
               {openSections.offboarding ? <ChevronDown className="nav-chevron" size={16} /> : <ChevronRight className="nav-chevron" size={16} />}
@@ -184,7 +178,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             onClick={closeMobile}
             title="Former"
           >
-            <UserX2 className="nav-icon" size={18} />
+            <UserX2 className="nav-icon" size={22} strokeWidth={2.2} />
             <span className="nav-text">Former</span>
           </NavLink>
         </div>
@@ -202,7 +196,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
               aria-expanded={Boolean(openSections.notes)}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <NotebookPen className="nav-icon" size={18} />
+                <NotebookPen className="nav-icon" size={22} strokeWidth={2.2} />
                 <span className="nav-text">Notes</span>
               </span>
               {openSections.notes ? <ChevronDown className="nav-chevron" size={16} /> : <ChevronRight className="nav-chevron" size={16} />}

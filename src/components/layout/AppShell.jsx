@@ -25,6 +25,7 @@ export default function AppShell() {
 
   return (
     <div className="app-container">
+      <div className="top-accent" aria-hidden="true" />
       {/* Dark layer behind the phone/tablet drawer; tapping it closes the drawer. */}
       <div className={`sidebar-backdrop ${mobileOpen ? 'visible' : ''}`} onClick={() => setMobileOpen(false)} aria-hidden="true" />
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />

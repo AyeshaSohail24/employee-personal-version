@@ -1,58 +1,103 @@
 /* ==========================================================================
    Rizurf Brand Design System & Application Shell CSS
-   Primary Brand Accent: #129FA9
+   Primary Brand Accent: var(--primary)
    Dark Navy Tone: #111A2E
    ========================================================================== */
 
+/* Rizurf design system tokens — copied verbatim from RIZURF_DESIGN_SYSTEM.md §1. */
 :root {
-  /* Rizurf Palette */
-  --color-primary: #129FA9;
-  --color-primary-hover: #0E848D;
-  --color-primary-active: #0A5C63;
-  --color-primary-light: #E6F7F8;
-  --color-primary-border: #BCE7EA;
+  --navy: #021732;
+  --navy-700: #0a2a4e;
+  --teal: #039db1;
+  --teal-600: #027e8f;
+  --teal-50: #e7f6f8;
+  --teal-100: #ccecf1;
 
-  --color-navy-dark: #0F172A;
-  --color-navy-header: #111A2E;
-  --color-navy-surface: #1E293B;
+  --primary: #4f46e5;
+  --primary-600: #4338ca;
 
-  /* Neutral Spectrum */
-  --bg-app: #F8FAFC;
-  --bg-card: #FFFFFF;
-  --bg-sidebar: #0B132B;
-  --bg-sidebar-hover: rgba(255, 255, 255, 0.06);
-  --bg-sidebar-active: rgba(18, 159, 169, 0.15);
+  --ink: #0e1b2c;
+  --muted: #5a6b80;
+  --line: #e3e8ef;
+  --bg: #ffffff;
+  --soft: #f6f8fb;
 
-  --text-main: #0F172A;
-  --text-muted: #64748B;
-  --text-light: #94A3B8;
-  --text-on-dark: #F8FAFC;
+  --ok: #12a150;
+  --warn: #e8a317;
+  --down: #e0533d;
+  --ok-bg: #e8f7ee;   --ok-border: #bfe8cf;   --ok-text: #0f7a3d;
+  --warn-bg: #fdf6e7; --warn-border: #f3e0ad; --warn-text: #9a6b06;
+  --down-bg: #fdf0ee; --down-border: #f6d5cf; --down-text: #97331f;
 
-  --border-light: #E2E8F0;
-  --border-subtle: #F1F5F9;
+  --accent-indigo: #4f46e5;
+  --accent-violet: #7c3aed;
+  --accent-pink: #db2777;
+  --accent-emerald: #059669;
+  --accent-amber: #b45309;
+  --accent-cyan: #0e7490;
+  --accent-orange: #c2410c;
+  --accent-fuchsia: #a21caf;
+  --accent-rose: #9f1239;
 
-  /* Status Colors */
-  --status-active-bg: #ECFDF5;
-  --status-active-text: #059669;
-  --status-pending-bg: #FFFBEB;
-  --status-pending-text: #D97706;
-  --status-error-bg: #FEF2F2;
-  --status-error-text: #DC2626;
-
-  /* Sizing & Radius */
-  --sidebar-width: 260px;
-  --header-height: 64px;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
-  --radius-full: 9999px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
+  --radius: var(--radius-md);
 
-  /* Shadows & Glassmorphism */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
-  --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-backdrop: blur(8px);
+  --shadow-sm: 0 1px 2px rgba(2, 23, 50, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(2, 23, 50, 0.07), 0 2px 4px -2px rgba(2, 23, 50, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(2, 23, 50, 0.08), 0 4px 6px -4px rgba(2, 23, 50, 0.04);
+  --shadow: var(--shadow-sm);
+
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --font: Inter, "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+  --mono: Consolas, "SF Mono", Menlo, monospace;
+
+  --top-accent-h: 4px;
+  --rail-w: 56px;
+
+  /* This app's older token names, aliased onto the Rizurf tokens so every existing rule
+     picks up the shared palette without being rewritten. */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-600);
+  --color-primary-active: var(--primary-600);
+  --color-primary-light: color-mix(in srgb, var(--primary) 11%, white);
+  --color-primary-border: color-mix(in srgb, var(--primary) 30%, white);
+
+  --color-navy-dark: var(--navy);
+  --color-navy-header: var(--navy);
+  --color-navy-surface: var(--navy-700);
+
+  --bg-app: var(--soft);
+  --bg-card: var(--bg);
+  --bg-sidebar: var(--bg);
+  --bg-sidebar-hover: var(--soft);
+  --bg-sidebar-active: color-mix(in srgb, var(--primary) 11%, white);
+
+  --text-main: var(--ink);
+  --text-muted: var(--muted);
+  --text-light: var(--muted);
+  --text-on-dark: #ffffff;
+
+  --border-light: var(--line);
+  --border-subtle: var(--soft);
+
+  --status-active-bg: var(--ok-bg);
+  --status-active-text: var(--ok-text);
+  --status-pending-bg: var(--warn-bg);
+  --status-pending-text: var(--warn-text);
+  --status-error-bg: var(--down-bg);
+  --status-error-text: var(--down-text);
+
+  --sidebar-width: 264px;
+  --header-height: 68px;
+  --radius-full: var(--radius-pill);
+
+  --glass-bg: var(--bg);
+  --glass-backdrop: none;
 }
 
 * {
@@ -62,7 +107,7 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font);
   background-color: var(--bg-app);
   color: var(--text-main);
   line-height: 1.5;
@@ -78,52 +123,53 @@ body {
   overflow-x: hidden;
 }
 
-/* Sidebar Styling */
+/* ==========================================================================
+   App shell — RIZURF_DESIGN_SYSTEM.md §2 (4px accent line, white rail, 68px top bar).
+   Class names are this app's own; the rail/drawer behaviour lives at the end of the file.
+   ========================================================================== */
+.top-accent {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--top-accent-h);
+  background: linear-gradient(90deg, var(--navy) 0%, var(--primary) 100%);
+  z-index: 70;
+}
+
 .app-sidebar {
   width: var(--sidebar-width);
-  background-color: var(--bg-sidebar);
-  color: var(--text-on-dark);
+  background: var(--bg);
+  color: var(--ink);
   display: flex;
   flex-direction: column;
   position: fixed;
-  top: 0;
+  top: var(--top-accent-h);
   bottom: 0;
   left: 0;
-  z-index: 40;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 50;
+  border-right: 1px solid var(--line);
 }
 
 .sidebar-header {
+  flex: none;
   height: var(--header-height);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .brand-title-group {
   display: flex;
   align-items: center;
   text-decoration: none;
-  color: #FFFFFF;
 }
 
-/* The official Rizurf Realty logo (images/Logo_ver2.png) — already contains both the building
-   symbol and the "Rizurf Realty" wordmark, so no separate icon/text/badge markup exists alongside
-   it anymore. Height is constrained (not width) so the logo fits cleanly within
-   .sidebar-header's existing fixed height (var(--header-height), shared with the top app header
-   for visual alignment — intentionally left untouched by this task) with comfortable vertical
-   breathing room; width is `auto`, so the logo's real aspect ratio is never distorted.
-   logo-dark-mode.png's canvas carries noticeably more transparent vertical padding than a tightly
-   cropped mark would (visible mark content is ~74% of the canvas height), so 48px was chosen
-   (not the smaller value a naively "tight" logo would use) so the actual visible symbol+wordmark
-   reads at a comparable size to a tightly-cropped logo, rather than looking undersized because of
-   padding baked into the file. max-width: 100% is a defensive fallback only — at this height the
-   rendered width (~139px) already sits comfortably inside .sidebar-header's own horizontal padding. */
 .brand-logo {
-  height: 48px;
+  height: 40px;
   width: auto;
   max-width: 100%;
   display: block;
@@ -132,203 +178,191 @@ body {
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem 0.75rem;
+  overflow-x: hidden;
+  padding: 10px 8px 8px;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 10px;
+  scrollbar-width: none;
 }
 
 .sidebar-nav::-webkit-scrollbar {
-  width: 4px;
-}
-.sidebar-nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  width: 0;
+  height: 0;
 }
 
 .nav-section-title {
-  font-size: 0.7rem;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-light);
-  padding: 0 0.75rem 0.35rem 0.75rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 0 8px 4px;
 }
 
-.nav-item {
+.nav-item,
+.nav-group-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  color: #CBD5E1;
-  text-decoration: none;
-  font-size: 0.875rem;
-  font-weight: 500;
+  gap: 11px;
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 2px;
+  border: 0;
   border-radius: var(--radius-md);
-  transition: all 0.15s ease;
-  position: relative;
-}
-
-.nav-item:hover {
-  background-color: var(--bg-sidebar-hover);
-  color: #FFFFFF;
-}
-
-.nav-item.active {
-  background-color: var(--bg-sidebar-active);
-  color: #FFFFFF;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
   font-weight: 600;
-  border-left: 3px solid var(--color-primary);
+  color: var(--muted);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.nav-item.active .nav-icon {
-  color: var(--color-primary);
+.nav-group-header {
+  justify-content: space-between;
+}
+
+.nav-item:hover,
+.nav-group-header:hover {
+  background: var(--soft);
+  color: var(--navy-700);
+}
+
+.nav-item.active,
+.nav-item.active:hover {
+  background: color-mix(in srgb, var(--primary) 11%, white);
+  color: var(--primary);
 }
 
 .nav-badge {
   margin-left: auto;
-  font-size: 0.7rem;
+  font-size: 11px;
   font-weight: 600;
-  padding: 0.1rem 0.45rem;
-  border-radius: var(--radius-full);
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #E2E8F0;
+  color: var(--muted);
 }
 
 .nav-item.active .nav-badge {
-  background-color: var(--color-primary);
-  color: #FFFFFF;
-}
-
-/* Nav Subgroup Collapsible Styling */
-.nav-group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  color: #CBD5E1;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: var(--radius-md);
-  transition: all 0.15s ease;
-}
-
-.nav-group-header:hover {
-  background-color: var(--bg-sidebar-hover);
-  color: #FFFFFF;
+  color: var(--primary);
 }
 
 .nav-sublist {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding-left: 1.25rem;
-  margin-top: 0.2rem;
+  gap: 2px;
+  padding-left: 35px;
+  margin-bottom: 2px;
 }
 
 .subnav-item {
   display: flex;
   align-items: center;
-  padding: 0.45rem 0.75rem;
-  color: #94A3B8;
-  text-decoration: none;
-  font-size: 0.825rem;
+  padding: 6px 8px;
   border-radius: var(--radius-sm);
-  transition: all 0.15s ease;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .subnav-item:hover {
-  color: #FFFFFF;
-  background-color: var(--bg-sidebar-hover);
+  background: var(--soft);
+  color: var(--navy-700);
 }
 
 .subnav-item.active {
-  color: var(--color-primary);
-  background-color: rgba(18, 159, 169, 0.1);
-  font-weight: 600;
+  background: color-mix(in srgb, var(--primary) 11%, white);
+  color: var(--primary);
 }
 
-/* Main Content Area */
 .main-wrapper {
   margin-left: var(--sidebar-width);
-  padding-top: var(--header-height);
+  padding-top: calc(var(--top-accent-h) + var(--header-height));
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  background: var(--soft);
 }
 
-/* Header Navbar */
 .app-header {
   position: fixed;
-  top: 0;
+  top: var(--top-accent-h);
   right: 0;
   left: var(--sidebar-width);
   height: var(--header-height);
-  background-color: var(--glass-bg);
-  backdrop-filter: var(--glass-backdrop);
-  border-bottom: 1px solid var(--border-light);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
-  z-index: 30;
-  transition: left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  gap: 14px;
+  padding: 0 32px;
+  z-index: 40;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 14px;
+  min-width: 0;
 }
 
 .mobile-toggle {
   display: none;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0.4rem;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border: 1.5px solid var(--line);
   border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
 }
 
 .mobile-toggle:hover {
-  background-color: var(--border-subtle);
-  color: var(--text-main);
+  border-color: var(--primary);
+  color: var(--primary);
 }
+
 
 .breadcrumbs {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .breadcrumb-item {
-  color: var(--text-muted);
+  color: var(--muted);
   text-decoration: none;
-  transition: color 0.15s ease;
+  transition: color var(--transition-fast);
 }
 
 .breadcrumb-item:hover {
-  color: var(--color-primary);
+  color: var(--primary);
 }
 
 .breadcrumb-current {
-  color: var(--text-main);
-  font-weight: 600;
+  color: var(--navy);
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-right {
+  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 16px;
 }
 
 /* Role Switcher Component */
@@ -344,7 +378,7 @@ body {
 }
 
 .role-switcher:hover {
-  background-color: #E6F7F8;
+  background-color: var(--color-primary-light);
   border-color: var(--color-primary);
 }
 
@@ -444,7 +478,7 @@ body {
 .custom-select-container.is-open .custom-select-trigger,
 .custom-select-trigger:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .custom-select-role.is-open .custom-select-trigger,
@@ -516,7 +550,7 @@ body {
 }
 
 .custom-select-option.selected {
-  background-color: #E6F7F8;
+  background-color: var(--color-primary-light);
   color: var(--color-primary);
   font-weight: 600;
 }
@@ -571,7 +605,7 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #111A2E 0%, #129FA9 100%);
+  background: linear-gradient(135deg, #111A2E 0%, var(--primary) 100%);
   color: #FFFFFF;
   display: flex;
   align-items: center;
@@ -1000,7 +1034,7 @@ body {
 .stat-card:not(.skeleton-box):hover {
   transform: translateY(-3px);
   border-color: var(--color-primary);
-  box-shadow: var(--shadow-md), 0 0 0 1px rgba(18, 159, 169, 0.08);
+  box-shadow: var(--shadow-md), 0 0 0 1px color-mix(in srgb, var(--primary) 8%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1454,7 +1488,7 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #129FA9 0%, #0E848D 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%);
   color: #FFFFFF;
   display: flex;
   align-items: center;
@@ -1795,7 +1829,7 @@ body {
 .toolbar-search-input:focus {
   border-color: var(--color-primary);
   background-color: var(--bg-card);
-  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 /* Optional clear ("x") button, shown only while a query is present — e.g. the Upcoming page's
@@ -2060,7 +2094,7 @@ body {
 
 .filter-select:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .filter-select:disabled {
@@ -2583,7 +2617,7 @@ body {
   background-color: #FFFFFF;
   color: #111A2E;
   padding: 32px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font);
   box-sizing: border-box;
 }
 
@@ -3972,7 +4006,7 @@ body {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #129FA9 0%, #0E848D 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%);
   color: #FFFFFF;
   display: flex;
   align-items: center;
@@ -4398,7 +4432,7 @@ body {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #129FA9 0%, #0E848D 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%);
   color: #FFFFFF;
   display: flex;
   align-items: center;
@@ -4595,7 +4629,7 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #129FA9 0%, #0E848D 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%);
   color: #FFFFFF;
   display: flex;
   align-items: center;
@@ -4865,7 +4899,7 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #129FA9 0%, #0E848D 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%);
   color: #FFFFFF;
   display: flex;
   align-items: center;
@@ -5368,7 +5402,7 @@ input.form-control:hover {
 .form-textarea:focus,
 input.form-control:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .form-select:disabled,
@@ -6137,8 +6171,8 @@ input.form-control:focus {
 }
 
 .emp-status-sub-pill.onboarding {
-  background-color: #E6F7F8;
-  color: #0E848D;
+  background-color: var(--color-primary-light);
+  color: var(--primary-600);
 }
 
 /* Matches EmployeeListView.jsx/EmployeeCardView.jsx's STATUS_PILL_STYLES exactly — Active and
@@ -6384,7 +6418,7 @@ input.form-control:focus {
   width: 3rem;
   height: 3rem;
   border-radius: var(--radius-md);
-  background-color: rgba(18, 159, 169, 0.1);
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
   color: var(--color-primary);
   display: flex;
   align-items: center;
@@ -6425,7 +6459,7 @@ input.form-control:focus {
 
 .btn-primary-teal:hover:not(:disabled) {
   background-color: var(--color-primary-hover);
-  box-shadow: 0 2px 6px rgba(18, 159, 169, 0.3);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
 .btn-primary-teal:disabled {
@@ -6561,7 +6595,7 @@ input.form-control:focus {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #129FA9 0%, #0E848D 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%);
   color: #FFFFFF;
   display: flex;
   align-items: center;
@@ -6727,10 +6761,10 @@ input.form-control:focus {
 }
 
 .documents-config-filter-btn.active {
-  background-color: rgba(18, 159, 169, 0.08);
+  background-color: color-mix(in srgb, var(--primary) 8%, transparent);
   color: var(--color-primary);
-  border-color: rgba(18, 159, 169, 0.35);
-  box-shadow: 0 1px 2px rgba(18, 159, 169, 0.06);
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--primary) 6%, transparent);
 }
 
 .documents-config-filter-count {
@@ -7163,7 +7197,7 @@ input.form-control:focus {
 
 .config-form-control:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .config-form-control.error {
@@ -7528,7 +7562,7 @@ input.form-control:focus {
 
 .note-content-editor:focus-within {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .note-content-toolbar {
@@ -8616,7 +8650,7 @@ input.form-control:focus {
 
 .former-section-action:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.3);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
 /* Onboarding / Offboarding plan detail — tick a task done (untick to reopen). Updates instantly. */
@@ -8639,7 +8673,7 @@ input.form-control:focus {
 
 .plan-task-checkbox:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
 .plan-task-checkbox:checked {
@@ -8655,7 +8689,7 @@ input.form-control:focus {
 
 .plan-task-checkbox:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(18, 159, 169, 0.3);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
 /* Onboarding / Offboarding plan detail — open tasks due today (light yellow) or past due (light red). */
@@ -8743,87 +8777,72 @@ input.form-control:focus {
 }
 
 /* ==========================================================================
-   Sidebar: hover rail (desktop) / drawer (phone & tablet) — RIZURF_SIDEBAR_RAIL.md
+   Sidebar: hover rail (desktop) / drawer (≤1000px) — RIZURF_DESIGN_SYSTEM.md §2.
    Kept at the end of the file so these win over the base sidebar rules above.
    ========================================================================== */
 .app-sidebar {
-  overflow: hidden; /* hides labels while the rail is narrow */
-}
-
-.sidebar-nav {
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .nav-item,
 .nav-group-header,
 .subnav-item {
-  white-space: nowrap; /* labels never wrap while the rail animates */
+  white-space: nowrap;
 }
 
 .nav-icon {
   flex: none;
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.2;
 }
 
 /* The logo's building mark alone (same image, cropped) — shown on the narrow rail. */
 .brand-icon {
   display: none;
-  width: 30px;
+  width: 26px;
   overflow: hidden;
 }
 
 .brand-icon .brand-logo {
   max-width: none;
-  margin-left: -5px;
-}
-
-.mobile-toggle {
-  display: none;
+  margin-left: -4px;
 }
 
 .sidebar-backdrop {
   display: none;
   position: fixed;
   inset: 0;
-  z-index: 35; /* above the header (30), below the drawer (40) */
-  background-color: rgba(15, 23, 42, 0.45);
+  z-index: 45;
+  background: rgba(2, 23, 50, 0.45);
 }
 
-/* ---------- Desktop: the hover rail ---------- */
 @media (min-width: 1001px) {
   .app-sidebar {
-    width: 56px;
-    min-width: 56px;
-    transform: none;
+    width: var(--rail-w);
+    min-width: var(--rail-w);
     transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* Widen on hover or when a keyboard user tabs in. :has(:focus-visible), not :focus-within —
-     a mouse click must not leave it stuck open. */
+  /* :has(:focus-visible), not :focus-within — a mouse click must not leave it stuck open. */
   .app-sidebar:hover,
   .app-sidebar:has(:focus-visible) {
     width: 208px;
-    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-lg);
   }
 
-  /* The page and header reserve only the 56px rail; the widened rail overlaps them. */
   .main-wrapper {
-    margin-left: 56px;
+    margin-left: var(--rail-w);
   }
 
   .app-header {
-    left: 56px;
-  }
-
-  /* Icons stay put while it widens: 7px + 12px item padding centres an 18px icon in 56px. */
-  .app-sidebar .sidebar-nav {
-    padding: 1rem 7px;
+    left: var(--rail-w);
   }
 
   .app-sidebar .sidebar-header {
-    padding: 0 13px;
+    padding: 0 15px;
   }
 
-  /* Labels, section titles and chevrons fade in with the width. */
   .app-sidebar :is(.nav-text, .nav-section-title, .nav-chevron) {
     opacity: 0;
     transition: opacity 0.14s ease;
@@ -8833,12 +8852,10 @@ input.form-control:focus {
     opacity: 1;
   }
 
-  /* Sub-pages (an open accordion) only while widened. */
   .app-sidebar:not(:hover):not(:has(:focus-visible)) .nav-sublist {
     display: none;
   }
 
-  /* Small mark collapsed, full logo expanded. */
   .app-sidebar:not(:hover):not(:has(:focus-visible)) .brand-full {
     display: none;
   }
@@ -8848,17 +8865,17 @@ input.form-control:focus {
   }
 }
 
-/* ---------- Phone / tablet: the drawer ---------- */
 @media (max-width: 1000px) {
   .mobile-toggle {
-    display: block;
+    display: grid;
   }
 
   .app-sidebar {
     width: var(--sidebar-width);
     min-width: var(--sidebar-width);
-    transform: translateX(-100%); /* parked off-screen */
+    transform: translateX(-100%);
     transition: transform 0.22s ease;
+    box-shadow: var(--shadow-lg);
   }
 
   .app-sidebar.mobile-open {
@@ -8878,6 +8895,22 @@ input.form-control:focus {
   }
 }
 
+@media (max-width: 700px) {
+  .app-header {
+    padding: 0 14px;
+    gap: 10px;
+  }
+
+  .header-right {
+    gap: 10px;
+    flex: none;
+  }
+
+  .page-container {
+    padding: 20px 18px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-sidebar,
   .app-sidebar .nav-text,
@@ -8886,6 +8919,7 @@ input.form-control:focus {
     transition: none !important;
   }
 }
+
 
 /* Reminders (bell + Soonest Due Tasks) — overdue in red, due today in amber. */
 .dashboard-task-row.is-overdue .dashboard-task-row-time {
@@ -9188,4 +9222,134 @@ input.form-control:focus {
 
 @media (prefers-reduced-motion: reduce) {
   .notification-alerts-switch, .notification-alerts-switch::after { transition: none; }
+}
+
+/* ==========================================================================
+   Building blocks — RIZURF_DESIGN_SYSTEM.md §3, mapped onto this app's own class names.
+   Last in the file so it wins over the older per-component rules above.
+   ========================================================================== */
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+}
+
+.page-description {
+  font-size: 14.5px;
+  color: var(--muted);
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  background: var(--teal);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.notification-dot {
+  background-color: #e5484d;
+}
+
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.btn-primary {
+  border: 0;
+  background: var(--primary);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-600);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: #fff;
+  border: 1.5px solid var(--line);
+  color: var(--navy-700);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #fff;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-primary:active,
+.btn-secondary:active {
+  transform: scale(0.98);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  border-width: 1.5px;
+  border-color: var(--line);
+  border-radius: 9px;
+}
+
+.status-pill {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: none;
+}
+
+.table-container-card,
+.directory-table-card,
+.directory-toolbar-card,
+.gmail-table-card,
+.stat-card,
+.presence-table-card {
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+
+.modal-card {
+  border-radius: var(--radius-lg);
+}
+
+.widget-table th,
+.gmail-table th,
+.presence-data-table thead th {
+  background: var(--soft);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.widget-table td,
+.gmail-table td,
+.presence-data-table td {
+  border-bottom: 1px solid var(--line);
+  color: var(--navy-700);
 }
